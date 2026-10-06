@@ -1,6 +1,6 @@
 # NextAction（今天干点啥）
 
-Orca Note（虎鲸笔记）的 GTD 任务管理插件，插件名 `nextaction`（中文名：今天干点啥）。
+Orca Note（虎鲸笔记）的 GTD 任务管理插件，插件名 `orca-plugin-nextaction`（中文名：今天干点啥）。
 
 ## 文档分工
 

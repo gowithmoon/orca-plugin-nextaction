@@ -80,8 +80,9 @@ tests/
 ### 命名
 
 - 领域概念一律使用 `CONTEXT.md` 中的英文名（`Task`、`NextAction`、`LogicalDay` 等），不要使用其中列为 _Avoid_ 的词。
-- 注册给 Orca 的所有标识符（命令、面板、渲染器、按钮、设置、broadcast 类型）都以 `nextaction.` 开头。
-- 插件写入的块属性名以 `nextaction.` 开头，不允许以 `_` 开头。
+- 插件名是 `orca-plugin-nextaction`，即插件目录名，也是 Orca 传给 `load` 的 `pluginName`。
+- 注册给 Orca 的所有标识符（命令、面板、渲染器、按钮、设置、broadcast 类型）都以运行时的 `pluginName` 加 `.` 开头，由注册表统一拼接和校验，代码中不写死前缀。
+- 写进笔记的数据键（插件块属性名等）使用固定前缀 `nextaction.`，不随插件目录名变化，这样即使插件目录被改名，已有数据仍然可读。不允许以 `_` 开头。
 - CSS 类名以 `nextaction-` 开头，颜色和间距只使用 Orca 的 CSS 变量。
 - 文件名用 kebab-case，React 组件用 PascalCase。
 
