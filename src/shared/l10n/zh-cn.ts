@@ -19,6 +19,10 @@ const zhCN: Record<string, string> = {
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
   "Read current block as task (debug)": "读取当前块为任务（调试）",
+  "Set importance 6 and due tomorrow (debug)":
+    "把重要性设为 6、截止时间设为明天（调试）",
+  "Read and write a test plugin block property (debug)":
+    "读写测试用的插件块属性（调试）",
   "Query inbox tasks (debug)": "查询收集箱中的任务（调试）",
 };
 

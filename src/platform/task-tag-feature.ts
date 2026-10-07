@@ -11,11 +11,13 @@ import { applyRename } from "../infra/orca/schema/tag-alias";
 import { resolveTagName } from "../infra/orca/schema/tag-name";
 import { readTaskTagCache } from "../infra/orca/schema/task-tag-cache";
 import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
+import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
 import { registerQueryInboxCommand } from "./dev/query-inbox-command";
 import { registerReadTaskCommand } from "./dev/read-task-command";
+import { registerWriteTaskCommands } from "./dev/write-task-commands";
 import { writeSetting } from "./settings";
 
 export interface TaskTagFeature {
@@ -183,9 +185,14 @@ export function createTaskTagFeature(): TaskTagFeature {
     // Statically false in production builds, so the commands and the
     // repository they use are left out of the bundle (#20).
     if (import.meta.env.DEV) {
-      const repository = createOrcaTaskRepository(() => state);
+      const repository = createOrcaTaskRepository(
+        () => state,
+        // No caches yet; step 4 connects the view cache here.
+        () => {},
+      );
       registerReadTaskCommand(context.registry, repository);
       registerQueryInboxCommand(context.registry, repository);
+      registerWriteTaskCommands(context.registry, repository, systemClock);
     }
     const uiLanguage = noteLanguageFor(orca.state.locale);
     await start(context, uiLanguage);
