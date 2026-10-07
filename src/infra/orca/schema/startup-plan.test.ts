@@ -100,10 +100,14 @@ const enDefinitions = [
   { name: "Notes", type: 1, pos: 7 },
 ];
 
-/** A tag block as read back from Orca, holding `properties` (in this order). */
-function tagBlock(properties: unknown[], id = 211) {
+/**
+ * A tag block as read back from Orca, holding `properties` (in this order)
+ * and called by `aliases`.
+ */
+function tagBlock(properties: unknown[], id = 211, aliases: string[] = []) {
   return {
     id,
+    aliases,
     properties: [
       ...properties,
       { name: "_repr", type: 0, pos: null, value: { type: "text" } },
@@ -495,6 +499,82 @@ describe("startup plan", () => {
         },
         writes: [],
       });
+    });
+  });
+  describe("rename while the plugin was off", () => {
+    // The user renamed "任务" to "GTD" in the settings while the plugin was
+    // disabled: no block is called "GTD", the cached block is still "任务".
+    const renamedInSettings = { tagBlockId: 211, tagName: "任务" };
+
+    it("renames the cached tag instead of creating one", () => {
+      expect(
+        planStartup({
+          tagName: "GTD",
+          tagBlock: undefined,
+          cache: renamedInSettings,
+          cachedBlock: tagBlock(readBack(zhDefinitions), 211, ["任务"]),
+          uiLanguage: "en",
+        }),
+      ).toEqual({
+        action: {
+          kind: "rename",
+          from: "任务",
+          to: "GTD",
+          tagBlockId: 211,
+          invalidated: [],
+          language: "zh",
+        },
+        writes: [],
+      });
+    });
+
+    it.each([
+      ["the block was reused for something else", tagBlock([])],
+      [
+        "the tag was renamed in Orca itself",
+        tagBlock(readBack(zhDefinitions), 211, ["别的名字"]),
+      ],
+      ["the block no longer exists", undefined],
+    ])("creates a tag under the new name when %s", (_, cachedBlock) => {
+      expect(
+        planStartup({
+          tagName: "GTD",
+          tagBlock: undefined,
+          cache: renamedInSettings,
+          cachedBlock,
+          uiLanguage: "zh",
+        }),
+      ).toEqual({
+        action: { kind: "create", tagName: "GTD" },
+        writes: zhDefinitions,
+      });
+    });
+
+    it("goes by the name alone when the cache is lost", () => {
+      expect(
+        planStartup({
+          tagName: "GTD",
+          tagBlock: tagBlock(readBack(zhDefinitions), 305),
+          cache: undefined,
+          uiLanguage: "zh",
+        }),
+      ).toEqual({
+        action: {
+          kind: "use",
+          tagBlockId: 305,
+          invalidated: [],
+          language: "zh",
+        },
+        writes: [],
+      });
+      expect(
+        planStartup({
+          tagName: "GTD",
+          tagBlock: undefined,
+          cache: undefined,
+          uiLanguage: "zh",
+        }).action,
+      ).toEqual({ kind: "create", tagName: "GTD" });
     });
   });
 });
