@@ -11,7 +11,8 @@
       "!**/dist",
       "!**/vendor",
       "!**/plugin-docs",
-      "!**/src/orca.d.ts"
+      "!**/src/orca.d.ts",
+      "!**/tests/violation-samples"
     ]
   },
   "formatter": {
