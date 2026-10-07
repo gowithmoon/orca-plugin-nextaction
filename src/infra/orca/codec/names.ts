@@ -1,5 +1,6 @@
 // The only place, besides t(), where names written into notes appear
 // (ADR 0009). Code uses the English keys; names are converted here.
+import { type TaskStatus, taskStatuses } from "../../../domain/task/task";
 
 /** The language of names written into notes, fixed when the tag is created. */
 export type NoteLanguage = "zh" | "en";
@@ -16,15 +17,8 @@ export const propertyKeys = [
 ] as const;
 export type PropertyKey = (typeof propertyKeys)[number];
 
-export const statusKeys = [
-  "inbox",
-  "todo",
-  "doing",
-  "waiting",
-  "someday",
-  "done",
-] as const;
-export type StatusKey = (typeof statusKeys)[number];
+/** The statuses, in option order; the domain's list (no second copy). */
+export const statusKeys = taskStatuses;
 
 type NameTable<K extends string> = Record<K, Record<NoteLanguage, string>>;
 
@@ -39,7 +33,7 @@ const propertyNames: NameTable<PropertyKey> = {
   note: { zh: "备注", en: "Notes" },
 };
 
-const statusNames: NameTable<StatusKey> = {
+const statusNames: NameTable<TaskStatus> = {
   inbox: { zh: "收集箱", en: "Inbox" },
   todo: { zh: "待开始", en: "Todo" },
   doing: { zh: "进行中", en: "Doing" },
@@ -87,7 +81,7 @@ export function propertyName(key: PropertyKey, language: NoteLanguage) {
   return propertyNames[key][language];
 }
 
-export function statusName(key: StatusKey, language: NoteLanguage) {
+export function statusName(key: TaskStatus, language: NoteLanguage) {
   return statusNames[key][language];
 }
 

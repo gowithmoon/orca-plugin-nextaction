@@ -23,12 +23,6 @@ import { registerReadTaskCommand } from "./dev/read-task-command";
 import { registerWriteTaskCommands } from "./dev/write-task-commands";
 import { writeSetting } from "./settings";
 
-export interface TaskTagFeature {
-  feature: FeatureModule;
-  /** Where the task tag stands now; hand this to the task repository. */
-  state: () => TaskTagState;
-}
-
 const settingKey = "taskTagName";
 
 /** Text settings change on every keystroke; act once typing has stopped. */
@@ -47,7 +41,7 @@ const isBlank = (value: unknown) =>
  * invalidated properties are reported to the user but do not fail the load,
  * so the settings page stays usable (e.g. to pick another name).
  */
-export function createTaskTagFeature(): TaskTagFeature {
+export function createTaskTagFeature(): FeatureModule {
   let state: TaskTagState = { kind: "paused", reason: "starting" };
 
   /** Startup: find, recover, create or align the tag, and report on it. */
@@ -241,5 +235,5 @@ export function createTaskTagFeature(): TaskTagFeature {
     });
   };
 
-  return { feature, state: () => state };
+  return feature;
 }

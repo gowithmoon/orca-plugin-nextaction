@@ -1,6 +1,7 @@
 // Plugin block properties: JSON block properties named `nextaction.<key>`
 // (docs/ARCHITECTURE.md §4, block-properties-json). Every value carries a
 // version number, `{ v: 1, ... }`, so its format can evolve.
+import { PropType } from "../prop-type";
 
 /** The fixed prefix; it does not follow the plugin directory name. */
 const prefix = "nextaction.";
@@ -45,9 +46,6 @@ export function readPluginProperty(
 /** The only format version this plugin reads and writes. */
 const currentVersion = 1;
 
-/** Orca `PropType.JSON` (block-properties-json J1). */
-const jsonType = 0;
-
 /** What writing one plugin block property should do. */
 export type PluginPropertyWrite =
   | {
@@ -76,7 +74,8 @@ export function planPluginPropertyWrite(
     kind: "write",
     property: {
       name: prefix + key,
-      type: jsonType,
+      // JSON block properties (block-properties-json J1).
+      type: PropType.JSON,
       value: { ...data, v: currentVersion },
     },
   };

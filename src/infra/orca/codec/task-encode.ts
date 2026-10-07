@@ -3,6 +3,7 @@
 
 import type { CalendarDate } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
+import { PropType } from "../prop-type";
 import {
   type NoteLanguage,
   type PropertyKey,
@@ -99,7 +100,8 @@ export function encodeTaskChanges(
 function dateItem(name: string, date: CalendarDate | null): RefDataItem {
   return date === null
     ? { name, value: null }
-    : { name, type: dateTimeType, value: localMidnight(date) };
+    : // The type is passed with dates as the spikes did.
+      { name, type: PropType.DateTime, value: localMidnight(date) };
 }
 
 /** The `TaskChanges` field each property is written from. */
@@ -122,9 +124,6 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
 function choicesValue(names: readonly string[]): string[] | null {
   return names.length > 0 ? [...names] : null;
 }
-
-/** Orca `PropType.DateTime`, passed with dates as the spikes did. */
-const dateTimeType = 5;
 
 /**
  * Orca keeps the time of day the plugin writes (date-subtype, block D), so a

@@ -7,14 +7,7 @@ import {
   statusKeys,
   statusName,
 } from "../codec/names";
-
-/** Orca `PropType` codes (plugin-docs/constants/db.md). */
-export const PropType = {
-  Text: 1,
-  Number: 3,
-  DateTime: 5,
-  TextChoices: 6,
-} as const;
+import { PropType } from "../prop-type";
 
 /** A property definition as written to the tag block with `setProperties`. */
 export type PropertyDefinition = Required<
