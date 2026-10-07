@@ -16,6 +16,7 @@
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
+    "scripts/deploy-local.ts",
     "tests/source-checks.ts",
     "tests/architecture.test.ts",
     "tests/translations.test.ts"

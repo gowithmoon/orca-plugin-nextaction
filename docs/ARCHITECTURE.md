@@ -187,6 +187,7 @@ tests/
 - 构建用 Vite，测试用 Vitest，lint 和格式化用 Biome（ADR 0010）。
 - 提交信息遵循 Conventional Commits（`feat:`、`fix:`、`refactor:`、`test:`、`docs:`、`chore:`）。
 - CI（GitHub Actions）在每次推送时运行：类型检查、Biome、Vitest、构建。
+- 本机测试：`pnpm deploy:local` 构建后把插件复制到 `ORCA_PLUGINS_DIR/orca-plugin-nextaction/`。`ORCA_PLUGINS_DIR` 写在仓库根目录的 `.env.local`（已被 git 忽略），例如 `ORCA_PLUGINS_DIR=/mnt/c/Users/<你>/Documents/orca/plugins`。复制后在 Orca 中停用再启用插件。
 
 ## 7. 完成的定义
 
