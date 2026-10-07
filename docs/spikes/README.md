@@ -1,0 +1,17 @@
+# 技术验证记录
+
+路线图第一步的技术验证（Issue #5–#13），2026-10-06 至 10-07 在测试笔记库中实测（Windows，UTC+8）。Orca 文档没写清楚的行为，以这里的结论为准；写代码时要遵守的部分已汇总到 `docs/ARCHITECTURE.md` 第 4 节"Orca 行为约束"。
+
+| 文件 | Issue | 主题 | 影响的步骤 |
+|---|---|---|---|
+| [tag-operations.md](./tag-operations.md) | #5 | 打标签、改值、改名、移除标签、撤销、删除块与孤立块 | 第二、三、六步 |
+| [block-properties-json.md](./block-properties-json.md) | #6 | 插件块属性中的 JSON，复制、移动、镜像块 | 第二、三、八、九步 |
+| [editor-sidetool-panel.md](./editor-sidetool-panel.md) | #7 | 编辑器工具按钮、插件面板的打开、覆盖与恢复（ADR 0011） | 第一、四步 |
+| [status-icon-task-menu.md](./status-icon-task-menu.md) | #8 | 状态图标与任务操作菜单 | 第三步 |
+| [journal-capture.md](./journal-capture.md) | #9 | 向日记追加任务，日期与时区 | 第三步及所有涉及日期的步骤 |
+| [native-reminder.md](./native-reminder.md) | #10 | Orca 原生提醒（`Reminder` 标签） | 第十一步 |
+| [block-change-signals.md](./block-change-signals.md) | #11 | 块变更信号与命令后钩子（ADR 0007） | 第四步起的所有视图 |
+| [plugin-lifecycle-settings.md](./plugin-lifecycle-settings.md) | #12 | `pluginName`、设置、`load`/`unload`、重启后的面板 | 第一、二、三步 |
+| [tag-property-query.md](./tag-property-query.md) | #13 | 按标签属性查询的能力与性能，排除孤立块 | 第二步起的所有查询 |
+
+验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。

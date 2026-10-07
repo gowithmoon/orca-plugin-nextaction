@@ -102,11 +102,52 @@ tests/
 - 所有写操作都经过仓储，涉及多个步骤的写操作包在 `orca.commands.invokeGroup` 里，让用户能一次撤销。
 - 属性名、类型码（`PropType`）、标签别名只在 `infra/orca` 中出现。
 - 读写块属性中的 JSON 时，必须经过带版本号的编解码函数；遇到无法解析的数据时保留原值并记录警告，禁止静默覆盖。
-- 视图按需查询，缓存遵循 ADR 0007：插件写入后让相关缓存失效。
+- 视图按需查询，缓存遵循 ADR 0007：插件写入后、命令后钩子报告相关编辑后、视图获得焦点时，让相关缓存失效。
+
+### Orca 行为约束（实测）
+
+以下规矩来自 `docs/spikes/` 中的实测结论（括号内为文件名），违反它们会得到错误数据，或者让 Orca 崩溃。
+
+查询（`tag-property-query`）：
+- 每次 `query` 都显式传 `pageSize`，默认只返回 20 条。
+- 检查返回值是不是数组：出错时返回 `{ code: "SQLITE_ERROR" }`，不抛异常。
+- 不使用 `sort` 和 `page`，排序和分页在内存中做。
+- 单选属性"是几个值之一"用 OR 组表达；多选属性"不包含"用取反组表达。不要用 `op: 3` 传数组，也不要用 `op: 4`。
+- 任务查询一律加上 `{ kind: 9, hasParent: true }`，排除被删除后残留的孤立块（`tag-operations`）。
+
+读写任务数据（`tag-operations`、`block-properties-json`）：
+- 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；日期是 ISO 字符串。
+- 修改标签块上的属性定义时，传入完整的 `typeArgs`（Orca 是整体替换），并显式写入 `pos`。
+- 块引用属性（依赖）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。
+- 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
+- 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
+- **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
+- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。
+
+日记与日期（`journal-capture`）：
+- `get-journal-block` 会在日记不存在时创建它，只在要写入日记时调用。
+- `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造，`domain` 只用年、月、日表示日期。
+- `time` 类型的设置只取本地的小时和分钟（`plugin-lifecycle-settings`）。
+
+导航与面板（`editor-sidetool-panel`，ADR 0011）：
+- 传给导航 API 的 `viewArgs` 保持原始类型，不做 JSON 序列化或深拷贝；只操作参数结构已知的 `block` 和 `journal` 视图。传错类型会让整个 Orca 崩溃。
+- 调用 `nav.changeSizes` 时传入这一行所有面板的宽度。
+- `orca.state.panels` 中的对象是实时的，需要保存的值在调用导航 API 之前取出；不要序列化它（含 DOM 元素）。
+- 插件面板中需要让用户复制的文字，显式设置 `user-select: text`。
+
+撤销（`tag-operations`）：
+- `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。
+
+界面注入（`status-icon-task-menu`）：
+- 依赖 Orca 内部 DOM 结构的选择器和命中判断，全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配。
 
 ### 注册与清理
 
-- 所有 `register*`、事件监听、样式注入、定时器都通过 `platform/registry.ts` 进行。注册表在 `unload` 时按注册的逆序全部释放。代码中禁止出现游离的 `register*` 调用。
+- 所有 `register*`、事件监听、样式注入、定时器、独立的 React 根节点都通过 `platform/registry.ts` 进行。注册表在 `unload` 时按注册的逆序全部释放。代码中禁止出现游离的 `register*` 调用。
+- `load` 和 `unload` 必须经得起反复调用：Orca 启用插件时可能在 1 秒内执行 `load → unload → load`；`load` 抛错后，停用时仍会调用 `unload`。注册表要能处理只加载了一半的状态（`plugin-lifecycle-settings`）。
+- 每次 `load` 都是新的模块实例，模块级变量不会跨越停用和启用保留。
+- 注销插件面板类型之前，先关闭所有打开着的插件面板；覆盖打开的，恢复被覆盖的内容（ADR 0011）。只注销不关闭，面板会一直留在界面上。
+- 设置在 `setSettingsSchema` 之后从 `orca.state.plugins[pluginName].settings` 读取，没有默认值的项由插件补上默认值。文本设置在用户输入过程中会多次变化，由设置触发的副作用（例如任务标签改名）要等输入停止后再执行，并校验新值。
 - 不覆盖、不干扰 Orca 自带的命令、渲染器和界面。
 
 ### 错误处理

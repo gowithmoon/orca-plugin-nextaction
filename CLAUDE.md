@@ -25,6 +25,7 @@ Orca Note（虎鲸笔记）的 GTD 任务管理插件，插件名 `orca-plugin-n
 - 代码中的状态等值使用英文键（`inbox`、`todo`……）；属性名、选项名、`PropType` 类型码只出现在 `infra/orca`。
 - 界面文字一律写成 `t("English source")`，同时补全 `zhCN` 翻译。
 - 当前所在的路线图步骤之外的功能，记下来留给对应步骤，不顺手实现。
+- 插件开发中，tdd流程仅用于业务规则，不用于Orca行为、界面验证；涉及代码review，必须批判性接受，禁止做插件环境不必要的实现。
 
 ## Orca API 资料
 
