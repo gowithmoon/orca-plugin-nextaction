@@ -8,7 +8,7 @@ Orca Note（虎鲸笔记）的 GTD 任务管理插件，插件名 `orca-plugin-n
 
 | 文档 | 管什么 | 何时读 |
 |---|---|---|
-| `CONTEXT.md` | 术语 | 每次。代码、文档、Issue 都用这里的词，_Avoid_ 列出的词不用 |
+| `GLOSSARY.md` | 术语 | 每次。代码、文档、Issue 都用这里的词，_Avoid_ 列出的词不用 |
 | `docs/adr/` | 已做的决策及理由 | 改动涉及数据存储、任务识别、父子关系、分层、时间、重复、缓存、工具链时 |
 | `docs/ARCHITECTURE.md` | 工程规矩：分层、目录、编码、测试、完成的定义 | 写代码前 |
 | `docs/ROADMAP.md` | 步骤顺序和每一步的范围 | 开始一项工作前，确认它属于当前这一步 |
@@ -53,4 +53,4 @@ Default canonical labels: needs-triage, needs-info, ready-for-agent, ready-for-h
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

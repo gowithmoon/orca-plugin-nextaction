@@ -1,6 +1,6 @@
 # 架构与工程规矩
 
-本文件是写代码时必须遵守的规矩。术语以 [`CONTEXT.md`](../CONTEXT.md) 为准，每条规矩背后的理由见 [`docs/adr/`](./adr/)。规矩需要修改时，先改本文件（必要时补一个 ADR），再改代码。
+本文件是写代码时必须遵守的规矩。术语以 [`GLOSSARY.md`](../GLOSSARY.md) 为准，每条规矩背后的理由见 [`docs/adr/`](./adr/)。规矩需要修改时，先改本文件（必要时补一个 ADR），再改代码。
 
 ## 1. 核心原则
 
@@ -79,7 +79,7 @@ tests/
 
 ### 命名
 
-- 领域概念一律使用 `CONTEXT.md` 中的英文名（`Task`、`NextAction`、`LogicalDay` 等），不要使用其中列为 _Avoid_ 的词。
+- 领域概念一律使用 `GLOSSARY.md` 中的英文名（`Task`、`NextAction`、`LogicalDay` 等），不要使用其中列为 _Avoid_ 的词。
 - 插件名是 `orca-plugin-nextaction`，即插件目录名，也是 Orca 传给 `load` 的 `pluginName`。
 - 注册给 Orca 的所有标识符（命令、面板、渲染器、按钮、设置、broadcast 类型）都以运行时的 `pluginName` 加 `.` 开头，由注册表统一拼接和校验，代码中不写死前缀。
 - 写进笔记的数据键（插件块属性名等）使用固定前缀 `nextaction.`，不随插件目录名变化，这样即使插件目录被改名，已有数据仍然可读。不允许以 `_` 开头。
@@ -170,7 +170,7 @@ tests/
 
 | 对象 | 方式 | 要求 |
 |---|---|---|
-| `domain` | Vitest 单元测试 | 每条规则都有测试，边界场景（`CONTEXT.md` 中的每条约定）必须覆盖 |
+| `domain` | Vitest 单元测试 | 每条规则都有测试，边界场景（`GLOSSARY.md` 中的每条约定）必须覆盖 |
 | `application` | Vitest，配合内存版仓储和固定时钟 | 每个用例都有测试 |
 | `infra/orca/codec` | Vitest，使用 `tests/fixtures` 中的真实 Block 样本 | 中英文名称、空值、异常数据都要覆盖 |
 | `infra`（其余部分）、`ui` | 在 Orca 中手动验证 | 每一步的完成标准里列出验证清单 |
@@ -194,5 +194,5 @@ tests/
 - 新规则有测试，修复的缺陷有回归测试。
 - 新增的界面文字都已有中文翻译。
 - 新注册的东西都经过注册表。
-- 引入了新术语就更新 `CONTEXT.md`；做出了符合条件的决策就补一个 ADR。
+- 引入了新术语就更新 `GLOSSARY.md`；做出了符合条件的决策就补一个 ADR。
 - 在 Orca 中按验证清单手动检查过。
