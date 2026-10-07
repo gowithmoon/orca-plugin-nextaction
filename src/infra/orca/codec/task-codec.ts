@@ -82,13 +82,19 @@ function isOrphan(block: RawBlock): boolean {
 /** Orca `RefType.Property`: a tag reference (plugin-docs/constants/db.md). */
 const propertyRef = 2;
 
+/** The block's reference to the task tag, which holds the task's values. */
+export function findTaskTagRef<R extends RawBlock["refs"][number]>(
+  refs: readonly R[],
+  tagBlockId: number,
+): R | undefined {
+  return refs.find((r) => r.type === propertyRef && r.to === tagBlockId);
+}
+
 export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
   const sourceId = mirrorSourceId(block);
   if (sourceId !== undefined) return { kind: "mirror", sourceId };
   if (isOrphan(block)) return { kind: "not-task", reason: "orphan" };
-  const ref = block.refs.find(
-    (r) => r.type === propertyRef && r.to === tag.tagBlockId,
-  );
+  const ref = findTaskTagRef(block.refs, tag.tagBlockId);
   if (!ref) return { kind: "not-task", reason: "untagged" };
   const values = new Map<PropertyKey, unknown>();
   for (const item of ref.data ?? []) {
