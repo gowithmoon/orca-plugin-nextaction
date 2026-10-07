@@ -10,12 +10,31 @@ import type {
   QueryTag2,
   QueryTagProperty,
 } from "../../../orca.d.ts";
-import { type NoteLanguage, propertyName, statusName } from "../codec/names";
+import {
+  type NoteLanguage,
+  type PropertyKey,
+  propertyName,
+  statusName,
+} from "../codec/names";
+import { OrcaError } from "../orca-error";
 
 /** The task tag's name, and the language of the names on it (ADR 0009). */
 export interface TaskTagNames {
   tagName: string;
   language: NoteLanguage;
+  /** Plugin properties whose definition conflicts (#19); never filtered by. */
+  invalidated: readonly PropertyKey[];
+}
+
+/** The properties a filter actually constrains. */
+function filteredProperties(filter: TaskFilter): PropertyKey[] {
+  const used = (values: TaskFilter["contexts"]) =>
+    (values?.includes?.length ?? 0) + (values?.excludes?.length ?? 0) > 0;
+  const keys: PropertyKey[] = [];
+  if ((filter.statuses ?? []).length > 0) keys.push("status");
+  if (used(filter.contexts)) keys.push("context");
+  if (used(filter.labels)) keys.push("label");
+  return keys;
 }
 
 /** `query` returns only 20 results unless told otherwise. */
@@ -50,10 +69,23 @@ function statusIs(status: TaskStatus, tag: TaskTagNames): QueryTagProperty {
   };
 }
 
+/**
+ * Throws an `OrcaError` when the filter uses an invalidated property: such a
+ * property reads as empty (ADR 0008), so a query on it would disagree with
+ * reading.
+ */
 export function buildTaskQuery(
   filter: TaskFilter,
   tag: TaskTagNames,
 ): QueryDescription2 {
+  const refused = filteredProperties(filter).filter((key) =>
+    tag.invalidated.includes(key),
+  );
+  if (refused.length > 0) {
+    throw new OrcaError(
+      `cannot filter by invalidated properties: ${refused.join(", ")}`,
+    );
+  }
   const properties: QueryTagProperty[] = [];
   const groups: QueryItem2[] = [];
   const statuses = filter.statuses ?? [];

@@ -7,7 +7,6 @@ import type {
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block } from "../../../orca.d.ts";
-import { describeError } from "../../../shared/describe-error";
 import {
   planPluginPropertyWrite,
   readPluginProperty,
@@ -19,6 +18,7 @@ import {
   type TaskTagContext,
 } from "../codec/task-codec";
 import { encodeTaskChanges } from "../codec/task-encode";
+import { invokeBackend, invokeEditorCommand, invokeGroup } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
@@ -30,20 +30,16 @@ import type { TaskTagState } from "../schema/task-tag-state";
  * result is matched by ID and anything else is ignored.
  */
 async function getBlocks(ids: readonly number[]): Promise<Map<number, Block>> {
-  let result: unknown;
-  try {
-    result = await orca.invokeBackend("get-blocks", ids);
-  } catch (error) {
-    throw new OrcaError(`get-blocks failed: ${describeError(error)}`);
-  }
+  const result = await invokeBackend("get-blocks", ids);
   if (!Array.isArray(result)) {
     throw new OrcaError(`get-blocks returned ${JSON.stringify(result)}`);
   }
+  const wanted = new Set(ids);
   const blocks = new Map<number, Block>();
   for (const item of result) {
     if (typeof item === "object" && item !== null && "id" in item) {
       const block = item as Block;
-      if (ids.includes(block.id)) blocks.set(block.id, block);
+      if (wanted.has(block.id)) blocks.set(block.id, block);
     }
   }
   return blocks;
@@ -62,25 +58,6 @@ async function sourceBlock(id: number): Promise<Block | undefined> {
   if (sourceId === undefined) return block;
   const source = (await getBlocks([sourceId])).get(sourceId);
   return source && mirrorSourceId(source) === undefined ? source : undefined;
-}
-
-/** Runs an Orca editor command, turning a failure into an `OrcaError`. */
-async function editorCommand(command: string, ...args: unknown[]) {
-  try {
-    return await orca.commands.invokeEditorCommand(command, null, ...args);
-  } catch (error) {
-    throw new OrcaError(`${command} failed: ${describeError(error)}`);
-  }
-}
-
-/** One undo for everything `write` does (tag-operations, round 2 F1/F2). */
-async function asOneUndo(write: () => Promise<void>): Promise<void> {
-  try {
-    await orca.commands.invokeGroup(write);
-  } catch (error) {
-    if (error instanceof OrcaError) throw error;
-    throw new OrcaError(`invokeGroup failed: ${describeError(error)}`);
-  }
 }
 
 /**
@@ -128,7 +105,8 @@ export function createOrcaTaskRepository(
   /** Writes to a task, then reports it written even if the write failed. */
   const writeTo = async (block: Block, write: () => Promise<void>) => {
     try {
-      await asOneUndo(write);
+      // One undo for everything `write` does.
+      await invokeGroup(write);
     } finally {
       onWritten(block.id);
     }
@@ -161,7 +139,7 @@ export function createOrcaTaskRepository(
       // setRefData takes the whole reference object and changes only the
       // items passed (tag-operations, round 1 steps 05–06).
       await writeTo(block, async () => {
-        await editorCommand("core.editor.setRefData", ref, items);
+        await invokeEditorCommand("core.editor.setRefData", ref, items);
       });
     },
 
@@ -203,7 +181,7 @@ export function createOrcaTaskRepository(
       // setProperties replaces a property of the same name and keeps the
       // others (block-properties-json J2).
       await writeTo(block, async () => {
-        await editorCommand(
+        await invokeEditorCommand(
           "core.editor.setProperties",
           [block.id],
           [plan.property],
@@ -216,21 +194,16 @@ export function createOrcaTaskRepository(
       const names: TaskTagNames = {
         tagName: state.tagName,
         language: state.language,
+        invalidated: state.invalidated,
       };
       const context: TaskTagContext = {
         tagBlockId: state.tagBlockId,
         invalidated: state.invalidated,
       };
-      let result: unknown;
-      try {
-        result = await orca.invokeBackend(
-          "query",
-          buildTaskQuery(filter, names),
-        );
-      } catch (error) {
-        throw new OrcaError(`query failed: ${describeError(error)}`);
-      }
-      const ids = blockIdsFromQueryResult(result);
+      // Built first: a filter on an invalidated property fails before the
+      // query runs.
+      const query = buildTaskQuery(filter, names);
+      const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
       if (ids.length === 0) return [];
       const blocks = await getBlocks(ids);
       const tasks: Task[] = [];

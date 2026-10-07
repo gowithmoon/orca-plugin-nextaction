@@ -123,6 +123,23 @@ describe("decodeTask", () => {
     expect(task.effort).toBe(1);
   });
 
+  it("reads an invalidated status as inbox without recording an anomaly", () => {
+    // The anomaly is about a value on a valid status property; once the
+    // property itself is invalidated, every task would carry one.
+    for (const block of [
+      blocks.zhFilled,
+      blocks.zhAbnormal,
+      blocks.zhCleared,
+    ]) {
+      const task = decodedTask(block, {
+        tagBlockId: tagBlocks.zh.id,
+        invalidated: ["status"],
+      });
+      expect(task.status).toBe("inbox");
+      expect(task.anomalies).toEqual([]);
+    }
+  });
+
   it("reads a block without the task tag as not a task", () => {
     expect(decodeTask(blocks.plain, zhTag)).toEqual({
       kind: "not-task",
@@ -151,6 +168,28 @@ describe("decodeTask", () => {
       reason: "orphan",
     });
   });
+
+  // The task query asks for `{ kind: 9, hasParent: true }` (#21), so reading
+  // by ID agrees with it: any tagged block without a parent is not a task
+  // (#20), whatever else it is.
+  it.each([
+    ["a page (it has an alias)", { aliases: ["NA页面"] }],
+    [
+      "a journal block",
+      {
+        properties: blocks.zhFilled.properties.map((p) =>
+          p.name === "_repr" ? { ...p, value: { type: "journal" } } : p,
+        ),
+      },
+    ],
+  ])(
+    "reads a tagged block without a parent as not a task, even %s",
+    (_, change) => {
+      expect(
+        decodeTask({ ...blocks.zhFilled, parent: null, ...change }, zhTag),
+      ).toEqual({ kind: "not-task", reason: "orphan" });
+    },
+  );
 });
 
 describe("decodeTask with values of the wrong kind", () => {

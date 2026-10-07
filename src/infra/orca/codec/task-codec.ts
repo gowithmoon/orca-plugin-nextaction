@@ -68,15 +68,13 @@ export function mirrorSourceId(
 }
 
 /**
- * A block deleted while still referenced: no parent, no alias and not a
- * journal (tag-operations, rounds 4–5). Such a block keeps its task tag.
+ * A block without a parent (#20), such as one deleted while still referenced
+ * (tag-operations, rounds 4–5), which keeps its task tag. Pages and journal
+ * blocks have no parent either and count too, so reading by ID agrees with
+ * the task query’s `{ kind: 9, hasParent: true }` (#21).
  */
 function isOrphan(block: RawBlock): boolean {
-  return (
-    block.parent == null &&
-    block.aliases.length === 0 &&
-    reprOf(block).type !== "journal"
-  );
+  return block.parent == null;
 }
 
 /** Orca `RefType.Property`: a tag reference (plugin-docs/constants/db.md). */
@@ -104,6 +102,9 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
     }
   }
   const status = values.get("status");
+  // An invalidated status reads as inbox with no anomaly: an anomaly is
+  // about a value stored on a valid status property, not about the property.
+  const statusInvalidated = tag.invalidated.includes("status");
   return {
     kind: "task",
     task: taskFromNotes({
@@ -112,8 +113,11 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
         .map((fragment) => (typeof fragment.v === "string" ? fragment.v : ""))
         .join(""),
       status: {
-        key:
-          typeof status === "string" ? findStatusKey(status)?.key : undefined,
+        key: statusInvalidated
+          ? "inbox"
+          : typeof status === "string"
+            ? findStatusKey(status)?.key
+            : undefined,
         value: status ?? null,
       },
       importance: numberValue(values.get("importance")),

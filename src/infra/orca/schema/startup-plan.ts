@@ -8,16 +8,11 @@ import {
   type PropertyKey,
   propertyKeys,
 } from "../codec/names";
+import type { TaskTagCache } from "./task-tag-cache";
 import {
   type PropertyDefinition,
   taskTagDefinitions,
 } from "./task-tag-structure";
-
-/** What this repo remembers about the task tag it last used (ADR 0002). */
-export interface TaskTagCache {
-  tagBlockId: number;
-  tagName: string;
-}
 
 export interface StartupInput {
   /** The task tag name from the settings, already resolved (never empty). */
@@ -27,8 +22,8 @@ export interface StartupInput {
   /** This repo's cache; `undefined` when there is none (or it is unreadable). */
   cache: TaskTagCache | undefined;
   /**
-   * The block the cache points at, read only when no block is called
-   * `tagName`; `undefined` when it was not read or no longer exists. Block IDs
+   * The block the cache points at, read only when `tagBlock` is not that
+   * block; `undefined` when it was not read or no longer exists. Block IDs
    * are reused (tag-operations spike), so it is checked, not trusted.
    */
   cachedBlock?: Pick<Block, "id" | "aliases" | "properties"> | undefined;
@@ -61,6 +56,20 @@ export type StartupAction =
       from: string;
       to: string;
       tagBlockId: number;
+      invalidated: PropertyKey[];
+      language: NoteLanguage;
+    }
+  /**
+   * The name was changed in the settings while the plugin was off, to a name
+   * another block already has: keep using the cached tag under `tagName`, as
+   * with `use`, write `tagName` back to the settings and tell the user
+   * (ADR 0002). That block is not taken over.
+   */
+  | {
+      kind: "revert";
+      tagBlockId: number;
+      tagName: string;
+      requested: string;
       invalidated: PropertyKey[];
       language: NoteLanguage;
     };
@@ -197,14 +206,33 @@ function planExisting(
 
 export function planStartup(input: StartupInput): StartupPlan {
   const { tagBlock, cache, cachedBlock } = input;
-  if (tagBlock) return planExisting(tagBlock, cache, input.uiLanguage);
-  // Recovery: the cached block is still the tag under the cached name.
-  if (
+  // The cached block is still the tag under the cached name.
+  const cachedTag =
     cache &&
     cachedBlock?.id === cache.tagBlockId &&
     cachedBlock.aliases.includes(cache.tagName)
-  ) {
-    const plan = planExisting(cachedBlock, cache, input.uiLanguage);
+      ? cachedBlock
+      : undefined;
+  if (tagBlock) {
+    if (cache && cachedTag && tagBlock.id !== cachedTag.id) {
+      const plan = planExisting(cachedTag, cache, input.uiLanguage);
+      if (plan.action.kind === "use") {
+        return {
+          action: {
+            ...plan.action,
+            kind: "revert",
+            tagName: cache.tagName,
+            requested: input.tagName,
+          },
+          writes: plan.writes,
+        };
+      }
+    }
+    return planExisting(tagBlock, cache, input.uiLanguage);
+  }
+  // Recovery: rename the cached tag to the name from the settings.
+  if (cache && cachedTag) {
+    const plan = planExisting(cachedTag, cache, input.uiLanguage);
     if (plan.action.kind === "use") {
       return {
         action: {

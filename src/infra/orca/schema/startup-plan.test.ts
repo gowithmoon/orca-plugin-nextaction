@@ -550,6 +550,69 @@ describe("startup plan", () => {
       });
     });
 
+    describe("onto a name another block already has", () => {
+      // The user renamed "任务" to "NA已占用" in the settings while the plugin
+      // was disabled, and a page is already called "NA已占用" (ADR 0002).
+      const cachedTag = tagBlock(readBack(zhDefinitions), 211, ["任务"]);
+
+      it.each([
+        ["a plain page", tagBlock([], 305, ["NA已占用"])],
+        [
+          "a page that would pass a takeover",
+          tagBlock(readBack(zhDefinitions), 305, ["NA已占用"]),
+        ],
+      ])("keeps the cached tag rather than taking over %s", (_, page) => {
+        expect(
+          planStartup({
+            tagName: "NA已占用",
+            tagBlock: page,
+            cache: renamedInSettings,
+            cachedBlock: cachedTag,
+            uiLanguage: "zh",
+          }),
+        ).toEqual({
+          action: {
+            kind: "revert",
+            tagBlockId: 211,
+            tagName: "任务",
+            requested: "NA已占用",
+            invalidated: [],
+            language: "zh",
+          },
+          writes: [],
+        });
+      });
+
+      it("still aligns the cached tag it keeps", () => {
+        const plan = planStartup({
+          tagName: "NA已占用",
+          tagBlock: tagBlock([], 305, ["NA已占用"]),
+          cache: renamedInSettings,
+          cachedBlock: tagBlock(readBack(without(["备注"])), 211, ["任务"]),
+          uiLanguage: "zh",
+        });
+        expect(plan.action.kind).toBe("revert");
+        expect(plan.writes).toEqual([{ name: "备注", type: 1, pos: 7 }]);
+      });
+
+      it("goes by the name when the cached block is no longer the tag", () => {
+        expect(
+          planStartup({
+            tagName: "NA已占用",
+            tagBlock: tagBlock(readBack(zhDefinitions), 305, ["NA已占用"]),
+            cache: renamedInSettings,
+            cachedBlock: tagBlock(readBack(zhDefinitions), 211, ["别的名字"]),
+            uiLanguage: "zh",
+          }).action,
+        ).toEqual({
+          kind: "use",
+          tagBlockId: 305,
+          invalidated: [],
+          language: "zh",
+        });
+      });
+    });
+
     it("goes by the name alone when the cache is lost", () => {
       expect(
         planStartup({

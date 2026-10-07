@@ -4,9 +4,14 @@
 // property with `op: 3` and an array (Q3b, always empty), and a multi-select
 // property with `op: 4` (Q11, wrong set).
 import { describe, expect, it } from "vitest";
+import { OrcaError } from "../orca-error";
 import { buildTaskQuery, type TaskTagNames } from "./task-query";
 
-const zhTag: TaskTagNames = { tagName: "任务", language: "zh" };
+const zhTag: TaskTagNames = {
+  tagName: "任务",
+  language: "zh",
+  invalidated: [],
+};
 
 const notOrphan = { kind: 9, hasParent: true };
 const allResults = 100_000;
@@ -150,7 +155,11 @@ describe("buildTaskQuery", () => {
   });
 
   it("combines every condition on an English task tag with English names", () => {
-    const enTag: TaskTagNames = { tagName: "Task", language: "en" };
+    const enTag: TaskTagNames = {
+      tagName: "Task",
+      language: "en",
+      invalidated: [],
+    };
     expect(
       buildTaskQuery(
         {
@@ -204,6 +213,40 @@ describe("buildTaskQuery", () => {
         ],
       },
       pageSize: allResults,
+    });
+  });
+
+  describe("on a task tag with invalidated properties", () => {
+    // ADR 0008: an invalidated property reads as empty, so a query on it
+    // could never agree with reading; it fails instead of running.
+    const tag: TaskTagNames = {
+      ...zhTag,
+      invalidated: ["status", "context", "label"],
+    };
+
+    it.each([
+      ["status", { statuses: ["inbox"] as const }],
+      ["contexts it includes", { contexts: { includes: ["@home"] } }],
+      ["contexts it excludes", { contexts: { excludes: ["@home"] } }],
+      ["labels", { labels: { includes: ["house"] } }],
+    ])("refuses to filter by %s", (_, filter) => {
+      expect(() => buildTaskQuery(filter, tag)).toThrow(OrcaError);
+    });
+
+    it("still filters by properties that are not invalidated", () => {
+      const statusOnly: TaskTagNames = { ...zhTag, invalidated: ["status"] };
+      expect(() =>
+        buildTaskQuery(
+          { contexts: { includes: ["@home"] }, underBlockId: 42 },
+          statusOnly,
+        ),
+      ).not.toThrow();
+    });
+
+    it("treats empty value lists as no filter", () => {
+      expect(() =>
+        buildTaskQuery({ contexts: { includes: [], excludes: [] } }, tag),
+      ).not.toThrow();
     });
   });
 });

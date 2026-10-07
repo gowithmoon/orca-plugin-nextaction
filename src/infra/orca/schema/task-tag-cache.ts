@@ -2,7 +2,12 @@
 // Discardable: anything unreadable counts as no cache. `setData` is already
 // per repo (plugin-lifecycle-settings spike), so the key carries no repo name.
 import { describeError } from "../../../shared/describe-error";
-import type { TaskTagCache } from "./startup-plan";
+
+/** What this repo remembers about the task tag it last used (ADR 0002). */
+export interface TaskTagCache {
+  tagBlockId: number;
+  tagName: string;
+}
 
 const cacheKey = "taskTag";
 

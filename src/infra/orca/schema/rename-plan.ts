@@ -1,6 +1,6 @@
 // What to do when the task tag name changes in the settings (ADR 0002). Pure;
 // the settings subscription, debounce and `renameAlias` live in platform.
-import type { TaskTagCache } from "./startup-plan";
+import type { TaskTagCache } from "./task-tag-cache";
 
 export interface RenameInput {
   /** The task tag in use. */
