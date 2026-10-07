@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "NODE_ENV=production vite build",
+    "build:dev": "NODE_ENV=development vite build --mode development",
     "deploy:local": "pnpm build && node --env-file-if-exists=.env.local scripts/deploy-local.ts",
+    "deploy:local:dev": "pnpm build:dev && node --env-file-if-exists=.env.local scripts/deploy-local.ts",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "lint": "biome check",

@@ -4,6 +4,7 @@ import {
   type PropertyKey,
   propertyName,
 } from "../infra/orca/codec/names";
+import { createOrcaTaskRepository } from "../infra/orca/repository/orca-task-repository";
 import type { RenamePlan } from "../infra/orca/schema/rename-plan";
 import { runStartupPlan } from "../infra/orca/schema/run-startup-plan";
 import { applyRename } from "../infra/orca/schema/tag-alias";
@@ -13,6 +14,8 @@ import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
+import { registerQueryInboxCommand } from "./dev/query-inbox-command";
+import { registerReadTaskCommand } from "./dev/read-task-command";
 import { writeSetting } from "./settings";
 
 export interface TaskTagFeature {
@@ -177,6 +180,13 @@ export function createTaskTagFeature(): TaskTagFeature {
   };
 
   const feature: FeatureModule = async (context) => {
+    // Statically false in production builds, so the commands and the
+    // repository they use are left out of the bundle (#20).
+    if (import.meta.env.DEV) {
+      const repository = createOrcaTaskRepository(() => state);
+      registerReadTaskCommand(context.registry, repository);
+      registerQueryInboxCommand(context.registry, repository);
+    }
     const uiLanguage = noteLanguageFor(orca.state.locale);
     await start(context, uiLanguage);
 
