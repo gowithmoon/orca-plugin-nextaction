@@ -19,13 +19,13 @@ export type SettingsDefinition = Record<string, SettingDefinition>;
 
 export const settingsDefinition: SettingsDefinition = {
   // No `defaultValue` and no fallback: the default follows the interface
-  // language at first start and is resolved where the tag is looked up
-  // (spec #16). Writing it back into the settings is #23.
+  // language at first start, is resolved where the tag is looked up and then
+  // written back here, so it no longer follows the language (ADR 0002).
   taskTagName: {
     schema: () => ({
       label: t("Task tag name"),
       description: t(
-        "The Orca tag that marks a block as a task. Leave empty to use the default name.",
+        "The Orca tag that marks a block as a task. Changing it renames the tag; existing tasks keep it.",
       ),
       type: "string",
     }),
@@ -59,4 +59,21 @@ export function readSettings(
       stored[key] ?? item.fallback,
     ]),
   );
+}
+
+/**
+ * Sets one setting of this repo. `setSettings` replaces the whole object
+ * (plugin-lifecycle-settings spike), so the others are carried over; the
+ * settings subscription fires once for this write, before it returns.
+ */
+export async function writeSetting(
+  pluginName: string,
+  key: string,
+  value: unknown,
+): Promise<void> {
+  const stored = orca.state.plugins[pluginName]?.settings ?? {};
+  await orca.plugins.setSettings("repo", pluginName, {
+    ...stored,
+    [key]: value,
+  });
 }

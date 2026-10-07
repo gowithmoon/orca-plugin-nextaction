@@ -28,8 +28,11 @@ export interface Registry {
   broadcastHandler(name: string, handler: CommandFn): string;
   /** Injects a style sheet; the prefixed identifier is its role. */
   css(name: string, css: string): string;
-  /** Schedules a callback; cleared on release if it has not fired yet. */
-  timeout(fn: () => void, ms: number): void;
+  /**
+   * Schedules a callback; cleared on release if it has not fired yet. Returns
+   * a function that clears it earlier (e.g. to debounce).
+   */
+  timeout(fn: () => void, ms: number): () => void;
   /** Repeats a callback; cleared on release. */
   interval(fn: () => void, ms: number): void;
   /**
@@ -98,9 +101,17 @@ export function createRegistry(pluginName: string): Registry {
     validate(id);
     entries.push({ id, dispose });
   };
-  /** Records a resource that has no identifier of ours (hooks, listeners, timers...). */
+  /**
+   * Records a resource that has no identifier of ours (hooks, listeners,
+   * timers...). Returns a function that forgets it once it is gone on its own.
+   */
   const track = (dispose: () => void | Promise<void>) => {
-    entries.push({ id: undefined, dispose });
+    const entry = { id: undefined, dispose };
+    entries.push(entry);
+    return () => {
+      const index = entries.indexOf(entry);
+      if (index >= 0) entries.splice(index, 1);
+    };
   };
   /** Validates, registers with Orca, then records the release; returns the full identifier. */
   const owned = (
@@ -152,8 +163,17 @@ export function createRegistry(pluginName: string): Registry {
         (id) => orca.themes.removeCSS(id),
       ),
     timeout(fn, ms) {
-      const handle = setTimeout(fn, ms);
-      track(() => clearTimeout(handle));
+      // A fired or cleared timer leaves the registry, so a debounce does not
+      // pile up one entry per keystroke.
+      const handle = setTimeout(() => {
+        forget();
+        fn();
+      }, ms);
+      const forget = track(() => clearTimeout(handle));
+      return () => {
+        clearTimeout(handle);
+        forget();
+      };
     },
     interval(fn, ms) {
       const handle = setInterval(fn, ms);

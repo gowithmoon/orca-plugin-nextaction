@@ -1,10 +1,15 @@
 // TaskRepository on Orca. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import type { TaskRepository } from "../../../application/ports/task-repository";
+import type {
+  TaskFilter,
+  TaskRepository,
+} from "../../../application/ports/task-repository";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { Block } from "../../../orca.d.ts";
 import { describeError } from "../../../shared/describe-error";
 import { decodeTask, type TaskTagContext } from "../codec/task-codec";
 import { OrcaError } from "../orca-error";
+import { blockIdsFromQueryResult } from "../query/query-result";
+import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
 import type { TaskTagState } from "../schema/task-tag-state";
 
 /**
@@ -40,11 +45,15 @@ async function getBlocks(ids: readonly number[]): Promise<Map<number, Block>> {
 export function createOrcaTaskRepository(
   tagState: () => TaskTagState,
 ): TaskRepository {
-  const currentTag = (): TaskTagContext => {
+  const readyTag = () => {
     const state = tagState();
     if (state.kind !== "ready") {
       throw new OrcaError(`task features are paused (${state.reason})`);
     }
+    return state;
+  };
+  const currentTag = (): TaskTagContext => {
+    const state = readyTag();
     return { tagBlockId: state.tagBlockId, invalidated: state.invalidated };
   };
 
@@ -70,6 +79,42 @@ export function createOrcaTaskRepository(
           return resolved.kind === "task" ? resolved.task : null;
         }
       }
+    },
+
+    async queryTasks(filter: TaskFilter): Promise<Task[]> {
+      const state = readyTag();
+      const names: TaskTagNames = {
+        tagName: state.tagName,
+        language: state.language,
+      };
+      const context: TaskTagContext = {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      };
+      let result: unknown;
+      try {
+        result = await orca.invokeBackend(
+          "query",
+          buildTaskQuery(filter, names),
+        );
+      } catch (error) {
+        throw new OrcaError(`query failed: ${describeError(error)}`);
+      }
+      const ids = blockIdsFromQueryResult(result);
+      if (ids.length === 0) return [];
+      const blocks = await getBlocks(ids);
+      const tasks: Task[] = [];
+      for (const id of ids) {
+        const block = blocks.get(id);
+        if (!block) continue;
+        const decoded = decodeTask(block, context);
+        // The query asks for blocks carrying the task tag, so a mirror is not
+        // expected among the results (not measured). Should one appear, it is
+        // skipped rather than read twice; the orphan condition in the query
+        // makes "orphan" equally unexpected here.
+        if (decoded.kind === "task") tasks.push(decoded.task);
+      }
+      return tasks;
     },
   };
 }

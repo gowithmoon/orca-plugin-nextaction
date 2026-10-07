@@ -4,8 +4,14 @@ const zhCN: Record<string, string> = {
     "加载失败：${reason}。清理时也出错：${cleanup}",
   "Failed to unload: ${reason}": "卸载失败：${reason}",
   "Task tag name": "任务标签名",
-  "The Orca tag that marks a block as a task. Leave empty to use the default name.":
-    "用来把块标记为任务的 Orca 标签。留空时使用默认名称。",
+  "The Orca tag that marks a block as a task. Changing it renames the tag; existing tasks keep it.":
+    "用来把块标记为任务的 Orca 标签。修改后会重命名这个标签，已有任务不受影响。",
+  'The task tag name cannot be empty. It was set back to "${name}".':
+    "任务标签名不能为空，已改回“${name}”。",
+  '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':
+    "“${requested}”已被其他页面或块使用，任务标签没有改名，名称已改回“${name}”。",
+  'Could not rename the task tag "${name}": ${reason}':
+    "无法重命名任务标签“${name}”：${reason}",
   'Could not set up the task tag "${name}": ${reason}':
     "无法设置任务标签“${name}”：${reason}",
   'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Task features are paused. Choose another task tag name in the plugin settings.':
@@ -13,6 +19,7 @@ const zhCN: Record<string, string> = {
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
   "Read current block as task (debug)": "读取当前块为任务（调试）",
+  "Query inbox tasks (debug)": "查询收集箱中的任务（调试）",
 };
 
 export default zhCN;
