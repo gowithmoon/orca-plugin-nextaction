@@ -6,7 +6,10 @@ import {
 } from "../infra/orca/codec/names";
 import { createOrcaTaskRepository } from "../infra/orca/repository/orca-task-repository";
 import type { RenamePlan } from "../infra/orca/schema/rename-plan";
-import { runStartupPlan } from "../infra/orca/schema/run-startup-plan";
+import {
+  runStartupPlan,
+  type StartupOutcome,
+} from "../infra/orca/schema/run-startup-plan";
 import { applyRename } from "../infra/orca/schema/tag-alias";
 import { resolveTagName } from "../infra/orca/schema/tag-name";
 import { readTaskTagCache } from "../infra/orca/schema/task-tag-cache";
@@ -55,9 +58,17 @@ export function createTaskTagFeature(): TaskTagFeature {
     state = { kind: "paused", reason: "starting" };
     const setting = settings()[settingKey];
     const cache = await readTaskTagCache(pluginName);
-    const tagName = resolveTagName(setting, uiLanguage, cache);
+    let tagName = resolveTagName(setting, uiLanguage, cache);
+    let reverted: StartupOutcome["reverted"];
     try {
-      state = await runStartupPlan(pluginName, tagName, uiLanguage, cache);
+      const outcome = await runStartupPlan(
+        pluginName,
+        tagName,
+        uiLanguage,
+        cache,
+      );
+      state = outcome.state;
+      reverted = outcome.reverted;
     } catch (error) {
       state = { kind: "paused", reason: "failed" };
       orca.notify(
@@ -70,10 +81,14 @@ export function createTaskTagFeature(): TaskTagFeature {
       );
       return;
     }
+    // The name was changed while the plugin was off to one another block
+    // has: the cached tag was kept under its own name (ADR 0002).
+    if (reverted && state.kind === "ready") tagName = state.tagName;
     // The name is settled only now, so the default (or the cached name) is
     // written back after the tag is, and from then on no longer follows the
-    // interface language. A name the user typed is left as it is.
-    if (isBlank(setting)) {
+    // interface language. A name the user typed is left as it is, unless it
+    // had to be set back.
+    if (isBlank(setting) || reverted) {
       try {
         await writeSetting(pluginName, settingKey, tagName);
       } catch (error) {
@@ -81,6 +96,16 @@ export function createTaskTagFeature(): TaskTagFeature {
           `[${pluginName}] could not write the task tag name: ${describeError(error)}`,
         );
       }
+    }
+    if (reverted) {
+      orca.notify(
+        "warn",
+        t(
+          '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".',
+          { requested: reverted.requested, name: tagName },
+        ),
+        { title: pluginName },
+      );
     }
     // Reported on every start until the user resolves it (ADR 0008).
     if (state.kind === "paused" && state.reason === "refused") {

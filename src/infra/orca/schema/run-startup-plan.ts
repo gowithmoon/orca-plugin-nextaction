@@ -67,24 +67,39 @@ async function createTag(plan: StartupPlan, tagName: string): Promise<DbId> {
   return tagBlockId;
 }
 
+/** What startup settled on. */
+export interface StartupOutcome {
+  /**
+   * Where the tag stands: `ready` (possibly with invalidated properties) or
+   * `paused` because the takeover was refused.
+   */
+  state: TaskTagState;
+  /**
+   * Set when the name in the settings was changed while the plugin was off
+   * to a name another block has: the cached tag was kept under its name, and
+   * the caller writes that name back to the settings and tells the user.
+   */
+  reverted?: { requested: string };
+}
+
 /**
  * Finds or creates the task tag named `tagName` (renaming the cached tag when
- * the name was changed while the plugin was off) and brings it to the planned
- * structure. Returns where the tag stands: `ready` (possibly with invalidated
- * properties) or `paused` because the takeover was refused. Throws an
- * `OrcaError` on failure.
+ * the name was changed while the plugin was off, or keeping it when that name
+ * is taken) and brings it to the planned structure. Throws an `OrcaError` on
+ * failure.
  */
 export async function runStartupPlan(
   pluginName: string,
   tagName: string,
   uiLanguage: NoteLanguage,
   cache: TaskTagCache | undefined,
-): Promise<TaskTagState> {
+): Promise<StartupOutcome> {
   try {
     const tagBlock = await findTagBlock(tagName);
-    // Only needed for rename recovery: no block has the name from the settings.
+    // Only needed when the name from the settings is not the cached tag's:
+    // to rename the cached tag, or to keep it when the name is taken.
     const cachedBlock =
-      tagBlock === undefined && cache !== undefined
+      cache !== undefined && tagBlock?.id !== cache.tagBlockId
         ? await readBlock(cache.tagBlockId)
         : undefined;
     const plan = planStartup({
@@ -99,25 +114,30 @@ export async function runStartupPlan(
       case "refuse":
         // Nothing is written, not even the cache: the tag is not ours.
         return {
-          kind: "paused",
-          reason: "refused",
-          tagName,
-          language: action.language,
-          conflicts: action.conflicts,
+          state: {
+            kind: "paused",
+            reason: "refused",
+            tagName,
+            language: action.language,
+            conflicts: action.conflicts,
+          },
         };
       case "create": {
         const tagBlockId = await createTag(plan, action.tagName);
         await writeTaskTagCache(pluginName, cache, { tagBlockId, tagName });
         return {
-          kind: "ready",
-          tagBlockId,
-          tagName,
-          language: uiLanguage,
-          invalidated: [],
+          state: {
+            kind: "ready",
+            tagBlockId,
+            tagName,
+            language: uiLanguage,
+            invalidated: [],
+          },
         };
       }
       case "rename":
-      case "use":
+      case "revert":
+      case "use": {
         if (action.kind === "rename") {
           await renameTagAlias(action.tagBlockId, action.from, action.to);
         }
@@ -128,19 +148,27 @@ export async function runStartupPlan(
             plan.writes,
           );
         }
+        // A kept tag keeps its name; the name from the settings is not used.
+        const nameInUse = action.kind === "revert" ? action.tagName : tagName;
         // Recorded after alignment, so a takeover that failed half-way is
         // checked as a first takeover again next time.
         await writeTaskTagCache(pluginName, cache, {
           tagBlockId: action.tagBlockId,
-          tagName,
+          tagName: nameInUse,
         });
         return {
-          kind: "ready",
-          tagBlockId: action.tagBlockId,
-          tagName,
-          language: action.language,
-          invalidated: action.invalidated,
+          state: {
+            kind: "ready",
+            tagBlockId: action.tagBlockId,
+            tagName: nameInUse,
+            language: action.language,
+            invalidated: action.invalidated,
+          },
+          ...(action.kind === "revert"
+            ? { reverted: { requested: action.requested } }
+            : {}),
         };
+      }
     }
   } catch (error) {
     throw error instanceof OrcaError
