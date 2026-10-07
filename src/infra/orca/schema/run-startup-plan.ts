@@ -5,6 +5,8 @@ import { describeError } from "../../../shared/describe-error";
 import type { NoteLanguage } from "../codec/names";
 import { OrcaError } from "../orca-error";
 import { planStartup, type StartupPlan } from "./startup-plan";
+import { readTaskTagCache, writeTaskTagCache } from "./task-tag-cache";
+import type { TaskTagState } from "./task-tag-state";
 
 const editor = (command: string, ...args: unknown[]): Promise<unknown> =>
   orca.commands.invokeEditorCommand(command, null, ...args);
@@ -58,27 +60,64 @@ async function createTag(plan: StartupPlan, tagName: string): Promise<DbId> {
 
 /**
  * Finds or creates the task tag named `tagName` and brings it to the planned
- * structure. Returns the tag block ID. Throws an `OrcaError` on failure.
+ * structure. Returns where the tag stands: `ready` (possibly with invalidated
+ * properties) or `paused` because the takeover was refused. Throws an
+ * `OrcaError` on failure.
  */
 export async function runStartupPlan(
+  pluginName: string,
   tagName: string,
   uiLanguage: NoteLanguage,
-): Promise<DbId> {
+): Promise<TaskTagState> {
   try {
-    const tagBlock = await findTagBlock(tagName);
-    const plan = planStartup({ tagName, tagBlock, uiLanguage });
-    switch (plan.action.kind) {
-      case "create":
-        return await createTag(plan, plan.action.tagName);
+    const [tagBlock, cache] = await Promise.all([
+      findTagBlock(tagName),
+      readTaskTagCache(pluginName),
+    ]);
+    const plan = planStartup({ tagName, tagBlock, cache, uiLanguage });
+    const { action } = plan;
+    switch (action.kind) {
+      case "refuse":
+        // Nothing is written, not even the cache: the tag is not ours.
+        return {
+          kind: "paused",
+          reason: "refused",
+          tagName,
+          language: action.language,
+          conflicts: action.conflicts,
+        };
+      case "create": {
+        const tagBlockId = await createTag(plan, action.tagName);
+        await writeTaskTagCache(pluginName, cache, { tagBlockId, tagName });
+        return {
+          kind: "ready",
+          tagBlockId,
+          tagName,
+          language: uiLanguage,
+          invalidated: [],
+        };
+      }
       case "use":
         if (plan.writes.length > 0) {
           await editor(
             "core.editor.setProperties",
-            [plan.action.tagBlockId],
+            [action.tagBlockId],
             plan.writes,
           );
         }
-        return plan.action.tagBlockId;
+        // Recorded after alignment, so a takeover that failed half-way is
+        // checked as a first takeover again next time.
+        await writeTaskTagCache(pluginName, cache, {
+          tagBlockId: action.tagBlockId,
+          tagName,
+        });
+        return {
+          kind: "ready",
+          tagBlockId: action.tagBlockId,
+          tagName,
+          language: action.language,
+          invalidated: action.invalidated,
+        };
     }
   } catch (error) {
     throw error instanceof OrcaError
