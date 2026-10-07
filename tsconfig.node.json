@@ -13,5 +13,11 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tests/source-checks.ts",
+    "tests/architecture.test.ts",
+    "tests/translations.test.ts"
+  ]
 }

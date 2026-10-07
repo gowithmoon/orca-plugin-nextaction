@@ -18,5 +18,13 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests"],
+  "exclude": [
+    // Deliberately broken inputs for the source static checks.
+    "tests/violation-samples",
+    // The source static checks read files with Node; see tsconfig.node.json.
+    "tests/source-checks.ts",
+    "tests/architecture.test.ts",
+    "tests/translations.test.ts"
+  ]
 }
