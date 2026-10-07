@@ -130,6 +130,7 @@ tests/
 - `get-journal-block` 会在日记不存在时创建它，只在要写入日记时调用。
 - `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造，`domain` 只用年、月、日表示日期。
 - `time` 类型的设置只取本地的小时和分钟（`plugin-lifecycle-settings`）。
+- 开始时间、截止时间是 `date` 子类型（ADR 0012）：读取时只取本地年月日，写入时传本地零点。Orca 不会截掉代码写入的时刻（`date-subtype`）。
 
 导航与面板（`editor-sidetool-panel`，ADR 0011）：
 - 传给导航 API 的 `viewArgs` 保持原始类型，不做 JSON 序列化或深拷贝；只操作参数结构已知的 `block` 和 `journal` 视图。传错类型会让整个 Orca 崩溃。
@@ -149,7 +150,7 @@ tests/
 - `load` 和 `unload` 必须经得起反复调用：Orca 启用插件时可能在 1 秒内执行 `load → unload → load`；`load` 抛错后，停用时仍会调用 `unload`。注册表要能处理只加载了一半的状态（`plugin-lifecycle-settings`）。
 - 每次 `load` 都是新的模块实例，模块级变量不会跨越停用和启用保留。
 - 注销插件面板类型之前，先关闭所有打开着的插件面板；覆盖打开的，恢复被覆盖的内容（ADR 0011）。只注销不关闭，面板会一直留在界面上。
-- 设置在 `setSettingsSchema` 之后从 `orca.state.plugins[pluginName].settings` 读取，没有默认值的项由插件补上默认值。文本设置在用户输入过程中会多次变化，由设置触发的副作用（例如任务标签改名）要等输入停止后再执行，并校验新值。
+- 设置在 `setSettingsSchema` 之后从 `orca.state.plugins[pluginName].settings` 读取，没有默认值的项由插件补上默认值。文本设置在用户输入过程中会多次变化，由设置触发的副作用（例如任务标签改名）要等输入停止后再执行，并校验新值。设置和 `plugins.setData` 都按笔记库保存。插件写设置时用 `setSettings("repo", …)` 并传入完整的设置对象（它整体替换，不合并）；插件自己的写入也会触发设置变化的订阅，由设置触发的副作用要能识别这种情况。
 - 不覆盖、不干扰 Orca 自带的命令、渲染器和界面。
 
 ### 错误处理

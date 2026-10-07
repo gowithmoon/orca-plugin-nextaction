@@ -11,7 +11,8 @@
 | [journal-capture.md](./journal-capture.md) | #9 | 向日记追加任务，日期与时区 | 第三步及所有涉及日期的步骤 |
 | [native-reminder.md](./native-reminder.md) | #10 | Orca 原生提醒（`Reminder` 标签） | 第十一步 |
 | [block-change-signals.md](./block-change-signals.md) | #11 | 块变更信号与命令后钩子（ADR 0007） | 第四步起的所有视图 |
-| [plugin-lifecycle-settings.md](./plugin-lifecycle-settings.md) | #12 | `pluginName`、设置、`load`/`unload`、重启后的面板 | 第一、二、三步 |
+| [plugin-lifecycle-settings.md](./plugin-lifecycle-settings.md) | #12、#17 | `pluginName`、设置（含保存范围与插件写入）、`load`/`unload`、重启后的面板 | 第一、二、三步 |
 | [tag-property-query.md](./tag-property-query.md) | #13 | 按标签属性查询的能力与性能，排除孤立块 | 第二步起的所有查询 |
+| [date-subtype.md](./date-subtype.md) | — | 日期属性的 `date` 与 `datetime` 子类型（第二步补测） | 第二步起所有涉及开始时间、截止时间的步骤 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。
