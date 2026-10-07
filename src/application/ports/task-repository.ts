@@ -1,4 +1,25 @@
-import type { Task, TaskId } from "../../domain/task/task";
+import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
+
+/** Values a multi-value property (contexts, labels) must or must not hold. */
+export interface ValuesFilter {
+  /** The task holds every one of these. */
+  includes?: readonly string[];
+  /** The task holds none of these. */
+  excludes?: readonly string[];
+}
+
+/**
+ * Which tasks a query matches. Every given condition must hold; an empty
+ * filter matches every task.
+ */
+export interface TaskFilter {
+  /** The task is in one of these statuses. */
+  statuses?: readonly [TaskStatus, ...TaskStatus[]];
+  contexts?: ValuesFilter;
+  labels?: ValuesFilter;
+  /** The task is somewhere below this block, at any depth. */
+  underBlockId?: number;
+}
 
 /**
  * Where tasks are read from and written to. Implementations hide every Orca
@@ -14,4 +35,7 @@ export interface TaskRepository {
    * task of its source block.
    */
   getTask(id: TaskId): Promise<Task | null>;
+
+  /** Every task matching the filter, in no particular order. */
+  queryTasks(filter: TaskFilter): Promise<Task[]>;
 }
