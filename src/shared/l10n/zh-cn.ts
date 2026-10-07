@@ -13,6 +13,7 @@ const zhCN: Record<string, string> = {
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
   "Read current block as task (debug)": "读取当前块为任务（调试）",
+  "Query inbox tasks (debug)": "查询收集箱中的任务（调试）",
 };
 
 export default zhCN;

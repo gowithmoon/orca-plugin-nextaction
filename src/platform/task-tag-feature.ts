@@ -11,6 +11,7 @@ import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
 import type { FeatureModule } from "./bootstrap";
+import { registerQueryInboxCommand } from "./dev/query-inbox-command";
 import { registerReadTaskCommand } from "./dev/read-task-command";
 
 export interface TaskTagFeature {
@@ -37,10 +38,9 @@ export function createTaskTagFeature(): TaskTagFeature {
     // Statically false in production builds, so the command and the
     // repository it uses are left out of the bundle (#20).
     if (import.meta.env.DEV) {
-      registerReadTaskCommand(
-        registry,
-        createOrcaTaskRepository(() => state),
-      );
+      const repository = createOrcaTaskRepository(() => state);
+      registerReadTaskCommand(registry, repository);
+      registerQueryInboxCommand(registry, repository);
     }
     const uiLanguage = noteLanguageFor(orca.state.locale);
     const tagName = resolveTagName(settings().taskTagName, uiLanguage);
