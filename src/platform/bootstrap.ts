@@ -1,6 +1,7 @@
+import { describeError } from "../shared/describe-error";
 import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
-import { createRegistry, describeError, type Registry } from "./registry";
+import { createRegistry, type Registry } from "./registry";
 import {
   applySettingsSchema,
   readSettings,

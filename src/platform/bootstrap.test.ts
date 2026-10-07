@@ -234,7 +234,7 @@ describe("plugin lifecycle", () => {
     const plugin = createPlugin({
       features: [
         ({ registry }) => {
-          registry.panel("panel", noop);
+          registry.panel("panel", () => null);
         },
       ],
     });
@@ -260,7 +260,7 @@ describe("plugin lifecycle", () => {
     const plugin = createPlugin({
       features: [
         ({ registry }) => {
-          registry.panel("panel", noop, {
+          registry.panel("panel", () => null, {
             closePanel: (panelId) => {
               closed.push(panelId);
             },
@@ -287,7 +287,7 @@ describe("plugin lifecycle", () => {
     const plugin = createPlugin({
       features: [
         ({ registry }) => {
-          registry.panel("panel", noop, {
+          registry.panel("panel", () => null, {
             closePanel: (panelId) => {
               if (panelId === stuck) throw new Error("panel is stuck");
               closed.push(panelId);
