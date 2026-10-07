@@ -8,6 +8,7 @@ const zhCN: Record<string, string> = {
     "用来把块标记为任务的 Orca 标签。留空时使用默认名称。",
   'Could not set up the task tag "${name}": ${reason}':
     "无法设置任务标签“${name}”：${reason}",
+  "Read current block as task (debug)": "读取当前块为任务（调试）",
 };
 
 export default zhCN;
