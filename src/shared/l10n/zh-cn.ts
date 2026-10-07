@@ -12,6 +12,7 @@ const zhCN: Record<string, string> = {
     "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。任务功能已暂停，请在插件设置中换一个任务标签名。",
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
+  "Read current block as task (debug)": "读取当前块为任务（调试）",
 };
 
 export default zhCN;

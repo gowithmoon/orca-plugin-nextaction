@@ -1,0 +1,438 @@
+{
+  "source": "hand-written from docs/spikes (tag-operations, block-properties-json, date-subtype); replace with a real export (see the #20 manual checklist). Task block `content` is modelled on the recorded tag block content; no spike recorded a task block's content.",
+  "tagBlocks": {
+    "zh": {
+      "id": 211,
+      "parent": null,
+      "text": "任务\n",
+      "content": [{ "t": "t", "v": "任务" }],
+      "aliases": ["任务"],
+      "properties": [
+        {
+          "name": "状态",
+          "type": 6,
+          "pos": 0,
+          "typeArgs": {
+            "subType": "single",
+            "defaultEnabled": true,
+            "default": "收集箱",
+            "choices": [
+              { "n": "收集箱", "c": "#9e9e9e" },
+              { "n": "待开始", "c": "#2196f3" },
+              { "n": "进行中", "c": "#ff9800" },
+              { "n": "等待中", "c": "#9c27b0" },
+              { "n": "将来/也许", "c": "#795548" },
+              { "n": "已完成", "c": "#4caf50" },
+              { "n": "放弃", "c": "#000000" }
+            ]
+          }
+        },
+        {
+          "name": "重要性",
+          "type": 3,
+          "pos": 1,
+          "typeArgs": { "defaultEnabled": true, "default": 4 }
+        },
+        {
+          "name": "工作量",
+          "type": 3,
+          "pos": 2,
+          "typeArgs": { "defaultEnabled": true, "default": 4 }
+        },
+        {
+          "name": "开始时间",
+          "type": 5,
+          "pos": 3,
+          "typeArgs": { "subType": "date" }
+        },
+        {
+          "name": "截止时间",
+          "type": 5,
+          "pos": 4,
+          "typeArgs": { "subType": "date" }
+        },
+        {
+          "name": "上下文",
+          "type": 6,
+          "pos": 5,
+          "typeArgs": {
+            "subType": "multi",
+            "choices": [{ "n": "@home", "c": "#2196f3" }]
+          }
+        },
+        {
+          "name": "标记",
+          "type": 6,
+          "pos": 6,
+          "typeArgs": { "subType": "multi", "choices": [] }
+        },
+        { "name": "备注", "type": 1, "pos": 7 },
+        { "name": "_repr", "type": 0, "pos": null },
+        { "name": "_show", "type": 0, "pos": null }
+      ],
+      "refs": [],
+      "backRefs": []
+    },
+    "en": {
+      "id": 311,
+      "parent": null,
+      "text": "Task\n",
+      "content": [{ "t": "t", "v": "Task" }],
+      "aliases": ["Task"],
+      "properties": [
+        {
+          "name": "Status",
+          "type": 6,
+          "pos": 0,
+          "typeArgs": {
+            "subType": "single",
+            "defaultEnabled": true,
+            "default": "Inbox",
+            "choices": [
+              { "n": "Inbox", "c": "#9e9e9e" },
+              { "n": "Todo", "c": "#2196f3" },
+              { "n": "Doing", "c": "#ff9800" },
+              { "n": "Waiting", "c": "#9c27b0" },
+              { "n": "Someday", "c": "#795548" },
+              { "n": "Done", "c": "#4caf50" }
+            ]
+          }
+        },
+        {
+          "name": "Importance",
+          "type": 3,
+          "pos": 1,
+          "typeArgs": { "defaultEnabled": true, "default": 4 }
+        },
+        {
+          "name": "Effort",
+          "type": 3,
+          "pos": 2,
+          "typeArgs": { "defaultEnabled": true, "default": 4 }
+        },
+        {
+          "name": "Start",
+          "type": 5,
+          "pos": 3,
+          "typeArgs": { "subType": "date" }
+        },
+        {
+          "name": "Due",
+          "type": 5,
+          "pos": 4,
+          "typeArgs": { "subType": "date" }
+        },
+        {
+          "name": "Context",
+          "type": 6,
+          "pos": 5,
+          "typeArgs": { "subType": "multi", "choices": [] }
+        },
+        {
+          "name": "Label",
+          "type": 6,
+          "pos": 6,
+          "typeArgs": { "subType": "multi", "choices": [] }
+        },
+        { "name": "Notes", "type": 1, "pos": 7 },
+        { "name": "_repr", "type": 0, "pos": null }
+      ],
+      "refs": [],
+      "backRefs": []
+    }
+  },
+  "blocks": {
+    "zhFilled": {
+      "id": 201,
+      "parent": 213,
+      "text": "NA验证任务A #任务,@home,2026-10-20,待开始,6\n",
+      "content": [{ "t": "t", "v": "NA验证任务A" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [203] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 203,
+          "from": 201,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            {
+              "name": "上下文",
+              "type": 6,
+              "value": ["@home"],
+              "typeArgs": { "subType": "multi", "choices": [] }
+            },
+            {
+              "name": "截止时间",
+              "type": 5,
+              "value": "2026-10-19T16:00:00.000Z",
+              "typeArgs": { "subType": "date" }
+            },
+            {
+              "name": "状态",
+              "type": 6,
+              "value": "待开始",
+              "typeArgs": { "subType": "single", "choices": [] }
+            },
+            {
+              "name": "重要性",
+              "type": 3,
+              "value": 6,
+              "typeArgs": { "defaultEnabled": true, "default": 4 }
+            }
+          ]
+        },
+        { "id": 202, "from": 201, "to": 213, "type": 3, "alias": null }
+      ],
+      "backRefs": []
+    },
+    "zhDefaultsOnly": {
+      "id": 204,
+      "parent": 213,
+      "text": "NA验证任务B #任务,收集箱,4\n",
+      "content": [{ "t": "t", "v": "NA验证任务B" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [205] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 205,
+          "from": 204,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "状态", "type": 6, "value": "收集箱" },
+            { "name": "重要性", "type": 3, "value": 4 }
+          ]
+        }
+      ],
+      "backRefs": []
+    },
+    "zhCleared": {
+      "id": 206,
+      "parent": 213,
+      "text": "NA清空测试 #任务\n",
+      "content": [{ "t": "t", "v": "NA清空测试" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [207] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 207,
+          "from": 206,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "状态", "type": 6, "value": null },
+            { "name": "重要性", "type": 3, "value": null },
+            { "name": "工作量", "type": 3, "value": null },
+            { "name": "开始时间", "type": 5, "value": null },
+            { "name": "截止时间", "type": 5, "value": null },
+            { "name": "上下文", "type": 6, "value": null },
+            { "name": "标记", "type": 6, "value": null },
+            { "name": "备注", "type": 1, "value": null }
+          ]
+        }
+      ],
+      "backRefs": []
+    },
+    "zhAbnormal": {
+      "id": 208,
+      "parent": 213,
+      "text": "NA异常值测试 #任务,放弃,99,3.5\n",
+      "content": [{ "t": "t", "v": "NA异常值测试" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [209] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 209,
+          "from": 208,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "状态", "type": 6, "value": "放弃" },
+            { "name": "重要性", "type": 3, "value": 99 },
+            { "name": "工作量", "type": 3, "value": 3.5 },
+            {
+              "name": "开始时间",
+              "type": 5,
+              "value": "2026-10-10T07:30:00.000Z"
+            },
+            {
+              "name": "截止时间",
+              "type": 5,
+              "value": "2026-10-06T16:00:00.000Z"
+            },
+            { "name": "上下文", "type": 6, "value": [] },
+            { "name": "标记", "type": 6, "value": [] }
+          ]
+        }
+      ],
+      "backRefs": []
+    },
+    "zhOutOfRangeLow": {
+      "id": 214,
+      "parent": 213,
+      "text": "NA越界测试 #任务,收集箱,0,-2\n",
+      "content": [{ "t": "t", "v": "NA越界测试" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [215] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 215,
+          "from": 214,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "状态", "type": 6, "value": "收集箱" },
+            { "name": "重要性", "type": 3, "value": 0 },
+            { "name": "工作量", "type": 3, "value": -2 }
+          ]
+        }
+      ],
+      "backRefs": []
+    },
+    "zhWithOtherTag": {
+      "id": 216,
+      "parent": 213,
+      "text": "NA多标签测试 #Reminder #任务,进行中,7,1\n",
+      "content": [{ "t": "t", "v": "NA多标签测试" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [217, 218] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 217,
+          "from": 216,
+          "to": 400,
+          "type": 2,
+          "alias": "Reminder",
+          "data": [{ "name": "状态", "type": 6, "value": "已完成" }]
+        },
+        {
+          "id": 218,
+          "from": 216,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "状态", "type": 6, "value": "进行中" },
+            { "name": "重要性", "type": 3, "value": 7 },
+            { "name": "工作量", "type": 3, "value": 1 },
+            { "name": "备注", "type": 1, "value": "先问老王" }
+          ]
+        }
+      ],
+      "backRefs": []
+    },
+    "enFilled": {
+      "id": 301,
+      "parent": 213,
+      "text": "Call the plumber #Task,@phone,Waiting,2,5\n",
+      "content": [{ "t": "t", "v": "Call the plumber" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [302] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 302,
+          "from": 301,
+          "to": 311,
+          "type": 2,
+          "alias": "Task",
+          "data": [
+            { "name": "Status", "type": 6, "value": "Waiting" },
+            { "name": "Importance", "type": 3, "value": 2 },
+            { "name": "Effort", "type": 3, "value": 5 },
+            { "name": "Start", "type": 5, "value": "2026-10-06T16:00:00.000Z" },
+            { "name": "Context", "type": 6, "value": ["@phone", "@home"] },
+            { "name": "Label", "type": 6, "value": ["house"] },
+            { "name": "Notes", "type": 1, "value": "after 9am" }
+          ]
+        }
+      ],
+      "backRefs": []
+    },
+    "orphan": {
+      "id": 232,
+      "parent": null,
+      "left": null,
+      "children": [],
+      "text": "NA删除测试X2_被依赖 #任务,收集箱,4\n",
+      "content": [{ "t": "t", "v": "NA删除测试X2_被依赖" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [219] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 219,
+          "from": 232,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "状态", "type": 6, "value": "收集箱" },
+            { "name": "重要性", "type": 3, "value": 4 }
+          ]
+        }
+      ],
+      "backRefs": [{ "id": 221, "from": 233, "to": 232, "type": 3 }]
+    },
+    "mirror": {
+      "id": 242,
+      "parent": 238,
+      "children": [],
+      "text": "\n",
+      "content": [],
+      "aliases": [],
+      "properties": [
+        { "name": "_repr", "value": { "type": "mirror", "mirroredId": 201 } }
+      ],
+      "refs": [
+        {
+          "id": 229,
+          "from": 242,
+          "to": 201,
+          "type": 5,
+          "alias": null,
+          "data": []
+        }
+      ],
+      "backRefs": []
+    },
+    "plain": {
+      "id": 250,
+      "parent": 213,
+      "text": "Just a note\n",
+      "content": [{ "t": "t", "v": "Just a note" }],
+      "aliases": [],
+      "properties": [{ "name": "_repr", "value": { "type": "text" } }],
+      "refs": [],
+      "backRefs": []
+    }
+  }
+}
