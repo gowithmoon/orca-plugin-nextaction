@@ -53,6 +53,31 @@ describe("plugin lifecycle", () => {
     expect(host.notifications[0]?.message).toContain("schema alignment failed");
   });
 
+  it("reports rollback failures together with the load error and still rethrows the load error", async () => {
+    const failure = new Error("schema alignment failed");
+    host.failUnregister(
+      "orca-plugin-nextaction.capture",
+      new Error("capture is stuck"),
+    );
+    const plugin = createPlugin({
+      features: [
+        ({ registry }) => {
+          registry.command("capture", noop, "Capture");
+        },
+        () => {
+          throw failure;
+        },
+      ],
+    });
+
+    await expect(plugin.load(pluginName)).rejects.toBe(failure);
+
+    expect(host.notifications).toHaveLength(1);
+    expect(host.notifications[0]?.type).toBe("error");
+    expect(host.notifications[0]?.message).toContain("schema alignment failed");
+    expect(host.notifications[0]?.message).toContain("capture is stuck");
+  });
+
   it("speaks the Orca interface language", async () => {
     host.uninstall();
     host = installFakeOrcaHost({ pluginName, locale: "zh-CN" });
@@ -209,7 +234,7 @@ describe("plugin lifecycle", () => {
     const plugin = createPlugin({
       features: [
         ({ registry }) => {
-          registry.panel("panel", noop);
+          registry.panel("panel", () => null);
         },
       ],
     });
@@ -235,7 +260,7 @@ describe("plugin lifecycle", () => {
     const plugin = createPlugin({
       features: [
         ({ registry }) => {
-          registry.panel("panel", noop, {
+          registry.panel("panel", () => null, {
             closePanel: (panelId) => {
               closed.push(panelId);
             },
@@ -253,6 +278,35 @@ describe("plugin lifecycle", () => {
       `registerPanel ${view}`,
       `unregisterPanel ${view}`,
     ]);
+  });
+
+  it("keeps closing open panels and still unregisters the type when closing one throws", async () => {
+    const view = "orca-plugin-nextaction.panel";
+    const closed: string[] = [];
+    let stuck = "";
+    const plugin = createPlugin({
+      features: [
+        ({ registry }) => {
+          registry.panel("panel", () => null, {
+            closePanel: (panelId) => {
+              if (panelId === stuck) throw new Error("panel is stuck");
+              closed.push(panelId);
+            },
+          });
+        },
+      ],
+    });
+    await plugin.load(pluginName);
+    stuck = host.openPanel(view);
+    const second = host.openPanel(view);
+    const third = host.openPanel(view);
+
+    await expect(plugin.unload()).resolves.toBeUndefined();
+
+    expect(closed).toEqual([second, third]);
+    expect(host.leftovers()).toEqual([]);
+    expect(host.notifications).toHaveLength(1);
+    expect(host.notifications[0]?.message).toContain("panel is stuck");
   });
 
   it("prefixes and releases every kind of Orca registration", async () => {

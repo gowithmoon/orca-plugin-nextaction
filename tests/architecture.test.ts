@@ -6,7 +6,10 @@ import {
   readSourceFiles,
 } from "./source-checks";
 
-// The same rules as the table in docs/ARCHITECTURE.md section 2. Change both together.
+// The table in docs/ARCHITECTURE.md section 2, row for row: each "may depend
+// on" and "forbidden" entry is a layer rule, a usage rule, or listed under
+// `notChecked` with the reason. Change both together. The register* and global
+// React usage rules come from section 4 ("注册与清理", "React").
 const rules: ArchitectureRules = {
   layers: {
     domain: {
@@ -22,6 +25,7 @@ const rules: ArchitectureRules = {
     infra: {
       files: "src/infra/",
       mayDependOn: ["application", "domain", "shared"],
+      onlyUnder: { application: "src/application/ports/" },
       allowed:
         "infra may depend only on application (ports), domain and shared",
     },
@@ -79,6 +83,27 @@ const rules: ArchitectureRules = {
       pattern: /\bwindow\s*\.\s*(?:React|ReactDOM|createRoot|Valtio)\b/,
       forbiddenIn: ["domain", "application", "infra", "shared"],
       allowed: "only ui and platform may use React",
+    },
+  ],
+  notChecked: [
+    {
+      rule: "ui may use domain only for types and pure functions",
+      reason:
+        "whether an imported domain function is pure is not visible in the source text",
+    },
+    {
+      rule: "ui may use only orca.components and read-only orca.state",
+      reason:
+        "only the invoke* calls are matched; a write to orca.state or another orca.* call looks like any other expression to a text scan",
+    },
+    {
+      rule: "platform holds no business rules",
+      reason: "a business rule has no syntactic signature to match",
+    },
+    {
+      rule: "*.test.ts files are exempt from every rule",
+      reason:
+        "tests sit next to the code they test (section 3) and must reach the fake host and tests/ helpers outside every layer; they are not part of the bundle",
     },
   ],
 };
@@ -149,6 +174,10 @@ describe("architecture rules", () => {
     [
       "src/infra/depends-on-ui.ts",
       ["infra depends on react", "infra depends on ui", "infra depends on ui"],
+    ],
+    [
+      "src/infra/imports-use-case.ts",
+      ["infra depends on application outside src/application/ports/"],
     ],
     [
       "src/shared/depends-on-others.ts",

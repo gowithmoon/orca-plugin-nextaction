@@ -1,6 +1,7 @@
+import { describeError } from "../shared/describe-error";
 import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
-import { createRegistry, describeError, type Registry } from "./registry";
+import { createRegistry, type Registry } from "./registry";
 import {
   applySettingsSchema,
   readSettings,
@@ -59,10 +60,19 @@ export function createPlugin(options: {
         } catch (error) {
           // The original load error is what Orca and the user need; a rollback
           // failure must not replace it.
-          await release();
+          const rollbackFailure = await release();
+          const reason = describeError(error);
           orca.notify(
             "error",
-            t("Failed to load: ${reason}", { reason: describeError(error) }),
+            rollbackFailure
+              ? t(
+                  "Failed to load: ${reason}. Cleanup also failed: ${cleanup}",
+                  {
+                    reason,
+                    cleanup: rollbackFailure,
+                  },
+                )
+              : t("Failed to load: ${reason}", { reason }),
             { title: pluginName },
           );
           throw error;

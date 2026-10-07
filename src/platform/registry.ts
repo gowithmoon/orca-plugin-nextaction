@@ -1,12 +1,16 @@
+import type { ComponentType, ReactNode } from "react";
+import type { Root } from "react-dom/client";
 import type {
   AfterHook,
   ColumnPanel,
   CommandFn,
   EditorCommandFn,
   EditorSidetool,
+  PanelProps,
   RowPanel,
   ViewPanel,
 } from "../orca.d.ts";
+import { describeError } from "../shared/describe-error";
 
 export interface Registry {
   /** Records a resource and how to release it. Throws on an invalid or duplicate identifier. */
@@ -34,8 +38,8 @@ export interface Registry {
    */
   reactRoot(
     name: string,
-    node: unknown,
-  ): { id: string; render(node: unknown): void };
+    node: ReactNode,
+  ): { id: string; render(node: ReactNode): void };
   /** Subscribes to a Valtio proxy (e.g. `orca.state.plugins`) via the global `window.Valtio`. */
   subscribe(state: object, callback: () => void): void;
   /** Adds a DOM event listener; removed with the same type, listener and capture flag. */
@@ -52,7 +56,7 @@ export interface Registry {
    */
   panel(
     name: string,
-    renderer: unknown,
+    renderer: ComponentType<PanelProps>,
     options?: { closePanel?: (panelId: string) => void | Promise<void> },
   ): string;
   disposeAll(): Promise<void>;
@@ -69,10 +73,6 @@ function openPanelIds(view: string): string[] {
   };
   walk(orca.state.panels);
   return ids;
-}
-
-export function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function createRegistry(pluginName: string): Registry {
@@ -160,20 +160,23 @@ export function createRegistry(pluginName: string): Registry {
       track(() => clearInterval(handle));
     },
     reactRoot(name, node) {
-      const id = `${prefix}${name}`;
-      validate(id);
-      const element = document.createElement("div");
-      document.body.append(element);
-      const root = window.createRoot(element) as {
-        render(node: unknown): void;
-        unmount(): void;
-      };
-      root.render(node);
-      add(id, () => {
-        root.unmount();
-        element.remove();
-      });
-      return { id, render: (next: unknown) => root.render(next) };
+      // Created only once the identifier is validated, so a rejected name leaves nothing behind.
+      let mounted: { element: HTMLElement; root: Root } | undefined;
+      const id = owned(
+        name,
+        () => {
+          const element = document.createElement("div");
+          document.body.append(element);
+          const root = window.createRoot(element) as Root;
+          root.render(node);
+          mounted = { element, root };
+        },
+        () => {
+          mounted?.root.unmount();
+          mounted?.element.remove();
+        },
+      );
+      return { id, render: (next) => mounted?.root.render(next) };
     },
     subscribe(state, callback) {
       const unsubscribe: () => void = window.Valtio.subscribe(state, callback);
@@ -190,8 +193,21 @@ export function createRegistry(pluginName: string): Registry {
         name,
         (id) => orca.panels.registerPanel(id, renderer),
         async (id) => {
-          for (const panelId of openPanelIds(id)) await closePanel(panelId);
-          orca.panels.unregisterPanel(id);
+          // One stuck panel must not keep the others open or the type registered.
+          const errors: unknown[] = [];
+          for (const panelId of openPanelIds(id)) {
+            try {
+              await closePanel(panelId);
+            } catch (error) {
+              errors.push(error);
+            }
+          }
+          try {
+            orca.panels.unregisterPanel(id);
+          } catch (error) {
+            errors.push(error);
+          }
+          if (errors.length > 0) throw new AggregateError(errors);
         },
       );
     },
@@ -201,7 +217,9 @@ export function createRegistry(pluginName: string): Registry {
         try {
           await entry.dispose();
         } catch (error) {
-          errors.push(error);
+          // A release made of several steps reports each failed step on its own.
+          if (error instanceof AggregateError) errors.push(...error.errors);
+          else errors.push(error);
         }
       }
       if (errors.length > 0) {
