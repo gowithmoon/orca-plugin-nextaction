@@ -26,6 +26,11 @@ export interface LayerRule {
   files: string;
   /** Other layers, or package groups from `packages`, this layer may import. */
   mayDependOn: string[];
+  /**
+   * Layers from `mayDependOn` this layer may import only under a path prefix,
+   * e.g. `{ application: "src/application/ports/" }`.
+   */
+  onlyUnder?: Record<string, string>;
   allowed: string;
 }
 
@@ -43,11 +48,17 @@ export interface ArchitectureRules {
   /** Package groups that layers may depend on, e.g. `{ react: ["react", "react-dom"] }`. */
   packages: Record<string, string[]>;
   usages: UsageRule[];
+  /**
+   * Rules from the documented table that a source scan cannot check, listed so
+   * every documented rule has a row here. The scanner ignores them.
+   */
+  notChecked: { rule: string; reason: string }[];
 }
 
 /**
  * Reads every .ts/.tsx file under `root`/src, skipping declarations and test
- * files. Paths are relative to `root`, so they start with "src/".
+ * files (see `notChecked` in tests/architecture.test.ts for why test files are
+ * exempt). Paths are relative to `root`, so they start with "src/".
  */
 export function readSourceFiles(root: URL): SourceFile[] {
   const base = fileURLToPath(root);
@@ -150,15 +161,22 @@ export function checkArchitecture(
     Object.entries(rules.layers).find(([, layer]) =>
       `${path}/`.startsWith(layer.files),
     );
-  const dependencyOf = (file: string, specifier: string) => {
+  /** The layer or package group imported, and for a layer the resolved path. */
+  const dependencyOf = (
+    file: string,
+    specifier: string,
+  ): { target: string; path?: string } | undefined => {
     if (specifier.startsWith(".")) {
-      return layerOf(posix.join(posix.dirname(file), specifier))?.[0];
+      const path = posix.join(posix.dirname(file), specifier);
+      const target = layerOf(path)?.[0];
+      return target === undefined ? undefined : { target, path };
     }
-    return Object.entries(rules.packages).find(([, names]) =>
+    const target = Object.entries(rules.packages).find(([, names]) =>
       names.some(
         (name) => specifier === name || specifier.startsWith(`${name}/`),
       ),
     )?.[0];
+    return target === undefined ? undefined : { target };
   };
 
   const violations: Violation[] = [];
@@ -169,18 +187,21 @@ export function checkArchitecture(
     const code = maskSource(file.text);
 
     for (const { specifier, offset } of importSpecifiers(file.text, code)) {
-      const target = dependencyOf(file.path, specifier);
-      if (
-        target === undefined ||
-        target === ownName ||
-        ownRule.mayDependOn.includes(target)
-      ) {
-        continue;
+      const dependency = dependencyOf(file.path, specifier);
+      if (dependency === undefined || dependency.target === ownName) continue;
+      const { target, path } = dependency;
+      const under = ownRule.onlyUnder?.[target];
+      let rule: string | undefined;
+      if (!ownRule.mayDependOn.includes(target)) {
+        rule = `${ownName} depends on ${target}`;
+      } else if (under !== undefined && !`${path}/`.startsWith(under)) {
+        rule = `${ownName} depends on ${target} outside ${under}`;
       }
+      if (rule === undefined) continue;
       violations.push({
         file: file.path,
         line: lineAt(file.text, offset),
-        rule: `${ownName} depends on ${target}`,
+        rule,
         allowed: ownRule.allowed,
       });
     }
