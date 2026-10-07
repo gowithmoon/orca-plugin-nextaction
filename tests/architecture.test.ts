@@ -8,8 +8,9 @@ import {
 
 // The table in docs/ARCHITECTURE.md section 2, row for row: each "may depend
 // on" and "forbidden" entry is a layer rule, a usage rule, or listed under
-// `notChecked` with the reason. Change both together. The register* and global
-// React usage rules come from section 4 ("注册与清理", "React").
+// `notChecked` with the reason. Change both together. The register*, CSS
+// injection, DOM listener and global React usage rules come from section 4
+// ("注册与清理", "React").
 const rules: ArchitectureRules = {
   layers: {
     domain: {
@@ -77,6 +78,20 @@ const rules: ArchitectureRules = {
       pattern: /\borca\s*\.(?:\s*\w+\s*\.)*?\s*(?:un)?register\w*/,
       forbiddenIn: ["domain", "application", "infra", "ui", "shared"],
       allowed: "register through platform/registry.ts so unload releases it",
+    },
+    {
+      name: "injects CSS directly",
+      pattern: /\borca\s*\.\s*themes\s*\.\s*injectCSS\w*/,
+      forbiddenIn: ["domain", "application", "infra", "ui", "shared"],
+      allowed:
+        "inject styles through platform/registry.ts so unload removes them",
+    },
+    {
+      name: "adds a DOM event listener directly",
+      pattern: /\.\s*addEventListener\b/,
+      forbiddenIn: ["domain", "application", "infra", "ui", "shared"],
+      allowed:
+        "listen through platform/registry.ts so unload removes the listener",
     },
     {
       name: "uses the global React",
@@ -178,6 +193,14 @@ describe("architecture rules", () => {
     [
       "src/infra/imports-use-case.ts",
       ["infra depends on application outside src/application/ports/"],
+    ],
+    [
+      "src/ui/injects-and-listens.ts",
+      [
+        "ui injects CSS directly",
+        "ui injects CSS directly",
+        "ui adds a DOM event listener directly",
+      ],
     ],
     [
       "src/shared/depends-on-others.ts",
