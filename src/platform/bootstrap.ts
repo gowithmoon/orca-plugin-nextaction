@@ -59,10 +59,19 @@ export function createPlugin(options: {
         } catch (error) {
           // The original load error is what Orca and the user need; a rollback
           // failure must not replace it.
-          await release();
+          const rollbackFailure = await release();
+          const reason = describeError(error);
           orca.notify(
             "error",
-            t("Failed to load: ${reason}", { reason: describeError(error) }),
+            rollbackFailure
+              ? t(
+                  "Failed to load: ${reason}. Cleanup also failed: ${cleanup}",
+                  {
+                    reason,
+                    cleanup: rollbackFailure,
+                  },
+                )
+              : t("Failed to load: ${reason}", { reason }),
             { title: pluginName },
           );
           throw error;

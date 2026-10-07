@@ -53,6 +53,31 @@ describe("plugin lifecycle", () => {
     expect(host.notifications[0]?.message).toContain("schema alignment failed");
   });
 
+  it("reports rollback failures together with the load error and still rethrows the load error", async () => {
+    const failure = new Error("schema alignment failed");
+    host.failUnregister(
+      "orca-plugin-nextaction.capture",
+      new Error("capture is stuck"),
+    );
+    const plugin = createPlugin({
+      features: [
+        ({ registry }) => {
+          registry.command("capture", noop, "Capture");
+        },
+        () => {
+          throw failure;
+        },
+      ],
+    });
+
+    await expect(plugin.load(pluginName)).rejects.toBe(failure);
+
+    expect(host.notifications).toHaveLength(1);
+    expect(host.notifications[0]?.type).toBe("error");
+    expect(host.notifications[0]?.message).toContain("schema alignment failed");
+    expect(host.notifications[0]?.message).toContain("capture is stuck");
+  });
+
   it("speaks the Orca interface language", async () => {
     host.uninstall();
     host = installFakeOrcaHost({ pluginName, locale: "zh-CN" });
