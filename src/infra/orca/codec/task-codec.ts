@@ -104,6 +104,9 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
     }
   }
   const status = values.get("status");
+  // An invalidated status reads as inbox with no anomaly: an anomaly is
+  // about a value stored on a valid status property, not about the property.
+  const statusInvalidated = tag.invalidated.includes("status");
   return {
     kind: "task",
     task: taskFromNotes({
@@ -112,8 +115,11 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
         .map((fragment) => (typeof fragment.v === "string" ? fragment.v : ""))
         .join(""),
       status: {
-        key:
-          typeof status === "string" ? findStatusKey(status)?.key : undefined,
+        key: statusInvalidated
+          ? "inbox"
+          : typeof status === "string"
+            ? findStatusKey(status)?.key
+            : undefined,
         value: status ?? null,
       },
       importance: numberValue(values.get("importance")),
