@@ -216,17 +216,18 @@ export function createOrcaTaskRepository(
       const names: TaskTagNames = {
         tagName: state.tagName,
         language: state.language,
+        invalidated: state.invalidated,
       };
       const context: TaskTagContext = {
         tagBlockId: state.tagBlockId,
         invalidated: state.invalidated,
       };
+      // Built first: a filter on an invalidated property fails before the
+      // query runs.
+      const query = buildTaskQuery(filter, names);
       let result: unknown;
       try {
-        result = await orca.invokeBackend(
-          "query",
-          buildTaskQuery(filter, names),
-        );
+        result = await orca.invokeBackend("query", query);
       } catch (error) {
         throw new OrcaError(`query failed: ${describeError(error)}`);
       }
