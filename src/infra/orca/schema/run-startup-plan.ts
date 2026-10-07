@@ -3,64 +3,77 @@
 import type { Block, DbId } from "../../../orca.d.ts";
 import { describeError } from "../../../shared/describe-error";
 import type { NoteLanguage } from "../codec/names";
-import { OrcaError } from "../orca-error";
 import {
-  planStartup,
-  type StartupPlan,
-  type TaskTagCache,
-} from "./startup-plan";
+  findAliasOwner,
+  invokeBackend,
+  invokeEditorCommand,
+  invokeGroup,
+} from "../orca-calls";
+import { OrcaError } from "../orca-error";
+import { planStartup, type StartupPlan } from "./startup-plan";
 import { renameTagAlias } from "./tag-alias";
-import { writeTaskTagCache } from "./task-tag-cache";
+import { type TaskTagCache, writeTaskTagCache } from "./task-tag-cache";
 import type { TaskTagState } from "./task-tag-state";
-
-const editor = (command: string, ...args: unknown[]): Promise<unknown> =>
-  orca.commands.invokeEditorCommand(command, null, ...args);
 
 /** The block with ID `id`, or `undefined` when there is none. */
 async function readBlock(id: number): Promise<Block | undefined> {
-  const block: Block | null | undefined = await orca.invokeBackend(
-    "get-block",
-    id,
-  );
+  const block = (await invokeBackend("get-block", id)) as
+    | Block
+    | null
+    | undefined;
   return block ?? undefined;
 }
 
 /** The block whose alias is `name`, or `undefined` when there is none. */
 async function findTagBlock(name: string): Promise<Block | undefined> {
-  const found = await orca.invokeBackend("get-blockid-by-alias", name);
-  const id: unknown = found?.id;
-  return typeof id === "number" ? readBlock(id) : undefined;
+  const id = await findAliasOwner(name);
+  return id === undefined ? undefined : readBlock(id);
 }
 
-/** Creates the tag block, its alias and its property definitions. */
+/**
+ * Creates the tag block, its alias and its property definitions as one undo
+ * step. When a step after `insertBlock` fails, the inserted block is deleted
+ * again, so no empty block without an alias is left behind. Whether
+ * `invokeGroup` rolls back on its own is not measured.
+ */
 async function createTag(plan: StartupPlan, tagName: string): Promise<DbId> {
-  // Results and failures are carried out of the group explicitly: whether
-  // invokeGroup rethrows an error from its callback is not measured.
   let tagBlockId: DbId | undefined;
-  let failure: unknown;
-  await orca.commands.invokeGroup(async () => {
+  await invokeGroup(async () => {
+    const id = await invokeEditorCommand(
+      "core.editor.insertBlock",
+      null,
+      null,
+      [{ t: "t", v: tagName }],
+    );
+    if (typeof id !== "number") {
+      throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+    }
     try {
-      const id = await editor("core.editor.insertBlock", null, null, [
-        { t: "t", v: tagName },
-      ]);
-      if (typeof id !== "number") {
-        throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
-      }
-      tagBlockId = id;
       // Succeeds with "" (tag-operations); documented to return an error
       // object when the name is taken.
-      const aliasError = await editor("core.editor.createAlias", tagName, id);
+      const aliasError = await invokeEditorCommand(
+        "core.editor.createAlias",
+        tagName,
+        id,
+      );
       if (aliasError) {
         throw new OrcaError(
           `createAlias "${tagName}" failed: ${JSON.stringify(aliasError)}`,
         );
       }
-      await editor("core.editor.setProperties", [id], plan.writes);
+      await invokeEditorCommand("core.editor.setProperties", [id], plan.writes);
     } catch (error) {
-      failure = error;
+      try {
+        await invokeEditorCommand("core.editor.deleteBlocks", [id]);
+      } catch (cleanup) {
+        throw new OrcaError(
+          `${describeError(error)}; deleting the new block ${id} also failed: ${describeError(cleanup)}`,
+        );
+      }
+      throw error;
     }
+    tagBlockId = id;
   });
-  if (failure !== undefined) throw failure;
   if (tagBlockId === undefined) {
     throw new OrcaError("the task tag block was not created");
   }
@@ -138,16 +151,19 @@ export async function runStartupPlan(
       case "rename":
       case "revert":
       case "use": {
-        if (action.kind === "rename") {
-          await renameTagAlias(action.tagBlockId, action.from, action.to);
-        }
-        if (plan.writes.length > 0) {
-          await editor(
-            "core.editor.setProperties",
-            [action.tagBlockId],
-            plan.writes,
-          );
-        }
+        // One undo step for the rename and the alignment (ARCHITECTURE §4).
+        await invokeGroup(async () => {
+          if (action.kind === "rename") {
+            await renameTagAlias(action.tagBlockId, action.from, action.to);
+          }
+          if (plan.writes.length > 0) {
+            await invokeEditorCommand(
+              "core.editor.setProperties",
+              [action.tagBlockId],
+              plan.writes,
+            );
+          }
+        });
         // A kept tag keeps its name; the name from the settings is not used.
         const nameInUse = action.kind === "revert" ? action.tagName : tagName;
         // Recorded after alignment, so a takeover that failed half-way is

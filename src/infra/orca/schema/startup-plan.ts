@@ -8,16 +8,11 @@ import {
   type PropertyKey,
   propertyKeys,
 } from "../codec/names";
+import type { TaskTagCache } from "./task-tag-cache";
 import {
   type PropertyDefinition,
   taskTagDefinitions,
 } from "./task-tag-structure";
-
-/** What this repo remembers about the task tag it last used (ADR 0002). */
-export interface TaskTagCache {
-  tagBlockId: number;
-  tagName: string;
-}
 
 export interface StartupInput {
   /** The task tag name from the settings, already resolved (never empty). */

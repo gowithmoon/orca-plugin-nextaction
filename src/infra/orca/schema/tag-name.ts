@@ -1,5 +1,5 @@
 import { defaultTagNames, type NoteLanguage } from "../codec/names";
-import type { TaskTagCache } from "./startup-plan";
+import type { TaskTagCache } from "./task-tag-cache";
 
 /**
  * The task tag name to look for at startup. A missing or blank setting is not

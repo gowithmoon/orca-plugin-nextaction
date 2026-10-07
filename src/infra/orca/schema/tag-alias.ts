@@ -1,19 +1,10 @@
 // Alias lookups and renames for the task tag. Thin Orca side; verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
 import { describeError } from "../../../shared/describe-error";
+import { findAliasOwner, invokeEditorCommand } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { planRename, type RenamePlan } from "./rename-plan";
-import type { TaskTagCache } from "./startup-plan";
-import { writeTaskTagCache } from "./task-tag-cache";
-
-/** The ID of the block whose alias is `name`, or `undefined` when there is none. */
-export async function findAliasOwner(
-  name: string,
-): Promise<number | undefined> {
-  const found = await orca.invokeBackend("get-blockid-by-alias", name);
-  const id: unknown = found?.id;
-  return typeof id === "number" ? id : undefined;
-}
+import { type TaskTagCache, writeTaskTagCache } from "./task-tag-cache";
 
 /**
  * Renames the tag's alias with `renameAlias` (ADR 0002): the block, its
@@ -27,12 +18,7 @@ export async function renameTagAlias(
   to: string,
 ): Promise<void> {
   // Succeeds with "" (tag-operations spike); anything else is a failure.
-  const result = await orca.commands.invokeEditorCommand(
-    "core.editor.renameAlias",
-    null,
-    from,
-    to,
-  );
+  const result = await invokeEditorCommand("core.editor.renameAlias", from, to);
   if (result) {
     throw new OrcaError(
       `renameAlias "${from}" → "${to}" returned ${JSON.stringify(result)}`,
