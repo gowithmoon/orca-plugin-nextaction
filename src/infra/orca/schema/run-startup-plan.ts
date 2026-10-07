@@ -4,23 +4,32 @@ import type { Block, DbId } from "../../../orca.d.ts";
 import { describeError } from "../../../shared/describe-error";
 import type { NoteLanguage } from "../codec/names";
 import { OrcaError } from "../orca-error";
-import { planStartup, type StartupPlan } from "./startup-plan";
-import { readTaskTagCache, writeTaskTagCache } from "./task-tag-cache";
+import {
+  planStartup,
+  type StartupPlan,
+  type TaskTagCache,
+} from "./startup-plan";
+import { renameTagAlias } from "./tag-alias";
+import { writeTaskTagCache } from "./task-tag-cache";
 import type { TaskTagState } from "./task-tag-state";
 
 const editor = (command: string, ...args: unknown[]): Promise<unknown> =>
   orca.commands.invokeEditorCommand(command, null, ...args);
 
-/** The block whose alias is `name`, or `undefined` when there is none. */
-async function findTagBlock(name: string): Promise<Block | undefined> {
-  const found = await orca.invokeBackend("get-blockid-by-alias", name);
-  const id: unknown = found?.id;
-  if (typeof id !== "number") return undefined;
+/** The block with ID `id`, or `undefined` when there is none. */
+async function readBlock(id: number): Promise<Block | undefined> {
   const block: Block | null | undefined = await orca.invokeBackend(
     "get-block",
     id,
   );
   return block ?? undefined;
+}
+
+/** The block whose alias is `name`, or `undefined` when there is none. */
+async function findTagBlock(name: string): Promise<Block | undefined> {
+  const found = await orca.invokeBackend("get-blockid-by-alias", name);
+  const id: unknown = found?.id;
+  return typeof id === "number" ? readBlock(id) : undefined;
 }
 
 /** Creates the tag block, its alias and its property definitions. */
@@ -59,7 +68,8 @@ async function createTag(plan: StartupPlan, tagName: string): Promise<DbId> {
 }
 
 /**
- * Finds or creates the task tag named `tagName` and brings it to the planned
+ * Finds or creates the task tag named `tagName` (renaming the cached tag when
+ * the name was changed while the plugin was off) and brings it to the planned
  * structure. Returns where the tag stands: `ready` (possibly with invalidated
  * properties) or `paused` because the takeover was refused. Throws an
  * `OrcaError` on failure.
@@ -68,13 +78,22 @@ export async function runStartupPlan(
   pluginName: string,
   tagName: string,
   uiLanguage: NoteLanguage,
+  cache: TaskTagCache | undefined,
 ): Promise<TaskTagState> {
   try {
-    const [tagBlock, cache] = await Promise.all([
-      findTagBlock(tagName),
-      readTaskTagCache(pluginName),
-    ]);
-    const plan = planStartup({ tagName, tagBlock, cache, uiLanguage });
+    const tagBlock = await findTagBlock(tagName);
+    // Only needed for rename recovery: no block has the name from the settings.
+    const cachedBlock =
+      tagBlock === undefined && cache !== undefined
+        ? await readBlock(cache.tagBlockId)
+        : undefined;
+    const plan = planStartup({
+      tagName,
+      tagBlock,
+      cache,
+      cachedBlock,
+      uiLanguage,
+    });
     const { action } = plan;
     switch (action.kind) {
       case "refuse":
@@ -97,7 +116,11 @@ export async function runStartupPlan(
           invalidated: [],
         };
       }
+      case "rename":
       case "use":
+        if (action.kind === "rename") {
+          await renameTagAlias(action.tagBlockId, action.from, action.to);
+        }
         if (plan.writes.length > 0) {
           await editor(
             "core.editor.setProperties",

@@ -1,8 +1,6 @@
 // The startup plan: given what was found in the notes, decide what to do with
 // the task tag and which property definitions to write. Pure; executing the
 // plan against Orca lives in ./run-startup-plan.ts.
-//
-// Rename recovery from the cache (#23) extends the input and the action union.
 import type { Block, BlockProperty } from "../../../orca.d.ts";
 import {
   findPropertyKey,
@@ -28,6 +26,12 @@ export interface StartupInput {
   tagBlock: Pick<Block, "id" | "properties"> | undefined;
   /** This repo's cache; `undefined` when there is none (or it is unreadable). */
   cache: TaskTagCache | undefined;
+  /**
+   * The block the cache points at, read only when no block is called
+   * `tagName`; `undefined` when it was not read or no longer exists. Block IDs
+   * are reused (tag-operations spike), so it is checked, not trusted.
+   */
+  cachedBlock?: Pick<Block, "id" | "aliases" | "properties"> | undefined;
   /** Language of the current interface; used only for names of new things. */
   uiLanguage: NoteLanguage;
 }
@@ -45,6 +49,19 @@ export type StartupAction =
       /** Plugin properties whose definition conflicts with the plugin's. */
       invalidated: PropertyKey[];
       /** Language of the names on the tag (ADR 0009). */
+      language: NoteLanguage;
+    }
+  /**
+   * The name was changed in the settings while the plugin was off: rename the
+   * cached tag from `from` to `to` instead of creating one (ADR 0002), then
+   * use it as with `use`.
+   */
+  | {
+      kind: "rename";
+      from: string;
+      to: string;
+      tagBlockId: number;
+      invalidated: PropertyKey[];
       language: NoteLanguage;
     };
 
@@ -135,44 +152,70 @@ function conflicts(
   return subType !== undefined && existing.typeArgs?.subType !== subType;
 }
 
+/** Plan for a tag block that exists: align it, or refuse a first takeover. */
+function planExisting(
+  tagBlock: Pick<Block, "id" | "properties">,
+  cache: TaskTagCache | undefined,
+  uiLanguage: NoteLanguage,
+): StartupPlan {
+  const byName = new Map(tagBlock.properties.map((p) => [p.name, p]));
+  const language = tagLanguage(tagBlock.properties, uiLanguage);
+  // Definitions are in `propertyKeys` order (their index is `pos`).
+  const expectedDefinitions = taskTagDefinitions(language);
+  const conflicting: PropertyKey[] = [];
+  const writes: PropertyDefinition[] = [];
+  propertyKeys.forEach((key, pos) => {
+    const expected = expectedDefinitions[pos];
+    if (!expected) return;
+    const existing = byName.get(expected.name);
+    if (!existing) {
+      writes.push(expected);
+    } else if (conflicts(existing, expected)) {
+      conflicting.push(key);
+    } else {
+      const write = alignProperty(existing, expected);
+      if (write) writes.push(write);
+    }
+  });
+  const firstTakeover = cache?.tagBlockId !== tagBlock.id;
+  if (firstTakeover && conflicting.length > 0) {
+    return {
+      action: { kind: "refuse", conflicts: conflicting, language },
+      writes: [],
+    };
+  }
+  return {
+    action: {
+      kind: "use",
+      tagBlockId: tagBlock.id,
+      invalidated: conflicting,
+      language,
+    },
+    writes,
+  };
+}
+
 export function planStartup(input: StartupInput): StartupPlan {
-  const { tagBlock, cache } = input;
-  if (tagBlock) {
-    const byName = new Map(tagBlock.properties.map((p) => [p.name, p]));
-    const language = tagLanguage(tagBlock.properties, input.uiLanguage);
-    // Definitions are in `propertyKeys` order (their index is `pos`).
-    const expectedDefinitions = taskTagDefinitions(language);
-    const conflicting: PropertyKey[] = [];
-    const writes: PropertyDefinition[] = [];
-    propertyKeys.forEach((key, pos) => {
-      const expected = expectedDefinitions[pos];
-      if (!expected) return;
-      const existing = byName.get(expected.name);
-      if (!existing) {
-        writes.push(expected);
-      } else if (conflicts(existing, expected)) {
-        conflicting.push(key);
-      } else {
-        const write = alignProperty(existing, expected);
-        if (write) writes.push(write);
-      }
-    });
-    const firstTakeover = cache?.tagBlockId !== tagBlock.id;
-    if (firstTakeover && conflicting.length > 0) {
+  const { tagBlock, cache, cachedBlock } = input;
+  if (tagBlock) return planExisting(tagBlock, cache, input.uiLanguage);
+  // Recovery: the cached block is still the tag under the cached name.
+  if (
+    cache &&
+    cachedBlock?.id === cache.tagBlockId &&
+    cachedBlock.aliases.includes(cache.tagName)
+  ) {
+    const plan = planExisting(cachedBlock, cache, input.uiLanguage);
+    if (plan.action.kind === "use") {
       return {
-        action: { kind: "refuse", conflicts: conflicting, language },
-        writes: [],
+        action: {
+          ...plan.action,
+          kind: "rename",
+          from: cache.tagName,
+          to: input.tagName,
+        },
+        writes: plan.writes,
       };
     }
-    return {
-      action: {
-        kind: "use",
-        tagBlockId: tagBlock.id,
-        invalidated: conflicting,
-        language,
-      },
-      writes,
-    };
   }
   return {
     action: { kind: "create", tagName: input.tagName },
