@@ -11,7 +11,7 @@ export function setupL10N(locale: string, builtinTranslations: Translations) {
 export function t(
   key: string,
   args?: { [key: string]: string },
-  locale?: string
+  locale?: string,
 ) {
   const template = _translations[locale ?? _locale]?.[key] ?? key;
 
@@ -19,6 +19,6 @@ export function t(
 
   return Object.entries(args).reduce(
     (str, [name, val]) => str.replaceAll(`\${${name}}`, val),
-    template
+    template,
   );
 }

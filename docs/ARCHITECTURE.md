@@ -48,6 +48,8 @@ src/
   application/
     ports/                 TaskRepository、TaskQuery、Clock、Settings、Notifier 等接口
     usecases/              每个用例一个文件
+  infra/
+    system-clock.ts        Clock 端口的真实实现（与 Orca 无关）
   infra/orca/
     schema/                任务标签的结构定义、启动对齐、改名
     codec/                 Block ⇄ Task 编解码、中英文名称表
@@ -153,7 +155,7 @@ tests/
 ### 错误处理
 
 - `infra` 把 Orca 的失败转换成插件自己的错误类型；`application` 不吞掉错误。
-- 错误统一在 `ui` 层捕获，通过 `orca.notify` 告知用户。禁止出现空的 `catch`。
+- 错误统一在 `ui` 层捕获，通过 `orca.notify` 告知用户。例外：`load`/`unload` 本身的失败（加载出错、回滚或释放出错）没有 `ui` 可用，由 `platform` 直接调用 `orca.notify`。禁止出现空的 `catch`。
 
 ### 界面文字
 
@@ -173,7 +175,7 @@ tests/
 | `domain` | Vitest 单元测试 | 每条规则都有测试，边界场景（`GLOSSARY.md` 中的每条约定）必须覆盖 |
 | `application` | Vitest，配合内存版仓储和固定时钟 | 每个用例都有测试 |
 | `infra/orca/codec` | Vitest，使用 `tests/fixtures` 中的真实 Block 样本 | 中英文名称、空值、异常数据都要覆盖 |
-| `infra`（其余部分）、`ui` | 在 Orca 中手动验证 | 每一步的完成标准里列出验证清单 |
+| `infra`（其余部分）、`ui`、`platform` | 在 Orca 中手动验证 | 每一步的完成标准里列出验证清单。加载、卸载、注册表属于 Orca 行为，不写假宿主测试 |
 | 架构 | `tests/architecture.test.ts` | 永远保持通过 |
 
 修复缺陷时，先写一个能复现缺陷的测试。

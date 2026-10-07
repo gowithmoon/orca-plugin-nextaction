@@ -1,19 +1,7 @@
-import { setupL10N, t } from "./libs/l10n";
-import zhCN from "./translations/zhCN";
+import { createPlugin } from "./platform/bootstrap";
 
-let pluginName: string;
+// Feature modules are wired in here by later roadmap steps.
+const plugin = createPlugin({ features: [] });
 
-export async function load(_name: string) {
-  pluginName = _name;
-
-  setupL10N(orca.state.locale, { "zh-CN": zhCN });
-
-  // Your plugin code goes here.
-  console.log(t("your plugin code starts here"));
-
-  console.log(`${pluginName} loaded.`);
-}
-
-export async function unload() {
-  // Clean up any resources used by the plugin here.
-}
+export const load = (pluginName: string) => plugin.load(pluginName);
+export const unload = () => plugin.unload();
