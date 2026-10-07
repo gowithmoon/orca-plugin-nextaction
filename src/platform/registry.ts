@@ -190,8 +190,21 @@ export function createRegistry(pluginName: string): Registry {
         name,
         (id) => orca.panels.registerPanel(id, renderer),
         async (id) => {
-          for (const panelId of openPanelIds(id)) await closePanel(panelId);
-          orca.panels.unregisterPanel(id);
+          // One stuck panel must not keep the others open or the type registered.
+          const errors: unknown[] = [];
+          for (const panelId of openPanelIds(id)) {
+            try {
+              await closePanel(panelId);
+            } catch (error) {
+              errors.push(error);
+            }
+          }
+          try {
+            orca.panels.unregisterPanel(id);
+          } catch (error) {
+            errors.push(error);
+          }
+          if (errors.length > 0) throw new AggregateError(errors);
         },
       );
     },
@@ -201,7 +214,9 @@ export function createRegistry(pluginName: string): Registry {
         try {
           await entry.dispose();
         } catch (error) {
-          errors.push(error);
+          // A release made of several steps reports each failed step on its own.
+          if (error instanceof AggregateError) errors.push(...error.errors);
+          else errors.push(error);
         }
       }
       if (errors.length > 0) {

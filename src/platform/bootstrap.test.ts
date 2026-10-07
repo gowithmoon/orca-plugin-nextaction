@@ -255,6 +255,35 @@ describe("plugin lifecycle", () => {
     ]);
   });
 
+  it("keeps closing open panels and still unregisters the type when closing one throws", async () => {
+    const view = "orca-plugin-nextaction.panel";
+    const closed: string[] = [];
+    let stuck = "";
+    const plugin = createPlugin({
+      features: [
+        ({ registry }) => {
+          registry.panel("panel", noop, {
+            closePanel: (panelId) => {
+              if (panelId === stuck) throw new Error("panel is stuck");
+              closed.push(panelId);
+            },
+          });
+        },
+      ],
+    });
+    await plugin.load(pluginName);
+    stuck = host.openPanel(view);
+    const second = host.openPanel(view);
+    const third = host.openPanel(view);
+
+    await expect(plugin.unload()).resolves.toBeUndefined();
+
+    expect(closed).toEqual([second, third]);
+    expect(host.leftovers()).toEqual([]);
+    expect(host.notifications).toHaveLength(1);
+    expect(host.notifications[0]?.message).toContain("panel is stuck");
+  });
+
   it("prefixes and releases every kind of Orca registration", async () => {
     const plugin = createPlugin({
       features: [
