@@ -1,10 +1,13 @@
-// The single place where plugin settings are defined. No items yet: they are
-// added by the roadmap steps that need them (e.g. the day boundary in step 3).
+// The single place where plugin settings are defined.
 import type { PluginSettingsSchema } from "../orca.d.ts";
+import { t } from "../shared/l10n/l10n";
 
 export interface SettingDefinition {
-  /** What Orca shows in the settings page. */
-  schema: PluginSettingsSchema[string];
+  /**
+   * What Orca shows in the settings page. A function so that `t()` runs after
+   * `setupL10N` in `load`, not when this module is imported.
+   */
+  schema: () => PluginSettingsSchema[string];
   /**
    * Used when Orca holds no value. Needed for items without a `defaultValue`,
    * which Orca leaves `undefined` (spike: plugin-lifecycle-settings).
@@ -14,7 +17,20 @@ export interface SettingDefinition {
 
 export type SettingsDefinition = Record<string, SettingDefinition>;
 
-export const settingsDefinition: SettingsDefinition = {};
+export const settingsDefinition: SettingsDefinition = {
+  // No `defaultValue` and no fallback: the default follows the interface
+  // language at first start and is resolved where the tag is looked up
+  // (spec #16). Writing it back into the settings is #23.
+  taskTagName: {
+    schema: () => ({
+      label: t("Task tag name"),
+      description: t(
+        "The Orca tag that marks a block as a task. Leave empty to use the default name.",
+      ),
+      type: "string",
+    }),
+  },
+};
 
 export type Settings = Record<string, unknown>;
 
@@ -26,7 +42,7 @@ export async function applySettingsSchema(
   const entries = Object.entries(definition);
   if (entries.length === 0) return;
   const schema: PluginSettingsSchema = Object.fromEntries(
-    entries.map(([key, item]) => [key, item.schema]),
+    entries.map(([key, item]) => [key, item.schema()]),
   );
   await orca.plugins.setSettingsSchema(pluginName, schema);
 }
