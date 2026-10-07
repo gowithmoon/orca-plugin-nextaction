@@ -156,7 +156,7 @@ tests/
 ### 错误处理
 
 - `infra` 把 Orca 的失败转换成插件自己的错误类型；`application` 不吞掉错误。
-- 错误统一在 `ui` 层捕获，通过 `orca.notify` 告知用户。例外：`load`/`unload` 本身的失败（加载出错、回滚或释放出错）没有 `ui` 可用，由 `platform` 直接调用 `orca.notify`。禁止出现空的 `catch`。
+- 错误统一在 `ui` 层捕获，通过 `orca.notify` 告知用户。例外：`load`/`unload` 本身的失败（加载出错、回滚或释放出错），以及由设置触发的工作（任务标签的改名、把设置改回原名）的结果和失败，都没有 `ui` 可用，由 `platform` 直接调用 `orca.notify`。禁止出现空的 `catch`。
 
 ### 界面文字
 
