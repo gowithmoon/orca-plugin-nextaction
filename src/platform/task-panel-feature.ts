@@ -2,6 +2,7 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadTask } from "../application/usecases/read-task";
 import { defaultDayBoundary, logicalDay } from "../domain/time/logical-day";
 import { systemClock } from "../infra/system-clock";
@@ -42,6 +43,7 @@ export function createTaskPanelFeature(
     readTask: createReadTask({ repository }),
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
+    readCandidates: createReadCandidates({ repository }),
     actions,
     changes,
     today: () => logicalDay(systemClock.now(), dayBoundary.current()),

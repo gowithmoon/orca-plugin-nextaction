@@ -119,6 +119,13 @@ const zhCN: Record<string, string> = {
   "Could not read the task: ${reason}": "无法读取任务：${reason}",
   "This block is no longer a task": "这个块已不是任务",
   "Could not save the change: ${reason}": "无法保存修改：${reason}",
+  Context: "上下文",
+  Label: "标记",
+  "No context": "无上下文",
+  "No label": "无标记",
+  "Search or add": "搜索或添加",
+  "Add ${value}": "添加 ${value}",
+  "Could not read the suggestions: ${reason}": "无法读取候选值：${reason}",
   "Pick a task to see and edit its properties here":
     "选一个任务，在这里查看和编辑属性",
   "Changed to ${status}": "已改为${status}",

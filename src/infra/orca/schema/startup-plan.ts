@@ -82,7 +82,8 @@ export interface StartupPlan {
 
 type TypeArgs = Record<string, unknown>;
 
-const choiceName = (choice: unknown): unknown =>
+/** A choice's name: `n` of an object choice, or a string choice itself. */
+export const choiceName = (choice: unknown): unknown =>
   typeof choice === "object" && choice !== null && "n" in choice
     ? choice.n
     : choice;

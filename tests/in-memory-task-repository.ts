@@ -5,6 +5,7 @@
 // the codec tests and not modelled here: a block that cannot be converted is
 // simply marked so.
 import type {
+  ChoiceProperty,
   CompletionHistoryRead,
   ConvertToTaskResult,
   NotConvertibleReason,
@@ -47,6 +48,8 @@ export interface InMemoryTaskRepository extends TaskRepository {
     task: Partial<Task> & { id: TaskId },
     setup?: Omit<BlockSetup, "notConvertible" | "text">,
   ): void;
+  /** The task tag's choices for contexts or labels (none unless set). */
+  setChoices(property: ChoiceProperty, choices: readonly string[]): void;
   /** Every write from now on fails with `error`; `undefined` stops it. */
   failWrites(error: Error | undefined): void;
   /** How many writes succeeded. */
@@ -93,6 +96,11 @@ function matchesValues(
 export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const blocks = new Map<number, StoredBlock>();
   let failure: Error | undefined;
+  /** The task tag's choices per property. */
+  const choices: Record<ChoiceProperty, string[]> = {
+    contexts: [],
+    labels: [],
+  };
   let writes = 0;
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
@@ -163,6 +171,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    setChoices(property, values) {
+      choices[property] = [...values];
+    },
+
     failWrites(error) {
       failure = error;
     },
@@ -208,6 +220,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const block = taskToWrite(id);
       if (completionHistory) refuseUnreadable(block, id);
       write(() => {
+        // Written contexts and labels become choices of the task tag, as in
+        // Orca (multi-choices-created), so they stay candidates.
+        for (const property of ["contexts", "labels"] as const) {
+          for (const value of changes[property] ?? []) {
+            if (!choices[property].includes(value)) {
+              choices[property].push(value);
+            }
+          }
+        }
         block.task = { ...block.task, ...changes };
         if (completionHistory) {
           block.completionHistory = {
@@ -216,6 +237,14 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           };
         }
       });
+    },
+
+    async readCandidates(property) {
+      const values = new Set(choices[property]);
+      for (const block of blocks.values()) {
+        for (const value of block.task?.[property] ?? []) values.add(value);
+      }
+      return [...values];
     },
 
     async readCompletionHistory(id) {

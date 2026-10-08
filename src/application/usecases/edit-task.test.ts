@@ -52,6 +52,25 @@ describe("edit task", () => {
     expect(repository.writeCount()).toBe(2);
   });
 
+  it("writes contexts and labels as they are, and clears them", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 44, contexts: ["@home"], labels: [] });
+    const editTask = createEditTask({ repository });
+
+    await editTask(44, { contexts: ["@home", "电话"], labels: ["写作"] });
+    expect(await repository.getTask(44)).toMatchObject({
+      contexts: ["@home", "电话"],
+      labels: ["写作"],
+    });
+
+    await editTask(44, { contexts: [], labels: [] });
+    expect(await repository.getTask(44)).toMatchObject({
+      contexts: [],
+      labels: [],
+    });
+    expect(repository.writeCount()).toBe(2);
+  });
+
   it("fails on a block that is not a task, writing nothing", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addBlock(42);
