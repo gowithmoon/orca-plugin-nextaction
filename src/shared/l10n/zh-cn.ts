@@ -56,6 +56,11 @@ const zhCN: Record<string, string> = {
   "Could not open the task menu: ${reason}": "无法打开任务操作菜单：${reason}",
   "Task features are paused. See the plugin's earlier notice or its task tag setting.":
     "任务功能已暂停。请查看插件之前的通知或任务标签设置。",
+  NextAction: "今天干点啥",
+  "Could not open or close the plugin panel: ${reason}":
+    "无法打开或关闭插件面板：${reason}",
+  Views: "视图",
+  Refresh: "刷新",
 };
 
 export default zhCN;
