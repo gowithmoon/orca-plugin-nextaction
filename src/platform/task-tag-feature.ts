@@ -1,3 +1,4 @@
+import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import {
   type NoteLanguage,
   noteLanguageFor,
@@ -13,6 +14,7 @@ import {
 import { applyRename } from "../infra/orca/schema/tag-alias";
 import { resolveTagName } from "../infra/orca/schema/tag-name";
 import { readTaskTagCache } from "../infra/orca/schema/task-tag-cache";
+import { taskTagNamesFor } from "../infra/orca/schema/task-tag-names";
 import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
 import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
@@ -41,8 +43,36 @@ const isBlank = (value: unknown) =>
  * invalidated properties are reported to the user but do not fail the load,
  * so the settings page stays usable (e.g. to pick another name).
  */
-export function createTaskTagFeature(): FeatureModule {
+export function createTaskTagFeature(): {
+  feature: FeatureModule;
+  /** The tag's note-facing names, following every change of the tag state. */
+  names: TaskTagNamesSource;
+} {
   let state: TaskTagState = { kind: "paused", reason: "starting" };
+  const listeners = new Set<() => void>();
+  /**
+   * Called after every assignment to `state`: startup (which passes through
+   * `starting`), its outcome (alignment, invalidated properties, refusal,
+   * failure) and renames.
+   */
+  const stateChanged = () => {
+    for (const listener of [...listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("[nextaction] task tag state listener failed", error);
+      }
+    }
+  };
+  const names: TaskTagNamesSource = {
+    current: () => taskTagNamesFor(state),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
 
   /** Startup: find, recover, create or align the tag, and report on it. */
   const start = async (
@@ -50,6 +80,7 @@ export function createTaskTagFeature(): FeatureModule {
     uiLanguage: NoteLanguage,
   ) => {
     state = { kind: "paused", reason: "starting" };
+    stateChanged();
     const setting = settings()[settingKey];
     const cache = await readTaskTagCache(pluginName);
     let tagName = resolveTagName(setting, uiLanguage, cache);
@@ -62,9 +93,11 @@ export function createTaskTagFeature(): FeatureModule {
         cache,
       );
       state = outcome.state;
+      stateChanged();
       reverted = outcome.reverted;
     } catch (error) {
       state = { kind: "paused", reason: "failed" };
+      stateChanged();
       orca.notify(
         "error",
         t('Could not set up the task tag "${name}": ${reason}', {
@@ -171,6 +204,7 @@ export function createTaskTagFeature(): FeatureModule {
         // Repositories read `state()` on every call, so they see it at once.
         if (state.kind === "ready" && state.tagBlockId === current.tagBlockId) {
           state = { ...state, tagName: plan.to };
+          stateChanged();
         }
         return;
       case "revert":
@@ -235,5 +269,5 @@ export function createTaskTagFeature(): FeatureModule {
     });
   };
 
-  return feature;
+  return { feature, names };
 }
