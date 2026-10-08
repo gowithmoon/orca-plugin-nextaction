@@ -2,6 +2,7 @@
 import {
   type ConvertToTaskResult,
   type PluginBlockPropertyRead,
+  type PluginBlockPropertyWrites,
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
@@ -62,6 +63,29 @@ async function sourceBlock(id: number): Promise<Block | undefined> {
   if (sourceId === undefined) return block;
   const source = (await getBlocks([sourceId])).get(sourceId);
   return source && mirrorSourceId(source) === undefined ? source : undefined;
+}
+
+/**
+ * The property to pass to `setProperties` for writing `data` to the plugin
+ * block property `key`. Throws, writing nothing, when the block holds a value
+ * this plugin cannot read: it is kept as it is.
+ */
+function planPluginBlockPropertyWrite(
+  block: Block,
+  key: string,
+  data: Readonly<Record<string, unknown>>,
+) {
+  const plan = planPluginPropertyWrite(block, key, { ...data });
+  if (plan.kind === "refused") {
+    console.warn(
+      `[nextaction] block ${block.id}: plugin block property "${key}" is not overwritten (${plan.reason})`,
+      plan.raw,
+    );
+    throw new OrcaError(
+      `plugin block property "${key}" of block ${block.id} holds a value this plugin cannot read (${plan.reason})`,
+    );
+  }
+  return plan.property;
 }
 
 /**
@@ -127,7 +151,11 @@ export function createOrcaTaskRepository(
       return decoded.kind === "task" ? decoded.task : null;
     },
 
-    async updateTask(id: TaskId, changes: TaskChanges): Promise<void> {
+    async updateTask(
+      id: TaskId,
+      changes: TaskChanges,
+      pluginBlockProperties: PluginBlockPropertyWrites = {},
+    ): Promise<void> {
       const state = readyTag();
       // Encoded first: an invalidated property fails before anything is read
       // or written.
@@ -139,13 +167,29 @@ export function createOrcaTaskRepository(
         tagBlockId: state.tagBlockId,
         invalidated: state.invalidated,
       });
-      if (items.length === 0) return;
+      // Every plugin block property is planned before anything is written: a
+      // value this plugin cannot read fails the whole write.
+      const properties = Object.entries(pluginBlockProperties).map(
+        ([key, data]) => planPluginBlockPropertyWrite(block, key, data),
+      );
+      if (items.length === 0 && properties.length === 0) return;
       const ref = findTaskTagRef(block.refs, state.tagBlockId);
       if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
-      // setRefData takes the whole reference object and changes only the
-      // items passed (tag-operations, round 1 steps 05–06).
       await writeTo(block, async () => {
-        await invokeEditorCommand("core.editor.setRefData", ref, items);
+        // setRefData takes the whole reference object and changes only the
+        // items passed (tag-operations, round 1 steps 05–06).
+        if (items.length > 0) {
+          await invokeEditorCommand("core.editor.setRefData", ref, items);
+        }
+        // setProperties replaces a property of the same name and keeps the
+        // others (block-properties-json J2).
+        if (properties.length > 0) {
+          await invokeEditorCommand(
+            "core.editor.setProperties",
+            [block.id],
+            properties,
+          );
+        }
       });
     },
 
@@ -174,23 +218,14 @@ export function createOrcaTaskRepository(
       data: Readonly<Record<string, unknown>>,
     ): Promise<void> {
       const block = await taskBlockToWrite(id, currentTag());
-      const plan = planPluginPropertyWrite(block, key, { ...data });
-      if (plan.kind === "refused") {
-        console.warn(
-          `[nextaction] block ${block.id}: plugin block property "${key}" is not overwritten (${plan.reason})`,
-          plan.raw,
-        );
-        throw new OrcaError(
-          `plugin block property "${key}" of block ${block.id} holds a value this plugin cannot read (${plan.reason})`,
-        );
-      }
+      const property = planPluginBlockPropertyWrite(block, key, data);
       // setProperties replaces a property of the same name and keeps the
       // others (block-properties-json J2).
       await writeTo(block, async () => {
         await invokeEditorCommand(
           "core.editor.setProperties",
           [block.id],
-          [plan.property],
+          [property],
         );
       });
     },

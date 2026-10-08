@@ -1,7 +1,10 @@
 // The task menu items of step 3: the six statuses and drop (#31). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
 import { TaskFeaturesPausedError } from "../../application/ports/task-repository";
-import type { ChangeStatus } from "../../application/usecases/change-status";
+import {
+  type ChangeStatus,
+  CompletionHistoryUnreadableError,
+} from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
 import { type TaskStatus, taskStatuses } from "../../domain/task/task";
 import { describeError } from "../../shared/describe-error";
@@ -77,6 +80,15 @@ export function registerBuiltinTaskMenuItems(
           // Success says nothing: the icon changes.
           await deps.changeStatus(task.id, status);
         } catch (error) {
+          if (error instanceof CompletionHistoryUnreadableError) {
+            deps.notify(
+              "error",
+              t(
+                "Could not mark the task done: its completion history cannot be read and is kept as it is.",
+              ),
+            );
+            return;
+          }
           notifyFailure(deps.notify, error, (reason) =>
             t("Could not change the status: ${reason}", { reason }),
           );

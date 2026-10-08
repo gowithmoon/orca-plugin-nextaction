@@ -16,8 +16,9 @@ export function dayBoundaryFrom({
 }
 
 /**
- * No use case reads the day boundary yet; development builds get a command
- * that prints the current logical day, to check the setting by hand.
+ * Development builds get a command that prints the current logical day, to
+ * check the setting by hand. Change status reads the day boundary since #32;
+ * removing this command is left to #33.
  */
 export function createDayBoundaryFeature(
   clock: Clock = systemClock,

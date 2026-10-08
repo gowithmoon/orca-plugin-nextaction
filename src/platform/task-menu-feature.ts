@@ -3,11 +3,13 @@ import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createReadTask } from "../application/usecases/read-task";
+import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
 import { createTaskMenuItems } from "../ui/task-menu/menu-items";
 import { statusIconAt } from "../ui/task-menu/orca-dom";
 import { createTaskMenuController } from "../ui/task-menu/task-menu";
 import type { FeatureModule } from "./bootstrap";
+import { dayBoundaryFrom } from "./day-boundary";
 
 /**
  * Opens the task menu when a status icon is clicked (#31). Listens in the
@@ -19,13 +21,18 @@ export function createTaskMenuFeature(
   repository: TaskRepository,
   names: TaskTagNamesSource,
 ): FeatureModule {
-  return ({ pluginName, registry }) => {
+  return (context) => {
+    const { pluginName, registry } = context;
     const notify = (type: "info" | "warn" | "error", message: string) =>
       orca.notify(type, message, { title: pluginName });
 
     const items = createTaskMenuItems();
     registerBuiltinTaskMenuItems(items, {
-      changeStatus: createChangeStatus({ repository }),
+      changeStatus: createChangeStatus({
+        repository,
+        clock: systemClock,
+        dayBoundary: dayBoundaryFrom(context),
+      }),
       dropTask: createDropTask({ repository }),
       notify,
     });

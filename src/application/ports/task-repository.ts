@@ -11,6 +11,11 @@ export type PluginBlockPropertyRead =
   | { kind: "absent" }
   | { kind: "unreadable"; reason: string };
 
+/** Plugin block properties to replace: data by key, without the version. */
+export type PluginBlockPropertyWrites = Readonly<
+  Record<string, Readonly<Record<string, unknown>>>
+>;
+
 /** Values a multi-value property (contexts, labels) must or must not hold. */
 export interface ValuesFilter {
   /** The task holds every one of these. */
@@ -76,11 +81,18 @@ export interface TaskRepository {
 
   /**
    * Writes the properties present in `changes` and leaves the others as they
-   * are; the user undoes the write with one undo. Fails, writing nothing,
-   * when the block is not a task or a property is invalidated. A mirror
-   * block's ID writes to its source block.
+   * are; with `pluginBlockProperties`, also replaces each of those plugin
+   * block properties (by key) with its data. The user undoes the whole write
+   * with one undo. Fails, writing nothing, when the block is not a task, a
+   * property is invalidated, or one of those plugin block properties holds a
+   * value this plugin cannot read. A mirror block's ID writes to its source
+   * block.
    */
-  updateTask(id: TaskId, changes: TaskChanges): Promise<void>;
+  updateTask(
+    id: TaskId,
+    changes: TaskChanges,
+    pluginBlockProperties?: PluginBlockPropertyWrites,
+  ): Promise<void>;
 
   /**
    * The plugin block property `key` of a task. A block that is not a task
