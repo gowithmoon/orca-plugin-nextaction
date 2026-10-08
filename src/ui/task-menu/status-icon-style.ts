@@ -1,27 +1,24 @@
 import type { TaskTagNames } from "../../application/ports/task-tag-names";
 import type { TaskStatus } from "../../domain/task/task";
 import { iconSelector } from "./orca-dom";
+import { statusIcons } from "./status-icons";
 
 /**
- * Tabler icon code points (the `ti-*` classes, from the tabler-icons font
- * Orca ships) and Orca colour variables, per status. Preliminary; tuned
- * after looking at them in Orca (#30).
+ * Orca colour variables per status, for the icons in `statusIcons`.
+ * Preliminary; tuned after looking at them in Orca (#30).
  */
-const icons: Record<TaskStatus, { glyph: string; color: string }> = {
-  inbox: { glyph: "\\eac4", color: "var(--orca-color-text-2)" }, // ti-inbox
-  todo: { glyph: "\\ea6b", color: "var(--orca-color-text-blue)" }, // ti-circle
-  doing: { glyph: "\\fa0d", color: "var(--orca-color-text-yellow)" }, // ti-progress
+const colors: Record<TaskStatus, string> = {
+  inbox: "var(--orca-color-text-2)",
+  todo: "var(--orca-color-text-blue)",
+  doing: "var(--orca-color-text-yellow)",
   // No purple variable has been observed; falls back to the muted colour.
-  waiting: {
-    glyph: "\\ef93",
-    color: "var(--orca-color-text-purple, var(--orca-color-text-2))",
-  }, // ti-hourglass
-  someday: { glyph: "\\ea76", color: "var(--orca-color-text-2)" }, // ti-cloud
-  done: { glyph: "\\ea67", color: "var(--orca-color-text-green)" }, // ti-circle-check
+  waiting: "var(--orca-color-text-purple, var(--orca-color-text-2))",
+  someday: "var(--orca-color-text-2)",
+  done: "var(--orca-color-text-green)",
 };
 
 const iconRule = (selector: string, status: TaskStatus) =>
-  `${selector} {\n  content: "${icons[status].glyph}";\n  color: ${icons[status].color};\n}`;
+  `${selector} {\n  content: "${statusIcons[status].codePoint}";\n  color: ${colors[status]};\n}`;
 
 /**
  * The style sheet for the status icons. A base rule draws the inbox icon on
@@ -49,7 +46,7 @@ export function statusIconCss(names: TaskTagNames): string {
   ];
   const status = names.status;
   if (status) {
-    for (const key of Object.keys(icons) as TaskStatus[]) {
+    for (const key of Object.keys(statusIcons) as TaskStatus[]) {
       if (key === "inbox") continue;
       const selector = iconSelector(names.tagName, {
         property: status.property,
