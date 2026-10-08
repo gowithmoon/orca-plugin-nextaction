@@ -1,14 +1,15 @@
+import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
 
 /**
- * What a plugin block property of a task holds. `unreadable`: something is
- * stored, but not in a format this plugin reads (a newer version wrote it, or
- * it is damaged); it is kept as it is and cannot be written.
+ * What a task's completion history (GLOSSARY: 完成历史) reads as. A task
+ * without one reads as an empty history. `unreadable`: something is stored
+ * that this plugin cannot read (an unknown version, or damaged); it is kept
+ * as it is and cannot be written.
  */
-export type PluginBlockPropertyRead =
-  | { kind: "present"; data: Readonly<Record<string, unknown>> }
-  | { kind: "absent" }
+export type CompletionHistoryRead =
+  | { kind: "readable"; history: CompletionHistory }
   | { kind: "unreadable"; reason: string };
 
 /** Values a multi-value property (contexts, labels) must or must not hold. */
@@ -33,11 +34,36 @@ export interface TaskFilter {
 }
 
 /**
+ * Task features are paused (the task tag is still starting, was refused or
+ * failed to set up), so the repository neither reads nor writes. Thrown by
+ * every method; `ui` tells the user why nothing happened.
+ */
+export class TaskFeaturesPausedError extends Error {
+  override name = "TaskFeaturesPausedError";
+}
+
+/**
+ * Why a block cannot be converted to a task (ADR 0013): it has neither a
+ * parent nor an alias (a journal block, or an orphan left behind when a
+ * referenced block was deleted), or it is the task tag block itself.
+ */
+export type NotConvertibleReason = "journal-or-orphan" | "task-tag";
+
+/** What converting a block to a task did. `id` is the (source) block's. */
+export type ConvertToTaskResult =
+  | { kind: "converted"; id: TaskId }
+  /** Nothing was written. */
+  | { kind: "already-task"; id: TaskId }
+  /** Nothing was written. */
+  | { kind: "not-convertible"; reason: NotConvertibleReason };
+
+/**
  * Where tasks are read from and written to. Implementations hide every Orca
  * detail: mirror blocks, orphans, note-facing names and error conversion.
  *
  * Step 2 built this port: reading (#20), querying (#21), writing properties
- * and plugin block properties (#22).
+ * and plugin block properties (#22). Step 3 adds converting (#27), dropping
+ * (#31), quick capture and the completion history (#32).
  */
 export interface TaskRepository {
   /**
@@ -52,29 +78,48 @@ export interface TaskRepository {
 
   /**
    * Writes the properties present in `changes` and leaves the others as they
-   * are; the user undoes the write with one undo. Fails, writing nothing,
-   * when the block is not a task or a property is invalidated. A mirror
-   * block's ID writes to its source block.
+   * are; with `completionHistory`, also replaces the task's completion
+   * history with it. The user undoes the whole write with one undo. Fails,
+   * writing nothing, when the block is not a task, a property is
+   * invalidated, or the completion history is to be replaced but reads as
+   * unreadable. A mirror block's ID writes to its source block.
    */
-  updateTask(id: TaskId, changes: TaskChanges): Promise<void>;
-
-  /**
-   * The plugin block property `key` of a task. A block that is not a task
-   * reads as `absent`, even if it still holds such a property.
-   */
-  readPluginBlockProperty(
+  updateTask(
     id: TaskId,
-    key: string,
-  ): Promise<PluginBlockPropertyRead>;
-
-  /**
-   * Replaces the plugin block property `key` of a task with `data`. Fails,
-   * writing nothing, when the block is not a task or the property holds a
-   * value this plugin cannot read.
-   */
-  writePluginBlockProperty(
-    id: TaskId,
-    key: string,
-    data: Readonly<Record<string, unknown>>,
+    changes: TaskChanges,
+    completionHistory?: CompletionHistory,
   ): Promise<void>;
+
+  /**
+   * The completion history of a task. A block that is not a task reads as an
+   * empty history, even if it still holds one.
+   */
+  readCompletionHistory(id: TaskId): Promise<CompletionHistoryRead>;
+
+  /**
+   * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror
+   * block's ID converts its source block. In one undo, every plugin block
+   * property left on the block (e.g. by removing the task tag in Orca) is
+   * deleted, then the task tag is added without values, so every property
+   * takes its default. A task, or a block that cannot be converted, is left
+   * as it is. Fails, writing nothing, when the write fails.
+   */
+  convertToTask(id: number): Promise<ConvertToTaskResult>;
+
+  /**
+   * Drops the task (GLOSSARY: 放弃): in one undo, removes the task tag and
+   * deletes every plugin block property of the block, so it is a plain block
+   * again. Subtasks are left as they are. A mirror block's ID drops its
+   * source block. Fails, writing nothing, when the block is not a task or the
+   * write fails.
+   */
+  dropTask(id: TaskId): Promise<void>;
+
+  /**
+   * Creates an inbox task with `text`, as plain text, at the end of the
+   * journal of the calendar day `now` falls on in local time (not the logical
+   * day, ADR 0005), creating that journal if it does not exist yet. The user
+   * undoes it with one undo. Returns the new task's ID.
+   */
+  appendTaskToJournal(text: string, now: Date): Promise<TaskId>;
 }

@@ -30,6 +30,17 @@ export const settingsDefinition: SettingsDefinition = {
       type: "string",
     }),
   },
+  // No `defaultValue`: Orca leaves the item `undefined`, and the day boundary
+  // reads that as 5:00 (infra/settings-day-boundary.ts).
+  dayBoundary: {
+    schema: () => ({
+      label: t("Day boundary"),
+      description: t(
+        "A day starts at this time. Usually set in the early morning.",
+      ),
+      type: "time",
+    }),
+  },
 };
 
 export type Settings = Record<string, unknown>;

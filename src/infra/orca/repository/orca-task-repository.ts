@@ -1,15 +1,22 @@
 // TaskRepository on Orca. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import type {
-  PluginBlockPropertyRead,
-  TaskFilter,
-  TaskRepository,
+import {
+  type CompletionHistoryRead,
+  type ConvertToTaskResult,
+  TaskFeaturesPausedError,
+  type TaskFilter,
+  type TaskRepository,
 } from "../../../application/ports/task-repository";
+import type { CompletionHistory } from "../../../domain/task/completion-history";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block } from "../../../orca.d.ts";
 import {
-  planPluginPropertyWrite,
-  readPluginProperty,
+  planCompletionHistoryWrite,
+  readCompletionHistory,
+} from "../codec/completion-history-codec";
+import {
+  type PluginPropertyWrite,
+  pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
 import {
   decodeTask,
@@ -17,6 +24,7 @@ import {
   mirrorSourceId,
   type TaskTagContext,
 } from "../codec/task-codec";
+import { planConversion } from "../codec/task-conversion";
 import { encodeTaskChanges } from "../codec/task-encode";
 import { invokeBackend, invokeEditorCommand, invokeGroup } from "../orca-calls";
 import { OrcaError } from "../orca-error";
@@ -61,6 +69,24 @@ async function sourceBlock(id: number): Promise<Block | undefined> {
 }
 
 /**
+ * The property to pass to `setProperties` for a planned plugin block property
+ * write. Throws, writing nothing, when the block holds a value this plugin
+ * cannot read: it is kept as it is.
+ */
+function plannedWrite(block: Block, plan: PluginPropertyWrite) {
+  if (plan.kind === "refused") {
+    console.warn(
+      `[nextaction] block ${block.id}: a plugin block property is not overwritten (${plan.reason})`,
+      plan.raw,
+    );
+    throw new OrcaError(
+      `a plugin block property of block ${block.id} holds a value this plugin cannot read (${plan.reason})`,
+    );
+  }
+  return plan.property;
+}
+
+/**
  * @param tagState Where the task tag stands (#19). While it is paused the
  *   repository neither reads nor writes; when ready, its invalidated
  *   properties read as empty and cannot be written.
@@ -75,7 +101,9 @@ export function createOrcaTaskRepository(
   const readyTag = () => {
     const state = tagState();
     if (state.kind !== "ready") {
-      throw new OrcaError(`task features are paused (${state.reason})`);
+      throw new TaskFeaturesPausedError(
+        `task features are paused (${state.reason})`,
+      );
     }
     return state;
   };
@@ -121,7 +149,11 @@ export function createOrcaTaskRepository(
       return decoded.kind === "task" ? decoded.task : null;
     },
 
-    async updateTask(id: TaskId, changes: TaskChanges): Promise<void> {
+    async updateTask(
+      id: TaskId,
+      changes: TaskChanges,
+      completionHistory?: CompletionHistory,
+    ): Promise<void> {
       const state = readyTag();
       // Encoded first: an invalidated property fails before anything is read
       // or written.
@@ -133,28 +165,46 @@ export function createOrcaTaskRepository(
         tagBlockId: state.tagBlockId,
         invalidated: state.invalidated,
       });
-      if (items.length === 0) return;
+      // The completion history is planned before anything is written: a
+      // value this plugin cannot read fails the whole write.
+      const properties = completionHistory
+        ? [
+            plannedWrite(
+              block,
+              planCompletionHistoryWrite(block, completionHistory),
+            ),
+          ]
+        : [];
+      if (items.length === 0 && properties.length === 0) return;
       const ref = findTaskTagRef(block.refs, state.tagBlockId);
       if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
-      // setRefData takes the whole reference object and changes only the
-      // items passed (tag-operations, round 1 steps 05–06).
       await writeTo(block, async () => {
-        await invokeEditorCommand("core.editor.setRefData", ref, items);
+        // setRefData takes the whole reference object and changes only the
+        // items passed (tag-operations, round 1 steps 05–06).
+        if (items.length > 0) {
+          await invokeEditorCommand("core.editor.setRefData", ref, items);
+        }
+        // setProperties replaces a property of the same name and keeps the
+        // others (block-properties-json J2).
+        if (properties.length > 0) {
+          await invokeEditorCommand(
+            "core.editor.setProperties",
+            [block.id],
+            properties,
+          );
+        }
       });
     },
 
-    async readPluginBlockProperty(
-      id: TaskId,
-      key: string,
-    ): Promise<PluginBlockPropertyRead> {
+    async readCompletionHistory(id: TaskId): Promise<CompletionHistoryRead> {
       // Only tagged blocks: what a dropped task left behind is not task data
       // (block-properties-json J4).
       const block = await taskBlock(id, currentTag());
-      if (!block) return { kind: "absent" };
-      const read = readPluginProperty(block, key);
+      if (!block) return { kind: "readable", history: [] };
+      const read = readCompletionHistory(block);
       if (read.kind === "unreadable") {
         console.warn(
-          `[nextaction] block ${block.id}: plugin block property "${key}" is kept as it is (${read.reason})`,
+          `[nextaction] block ${block.id}: the completion history is kept as it is (${read.reason})`,
           read.raw,
         );
         return { kind: "unreadable", reason: read.reason };
@@ -162,31 +212,121 @@ export function createOrcaTaskRepository(
       return read;
     },
 
-    async writePluginBlockProperty(
-      id: TaskId,
-      key: string,
-      data: Readonly<Record<string, unknown>>,
-    ): Promise<void> {
-      const block = await taskBlockToWrite(id, currentTag());
-      const plan = planPluginPropertyWrite(block, key, { ...data });
-      if (plan.kind === "refused") {
-        console.warn(
-          `[nextaction] block ${block.id}: plugin block property "${key}" is not overwritten (${plan.reason})`,
-          plan.raw,
-        );
-        throw new OrcaError(
-          `plugin block property "${key}" of block ${block.id} holds a value this plugin cannot read (${plan.reason})`,
-        );
+    async convertToTask(id: number): Promise<ConvertToTaskResult> {
+      const state = readyTag();
+      // Mirrors resolve first: tagging a mirror puts hidden task data on it
+      // (block-properties-json M4).
+      const block = await sourceBlock(id);
+      if (!block) throw new OrcaError(`no block ${id} to convert`);
+      // Decided before any call into Orca: insertTag on a journal block
+      // fails inside Orca (page-task P1).
+      const plan = planConversion(block, {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      });
+      switch (plan.kind) {
+        case "already-task":
+          return { kind: "already-task", id: block.id };
+        case "not-convertible":
+          return { kind: "not-convertible", reason: plan.reason };
+        case "mirror":
+          // sourceBlock never returns a mirror.
+          throw new OrcaError(`block ${block.id} is a mirror of a mirror`);
+        case "convertible":
+          await writeTo(block, async () => {
+            // Removing the task tag in Orca leaves plugin block properties
+            // behind (block-properties-json J4); a new task starts blank.
+            // deleteProperties deletes by name, dotted names included (J7).
+            if (plan.leftoverProperties.length > 0) {
+              await invokeEditorCommand(
+                "core.editor.deleteProperties",
+                [block.id],
+                plan.leftoverProperties,
+              );
+            }
+            // Without values every property takes its default, the status
+            // inbox (tag-operations).
+            await invokeEditorCommand(
+              "core.editor.insertTag",
+              block.id,
+              state.tagName,
+            );
+          });
+          return { kind: "converted", id: block.id };
       }
-      // setProperties replaces a property of the same name and keeps the
-      // others (block-properties-json J2).
+    },
+
+    async dropTask(id: TaskId): Promise<void> {
+      const state = readyTag();
+      const block = await taskBlockToWrite(id, {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      });
+      const pluginProperties = block.properties
+        .map((p) => p.name)
+        .filter((name) => name.startsWith(pluginPropertyPrefix));
+      // removeTag leaves plugin block properties behind (block-properties-json
+      // J4), so both happen in one undo.
       await writeTo(block, async () => {
         await invokeEditorCommand(
-          "core.editor.setProperties",
-          [block.id],
-          [plan.property],
+          "core.editor.removeTag",
+          block.id,
+          state.tagName,
         );
+        if (pluginProperties.length > 0) {
+          await invokeEditorCommand(
+            "core.editor.deleteProperties",
+            [block.id],
+            pluginProperties,
+          );
+        }
       });
+    },
+
+    async appendTaskToJournal(text: string, now: Date): Promise<TaskId> {
+      const state = readyTag();
+      // A local-time Date picks the journal by local date, and a missing
+      // journal is created (journal-capture J2, J3). This runs outside the
+      // group below, so a journal it creates is not removed by the one undo;
+      // accepted (journal-capture).
+      const journal = await invokeBackend("get-journal-block", now);
+      if (
+        typeof journal !== "object" ||
+        journal === null ||
+        !("id" in journal)
+      ) {
+        throw new OrcaError(
+          `get-journal-block returned ${JSON.stringify(journal)}`,
+        );
+      }
+      let id: unknown;
+      try {
+        // insertBlock and insertTag in one group are one undo (J4, J6); a
+        // journal fetched with get-block works as the reference (J5).
+        await invokeGroup(async () => {
+          id = await invokeEditorCommand(
+            "core.editor.insertBlock",
+            journal,
+            "lastChild",
+            // Plain text: tags and formatting in it are not parsed.
+            [{ t: "t", v: text }],
+          );
+          if (typeof id !== "number") {
+            throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+          }
+          // Without values every property takes its default, the status
+          // inbox (tag-operations).
+          await invokeEditorCommand("core.editor.insertTag", id, state.tagName);
+        });
+      } finally {
+        if (typeof id === "number") onWritten(id);
+      }
+      // The group completed, so insertBlock returned a number; checked again
+      // because TypeScript cannot see the assignment inside the callback.
+      if (typeof id !== "number") {
+        throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+      }
+      return id;
     },
 
     async queryTasks(filter: TaskFilter): Promise<Task[]> {

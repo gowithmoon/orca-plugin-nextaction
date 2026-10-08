@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 // https://vitejs.dev/config/
 // `vite build` is the production build. `vite build --mode development`
 // (pnpm build:dev) is a development build that Orca can load: it keeps
-// development-only code such as debug commands (`import.meta.env.DEV`).
+// development-only code (`import.meta.env.DEV`).
 export default defineConfig(({ command, mode }) => {
   const production = command === "build" && mode !== "development";
   return {

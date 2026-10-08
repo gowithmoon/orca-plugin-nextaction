@@ -1,3 +1,7 @@
+import type { TaskRepository } from "../application/ports/task-repository";
+import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
+import { createConvertToTask } from "../application/usecases/convert-to-task";
+import { createQuickCapture } from "../application/usecases/quick-capture";
 import {
   type NoteLanguage,
   noteLanguageFor,
@@ -13,14 +17,14 @@ import {
 import { applyRename } from "../infra/orca/schema/tag-alias";
 import { resolveTagName } from "../infra/orca/schema/tag-name";
 import { readTaskTagCache } from "../infra/orca/schema/task-tag-cache";
+import { taskTagNamesFor } from "../infra/orca/schema/task-tag-names";
 import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
 import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
+import { createQuickCaptureCommand } from "../ui/capture/quick-capture-popup";
+import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
-import { registerQueryInboxCommand } from "./dev/query-inbox-command";
-import { registerReadTaskCommand } from "./dev/read-task-command";
-import { registerWriteTaskCommands } from "./dev/write-task-commands";
 import { writeSetting } from "./settings";
 
 const settingKey = "taskTagName";
@@ -41,8 +45,49 @@ const isBlank = (value: unknown) =>
  * invalidated properties are reported to the user but do not fail the load,
  * so the settings page stays usable (e.g. to pick another name).
  */
-export function createTaskTagFeature(): FeatureModule {
+export function createTaskTagFeature(): {
+  feature: FeatureModule;
+  /** The tag's note-facing names, following every change of the tag state. */
+  names: TaskTagNamesSource;
+  /** Tasks in the notes; it reads the tag state on every call. */
+  repository: TaskRepository;
+  /** The task tag block's ID; `undefined` while task features are paused. */
+  taskTagBlockId: () => number | undefined;
+} {
   let state: TaskTagState = { kind: "paused", reason: "starting" };
+  const listeners = new Set<() => void>();
+  /**
+   * Called after every assignment to `state`: startup (which passes through
+   * `starting`), its outcome (alignment, invalidated properties, refusal,
+   * failure) and renames.
+   */
+  const stateChanged = (pluginName: string) => {
+    for (const listener of [...listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        // Kept for the stack; the notice tells the user.
+        console.error("[nextaction] task tag state listener failed", error);
+        orca.notify(
+          "error",
+          t(
+            "A feature could not follow the change of the task tag: ${reason}",
+            { reason: describeError(error) },
+          ),
+          { title: pluginName },
+        );
+      }
+    }
+  };
+  const names: TaskTagNamesSource = {
+    current: () => taskTagNamesFor(state),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
 
   /** Startup: find, recover, create or align the tag, and report on it. */
   const start = async (
@@ -50,6 +95,7 @@ export function createTaskTagFeature(): FeatureModule {
     uiLanguage: NoteLanguage,
   ) => {
     state = { kind: "paused", reason: "starting" };
+    stateChanged(pluginName);
     const setting = settings()[settingKey];
     const cache = await readTaskTagCache(pluginName);
     let tagName = resolveTagName(setting, uiLanguage, cache);
@@ -62,9 +108,11 @@ export function createTaskTagFeature(): FeatureModule {
         cache,
       );
       state = outcome.state;
+      stateChanged(pluginName);
       reverted = outcome.reverted;
     } catch (error) {
       state = { kind: "paused", reason: "failed" };
+      stateChanged(pluginName);
       orca.notify(
         "error",
         t('Could not set up the task tag "${name}": ${reason}', {
@@ -171,6 +219,7 @@ export function createTaskTagFeature(): FeatureModule {
         // Repositories read `state()` on every call, so they see it at once.
         if (state.kind === "ready" && state.tagBlockId === current.tagBlockId) {
           state = { ...state, tagName: plan.to };
+          stateChanged(pluginName);
         }
         return;
       case "revert":
@@ -200,19 +249,36 @@ export function createTaskTagFeature(): FeatureModule {
     }
   };
 
+  const repository = createOrcaTaskRepository(
+    () => state,
+    // No caches yet; step 4 connects the view cache here.
+    () => {},
+  );
+
   const feature: FeatureModule = async (context) => {
-    // Statically false in production builds, so the commands and the
-    // repository they use are left out of the bundle (#20).
-    if (import.meta.env.DEV) {
-      const repository = createOrcaTaskRepository(
-        () => state,
-        // No caches yet; step 4 connects the view cache here.
-        () => {},
-      );
-      registerReadTaskCommand(context.registry, repository);
-      registerQueryInboxCommand(context.registry, repository);
-      registerWriteTaskCommands(context.registry, repository, systemClock);
-    }
+    // No shortcut is assigned: the user binds one in Orca's settings.
+    context.registry.editorCommand(
+      "convertToTask",
+      createConvertToTaskCommand(
+        createConvertToTask({ repository }),
+        context.pluginName,
+      ),
+      // The repository's invokeGroup is the undo unit.
+      () => undefined,
+      { label: t("Convert to task") },
+    );
+    // The popup's own root, empty until the command opens it; unload
+    // unmounts it.
+    const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
+    context.registry.command(
+      "quickCapture",
+      createQuickCaptureCommand(
+        createQuickCapture({ repository, clock: systemClock }),
+        context.pluginName,
+        captureRoot.render,
+      ),
+      t("Quick capture"),
+    );
     const uiLanguage = noteLanguageFor(orca.state.locale);
     await start(context, uiLanguage);
 
@@ -235,5 +301,8 @@ export function createTaskTagFeature(): FeatureModule {
     });
   };
 
-  return feature;
+  const taskTagBlockId = () =>
+    state.kind === "ready" ? state.tagBlockId : undefined;
+
+  return { feature, names, repository, taskTagBlockId };
 }

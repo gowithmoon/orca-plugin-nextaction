@@ -2,12 +2,14 @@ import type { ComponentType, ReactNode } from "react";
 import type { Root } from "react-dom/client";
 import type {
   AfterHook,
+  BlockMenuCommand,
   ColumnPanel,
   CommandFn,
   EditorCommandFn,
   EditorSidetool,
   PanelProps,
   RowPanel,
+  TagMenuCommand,
   ViewPanel,
 } from "../orca.d.ts";
 import { describeError } from "../shared/describe-error";
@@ -25,9 +27,22 @@ export interface Registry {
   /** Hooks after any command, including Orca's own; `commandId` is not prefixed. */
   afterCommand(commandId: string, hook: AfterHook): void;
   editorSidetool(name: string, tool: EditorSidetool): string;
+  /** Adds entries to the tag menu (official-task-menus). */
+  tagMenuCommand(name: string, command: TagMenuCommand): string;
+  /** Adds entries to the block handle's menu (official-task-menus). */
+  blockMenuCommand(name: string, command: BlockMenuCommand): string;
   broadcastHandler(name: string, handler: CommandFn): string;
   /** Injects a style sheet; the prefixed identifier is its role. */
   css(name: string, css: string): string;
+  /**
+   * A style sheet whose content changes over time. `set` replaces it;
+   * `undefined` (or an empty string) removes it until the next `set`. On
+   * release it is removed.
+   */
+  replaceableCss(name: string): {
+    id: string;
+    set(css: string | undefined): void;
+  };
   /**
    * Schedules a callback; cleared on release if it has not fired yet. Returns
    * a function that clears it earlier (e.g. to debounce).
@@ -150,6 +165,18 @@ export function createRegistry(pluginName: string): Registry {
         (id) => orca.editorSidetools.registerEditorSidetool(id, tool),
         (id) => orca.editorSidetools.unregisterEditorSidetool(id),
       ),
+    tagMenuCommand: (name, command) =>
+      owned(
+        name,
+        (id) => orca.tagMenuCommands.registerTagMenuCommand(id, command),
+        (id) => orca.tagMenuCommands.unregisterTagMenuCommand(id),
+      ),
+    blockMenuCommand: (name, command) =>
+      owned(
+        name,
+        (id) => orca.blockMenuCommands.registerBlockMenuCommand(id, command),
+        (id) => orca.blockMenuCommands.unregisterBlockMenuCommand(id),
+      ),
     broadcastHandler: (name, handler) =>
       owned(
         name,
@@ -162,6 +189,29 @@ export function createRegistry(pluginName: string): Registry {
         (id) => orca.themes.injectCSS(css, id),
         (id) => orca.themes.removeCSS(id),
       ),
+    replaceableCss(name) {
+      let current = "";
+      let released = false;
+      const id = owned(
+        name,
+        () => {},
+        (id) => {
+          released = true;
+          orca.themes.removeCSS(id);
+        },
+      );
+      return {
+        id,
+        set(css = "") {
+          if (released || css === current) return;
+          // Removed first: whether injecting under the same role replaces the
+          // old sheet is not documented.
+          if (current) orca.themes.removeCSS(id);
+          if (css) orca.themes.injectCSS(css, id);
+          current = css;
+        },
+      };
+    },
     timeout(fn, ms) {
       // A fired or cleared timer leaves the registry, so a debounce does not
       // pile up one entry per keystroke.
