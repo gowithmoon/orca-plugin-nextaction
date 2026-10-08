@@ -2,13 +2,26 @@
 // marked. Choosing the current status does nothing. Shared by the task card
 // and the task panel; render it inside a ContextMenu's `menu`. Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
-import { type TaskStatus, taskStatuses } from "../../domain/task/task";
+import {
+  hasStatusAnomaly,
+  type Task,
+  type TaskStatus,
+  taskStatuses,
+} from "../../domain/task/task";
 import { statusIcons } from "../task-menu/status-icons";
 import { statusLabel } from "./status-label";
 
+/**
+ * The status to mark as current: none while the notes hold an empty or
+ * unknown status, so choosing inbox writes it and repairs the task.
+ */
+export function markedStatus(task: Task): TaskStatus | undefined {
+  return hasStatusAnomaly(task) ? undefined : task.status;
+}
+
 export function StatusMenu(props: {
-  /** The task's status; an empty or unknown one reads as inbox. */
-  current: TaskStatus;
+  /** The status marked as current (`markedStatus`); none is marked without it. */
+  current: TaskStatus | undefined;
   /** Called with a status other than `current`, after the menu closes. */
   onChoose: (status: TaskStatus) => void;
   close: () => void;

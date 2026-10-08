@@ -1,11 +1,10 @@
 // Where the plugin panel opens and how it goes away (ADR 0011,
 // editor-sidetool-panel "对后续步骤的影响"). Orca behaviour, verified by hand
 // in Orca (docs/ARCHITECTURE.md §5).
-import type { ColumnPanel, RowPanel, ViewPanel } from "../orca.d.ts";
+import { journalViewDate } from "../infra/orca/journal-date";
+import type { ViewPanel } from "../orca.d.ts";
 import type { NextActionPanelArgs } from "../ui/panel/nextaction-panel";
-
-type AnyPanel = RowPanel | ColumnPanel | ViewPanel;
-type Container = RowPanel | ColumnPanel;
+import { findViewPanels, parentOf } from "./panel-tree";
 
 /** Only these views have known `viewArgs`; any other is never covered. */
 const coverableViews = new Set(["block", "journal"]);
@@ -18,31 +17,6 @@ export interface PanelPlacement {
   toggle(originPanelId: string): void;
   /** Restores what the plugin panel covered, or closes it when it opened a new panel. */
   close(panelId: string): void;
-}
-
-/** The view panels showing `view`. Read before any navigation call: the tree is live. */
-function findViewPanels(view: string): ViewPanel[] {
-  const found: ViewPanel[] = [];
-  const walk = (panel: AnyPanel) => {
-    if ("children" in panel) panel.children.forEach(walk);
-    else if (panel.view === view) found.push(panel);
-  };
-  walk(orca.state.panels);
-  return found;
-}
-
-/** The container holding the panel `id`, if it is open. */
-function parentOf(id: string): Container | undefined {
-  const walk = (panel: AnyPanel): Container | undefined => {
-    if (!("children" in panel)) return undefined;
-    for (const child of panel.children) {
-      if (child.id === id) return panel;
-      const found = walk(child);
-      if (found) return found;
-    }
-    return undefined;
-  };
-  return walk(orca.state.panels);
 }
 
 /**
@@ -72,13 +46,9 @@ function correctedArgs(
 ): Record<string, unknown> | undefined {
   const args = { ...covered.viewArgs };
   if (covered.view === "journal") {
-    const date =
-      args.date instanceof Date
-        ? args.date
-        : typeof args.date === "string" || typeof args.date === "number"
-          ? new Date(args.date)
-          : undefined;
-    if (!date || Number.isNaN(date.getTime())) return undefined;
+    // Journal dates are made in infra only (journal-capture).
+    const date = journalViewDate(args.date);
+    if (!date) return undefined;
     args.date = date;
   } else {
     const blockId = Number(args.blockId);

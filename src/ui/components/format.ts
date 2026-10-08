@@ -1,7 +1,17 @@
 // How task values read in the plugin panel. Display only: nothing here
 // changes what the notes hold.
-import type { CalendarDate, Rating } from "../../domain/task/task";
+import type { CalendarDate, Rating, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+
+/**
+ * The task's text as shown: a placeholder when it is blank, which `empty`
+ * marks so it can be styled apart.
+ */
+export function shownText(task: Task): { text: string; empty: boolean } {
+  return task.text.trim() === ""
+    ? { text: t("(No text)"), empty: true }
+    : { text: task.text, empty: false };
+}
 
 function weekday(date: CalendarDate): string {
   // Local calendar arithmetic only (ADR 0012); no current time involved.

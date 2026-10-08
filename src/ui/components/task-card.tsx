@@ -9,9 +9,10 @@ import { t } from "../../shared/l10n/l10n";
 import type { TaskActions } from "../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../task-menu/menu-items";
 import { TaskMenu } from "../task-menu/task-menu";
+import { shownText } from "./format";
 import { PropertyRow } from "./property-row";
 import { StatusIcon } from "./status-icon";
-import { StatusMenu } from "./status-menu";
+import { markedStatus, StatusMenu } from "./status-menu";
 
 export interface TaskCardProps {
   task: Task;
@@ -30,7 +31,7 @@ export interface TaskCardProps {
    * The task has left the view's list but stays while it is selected (#42):
    * faded, struck through, and saying its new status.
    */
-  left?: boolean;
+  kept?: boolean;
 }
 
 /** A click that selected text is not a click on the card. */
@@ -46,7 +47,7 @@ function StatusButton(props: { task: Task; actions: TaskActions }) {
     <ContextMenu
       menu={(close) => (
         <StatusMenu
-          current={task.status}
+          current={markedStatus(task)}
           onChoose={(status) => actions.changeStatus(task, status)}
           close={close}
         />
@@ -92,17 +93,17 @@ function OpenInNotesButton(props: { task: Task; actions: TaskActions }) {
 }
 
 export function TaskCard(props: TaskCardProps) {
-  const { task, today, actions, menuItems, onOpen, menuPlace, selected, left } =
+  const { task, today, actions, menuItems, onOpen, menuPlace, selected, kept } =
     props;
   const { ContextMenu } = orca.components;
-  const text = task.text.trim();
+  const text = shownText(task);
 
   const card = (onContextMenu?: (event: React.MouseEvent) => void) => (
     <article
       className="nextaction-task-card"
       data-clickable={onOpen ? true : undefined}
       data-selected={selected || undefined}
-      data-left={left || undefined}
+      data-kept={kept || undefined}
       aria-current={selected || undefined}
       onClick={
         onOpen &&
@@ -144,11 +145,11 @@ export function TaskCard(props: TaskCardProps) {
       <div className="nextaction-task-card-main">
         <div
           className="nextaction-task-card-text"
-          data-empty={text === "" || undefined}
+          data-empty={text.empty || undefined}
         >
-          {text === "" ? t("(No text)") : task.text}
+          {text.text}
         </div>
-        <PropertyRow task={task} today={today} left={left} />
+        <PropertyRow task={task} today={today} kept={kept} />
       </div>
       {actions && <OpenInNotesButton task={task} actions={actions} />}
     </article>

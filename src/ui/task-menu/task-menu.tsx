@@ -13,8 +13,7 @@ import type {
 } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { useTask } from "../hooks/use-task";
-import { createNotify } from "../notify";
-import { notifyMenuFailure } from "./builtin-items";
+import { createNotify, notifyActionFailure } from "../notify";
 import type { TaskMenuItem, TaskMenuItems, TaskMenuPlace } from "./menu-items";
 
 export interface TaskMenuDeps {
@@ -54,7 +53,7 @@ function itemEntry(
  * The registered entries for `task`, without a container: Orca's tag and
  * block menus provide their own. `TaskMenu` wraps them for a `ContextMenu`.
  */
-export function TaskMenuEntries(props: {
+function TaskMenuEntries(props: {
   items: TaskMenuItems;
   task: Task;
   close: () => void;
@@ -112,7 +111,7 @@ function ReadTaskMenuEntries(props: {
   const { deps, taskId, close } = props;
   const onError = React.useCallback(
     (error: unknown) =>
-      notifyMenuFailure(createNotify(deps.pluginName), error, (reason) =>
+      notifyActionFailure(createNotify(deps.pluginName), error, (reason) =>
         t("Could not open the task menu: ${reason}", { reason }),
       ),
     [deps.pluginName],

@@ -5,10 +5,9 @@
 import * as React from "react";
 import type { ChangeStatus } from "../../application/usecases/change-status";
 import type { Task, TaskStatus } from "../../domain/task/task";
-import type { Notify } from "../notify";
+import { changeStatusReporting, type Notify } from "../notify";
 import { type OpenInNotes, openInNotesReporting } from "../panel/open-in-notes";
 import { PanelContext } from "../panel/panel-context";
-import { changeStatusReporting } from "../task-menu/builtin-items";
 
 export interface TaskActionsDeps {
   changeStatus: ChangeStatus;

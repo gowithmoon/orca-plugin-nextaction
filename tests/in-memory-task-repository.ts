@@ -230,6 +230,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           }
         }
         block.task = { ...block.task, ...changes };
+        // A status written is one of the plugin's: it reads back without the
+        // anomaly an empty or unknown one had, as decoding does.
+        if (changes.status !== undefined) {
+          block.task = {
+            ...block.task,
+            anomalies: block.task.anomalies.filter(
+              (anomaly) => anomaly.property !== "status",
+            ),
+          };
+        }
         if (completionHistory) {
           block.completionHistory = {
             kind: "readable",
@@ -239,12 +249,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
-    async readCandidates(property) {
-      const values = new Set(choices[property]);
-      for (const block of blocks.values()) {
-        for (const value of block.task?.[property] ?? []) values.add(value);
-      }
-      return [...values];
+    async readCandidates() {
+      const read = (property: ChoiceProperty) => {
+        const values = new Set(choices[property]);
+        for (const block of blocks.values()) {
+          for (const value of block.task?.[property] ?? []) values.add(value);
+        }
+        return [...values];
+      };
+      return { contexts: read("contexts"), labels: read("labels") };
     },
 
     async readCompletionHistory(id) {

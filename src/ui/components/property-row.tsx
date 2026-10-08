@@ -27,14 +27,14 @@ export function PropertyRow(props: {
   task: Task;
   today: CalendarDate;
   /** The task has left the view's list: its new status comes first. */
-  left?: boolean;
+  kept?: boolean;
 }) {
-  const { task, today, left } = props;
+  const { task, today, kept } = props;
   const overdue = isOverdue(task, today);
   return (
     <div className="nextaction-property-row">
-      {left && (
-        <span className="nextaction-property nextaction-property-left">
+      {kept && (
+        <span className="nextaction-property nextaction-property-kept">
           {t("Changed to ${status}", { status: statusLabel(task.status) })}
         </span>
       )}

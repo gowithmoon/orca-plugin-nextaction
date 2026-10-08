@@ -5,14 +5,10 @@
 // (ADR 0007), keeping what is shown until the new read ends. Verified by hand
 // in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import { TaskFeaturesPausedError } from "../../application/ports/task-repository";
 import type { ChangeSignalSource } from "../../shared/change-signal";
+import { createLatestRead, type ReadOutcome } from "./latest-read";
 
-export type ViewQueryState<T> =
-  | { readonly kind: "loading" }
-  | { readonly kind: "loaded"; readonly data: T }
-  | { readonly kind: "failed"; readonly error: unknown }
-  | { readonly kind: "paused" };
+export type ViewQueryState<T> = { readonly kind: "loading" } | ReadOutcome<T>;
 
 export interface ViewQuery<T> {
   current(): ViewQueryState<T>;
@@ -36,31 +32,15 @@ export function createViewQuery<T>(
   changes: ChangeSignalSource,
 ): ViewQuery<T> {
   let state: ViewQueryState<T> = { kind: "loading" };
-  let latest = 0;
   let stopChanges: (() => void) | undefined;
   const listeners = new Set<() => void>();
   const set = (next: ViewQueryState<T>) => {
     state = next;
     for (const listener of [...listeners]) listener();
   };
+  const reads = createLatestRead(read, set);
   /** Reads again, keeping what is shown until the read ends. */
-  const load = () => {
-    latest += 1;
-    const mine = latest;
-    read().then(
-      (data) => {
-        if (mine === latest) set({ kind: "loaded", data });
-      },
-      (error: unknown) => {
-        if (mine !== latest) return;
-        set(
-          error instanceof TaskFeaturesPausedError
-            ? { kind: "paused" }
-            : { kind: "failed", error },
-        );
-      },
-    );
-  };
+  const load = () => reads.run();
   const reset = () => {
     set({ kind: "loading" });
     load();
@@ -80,7 +60,7 @@ export function createViewQuery<T>(
         stopChanges();
         stopChanges = undefined;
         // A read still under way is ignored; nothing stale shows next time.
-        latest += 1;
+        reads.cancel();
         state = { kind: "loading" };
       };
     },

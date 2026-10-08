@@ -3,16 +3,14 @@ import type { Root } from "react-dom/client";
 import type {
   AfterHook,
   BlockMenuCommand,
-  ColumnPanel,
   CommandFn,
   EditorCommandFn,
   EditorSidetool,
   PanelProps,
-  RowPanel,
   TagMenuCommand,
-  ViewPanel,
 } from "../orca.d.ts";
 import { describeError } from "../shared/describe-error";
+import { findViewPanels } from "./panel-tree";
 
 export interface Registry {
   /** Records a resource and how to release it. Throws on an invalid or duplicate identifier. */
@@ -78,19 +76,6 @@ export interface Registry {
     options?: { closePanel?: (panelId: string) => void | Promise<void> },
   ): string;
   disposeAll(): Promise<void>;
-}
-
-type AnyPanel = RowPanel | ColumnPanel | ViewPanel;
-
-/** Ids of open view panels showing `view`, read before any navigation call changes the live tree. */
-function openPanelIds(view: string): string[] {
-  const ids: string[] = [];
-  const walk = (panel: AnyPanel) => {
-    if ("children" in panel) panel.children.forEach(walk);
-    else if (panel.view === view) ids.push(panel.id);
-  };
-  walk(orca.state.panels);
-  return ids;
 }
 
 export function createRegistry(pluginName: string): Registry {
@@ -265,7 +250,9 @@ export function createRegistry(pluginName: string): Registry {
         async (id) => {
           // One stuck panel must not keep the others open or the type registered.
           const errors: unknown[] = [];
-          for (const panelId of openPanelIds(id)) {
+          // Ids taken before any panel closes: the tree is live.
+          const openIds = findViewPanels(id).map((panel) => panel.id);
+          for (const panelId of openIds) {
             try {
               await closePanel(panelId);
             } catch (error) {

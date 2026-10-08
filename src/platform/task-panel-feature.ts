@@ -1,11 +1,9 @@
-import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadTask } from "../application/usecases/read-task";
-import { defaultDayBoundary, logicalDay } from "../domain/time/logical-day";
-import { systemClock } from "../infra/system-clock";
+import type { CalendarDate } from "../domain/task/task";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import { taskPanelCss } from "../ui/styles/task-panel-style";
@@ -15,7 +13,6 @@ import {
   type OpenTaskPanelPopup,
 } from "../ui/task-panel/task-panel-popup";
 import type { FeatureModule } from "./bootstrap";
-import { dayBoundaryFrom } from "./day-boundary";
 
 /**
  * The task panel (#40, #42): the popup's style sheet and its own React root,
@@ -24,35 +21,37 @@ import { dayBoundaryFrom } from "./day-boundary";
  * nothing outside a load. `formDeps` is what the form needs wherever it shows
  * (the popup, the plugin panel's side pane).
  */
-export function createTaskPanelFeature(
-  repository: TaskRepository,
+export function createTaskPanelFeature(deps: {
+  repository: TaskRepository;
   /** Tasks may have changed: an open task panel reads its task again. */
-  changes: ChangeSignalSource,
+  changes: ChangeSignalSource;
+  /** The current logical day, for dates and overdue. */
+  today: () => CalendarDate;
   /** The plugin panel's status change, "open in notes" and notices (#39). */
-  actions: TaskActionsDeps,
-): {
+  taskActions: TaskActionsDeps;
+}): {
   feature: FeatureModule;
   open: OpenTaskPanelPopup;
   formDeps: TaskPanelFormDeps;
 } {
-  // What the current load knows; the form's deps are created before any load.
-  let dayBoundary: DayBoundarySetting = {
-    current: () => defaultDayBoundary,
-  };
+  const { repository } = deps;
+  // Until a load says otherwise, writing on leaving is allowed.
+  let releasing = () => false;
   const formDeps: TaskPanelFormDeps = {
     readTask: createReadTask({ repository }),
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),
-    actions,
-    changes,
-    today: () => logicalDay(systemClock.now(), dayBoundary.current()),
+    actions: deps.taskActions,
+    changes: deps.changes,
+    today: deps.today,
+    unloading: () => releasing(),
   };
   let current: OpenTaskPanelPopup | undefined;
 
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
-    dayBoundary = dayBoundaryFrom(context);
+    releasing = context.releasing;
     registry.css("taskPanelStyle", taskPanelCss);
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;
