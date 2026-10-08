@@ -132,8 +132,16 @@ export function buildTaskQuery(
       kind: selfAnd,
       conditions: [
         tagCondition(tag, properties),
-        // Excludes orphans: deleted tasks still referenced elsewhere.
-        { kind: blockKind, hasParent: true },
+        // Excludes orphans (deleted tasks still referenced elsewhere) and
+        // journal blocks, but keeps pages: a task has a parent or an alias
+        // (ADR 0013, page-task P2).
+        {
+          kind: selfOr,
+          conditions: [
+            { kind: blockKind, hasParent: true },
+            { kind: blockKind, hasAliases: true },
+          ],
+        },
         ...groups,
       ],
     },
