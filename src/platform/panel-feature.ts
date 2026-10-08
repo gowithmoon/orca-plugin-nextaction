@@ -19,7 +19,9 @@ export function createPanelFeature(): {
   views.register(inboxView);
 
   const feature: FeatureModule = ({ pluginName, registry }) => {
-    registry.css("panel", panelCss);
+    // Identifiers share one namespace across kinds: the style sheet must not
+    // be named like the panel type.
+    registry.css("panelStyle", panelCss);
     const panelType = `${pluginName}.panel`;
     const placement = createPanelPlacement(panelType);
     // Released before the style sheet: open panels are restored or closed
