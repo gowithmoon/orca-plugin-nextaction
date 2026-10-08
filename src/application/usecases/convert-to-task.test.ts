@@ -10,7 +10,10 @@ const completion = {
 describe("convert to task", () => {
   it("converts a block into an inbox task with default values", async () => {
     const repository = createInMemoryTaskRepository();
-    repository.addBlock(10, { text: "Call the plumber" });
+    repository.addBlock(10, {
+      text: "Call the plumber",
+      created: new Date("2026-03-02T08:00:00.000Z"),
+    });
     const convertToTask = createConvertToTask({ repository });
 
     expect(await convertToTask(10)).toEqual({ kind: "converted", id: 10 });
@@ -25,6 +28,8 @@ describe("convert to task", () => {
       contexts: [],
       labels: [],
       note: null,
+      // The block's own creation time, however long ago it was written (#35).
+      created: new Date("2026-03-02T08:00:00.000Z"),
       anomalies: [],
     });
   });

@@ -35,6 +35,8 @@ export type DecodeResult =
  */
 export interface RawBlock {
   id: number;
+  /** A Date, as get-blocks returns it (multi-choices-created). */
+  created: Date;
   parent?: number | null;
   aliases: readonly string[];
   content?: readonly { t: string; v: unknown }[] | null;
@@ -128,6 +130,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       contexts: choicesValue(values.get("context")),
       labels: choicesValue(values.get("label")),
       note: textValue(values.get("note")),
+      created: block.created,
     }),
   };
 }

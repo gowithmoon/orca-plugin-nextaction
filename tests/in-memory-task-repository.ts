@@ -17,6 +17,8 @@ import type { TaskChanges } from "../src/domain/task/task-changes";
 
 interface StoredBlock {
   text: string;
+  /** When the block was created; a task keeps its block's. */
+  created: Date;
   parentId: number | undefined;
   notConvertible: NotConvertibleReason | undefined;
   /** Present while the block carries the task tag. */
@@ -30,6 +32,8 @@ interface StoredBlock {
 
 export interface BlockSetup {
   text?: string;
+  /** Defaults to `defaultCreated`. */
+  created?: Date;
   parentId?: number;
   notConvertible?: NotConvertibleReason;
   completionHistory?: CompletionHistoryRead;
@@ -54,11 +58,15 @@ export interface InMemoryTaskRepository extends TaskRepository {
   journalOf(id: number): CalendarDate | undefined;
 }
 
+/** When a block was created, unless a test says otherwise. */
+export const defaultCreated = new Date("2026-01-01T00:00:00.000Z");
+
 /** What a block tagged without values reads as (tag-operations). */
-function freshTask(id: TaskId, text: string): Task {
+function freshTask(id: TaskId, text: string, created: Date): Task {
   return {
     id,
     text,
+    created,
     status: "inbox",
     importance: 4,
     effort: 4,
@@ -135,6 +143,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     addBlock(id, setup = {}) {
       store(id, {
         text: setup.text ?? "",
+        created: setup.created ?? defaultCreated,
         parentId: setup.parentId,
         notConvertible: setup.notConvertible,
         task: undefined,
@@ -143,9 +152,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     addTask(task, setup = {}) {
-      const full = { ...freshTask(task.id, ""), ...task };
+      const full = { ...freshTask(task.id, "", defaultCreated), ...task };
       store(task.id, {
         text: full.text,
+        created: full.created,
         parentId: setup.parentId,
         notConvertible: undefined,
         task: full,
@@ -170,7 +180,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       for (const [id, block] of blocks) {
         const task = block.task;
         if (!task) continue;
-        if (filter.statuses && !filter.statuses.includes(task.status)) continue;
+        // As in Orca, a status the notes do not hold as one of the plugin's
+        // matches no status filter (inbox-anomalous-status).
+        const statusAnomaly = task.anomalies.some(
+          (anomaly) => anomaly.property === "status",
+        );
+        if (
+          filter.statuses &&
+          (statusAnomaly || !filter.statuses.includes(task.status))
+        ) {
+          continue;
+        }
         if (!matchesValues(task.contexts, filter.contexts)) continue;
         if (!matchesValues(task.labels, filter.labels)) continue;
         if (
@@ -214,7 +234,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       if (block.task) return { kind: "already-task", id };
       write(() => {
         block.completionHistory = undefined;
-        block.task = freshTask(id, block.text);
+        block.task = freshTask(id, block.text, block.created);
       });
       return { kind: "converted", id };
     },
@@ -238,9 +258,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         });
         store(id, {
           text,
+          created: now,
           parentId: undefined,
           notConvertible: undefined,
-          task: freshTask(id, text),
+          task: freshTask(id, text, now),
           completionHistory: undefined,
         });
       });
