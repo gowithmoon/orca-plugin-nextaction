@@ -24,6 +24,17 @@ const zhCN: Record<string, string> = {
   "Read and write a test plugin block property (debug)":
     "读写测试用的插件块属性（调试）",
   "Query inbox tasks (debug)": "查询收集箱中的任务（调试）",
+  "Convert to task": "转为任务",
+  "This block is already a task.": "这个块已经是任务。",
+  "The task tag itself cannot be converted to a task.":
+    "任务标签自身不能转为任务。",
+  "This block cannot be converted to a task: journal blocks, and blocks with neither a parent nor an alias, cannot be tasks.":
+    "这个块不能转为任务：日记块，以及既没有父块也没有别名的块，都不能是任务。",
+  "Put the cursor in a block to convert it to a task.":
+    "请把光标放在要转为任务的块中。",
+  "Task features are paused, so the block was not converted. See the plugin's earlier notice or its task tag setting.":
+    "任务功能已暂停，块没有转为任务。请查看插件之前的通知或任务标签设置。",
+  "Could not convert to a task: ${reason}": "无法转为任务：${reason}",
 };
 
 export default zhCN;

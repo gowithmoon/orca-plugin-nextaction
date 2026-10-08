@@ -4,7 +4,8 @@
 import { PropType } from "../prop-type";
 
 /** The fixed prefix; it does not follow the plugin directory name. */
-const prefix = "nextaction.";
+export const pluginPropertyPrefix = "nextaction.";
+const prefix = pluginPropertyPrefix;
 
 /** What reading one plugin block property found. */
 export type PluginPropertyRead =
