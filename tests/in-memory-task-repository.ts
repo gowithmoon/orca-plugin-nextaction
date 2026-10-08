@@ -12,7 +12,7 @@ import type {
   TaskRepository,
   ValuesFilter,
 } from "../src/application/ports/task-repository";
-import type { Task, TaskId } from "../src/domain/task/task";
+import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
 
 /** Plugin block properties by key (without the `nextaction.` prefix). */
@@ -47,6 +47,11 @@ export interface InMemoryTaskRepository extends TaskRepository {
   failWrites(error: Error | undefined): void;
   /** How many writes succeeded. */
   writeCount(): number;
+  /**
+   * The day of the journal a block was appended to with
+   * `appendTaskToJournal`, or `undefined` when it was not.
+   */
+  journalOf(id: number): CalendarDate | undefined;
 }
 
 /** What a block tagged without values reads as (tag-operations). */
@@ -81,6 +86,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const blocks = new Map<number, StoredBlock>();
   let failure: Error | undefined;
   let writes = 0;
+  /** Journal days by block, for blocks appended to a journal. */
+  const journalDays = new Map<number, CalendarDate>();
+  /** IDs of new blocks, far from the ones tests pick. */
+  let nextId = 100_000;
 
   const store = (id: number, block: StoredBlock) => {
     if (blocks.has(id)) throw new Error(`block ${id} already exists`);
@@ -139,6 +148,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     writeCount: () => writes,
+
+    journalOf: (id) => journalDays.get(id),
 
     async getTask(id) {
       return blocks.get(id)?.task ?? null;
@@ -201,6 +212,26 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         block.task = freshTask(id, block.text);
       });
       return { kind: "converted", id };
+    },
+
+    async appendTaskToJournal(text, now) {
+      const id = nextId++;
+      write(() => {
+        // get-journal-block picks the journal by local date (journal-capture J3).
+        journalDays.set(id, {
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          day: now.getDate(),
+        });
+        store(id, {
+          text,
+          parentId: undefined,
+          notConvertible: undefined,
+          task: freshTask(id, text),
+          pluginProperties: new Map(),
+        });
+      });
+      return id;
     },
   };
 }
