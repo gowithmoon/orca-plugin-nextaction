@@ -238,6 +238,45 @@ export function createOrcaTaskRepository(
       }
     },
 
+    async appendTaskToJournal(text: string, now: Date): Promise<TaskId> {
+      const state = readyTag();
+      // A local-time Date picks the journal by local date, and a missing
+      // journal is created (journal-capture J2, J3).
+      const journal = await invokeBackend("get-journal-block", now);
+      if (
+        typeof journal !== "object" ||
+        journal === null ||
+        !("id" in journal)
+      ) {
+        throw new OrcaError(
+          `get-journal-block returned ${JSON.stringify(journal)}`,
+        );
+      }
+      let id: unknown;
+      try {
+        // insertBlock and insertTag in one group are one undo (J4, J6); a
+        // journal fetched with get-block works as the reference (J5).
+        await invokeGroup(async () => {
+          id = await invokeEditorCommand(
+            "core.editor.insertBlock",
+            journal,
+            "lastChild",
+            // Plain text: tags and formatting in it are not parsed.
+            [{ t: "t", v: text }],
+          );
+          if (typeof id !== "number") {
+            throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+          }
+          // Without values every property takes its default, the status
+          // inbox (tag-operations).
+          await invokeEditorCommand("core.editor.insertTag", id, state.tagName);
+        });
+      } finally {
+        if (typeof id === "number") onWritten(id);
+      }
+      return id as TaskId;
+    },
+
     async queryTasks(filter: TaskFilter): Promise<Task[]> {
       const state = readyTag();
       const names: TaskTagNames = {
