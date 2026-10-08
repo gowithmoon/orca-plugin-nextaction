@@ -1,6 +1,7 @@
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadTask } from "../application/usecases/read-task";
 import type { TaskId } from "../domain/task/task";
 import { logicalDay } from "../domain/time/logical-day";
@@ -39,6 +40,7 @@ export function createTaskPanelFeature(
         readTask: createReadTask({ repository }),
         editTask: createEditTask({ repository }),
         dropTask: createDropTask({ repository }),
+        readCandidates: createReadCandidates({ repository }),
         actions,
         changes,
         today: () => logicalDay(systemClock.now(), dayBoundary.current()),

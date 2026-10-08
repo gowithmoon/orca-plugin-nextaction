@@ -1,5 +1,6 @@
 // TaskRepository on Orca. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import {
+  type ChoiceProperty,
   type CompletionHistoryRead,
   type ConvertToTaskResult,
   TaskFeaturesPausedError,
@@ -14,6 +15,7 @@ import {
   planCompletionHistoryWrite,
   readCompletionHistory,
 } from "../codec/completion-history-codec";
+import { type PropertyKey, propertyName } from "../codec/names";
 import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
@@ -30,7 +32,23 @@ import { invokeBackend, invokeEditorCommand, invokeGroup } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
+import { planChoiceAdditions } from "../schema/choice-plan";
+import { choiceName } from "../schema/startup-plan";
 import type { TaskTagState } from "../schema/task-tag-state";
+import type { PropertyDefinition } from "../schema/task-tag-structure";
+
+type ReadyTag = Extract<TaskTagState, { kind: "ready" }>;
+type ChoiceKey = Extract<PropertyKey, "context" | "label">;
+
+/** The property each multi-value task field is stored in. */
+const choiceKeyOf: Record<ChoiceProperty, ChoiceKey> = {
+  contexts: "context",
+  labels: "label",
+};
+const choiceFields = Object.entries(choiceKeyOf) as [
+  ChoiceProperty,
+  ChoiceKey,
+][];
 
 /**
  * Reads blocks with `get-blocks`, never `orca.state.blocks` (a front-end
@@ -139,7 +157,92 @@ export function createOrcaTaskRepository(
     }
   };
 
+  const queryTasks = async (filter: TaskFilter): Promise<Task[]> => {
+    const state = readyTag();
+    const names: TaskTagNames = {
+      tagName: state.tagName,
+      language: state.language,
+      invalidated: state.invalidated,
+    };
+    const context: TaskTagContext = {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    };
+    // Built first: a filter on an invalidated property fails before the
+    // query runs.
+    const query = buildTaskQuery(filter, names);
+    const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
+    if (ids.length === 0) return [];
+    const blocks = await getBlocks(ids);
+    const tasks: Task[] = [];
+    for (const id of ids) {
+      const block = blocks.get(id);
+      if (!block) continue;
+      const decoded = decodeTask(block, context);
+      // The query asks for blocks carrying the task tag, so a mirror is not
+      // expected among the results (not measured). Should one appear, it is
+      // skipped rather than read twice; the orphan condition in the query
+      // makes "orphan" equally unexpected here.
+      if (decoded.kind === "task") tasks.push(decoded.task);
+    }
+    return tasks;
+  };
+
+  /**
+   * The task tag's current definition of contexts or labels, read from the
+   * tag block (never from the copies in `ref.data`, tag-operations), or
+   * `undefined` when the tag has no such property.
+   */
+  const tagProperty = async (state: ReadyTag, key: ChoiceKey) => {
+    const tag = (await getBlocks([state.tagBlockId])).get(state.tagBlockId);
+    if (!tag)
+      throw new OrcaError(`the task tag block ${state.tagBlockId} is gone`);
+    const name = propertyName(key, state.language);
+    return tag.properties.find((p) => p.name === name);
+  };
+
+  /** The definitions to write so every context and label in `changes` is a choice. */
+  const planChoiceWrites = async (
+    state: ReadyTag,
+    changes: TaskChanges,
+  ): Promise<PropertyDefinition[]> => {
+    const writes: PropertyDefinition[] = [];
+    for (const [field, key] of choiceFields) {
+      const values = changes[field];
+      if (!values || values.length === 0) continue;
+      const property = await tagProperty(state, key);
+      // Startup alignment adds the property; without it nothing is shown
+      // anyway, and a definition is not invented here.
+      if (!property) continue;
+      const plan = planChoiceAdditions(property, values);
+      if (plan.kind === "add") writes.push(plan.definition);
+    }
+    return writes;
+  };
+
   return {
+    async readCandidates(field: ChoiceProperty): Promise<string[]> {
+      const state = readyTag();
+      const key = choiceKeyOf[field];
+      // An invalidated property reads as empty everywhere (ADR 0008).
+      if (state.invalidated.includes(key)) return [];
+      const property = await tagProperty(state, key);
+      const choices: unknown[] = Array.isArray(property?.typeArgs?.choices)
+        ? property.typeArgs.choices
+        : [];
+      const values = new Set<string>();
+      for (const choice of choices) {
+        const name = choiceName(choice);
+        if (typeof name === "string" && name !== "") values.add(name);
+      }
+      // Values tasks hold without a choice (e.g. written before #41) count
+      // too. Every task is read: about 70 ms for 1000 tasks (ADR 0007).
+      for (const task of await queryTasks({})) {
+        for (const value of task[field]) values.add(value);
+      }
+      return [...values];
+    },
+
     async getTask(id: TaskId): Promise<Task | null> {
       const context = currentTag();
       const block = await sourceBlock(id);
@@ -177,7 +280,20 @@ export function createOrcaTaskRepository(
       if (items.length === 0 && properties.length === 0) return;
       const ref = findTaskTagRef(block.refs, state.tagBlockId);
       if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
+      // Values missing from the tag's choices are stored but not shown
+      // (multi-choices-created): the whole list is checked every write, so
+      // values stored earlier without a choice show again too.
+      const choiceWrites = await planChoiceWrites(state, changes);
       await writeTo(block, async () => {
+        // The choices first, in the same group: one undo takes back both
+        // (multi-choices-created §3–4).
+        if (choiceWrites.length > 0) {
+          await invokeEditorCommand(
+            "core.editor.setProperties",
+            [state.tagBlockId],
+            choiceWrites,
+          );
+        }
         // setRefData takes the whole reference object and changes only the
         // items passed (tag-operations, round 1 steps 05–06).
         if (items.length > 0) {
@@ -328,35 +444,6 @@ export function createOrcaTaskRepository(
       return id;
     },
 
-    async queryTasks(filter: TaskFilter): Promise<Task[]> {
-      const state = readyTag();
-      const names: TaskTagNames = {
-        tagName: state.tagName,
-        language: state.language,
-        invalidated: state.invalidated,
-      };
-      const context: TaskTagContext = {
-        tagBlockId: state.tagBlockId,
-        invalidated: state.invalidated,
-      };
-      // Built first: a filter on an invalidated property fails before the
-      // query runs.
-      const query = buildTaskQuery(filter, names);
-      const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
-      if (ids.length === 0) return [];
-      const blocks = await getBlocks(ids);
-      const tasks: Task[] = [];
-      for (const id of ids) {
-        const block = blocks.get(id);
-        if (!block) continue;
-        const decoded = decodeTask(block, context);
-        // The query asks for blocks carrying the task tag, so a mirror is not
-        // expected among the results (not measured). Should one appear, it is
-        // skipped rather than read twice; the orphan condition in the query
-        // makes "orphan" equally unexpected here.
-        if (decoded.kind === "task") tasks.push(decoded.task);
-      }
-      return tasks;
-    },
+    queryTasks,
   };
 }
