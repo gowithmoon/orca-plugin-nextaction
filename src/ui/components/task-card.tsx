@@ -7,7 +7,7 @@ import type * as React from "react";
 import type { CalendarDate, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import type { TaskActions } from "../hooks/use-task-actions";
-import type { TaskMenuItems } from "../task-menu/menu-items";
+import type { TaskMenuItems, TaskMenuPlace } from "../task-menu/menu-items";
 import { TaskMenu } from "../task-menu/task-menu";
 import { PropertyRow } from "./property-row";
 import { StatusIcon } from "./status-icon";
@@ -22,6 +22,15 @@ export interface TaskCardProps {
   menuItems?: TaskMenuItems;
   /** A click on the text or the card's empty space; the card is not clickable without it. */
   onOpen?: (task: Task) => void;
+  /** The plugin panel the card is in, for its task menu. */
+  menuPlace?: TaskMenuPlace;
+  /** The task is the one open in the task panel. */
+  selected?: boolean;
+  /**
+   * The task has left the view's list but stays while it is selected (#42):
+   * faded, struck through, and saying its new status.
+   */
+  left?: boolean;
 }
 
 /** A click that selected text is not a click on the card. */
@@ -83,7 +92,8 @@ function OpenInNotesButton(props: { task: Task; actions: TaskActions }) {
 }
 
 export function TaskCard(props: TaskCardProps) {
-  const { task, today, actions, menuItems, onOpen } = props;
+  const { task, today, actions, menuItems, onOpen, menuPlace, selected, left } =
+    props;
   const { ContextMenu } = orca.components;
   const text = task.text.trim();
 
@@ -91,6 +101,9 @@ export function TaskCard(props: TaskCardProps) {
     <article
       className="nextaction-task-card"
       data-clickable={onOpen ? true : undefined}
+      data-selected={selected || undefined}
+      data-left={left || undefined}
+      aria-current={selected || undefined}
       onClick={
         onOpen &&
         ((event) => {
@@ -135,7 +148,7 @@ export function TaskCard(props: TaskCardProps) {
         >
           {text === "" ? t("(No text)") : task.text}
         </div>
-        <PropertyRow task={task} today={today} />
+        <PropertyRow task={task} today={today} left={left} />
       </div>
       {actions && <OpenInNotesButton task={task} actions={actions} />}
     </article>
@@ -144,7 +157,14 @@ export function TaskCard(props: TaskCardProps) {
   if (!menuItems) return card();
   return (
     <ContextMenu
-      menu={(close) => <TaskMenu items={menuItems} task={task} close={close} />}
+      menu={(close) => (
+        <TaskMenu
+          items={menuItems}
+          task={task}
+          close={close}
+          place={menuPlace}
+        />
+      )}
     >
       {(open) => card(open)}
     </ContextMenu>

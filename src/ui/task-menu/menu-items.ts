@@ -1,6 +1,15 @@
 // The task menu's item registrations (GLOSSARY: 任务操作菜单). The menu
 // renders whatever is registered; later steps only append registrations.
-import type { Task } from "../../domain/task/task";
+import type { Task, TaskId } from "../../domain/task/task";
+
+/**
+ * The plugin panel a task menu was opened in (a right-click on a card).
+ * Absent in Orca's own menus.
+ */
+export interface TaskMenuPlace {
+  /** Selects the task there: the side pane or the popup shows it, by tier. */
+  readonly selectTask: (taskId: TaskId) => void;
+}
 
 /** One entry of the task menu. */
 export interface TaskMenuItem {
@@ -19,8 +28,12 @@ export interface TaskMenuItem {
   readonly isCurrent?: (task: Task) => boolean;
   /** Whether the item shows for this task; shown when absent. */
   readonly isShownFor?: (task: Task) => boolean;
-  /** What choosing the item does. The menu closes first; errors are the item's to report. */
-  readonly run: (task: Task) => Promise<void>;
+  /**
+   * What choosing the item does; `place` is the plugin panel the menu was
+   * opened in, absent in Orca's own menus. The menu closes first; errors are
+   * the item's to report.
+   */
+  readonly run: (task: Task, place?: TaskMenuPlace) => Promise<void>;
 }
 
 /** Shows a group as one entry that opens its items, instead of the items themselves. */

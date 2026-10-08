@@ -1,5 +1,6 @@
 // What every part of an open plugin panel can know about it.
 import * as React from "react";
+import type { TaskId } from "../../domain/task/task";
 import type { PanelTier } from "./tiers";
 
 export interface PanelContextValue {
@@ -11,6 +12,13 @@ export interface PanelContextValue {
    */
   readonly originPanelId: string | undefined;
   readonly tier: PanelTier;
+  /**
+   * The task open in the task panel (#42): in the side pane in the wide tier,
+   * in the popup otherwise. Kept for this opening of the plugin panel only.
+   */
+  readonly selectedTaskId: TaskId | undefined;
+  /** Opens task `taskId` in the task panel, replacing the one selected. */
+  readonly selectTask: (taskId: TaskId) => void;
 }
 
 export const PanelContext = React.createContext<PanelContextValue | undefined>(

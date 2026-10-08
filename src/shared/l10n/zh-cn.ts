@@ -126,6 +126,9 @@ const zhCN: Record<string, string> = {
   "Search or add": "搜索或添加",
   "Add ${value}": "添加 ${value}",
   "Could not read the suggestions: ${reason}": "无法读取候选值：${reason}",
+  "Pick a task to see and edit its properties here":
+    "选一个任务，在这里查看和编辑属性",
+  "Changed to ${status}": "已改为${status}",
 };
 
 export default zhCN;

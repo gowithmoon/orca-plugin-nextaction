@@ -2,7 +2,6 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createReadInbox } from "../application/usecases/read-inbox";
-import type { TaskId } from "../domain/task/task";
 import { defaultDayBoundary, logicalDay } from "../domain/time/logical-day";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
@@ -15,6 +14,9 @@ import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import { componentCss } from "../ui/styles/component-style";
 import { panelCss } from "../ui/styles/panel-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
+import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
+import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
+import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import type { FeatureModule } from "./bootstrap";
 import { dayBoundaryFrom } from "./day-boundary";
@@ -35,8 +37,15 @@ export function createPanelFeature(
   changes: ChangeSignal,
   /** The current load's task menu registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined,
-  /** A click on a card (#40): the task panel opens as a popup. */
-  openTaskPanel: (taskId: TaskId) => void,
+  /**
+   * The task panel (#40, #42): the selected task shows in the side pane in
+   * the wide tier and in the popup otherwise. Read when first needed: the
+   * task panel is created after this feature.
+   */
+  taskPanel: () => {
+    openPopup: OpenTaskPanelPopup;
+    formDeps: TaskPanelFormDeps;
+  },
 ): {
   feature: FeatureModule;
   views: PanelViews;
@@ -67,13 +76,14 @@ export function createPanelFeature(
       changes,
       taskActions,
       menuItems,
-      onOpenTask: openTaskPanel,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
   const refresh = () => changes.now();
   const panelRenderer = createNextActionPanel({
     views,
+    sidePane: createTaskPanelSidePane(() => taskPanel().formDeps),
+    openPopup: (taskId, onClose) => taskPanel().openPopup(taskId, onClose),
     onRefresh: refresh,
     // Changes made elsewhere without a hook (e.g. sync) show on return.
     onActivated: refresh,

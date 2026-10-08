@@ -47,6 +47,47 @@ describe("read inbox", () => {
     expect((await readInbox()).map((task) => task.id)).toEqual([31, 12, 20, 8]);
   });
 
+  it("keeps the task given as `keep` after it left the inbox, in its capture-order place", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 40,
+      status: "inbox",
+      created: new Date("2026-10-01T09:00:00Z"),
+    });
+    repository.addTask({
+      id: 41,
+      status: "inbox",
+      created: new Date("2026-10-03T09:00:00Z"),
+    });
+    repository.addTask({
+      id: 42,
+      status: "todo",
+      created: new Date("2026-10-02T09:00:00Z"),
+    });
+    repository.addTask({
+      id: 43,
+      status: "done",
+      created: new Date("2026-10-02T10:00:00Z"),
+    });
+    const readInbox = createReadInbox({ repository });
+
+    expect((await readInbox({ keep: 42 })).map((task) => task.id)).toEqual([
+      40, 42, 41,
+    ]);
+  });
+
+  it("does not list the task given as `keep` once it is no longer a task", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 50, status: "inbox" });
+    repository.addTask({ id: 51, status: "todo" });
+    await repository.dropTask(51);
+    const readInbox = createReadInbox({ repository });
+
+    expect((await readInbox({ keep: 51 })).map((task) => task.id)).toEqual([
+      50,
+    ]);
+  });
+
   it("returns an empty list when there are no tasks", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addBlock(9);
