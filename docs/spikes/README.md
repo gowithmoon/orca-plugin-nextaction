@@ -16,5 +16,6 @@
 | [date-subtype.md](./date-subtype.md) | — | 日期属性的 `date` 与 `datetime` 子类型（第二步补测） | 第二步起所有涉及开始日期、截止日期的步骤 |
 | [official-task-menus.md](./official-task-menus.md) | — | 用 `tagMenuCommands`、`blockMenuCommands` 承载任务操作（第三步补测，取代自绘图标的点击） | 第三步起的任务操作菜单 |
 | [page-task.md](./page-task.md) | — | 页面任务、"有父块或有别名"的查询条件、英文属性名的 `data-` 形态（第三步补测，ADR 0013） | 第三步起的任务识别、查询和状态图标 |
+| [multi-choices-created.md](./multi-choices-created.md) | — | 多选属性写入不在选项里的值；块的创建时间（第四步补测） | 第四步起的上下文、标记和收集箱排序 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。
