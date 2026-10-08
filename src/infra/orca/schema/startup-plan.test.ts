@@ -33,8 +33,8 @@ const zhDefinitions = [
     pos: 2,
     typeArgs: { defaultEnabled: true, default: 4 },
   },
-  { name: "开始时间", type: 5, pos: 3, typeArgs: { subType: "date" } },
-  { name: "截止时间", type: 5, pos: 4, typeArgs: { subType: "date" } },
+  { name: "开始日期", type: 5, pos: 3, typeArgs: { subType: "date" } },
+  { name: "截止日期", type: 5, pos: 4, typeArgs: { subType: "date" } },
   {
     name: "上下文",
     type: 6,
@@ -476,7 +476,7 @@ describe("startup plan", () => {
 
     it("treats a date property with a different subtype as a conflict", () => {
       const dateTimeDue = {
-        name: "截止时间",
+        name: "截止日期",
         type: 5,
         pos: 4,
         value: null,
@@ -486,7 +486,7 @@ describe("startup plan", () => {
       expect(
         planStartup({
           tagName: "任务",
-          tagBlock: tagBlock([dateTimeDue, ...readBack(without(["截止时间"]))]),
+          tagBlock: tagBlock([dateTimeDue, ...readBack(without(["截止日期"]))]),
           cache: takenOver,
           uiLanguage: "zh",
         }),

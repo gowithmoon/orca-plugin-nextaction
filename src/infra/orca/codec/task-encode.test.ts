@@ -30,7 +30,7 @@ describe("encodeTaskChanges", () => {
       { due: { year: 2026, month: 10, day: 20 } },
       zh,
     );
-    expect(item?.name).toBe("截止时间");
+    expect(item?.name).toBe("截止日期");
     expect(item?.type).toBe(5);
     expect(instantOf(item?.value)).toBe("2026-10-19T16:00:00.000Z");
   });
@@ -99,7 +99,7 @@ describe("encodeTaskChanges", () => {
   it("clears a date by writing null", () => {
     // As tag-operations step 06 cleared a due date.
     expect(encodeTaskChanges({ due: null }, zh)).toEqual([
-      { name: "截止时间", value: null },
+      { name: "截止日期", value: null },
     ]);
   });
 });

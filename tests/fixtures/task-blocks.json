@@ -40,13 +40,13 @@
           "typeArgs": { "defaultEnabled": true, "default": 4 }
         },
         {
-          "name": "开始时间",
+          "name": "开始日期",
           "type": 5,
           "pos": 3,
           "typeArgs": { "subType": "date" }
         },
         {
-          "name": "截止时间",
+          "name": "截止日期",
           "type": 5,
           "pos": 4,
           "typeArgs": { "subType": "date" }
@@ -167,7 +167,7 @@
               "typeArgs": { "subType": "multi", "choices": [] }
             },
             {
-              "name": "截止时间",
+              "name": "截止日期",
               "type": 5,
               "value": "2026-10-19T16:00:00.000Z",
               "typeArgs": { "subType": "date" }
@@ -236,8 +236,8 @@
             { "name": "状态", "type": 6, "value": null },
             { "name": "重要性", "type": 3, "value": null },
             { "name": "工作量", "type": 3, "value": null },
-            { "name": "开始时间", "type": 5, "value": null },
-            { "name": "截止时间", "type": 5, "value": null },
+            { "name": "开始日期", "type": 5, "value": null },
+            { "name": "截止日期", "type": 5, "value": null },
             { "name": "上下文", "type": 6, "value": null },
             { "name": "标记", "type": 6, "value": null },
             { "name": "备注", "type": 1, "value": null }
@@ -268,12 +268,12 @@
             { "name": "重要性", "type": 3, "value": 99 },
             { "name": "工作量", "type": 3, "value": 3.5 },
             {
-              "name": "开始时间",
+              "name": "开始日期",
               "type": 5,
               "value": "2026-10-10T07:30:00.000Z"
             },
             {
-              "name": "截止时间",
+              "name": "截止日期",
               "type": 5,
               "value": "2026-10-06T16:00:00.000Z"
             },

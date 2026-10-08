@@ -130,7 +130,7 @@ tests/
 - `get-journal-block` 会在日记不存在时创建它，只在要写入日记时调用。
 - `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造，`domain` 只用年、月、日表示日期。
 - `time` 类型的设置只取本地的小时和分钟（`plugin-lifecycle-settings`）。
-- 开始时间、截止时间是 `date` 子类型（ADR 0012）：读取时只取本地年月日，写入时传本地零点。Orca 不会截掉代码写入的时刻（`date-subtype`）。
+- 开始日期、截止日期是 `date` 子类型（ADR 0012）：读取时只取本地年月日，写入时传本地零点。Orca 不会截掉代码写入的时刻（`date-subtype`）。
 
 导航与面板（`editor-sidetool-panel`，ADR 0011）：
 - 传给导航 API 的 `viewArgs` 保持原始类型，不做 JSON 序列化或深拷贝；只操作参数结构已知的 `block` 和 `journal` 视图。传错类型会让整个 Orca 崩溃。
