@@ -49,15 +49,15 @@ export const componentCss = `
 }
 
 /* Left the list but kept while selected (#42): faded and struck through. */
-.nextaction-task-card[data-left] {
+.nextaction-task-card[data-kept] {
   opacity: 0.6;
 }
 
-.nextaction-task-card[data-left] .nextaction-task-card-text {
+.nextaction-task-card[data-kept] .nextaction-task-card-text {
   text-decoration: line-through;
 }
 
-.nextaction-property-left {
+.nextaction-property-kept {
   color: var(--orca-color-text-1);
   font-weight: var(--orca-fontweight-lg);
 }

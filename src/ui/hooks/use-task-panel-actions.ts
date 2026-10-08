@@ -7,10 +7,7 @@ import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import {
-  changeStatusReporting,
-  notifyMenuFailure,
-} from "../task-menu/builtin-items";
+import { changeStatusReporting, notifyActionFailure } from "../notify";
 import type { TaskActionsDeps } from "./use-task-actions";
 
 export interface TaskPanelWrites {
@@ -48,7 +45,7 @@ export function useTaskPanelActions(
         await write();
         return true;
       } catch (error) {
-        notifyMenuFailure(notify, error, reason);
+        notifyActionFailure(notify, error, reason);
         failed.current();
         return false;
       }

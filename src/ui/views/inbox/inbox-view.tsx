@@ -6,10 +6,14 @@ import * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
-import { describeError } from "../../../shared/describe-error";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
+import {
+  FailedNotice,
+  PausedNotice,
+  ViewNotice,
+} from "../../components/view-notice";
 import {
   type TaskActionsDeps,
   useTaskActions,
@@ -61,24 +65,6 @@ function Placeholder() {
   );
 }
 
-function Notice(props: {
-  icon: string;
-  title: string;
-  detail?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="nextaction-view-notice" role="status">
-      <i className={props.icon} aria-hidden="true" />
-      <div className="nextaction-view-notice-title">{props.title}</div>
-      {props.detail && (
-        <div className="nextaction-view-notice-detail">{props.detail}</div>
-      )}
-      {props.action}
-    </div>
-  );
-}
-
 function InboxContent(props: {
   query: ViewQuery<Task[]>;
   today: CalendarDate;
@@ -90,38 +76,24 @@ function InboxContent(props: {
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
-  const { Button } = orca.components;
 
   if (state.kind === "loading") return <Placeholder />;
-  if (state.kind === "paused") {
-    return (
-      <Notice
-        icon="ti ti-player-pause"
-        title={t(
-          "Task features are paused. See the plugin's earlier notice or its task tag setting.",
-        )}
-      />
-    );
-  }
+  if (state.kind === "paused") return <PausedNotice />;
   if (state.kind === "failed") {
     return (
-      <Notice
-        icon="ti ti-alert-circle"
-        title={t("Could not read the inbox: ${reason}", {
-          reason: describeError(state.error),
-        })}
-        action={
-          <Button variant="outline" onClick={() => query.reset()}>
-            {t("Retry")}
-          </Button>
+      <FailedNotice
+        error={state.error}
+        message={(reason) =>
+          t("Could not read the inbox: ${reason}", { reason })
         }
+        onRetry={() => query.reset()}
       />
     );
   }
   const tasks = shownTasks(state.data, selectedTaskId);
   if (tasks.length === 0) {
     return (
-      <Notice
+      <ViewNotice
         icon="ti ti-inbox"
         title={t("Inbox is clear")}
         detail={t("New tasks you capture appear here.")}
@@ -140,7 +112,7 @@ function InboxContent(props: {
             menuPlace={menuPlace}
             onOpen={(open) => selectTask(open.id)}
             selected={task.id === selectedTaskId}
-            left={task.status !== "inbox"}
+            kept={task.status !== "inbox"}
           />
         </li>
       ))}

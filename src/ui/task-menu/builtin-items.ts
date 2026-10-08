@@ -1,66 +1,21 @@
 // The task menu items of step 3: the six statuses and drop (#31). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
-import {
-  type ChangeStatus,
-  CompletionHistoryUnreadableError,
-} from "../../application/usecases/change-status";
+import type { ChangeStatus } from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
-import {
-  type TaskId,
-  type TaskStatus,
-  taskStatuses,
-} from "../../domain/task/task";
+import { taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { statusLabel } from "../components/status-label";
 import { markedStatus } from "../components/status-menu";
-import { createNotify, type Notify, notifyFailure } from "../notify";
+import {
+  changeStatusReporting,
+  createNotify,
+  notifyActionFailure,
+} from "../notify";
 import type { TaskMenuItems } from "./menu-items";
 import { statusIcons } from "./status-icons";
 
 /** Menu groups, lowest first. Gaps leave room for later steps (task panel, my day). */
 export const taskMenuGroups = { status: 10, taskPanel: 50, drop: 100 } as const;
-
-/** Tells the user why a task menu action failed. */
-export function notifyMenuFailure(
-  notify: Notify,
-  error: unknown,
-  failed: (reason: string) => string,
-): void {
-  notifyFailure(notify, error, {
-    paused: t(
-      "Task features are paused. See the plugin's earlier notice or its task tag setting.",
-    ),
-    failed,
-  });
-}
-
-/**
- * Changes the status and reports a failure; success says nothing (the icon
- * changes). Never throws. Shared by the menu items and the plugin panel.
- */
-export async function changeStatusReporting(
-  changeStatus: ChangeStatus,
-  notify: Notify,
-  id: TaskId,
-  status: TaskStatus,
-): Promise<void> {
-  try {
-    await changeStatus(id, status);
-  } catch (error) {
-    if (error instanceof CompletionHistoryUnreadableError) {
-      notify(
-        "error",
-        t(
-          "Could not mark the task done: its completion history cannot be read and is kept as it is.",
-        ),
-      );
-      return;
-    }
-    notifyMenuFailure(notify, error, (reason) =>
-      t("Could not change the status: ${reason}", { reason }),
-    );
-  }
-}
 
 export function registerBuiltinTaskMenuItems(
   items: TaskMenuItems,
@@ -101,7 +56,7 @@ export function registerBuiltinTaskMenuItems(
         await deps.dropTask(task.id);
         notify("info", t("Task dropped"));
       } catch (error) {
-        notifyMenuFailure(notify, error, (reason) =>
+        notifyActionFailure(notify, error, (reason) =>
           t("Could not drop the task: ${reason}", { reason }),
         );
       }

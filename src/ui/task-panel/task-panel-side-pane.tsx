@@ -14,9 +14,9 @@ export interface TaskPanelSidePaneProps {
   onClose: () => void;
 }
 
-/** The side pane; `deps` is read when it renders (the form's deps exist by then). */
+/** The side pane, showing the form with `deps`. */
 export function createTaskPanelSidePane(
-  deps: () => TaskPanelFormDeps,
+  deps: TaskPanelFormDeps,
 ): React.ComponentType<TaskPanelSidePaneProps> {
   return function TaskPanelSidePane(props) {
     if (props.taskId === undefined) {
@@ -33,7 +33,7 @@ export function createTaskPanelSidePane(
       <TaskPanelForm
         // A new task starts afresh: nothing typed for the previous one stays.
         key={props.taskId}
-        deps={deps()}
+        deps={deps}
         taskId={props.taskId}
         onClose={props.onClose}
       />

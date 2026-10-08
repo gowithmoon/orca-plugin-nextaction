@@ -23,6 +23,9 @@ export interface ValuesFilter {
 /** The multi-value properties whose values the user picks from candidates. */
 export type ChoiceProperty = "contexts" | "labels";
 
+/** The values offered for each multi-value property. */
+export type Candidates = Record<ChoiceProperty, string[]>;
+
 /**
  * Which tasks a query matches. Every given condition must hold; an empty
  * filter matches every task.
@@ -84,11 +87,12 @@ export interface TaskRepository {
   queryTasks(filter: TaskFilter): Promise<Task[]>;
 
   /**
-   * The values to offer for contexts or labels, each once, in no particular
-   * order: the task tag's choices for that property, and the values tasks
-   * already hold. An invalidated property has none.
+   * The values to offer for contexts and labels, each once per property, in
+   * no particular order: the task tag's choices for that property, and the
+   * values tasks already hold. An invalidated property has none. Both come
+   * from one read of the tasks.
    */
-  readCandidates(property: ChoiceProperty): Promise<string[]>;
+  readCandidates(): Promise<Candidates>;
 
   /**
    * Writes the properties present in `changes` and leaves the others as they

@@ -2,10 +2,10 @@
 // and again on every task change signal (ADR 0007). Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import { TaskFeaturesPausedError } from "../../application/ports/task-repository";
 import type { ReadTask } from "../../application/usecases/read-task";
 import type { Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
+import { createLatestRead } from "./latest-read";
 
 export type LiveTaskState =
   | { readonly kind: "loading" }
@@ -26,37 +26,31 @@ export function useLiveTask(
   changes: ChangeSignalSource,
 ): { state: LiveTaskState; reload: () => void } {
   const [state, setState] = React.useState<LiveTaskState>({ kind: "loading" });
-  const latest = React.useRef(0);
-
-  const reload = React.useCallback(() => {
-    latest.current += 1;
-    const mine = latest.current;
-    readTask(id).then(
-      (task) => {
-        if (mine !== latest.current) return;
-        setState(task ? { kind: "loaded", task } : { kind: "gone" });
-      },
-      (error: unknown) => {
-        if (mine !== latest.current) return;
-        setState(
-          error instanceof TaskFeaturesPausedError
-            ? { kind: "paused" }
-            : { kind: "failed", error },
-        );
-      },
-    );
-  }, [readTask, id]);
+  const reads = React.useMemo(
+    () =>
+      createLatestRead(
+        () => readTask(id),
+        (outcome) => {
+          if (outcome.kind !== "loaded") setState(outcome);
+          else if (outcome.data) {
+            setState({ kind: "loaded", task: outcome.data });
+          } else setState({ kind: "gone" });
+        },
+      ),
+    [readTask, id],
+  );
+  const reload = React.useCallback(() => reads.run(), [reads]);
 
   React.useEffect(() => {
     setState({ kind: "loading" });
-    reload();
-    const unsubscribe = changes.subscribe(reload);
+    reads.run();
+    const unsubscribe = changes.subscribe(reads.run);
     return () => {
       unsubscribe();
       // A read still under way after the panel closed or moved on is ignored.
-      latest.current += 1;
+      reads.cancel();
     };
-  }, [reload, changes]);
+  }, [reads, changes]);
 
   return { state, reload };
 }

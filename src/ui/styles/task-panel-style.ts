@@ -6,9 +6,9 @@
 
 export const taskPanelCss = `
 .nextaction-task-panel-popup {
-  width: min(32rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 4rem);
-  margin: 2rem auto 0;
+  width: min(32rem, calc(100vw - 2 * var(--orca-spacing-lg)));
+  max-height: calc(100vh - 4 * var(--orca-spacing-lg));
+  margin: calc(2 * var(--orca-spacing-lg)) auto 0;
   display: flex;
   border: 1px solid var(--orca-color-border);
   border-radius: var(--orca-radius-sm);
@@ -125,7 +125,7 @@ export const taskPanelCss = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--orca-spacing-xs);
   min-width: 0;
   padding: var(--orca-spacing-xs);
   border: 1px solid var(--orca-color-border);
@@ -169,7 +169,7 @@ export const taskPanelCss = `
 
 .nextaction-rating-cells {
   display: flex;
-  gap: 2px;
+  gap: var(--orca-spacing-xs);
   flex: 1 1 auto;
   max-width: 14rem;
 }
@@ -200,7 +200,11 @@ export const taskPanelCss = `
   opacity: 1;
 }
 
-/* The default level (4) carries a small mark. */
+/*
+ * The default level (4) carries a small dot, centred without a spacing
+ * offset. Its 4px size and 2px inset are the mark's own geometry inside a
+ * 1.25rem cell, not spacing between elements; no Orca variable stands for it.
+ */
 .nextaction-rating-cell[data-default]::after {
   content: "";
   position: absolute;
@@ -208,7 +212,7 @@ export const taskPanelCss = `
   bottom: 2px;
   width: 4px;
   height: 4px;
-  margin-left: -2px;
+  transform: translateX(-50%);
   border-radius: 50%;
   background-color: var(--orca-color-text-2);
 }

@@ -1,5 +1,6 @@
 // TaskRepository on Orca. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import {
+  type Candidates,
   type ChoiceProperty,
   type CompletionHistoryRead,
   type ConvertToTaskResult,
@@ -221,26 +222,37 @@ export function createOrcaTaskRepository(
   };
 
   return {
-    async readCandidates(field: ChoiceProperty): Promise<string[]> {
+    async readCandidates(): Promise<Candidates> {
       const state = readyTag();
-      const key = choiceKeyOf[field];
-      // An invalidated property reads as empty everywhere (ADR 0008).
-      if (state.invalidated.includes(key)) return [];
-      const property = await tagProperty(state, key);
-      const choices: unknown[] = Array.isArray(property?.typeArgs?.choices)
-        ? property.typeArgs.choices
-        : [];
-      const values = new Set<string>();
-      for (const choice of choices) {
-        const name = choiceName(choice);
-        if (typeof name === "string" && name !== "") values.add(name);
+      const candidates: Candidates = { contexts: [], labels: [] };
+      const live = choiceFields.filter(
+        // An invalidated property reads as empty everywhere (ADR 0008).
+        ([, key]) => !state.invalidated.includes(key),
+      );
+      if (live.length === 0) return candidates;
+      const values = new Map<ChoiceProperty, Set<string>>();
+      for (const [field, key] of live) {
+        const property = await tagProperty(state, key);
+        const choices: unknown[] = Array.isArray(property?.typeArgs?.choices)
+          ? property.typeArgs.choices
+          : [];
+        const names = new Set<string>();
+        for (const choice of choices) {
+          const name = choiceName(choice);
+          if (typeof name === "string" && name !== "") names.add(name);
+        }
+        values.set(field, names);
       }
       // Values tasks hold without a choice (e.g. written before #41) count
-      // too. Every task is read: about 70 ms for 1000 tasks (ADR 0007).
+      // too. Every task is read once for both: about 70 ms for 1000 tasks
+      // (ADR 0007).
       for (const task of await queryTasks({})) {
-        for (const value of task[field]) values.add(value);
+        for (const [field, names] of values) {
+          for (const value of task[field]) names.add(value);
+        }
       }
-      return [...values];
+      for (const [field, names] of values) candidates[field] = [...names];
+      return candidates;
     },
 
     async getTask(id: TaskId): Promise<Task | null> {

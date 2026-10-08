@@ -29,27 +29,24 @@ export interface NextActionPanelArgs {
 
 export interface NextActionPanelOptions {
   views: PanelViews;
-  /**
-   * The task panel in the wide tier's side pane, showing the selected task;
-   * the pane is empty without it.
-   */
-  sidePane?: React.ComponentType<TaskPanelSidePaneProps>;
+  /** The task panel in the wide tier's side pane, showing the selected task. */
+  sidePane: React.ComponentType<TaskPanelSidePaneProps>;
   /** The task panel as a popup, for the selected task in the other tiers. */
-  openPopup?: OpenTaskPanelPopup;
-  /** Shows the refresh button beside the navigation when present. */
-  onRefresh?: () => void;
+  openPopup: OpenTaskPanelPopup;
+  /** The refresh button beside the navigation. */
+  onRefresh: () => void;
   /**
    * The plugin panel became the active panel again (not when it opens: it
    * opens active, and its views read then).
    */
-  onActivated?: () => void;
+  onActivated: () => void;
 }
 
 /** Calls `onActivated` each time `active` turns true after the first render. */
-function useActivated(active: boolean, onActivated: (() => void) | undefined) {
+function useActivated(active: boolean, onActivated: () => void) {
   const previous = React.useRef(active);
   React.useEffect(() => {
-    if (active && !previous.current) onActivated?.();
+    if (active && !previous.current) onActivated();
     previous.current = active;
   }, [active, onActivated]);
 }
@@ -79,13 +76,13 @@ function useTier(ref: React.RefObject<HTMLElement>): PanelTier | undefined {
  * plugin panel closing takes its popup with it.
  */
 function useSelectionPopup(
-  openPopup: OpenTaskPanelPopup | undefined,
+  openPopup: OpenTaskPanelPopup,
   inPopup: boolean,
   taskId: TaskId | undefined,
   clear: () => void,
 ) {
   React.useEffect(() => {
-    if (!openPopup || !inPopup || taskId === undefined) return;
+    if (!inPopup || taskId === undefined) return;
     return openPopup(taskId, clear);
   }, [openPopup, inPopup, taskId, clear]);
 }
@@ -159,12 +156,7 @@ export function createNextActionPanel(
                   className="nextaction-panel-side"
                   aria-label={t("Task panel")}
                 >
-                  {SidePane && (
-                    <SidePane
-                      taskId={selectedTaskId}
-                      onClose={clearSelection}
-                    />
-                  )}
+                  <SidePane taskId={selectedTaskId} onClose={clearSelection} />
                 </aside>
               )}
             </div>

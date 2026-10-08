@@ -3,7 +3,7 @@
 // calls the use cases; it does not know whether it sits in a popup or a side
 // pane. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { ChoiceProperty } from "../../application/ports/task-repository";
+import type { Candidates } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
@@ -11,15 +11,16 @@ import type { ReadTask } from "../../application/usecases/read-task";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
-import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
 import {
   effortName,
   formatContext,
   importanceName,
+  shownText,
 } from "../components/format";
 import { StatusIcon } from "../components/status-icon";
 import { markedStatus } from "../components/status-menu";
+import { FailedNotice, PausedNotice } from "../components/view-notice";
 import { useCandidates } from "../hooks/use-candidates";
 import { useLiveTask } from "../hooks/use-live-task";
 import {
@@ -48,6 +49,11 @@ export interface TaskPanelFormDeps {
   changes: ChangeSignalSource;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
+  /**
+   * The plugin is unloading: the form unmounting now writes nothing, as
+   * what writes is being released.
+   */
+  unloading: () => boolean;
 }
 
 export interface TaskPanelFormProps {
@@ -60,20 +66,6 @@ export interface TaskPanelFormProps {
   onOpenedInNotes?: () => void;
 }
 
-function Notice(props: {
-  icon: string;
-  title: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="nextaction-view-notice" role="status">
-      <i className={props.icon} aria-hidden="true" />
-      <div className="nextaction-view-notice-title">{props.title}</div>
-      {props.action}
-    </div>
-  );
-}
-
 function Header(props: {
   task: Task | undefined;
   titleId: string;
@@ -82,16 +74,16 @@ function Header(props: {
 }) {
   const { Button, Tooltip } = orca.components;
   const { task } = props;
-  const text = task?.text.trim() ?? "";
+  const title = task && shownText(task);
   return (
     <header className="nextaction-task-panel-header">
       {task && <StatusIcon status={task.status} />}
       <div
         className="nextaction-task-panel-title"
         id={props.titleId}
-        data-empty={(task !== undefined && text === "") || undefined}
+        data-empty={title?.empty || undefined}
       >
-        {task ? (text === "" ? t("(No text)") : task.text) : t("Task panel")}
+        {title ? title.text : t("Task panel")}
       </div>
       {props.onOpenInNotes && (
         <Tooltip text={t("Open in notes")}>
@@ -120,7 +112,7 @@ function Fields(props: {
   actions: ReturnType<typeof useTaskPanelActions>;
   /** Whether a note typed but not saved is still written on leaving. */
   saveOnLeave: () => boolean;
-  candidates: Record<ChoiceProperty, readonly string[]>;
+  candidates: Candidates;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -210,21 +202,16 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const actions = useTaskPanelActions(deps, taskId, reload);
   const taskActions = useTaskActions(deps.actions);
   const { notify } = deps.actions;
-  const contexts = useCandidates(
-    deps.readCandidates,
-    "contexts",
-    deps.changes,
-    notify,
-  );
-  const labels = useCandidates(
-    deps.readCandidates,
-    "labels",
-    deps.changes,
-    notify,
-  );
+  const candidates = useCandidates(deps.readCandidates, deps.changes, notify);
   /** Set once the task is going away, so nothing more is written or told. */
   const leaving = React.useRef(false);
-  const saveOnLeave = React.useCallback(() => !leaving.current, []);
+  // Leaving writes the note unless the task went away or the plugin is
+  // unloading (what writes is being released then).
+  const { unloading } = deps;
+  const saveOnLeave = React.useCallback(
+    () => !leaving.current && !unloading(),
+    [unloading],
+  );
 
   // Dropped, deleted or untagged (here or elsewhere): tell the user, then close.
   React.useEffect(() => {
@@ -250,30 +237,19 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         idPrefix={idPrefix}
         actions={actions}
         saveOnLeave={saveOnLeave}
-        candidates={{ contexts, labels }}
+        candidates={candidates}
       />
     );
   } else if (state.kind === "paused") {
-    body = (
-      <Notice
-        icon="ti ti-player-pause"
-        title={t(
-          "Task features are paused. See the plugin's earlier notice or its task tag setting.",
-        )}
-      />
-    );
+    body = <PausedNotice />;
   } else if (state.kind === "failed") {
     body = (
-      <Notice
-        icon="ti ti-alert-circle"
-        title={t("Could not read the task: ${reason}", {
-          reason: describeError(state.error),
-        })}
-        action={
-          <Button variant="outline" onClick={reload}>
-            {t("Retry")}
-          </Button>
+      <FailedNotice
+        error={state.error}
+        message={(reason) =>
+          t("Could not read the task: ${reason}", { reason })
         }
+        onRetry={reload}
       />
     );
   } else {

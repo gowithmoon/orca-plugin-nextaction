@@ -249,12 +249,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
-    async readCandidates(property) {
-      const values = new Set(choices[property]);
-      for (const block of blocks.values()) {
-        for (const value of block.task?.[property] ?? []) values.add(value);
-      }
-      return [...values];
+    async readCandidates() {
+      const read = (property: ChoiceProperty) => {
+        const values = new Set(choices[property]);
+        for (const block of blocks.values()) {
+          for (const value of block.task?.[property] ?? []) values.add(value);
+        }
+        return [...values];
+      };
+      return { contexts: read("contexts"), labels: read("labels") };
     },
 
     async readCompletionHistory(id) {

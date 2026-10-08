@@ -1,5 +1,5 @@
 // "Open in notes" as ui sees it: the navigation itself lives in platform
-// (platform/open-in-notes.ts); ui reports its failures.
+// (platform/note-navigation.ts); ui reports its failures.
 import type { TaskId } from "../../domain/task/task";
 import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
