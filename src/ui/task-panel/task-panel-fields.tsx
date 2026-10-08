@@ -201,9 +201,10 @@ export function DateField(props: {
 
 /**
  * The note: a one-line input saved on Enter or when it loses focus, then
- * "Saved" shows briefly. While it has focus, what the notes hold does not
- * replace what is being typed. Leaving the panel with unsaved text saves it
- * when `saveOnLeave()` allows (not after the task went away).
+ * "Saved" shows briefly; a failed save shows what the notes hold again.
+ * While it has focus, what the notes hold does not replace what is being
+ * typed. Leaving the panel with unsaved text saves it when `saveOnLeave()`
+ * allows (not after the task went away, nor while the plugin unloads).
  */
 export function NoteField(props: {
   labelId: string;
@@ -233,18 +234,21 @@ export function NoteField(props: {
   const save = React.useCallback(
     async (text: string) => {
       if (text === saved.current) return;
-      const previous = saved.current;
       saved.current = text;
       if (await props.onSave(text === "" ? null : text)) {
         setSavedCount((count) => count + 1);
-      } else {
-        saved.current = previous;
+        return;
       }
+      // Not saved: show what the notes hold (#35 story 76), so the text
+      // typed is not taken for saved, nor written again on the next blur.
+      saved.current = latestFromNotes.current;
+      setDraft(latestFromNotes.current);
     },
     [props.onSave],
   );
 
-  // Leaving with unsaved text (Esc, the close button) still saves it.
+  // Leaving with unsaved text (Esc, the close button, a click outside,
+  // another task) still saves it; unmounting during unload does not.
   const latest = React.useRef({ draft, save, saveOnLeave: props.saveOnLeave });
   latest.current = { draft, save, saveOnLeave: props.saveOnLeave };
   React.useEffect(
