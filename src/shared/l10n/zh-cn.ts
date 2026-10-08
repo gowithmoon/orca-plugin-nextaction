@@ -39,6 +39,19 @@ const zhCN: Record<string, string> = {
   "Task features are paused, so the block was not converted. See the plugin's earlier notice or its task tag setting.":
     "任务功能已暂停，块没有转为任务。请查看插件之前的通知或任务标签设置。",
   "Could not convert to a task: ${reason}": "无法转为任务：${reason}",
+  Inbox: "收集箱",
+  Todo: "待开始",
+  Doing: "进行中",
+  Waiting: "等待中",
+  Someday: "将来/也许",
+  Done: "已完成",
+  "Drop task": "放弃",
+  "Task dropped": "已放弃",
+  "Could not drop the task: ${reason}": "无法放弃任务：${reason}",
+  "Could not change the status: ${reason}": "无法修改状态：${reason}",
+  "Could not open the task menu: ${reason}": "无法打开任务操作菜单：${reason}",
+  "Task features are paused. See the plugin's earlier notice or its task tag setting.":
+    "任务功能已暂停。请查看插件之前的通知或任务标签设置。",
 };
 
 export default zhCN;

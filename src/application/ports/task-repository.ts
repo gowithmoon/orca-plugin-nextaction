@@ -111,4 +111,13 @@ export interface TaskRepository {
    * as it is. Fails, writing nothing, when the write fails.
    */
   convertToTask(id: number): Promise<ConvertToTaskResult>;
+
+  /**
+   * Drops the task (GLOSSARY: 放弃): in one undo, removes the task tag and
+   * deletes every plugin block property of the block, so it is a plain block
+   * again. Subtasks are left as they are. A mirror block's ID drops its
+   * source block. Fails, writing nothing, when the block is not a task or the
+   * write fails.
+   */
+  dropTask(id: TaskId): Promise<void>;
 }

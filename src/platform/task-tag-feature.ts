@@ -1,3 +1,4 @@
+import type { TaskRepository } from "../application/ports/task-repository";
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createConvertToTask } from "../application/usecases/convert-to-task";
 import {
@@ -49,6 +50,8 @@ export function createTaskTagFeature(): {
   feature: FeatureModule;
   /** The tag's note-facing names, following every change of the tag state. */
   names: TaskTagNamesSource;
+  /** Tasks in the notes; it reads the tag state on every call. */
+  repository: TaskRepository;
 } {
   let state: TaskTagState = { kind: "paused", reason: "starting" };
   const listeners = new Set<() => void>();
@@ -236,12 +239,13 @@ export function createTaskTagFeature(): {
     }
   };
 
+  const repository = createOrcaTaskRepository(
+    () => state,
+    // No caches yet; step 4 connects the view cache here.
+    () => {},
+  );
+
   const feature: FeatureModule = async (context) => {
-    const repository = createOrcaTaskRepository(
-      () => state,
-      // No caches yet; step 4 connects the view cache here.
-      () => {},
-    );
     // No shortcut is assigned: the user binds one in Orca's settings.
     context.registry.editorCommand(
       "convertToTask",
@@ -282,5 +286,5 @@ export function createTaskTagFeature(): {
     });
   };
 
-  return { feature, names };
+  return { feature, names, repository };
 }
