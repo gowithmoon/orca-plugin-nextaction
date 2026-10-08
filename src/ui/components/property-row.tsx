@@ -11,6 +11,7 @@ import {
   formatDate,
   importanceName,
 } from "./format";
+import { statusLabel } from "./status-label";
 
 function anomalyText(anomaly: DataAnomaly): string {
   const { value } = anomaly;
@@ -22,11 +23,21 @@ function anomalyText(anomaly: DataAnomaly): string {
   });
 }
 
-export function PropertyRow(props: { task: Task; today: CalendarDate }) {
-  const { task, today } = props;
+export function PropertyRow(props: {
+  task: Task;
+  today: CalendarDate;
+  /** The task has left the view's list: its new status comes first. */
+  left?: boolean;
+}) {
+  const { task, today, left } = props;
   const overdue = isOverdue(task, today);
   return (
     <div className="nextaction-property-row">
+      {left && (
+        <span className="nextaction-property nextaction-property-left">
+          {t("Changed to ${status}", { status: statusLabel(task.status) })}
+        </span>
+      )}
       {task.anomalies.map((anomaly) => (
         <span
           key={anomaly.property}

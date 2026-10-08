@@ -15,7 +15,7 @@ import { t } from "../../shared/l10n/l10n";
 import { useTask } from "../hooks/use-task";
 import { createNotify } from "../notify";
 import { notifyMenuFailure } from "./builtin-items";
-import type { TaskMenuItem, TaskMenuItems } from "./menu-items";
+import type { TaskMenuItem, TaskMenuItems, TaskMenuPlace } from "./menu-items";
 
 export interface TaskMenuDeps {
   items: TaskMenuItems;
@@ -26,7 +26,12 @@ export interface TaskMenuDeps {
   taskTagBlockId: () => number | undefined;
 }
 
-function itemEntry(item: TaskMenuItem, task: Task, close: () => void) {
+function itemEntry(
+  item: TaskMenuItem,
+  task: Task,
+  close: () => void,
+  place: TaskMenuPlace | undefined,
+) {
   const { MenuText } = orca.components;
   const current = item.isCurrent?.(task) ?? false;
   return (
@@ -39,7 +44,7 @@ function itemEntry(item: TaskMenuItem, task: Task, close: () => void) {
       aria-current={current || undefined}
       onClick={() => {
         close();
-        void item.run(task);
+        void item.run(task, place);
       }}
     />
   );
@@ -53,13 +58,17 @@ export function TaskMenuEntries(props: {
   items: TaskMenuItems;
   task: Task;
   close: () => void;
+  /** The plugin panel the menu is in; absent in Orca's own menus. */
+  place?: TaskMenuPlace;
 }) {
-  const { items, task, close } = props;
+  const { items, task, close, place } = props;
   const { Menu, MenuText } = orca.components;
   return (
     <>
       {items.arrange(task).map((group) => {
-        const entries = group.items.map((item) => itemEntry(item, task, close));
+        const entries = group.items.map((item) =>
+          itemEntry(item, task, close, place),
+        );
         if (!group.submenu) return entries;
         return (
           <MenuText
@@ -83,6 +92,7 @@ export function TaskMenu(props: {
   items: TaskMenuItems;
   task: Task;
   close: () => void;
+  place?: TaskMenuPlace;
 }) {
   const { Menu } = orca.components;
   return (

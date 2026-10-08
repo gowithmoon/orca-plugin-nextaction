@@ -42,6 +42,26 @@ export const componentCss = `
   background-color: var(--orca-color-bg-2);
 }
 
+/* The task open in the task panel. */
+.nextaction-task-card[data-selected] {
+  border-color: var(--orca-color-primary-5);
+  box-shadow: inset 3px 0 0 var(--orca-color-primary-5);
+}
+
+/* Left the list but kept while selected (#42): faded and struck through. */
+.nextaction-task-card[data-left] {
+  opacity: 0.6;
+}
+
+.nextaction-task-card[data-left] .nextaction-task-card-text {
+  text-decoration: line-through;
+}
+
+.nextaction-property-left {
+  color: var(--orca-color-text-1);
+  font-weight: var(--orca-fontweight-lg);
+}
+
 /* The card's small icon buttons: the status icon and "open in notes". */
 .nextaction-task-card-button {
   display: inline-flex;

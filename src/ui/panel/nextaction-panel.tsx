@@ -3,7 +3,11 @@
 // current view and, in the wide tier, the side pane. It knows nothing about
 // any view's content. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { TaskId } from "../../domain/task/task";
 import type { PanelProps } from "../../orca.d.ts";
+import { t } from "../../shared/l10n/l10n";
+import type { OpenTaskPanelPopup } from "../task-panel/task-panel-popup";
+import type { TaskPanelSidePaneProps } from "../task-panel/task-panel-side-pane";
 import { PanelContext, type PanelContextValue } from "./panel-context";
 import { PanelNavigation } from "./panel-navigation";
 import type { PanelViews } from "./panel-views";
@@ -25,8 +29,13 @@ export interface NextActionPanelArgs {
 
 export interface NextActionPanelOptions {
   views: PanelViews;
-  /** Content of the wide tier's side pane; the pane is empty without it. */
-  sidePane?: React.ComponentType;
+  /**
+   * The task panel in the wide tier's side pane, showing the selected task;
+   * the pane is empty without it.
+   */
+  sidePane?: React.ComponentType<TaskPanelSidePaneProps>;
+  /** The task panel as a popup, for the selected task in the other tiers. */
+  openPopup?: OpenTaskPanelPopup;
   /** Shows the refresh button beside the navigation when present. */
   onRefresh?: () => void;
   /**
@@ -63,11 +72,35 @@ function useTier(ref: React.RefObject<HTMLElement>): PanelTier | undefined {
   return tier;
 }
 
+/**
+ * Shows the selected task in the popup while `inPopup`: across a tier change
+ * the popup and the side pane take over from each other, the task unchanged.
+ * Closing the popup (or the task going away) clears the selection; the
+ * plugin panel closing takes its popup with it.
+ */
+function useSelectionPopup(
+  openPopup: OpenTaskPanelPopup | undefined,
+  inPopup: boolean,
+  taskId: TaskId | undefined,
+  clear: () => void,
+) {
+  React.useEffect(() => {
+    if (!openPopup || !inPopup || taskId === undefined) return;
+    return openPopup(taskId, clear);
+  }, [openPopup, inPopup, taskId, clear]);
+}
+
 /** The panel type's renderer. Each opening starts afresh on the first view. */
 export function createNextActionPanel(
   options: NextActionPanelOptions,
 ): React.ComponentType<PanelProps & Partial<NextActionPanelArgs>> {
-  const { views, sidePane: SidePane, onRefresh, onActivated } = options;
+  const {
+    views,
+    sidePane: SidePane,
+    openPopup,
+    onRefresh,
+    onActivated,
+  } = options;
 
   return function NextActionPanel(props) {
     const root = React.useRef<HTMLDivElement>(null);
@@ -76,6 +109,18 @@ export function createNextActionPanel(
     const list = views.list();
     const [currentId, setCurrentId] = React.useState(list[0]?.id);
     const current = list.find((view) => view.id === currentId) ?? list[0];
+    // Only for this opening: nothing is selected when it opens (#42).
+    const [selectedTaskId, setSelectedTaskId] = React.useState<TaskId>();
+    const clearSelection = React.useCallback(
+      () => setSelectedTaskId(undefined),
+      [],
+    );
+    useSelectionPopup(
+      openPopup,
+      tier !== undefined && tier !== "wide",
+      selectedTaskId,
+      clearSelection,
+    );
 
     const context = React.useMemo<PanelContextValue | undefined>(
       () =>
@@ -83,8 +128,10 @@ export function createNextActionPanel(
           panelId: props.panelId,
           originPanelId: props.originPanelId,
           tier,
+          selectedTaskId,
+          selectTask: setSelectedTaskId,
         },
-      [props.panelId, props.originPanelId, tier],
+      [props.panelId, props.originPanelId, tier, selectedTaskId],
     );
 
     const View = current?.component;
@@ -108,8 +155,16 @@ export function createNextActionPanel(
                 {View && <View />}
               </div>
               {tier === "wide" && (
-                <aside className="nextaction-panel-side">
-                  {SidePane && <SidePane />}
+                <aside
+                  className="nextaction-panel-side"
+                  aria-label={t("Task panel")}
+                >
+                  {SidePane && (
+                    <SidePane
+                      taskId={selectedTaskId}
+                      onClose={clearSelection}
+                    />
+                  )}
                 </aside>
               )}
             </div>

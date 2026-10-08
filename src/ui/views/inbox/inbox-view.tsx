@@ -2,7 +2,7 @@
 // order they were captured, as task cards with their actions (#39). It reads
 // when the plugin panel opens and again on every task change signal (#38).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import type * as React from "react";
+import * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -19,6 +19,7 @@ import {
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
+import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 
@@ -32,8 +33,15 @@ export interface InboxViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
-  /** A click on a card: the task opens in the task panel (#40). */
-  onOpenTask?: (taskId: TaskId) => void;
+}
+
+/**
+ * What the list shows of a read (#35 "收集箱视图"): the inbox, plus the
+ * selected task if it has left the inbox, in its place. A task kept for an
+ * earlier selection is no longer shown once the selection moves on.
+ */
+function shownTasks(read: readonly Task[], selected: TaskId | undefined) {
+  return read.filter((task) => task.status === "inbox" || task.id === selected);
 }
 
 function Placeholder() {
@@ -80,6 +88,8 @@ function InboxContent(props: {
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
   const menuItems = deps.menuItems();
+  const { selectedTaskId, selectTask } = usePanel();
+  const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
   const { Button } = orca.components;
 
   if (state.kind === "loading") return <Placeholder />;
@@ -108,7 +118,8 @@ function InboxContent(props: {
       />
     );
   }
-  if (state.data.length === 0) {
+  const tasks = shownTasks(state.data, selectedTaskId);
+  if (tasks.length === 0) {
     return (
       <Notice
         icon="ti ti-inbox"
@@ -119,14 +130,17 @@ function InboxContent(props: {
   }
   return (
     <ul className="nextaction-task-list">
-      {state.data.map((task) => (
+      {tasks.map((task) => (
         <li key={task.id}>
           <TaskCard
             task={task}
             today={today}
             actions={actions}
             menuItems={menuItems}
-            onOpen={deps.onOpenTask && ((open) => deps.onOpenTask?.(open.id))}
+            menuPlace={menuPlace}
+            onOpen={(open) => selectTask(open.id)}
+            selected={task.id === selectedTaskId}
+            left={task.status !== "inbox"}
           />
         </li>
       ))}
@@ -140,15 +154,35 @@ function InboxContent(props: {
  * opening starts from what the notes hold then.
  */
 export function createInboxView(deps: InboxViewDeps): PanelView {
-  const query = createViewQuery(() => deps.readInbox(), deps.changes);
+  /**
+   * The selected task, kept by every read while it is selected. One value
+   * serves the whole view: there is at most one plugin panel.
+   */
+  let selected: TaskId | undefined;
+  const query = createViewQuery(
+    () => deps.readInbox({ keep: selected }),
+    deps.changes,
+  );
 
+  /** Tasks still to clarify: a selected task that left is not counted. */
   const useCount = () => {
     const state = useViewQuery(query);
-    return state.kind === "loaded" ? state.data.length : undefined;
+    return state.kind === "loaded"
+      ? shownTasks(state.data, undefined).length
+      : undefined;
   };
 
   function InboxView() {
     const count = useCount();
+    const { selectedTaskId } = usePanel();
+    // Before any read the selection may cause: effects run before the
+    // change signal's debounced read.
+    React.useEffect(() => {
+      selected = selectedTaskId;
+      return () => {
+        selected = undefined;
+      };
+    }, [selectedTaskId]);
     return (
       <>
         <ViewHeader title={t("Inbox")} count={count} />

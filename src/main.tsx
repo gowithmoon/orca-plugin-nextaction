@@ -10,8 +10,10 @@ import { createTaskTagFeature } from "./platform/task-tag-feature";
 const taskChanges = createTaskChangesFeature();
 const taskTag = createTaskTagFeature(() => taskChanges.changes.changed());
 // The task panel needs the plugin panel's task actions, and the menus and the
-// cards open the task panel: they reach it through this function.
-const openTaskPanel = (taskId: number) => taskPanel.open(taskId);
+// plugin panel open the task panel: they reach it through these functions.
+const openTaskPanel = (taskId: number) => {
+  taskPanel.open(taskId);
+};
 const taskMenu = createTaskMenuFeature(
   taskTag.repository,
   taskTag.taskTagBlockId,
@@ -21,7 +23,7 @@ const panel = createPanelFeature(
   taskTag.repository,
   taskChanges.changes,
   taskMenu.items,
-  openTaskPanel,
+  () => ({ openPopup: taskPanel.open, formDeps: taskPanel.formDeps }),
 );
 const taskPanel = createTaskPanelFeature(
   taskTag.repository,

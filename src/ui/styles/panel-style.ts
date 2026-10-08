@@ -128,6 +128,9 @@ export const panelCss = `
 }
 
 .nextaction-panel-side {
+  /* The task panel fills it; its own body scrolls. */
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   width: clamp(
     var(--nextaction-side-min),

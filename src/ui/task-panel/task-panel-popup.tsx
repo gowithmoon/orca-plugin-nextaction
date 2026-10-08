@@ -48,25 +48,43 @@ function TaskPanelPopup(props: {
 }
 
 /**
- * Opens task `taskId` in the popup, in `render`'s root; another one already
- * open is replaced. Outside the plugin panel's React tree, so "open in notes"
- * works out the plugin panel from the active panel (#39's helper).
+ * Opens task `taskId` in the popup. `onClose` hears that the popup closed by
+ * itself: the user closed it, the task went away, or another opening replaced
+ * it. The returned function takes the popup away without `onClose` (e.g. the
+ * plugin panel moving it into its side pane); it does nothing once the popup
+ * is gone.
+ */
+export type OpenTaskPanelPopup = (
+  taskId: TaskId,
+  onClose?: () => void,
+) => () => void;
+
+/**
+ * The popup in `render`'s root; at most one at a time. Outside the plugin
+ * panel's React tree, so "open in notes" works out the plugin panel from the
+ * active panel (#39's helper).
  */
 export function createTaskPanelPopup(options: {
   deps: TaskPanelFormDeps;
   render: (node: React.ReactNode) => void;
-}): (taskId: TaskId) => void {
+}): OpenTaskPanelPopup {
   const { deps, render } = options;
   /** Which opening is shown, so a late close of a replaced one does nothing. */
   let shown = 0;
+  /** The shown opening's `onClose`, told when another opening replaces it. */
+  let replaced: (() => void) | undefined;
 
-  return (taskId) => {
+  return (taskId, onClose) => {
+    const previous = replaced;
     shown += 1;
     const mine = shown;
-    const close = () => {
-      if (mine !== shown) return;
+    replaced = onClose;
+    const dismiss = () => {
+      if (mine !== shown) return false;
       shown += 1;
+      replaced = undefined;
       render(null);
+      return true;
     };
     render(
       <TaskPanelPopup
@@ -74,8 +92,14 @@ export function createTaskPanelPopup(options: {
         key={mine}
         deps={deps}
         taskId={taskId}
-        onClose={close}
+        onClose={() => {
+          if (dismiss()) onClose?.();
+        }}
       />,
     );
+    previous?.();
+    return () => {
+      dismiss();
+    };
   };
 }

@@ -119,6 +119,9 @@ const zhCN: Record<string, string> = {
   "Could not read the task: ${reason}": "无法读取任务：${reason}",
   "This block is no longer a task": "这个块已不是任务",
   "Could not save the change: ${reason}": "无法保存修改：${reason}",
+  "Pick a task to see and edit its properties here":
+    "选一个任务，在这里查看和编辑属性",
+  "Changed to ${status}": "已改为${status}",
 };
 
 export default zhCN;
