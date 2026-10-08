@@ -120,4 +120,12 @@ export interface TaskRepository {
    * write fails.
    */
   dropTask(id: TaskId): Promise<void>;
+
+  /**
+   * Creates an inbox task with `text`, as plain text, at the end of the
+   * journal of the calendar day `now` falls on in local time (not the logical
+   * day, ADR 0005), creating that journal if it does not exist yet. The user
+   * undoes it with one undo. Returns the new task's ID.
+   */
+  appendTaskToJournal(text: string, now: Date): Promise<TaskId>;
 }

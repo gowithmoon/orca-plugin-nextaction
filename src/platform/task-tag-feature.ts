@@ -1,6 +1,7 @@
 import type { TaskRepository } from "../application/ports/task-repository";
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createConvertToTask } from "../application/usecases/convert-to-task";
+import { createQuickCapture } from "../application/usecases/quick-capture";
 import {
   type NoteLanguage,
   noteLanguageFor,
@@ -21,6 +22,7 @@ import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
 import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
+import { createQuickCaptureCommand } from "../ui/capture/quick-capture-popup";
 import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
 import { registerQueryInboxCommand } from "./dev/query-inbox-command";
@@ -256,6 +258,18 @@ export function createTaskTagFeature(): {
       // The repository's invokeGroup is the undo unit.
       () => undefined,
       { label: t("Convert to task") },
+    );
+    // The popup's own root, empty until the command opens it; unload
+    // unmounts it.
+    const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
+    context.registry.command(
+      "quickCapture",
+      createQuickCaptureCommand(
+        createQuickCapture({ repository, clock: systemClock }),
+        context.pluginName,
+        captureRoot.render,
+      ),
+      t("Quick capture"),
     );
     // Statically false in production builds, so the debug commands are left
     // out of the bundle (#20).
