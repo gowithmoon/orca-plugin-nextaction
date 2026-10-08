@@ -59,7 +59,7 @@ src/
     panel/                 插件面板外壳与视图导航
     views/                 各个视图，每个视图一个子目录
     task-panel/            任务属性面板
-    task-menu/             状态图标与任务操作菜单（菜单项通过登记的方式添加）
+    task-menu/             状态图标（只显示）与任务操作菜单（菜单项通过登记的方式添加，渲染进 Orca 的标签菜单和块右键菜单）
     capture/               快速捕获弹窗
     components/            可复用组件
     hooks/                 React hooks（只调用 application）
@@ -141,8 +141,10 @@ tests/
 撤销（`tag-operations`）：
 - `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。
 
-界面注入（`status-icon-task-menu`）：
-- 依赖 Orca 内部 DOM 结构的选择器和命中判断，全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
+界面注入（`status-icon-task-menu`、`official-task-menus`）：
+- 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 DOM 读取块 ID。
+- 只有状态图标依赖 Orca 内部 DOM：它是一份只负责显示的注入样式，Orca 改版时最坏的结果是图标不显示，不影响任何操作。依赖内部 DOM 的选择器全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
+- 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件中使用；其他 `ui` 代码仍然只用英文键。
 
 ### 注册与清理
 
@@ -167,6 +169,7 @@ tests/
 
 - React 和 Valtio 使用全局的 `window.React`、`window.Valtio`，禁止打包进插件。
 - 组件只通过 `ui/hooks` 调用用例，不直接访问仓储。
+- 命令回调、菜单项回调这类不是 React 组件的 `ui` 代码用不了 hooks，它们直接调用由 `platform` 注入的用例；同样不直接访问仓储，也不调用 Orca 的读写 API。
 - 每个自定义渲染器都配一个纯文本转换器。
 
 ## 5. 测试
