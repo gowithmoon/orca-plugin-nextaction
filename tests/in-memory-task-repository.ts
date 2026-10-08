@@ -103,6 +103,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     return block as StoredBlock & { task: Task };
   };
 
+  /** A plugin block property this plugin cannot read is never overwritten. */
+  const refuseUnreadable = (block: StoredBlock, id: TaskId, key: string) => {
+    const current = block.pluginProperties.get(key);
+    if (current?.kind === "unreadable") {
+      throw new Error(
+        `plugin block property "${key}" of block ${id} holds a value this plugin cannot read (${current.reason})`,
+      );
+    }
+  };
+
   /** Runs a write: all of it, or (when writes fail) none of it. */
   const write = (apply: () => void) => {
     if (failure) throw failure;
@@ -174,10 +184,18 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return tasks;
     },
 
-    async updateTask(id, changes: TaskChanges) {
+    async updateTask(id, changes: TaskChanges, pluginBlockProperties = {}) {
       const block = taskToWrite(id);
+      const entries = Object.entries(pluginBlockProperties);
+      for (const [key] of entries) refuseUnreadable(block, id, key);
       write(() => {
         block.task = { ...block.task, ...changes };
+        for (const [key, data] of entries) {
+          block.pluginProperties.set(key, {
+            kind: "present",
+            data: { ...data },
+          });
+        }
       });
     },
 
@@ -189,12 +207,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async writePluginBlockProperty(id, key, data) {
       const block = taskToWrite(id);
-      const current = block.pluginProperties.get(key);
-      if (current?.kind === "unreadable") {
-        throw new Error(
-          `plugin block property "${key}" of block ${id} holds a value this plugin cannot read (${current.reason})`,
-        );
-      }
+      refuseUnreadable(block, id, key);
       write(() => {
         block.pluginProperties.set(key, { kind: "present", data: { ...data } });
       });

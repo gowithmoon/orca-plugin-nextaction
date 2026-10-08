@@ -1,5 +1,18 @@
-// Use case: change a task's status from the task menu (GLOSSARY: 状态).
+// Use case: change a task's status from the task menu (GLOSSARY: 状态), and
+// record a completion when the task enters done (GLOSSARY: 完成历史).
+import {
+  historyAfterStatusChange,
+  recordsCompletion,
+} from "../../domain/task/completion-history";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
+import { logicalDay } from "../../domain/time/logical-day";
+import {
+  completionHistoryKey,
+  decodeCompletionHistory,
+  encodeCompletionHistory,
+} from "../codecs/completion-history-codec";
+import type { Clock } from "../ports/clock";
+import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
 /** What changing the status did. */
@@ -9,8 +22,18 @@ export type ChangeStatusResult =
   | { kind: "unchanged" };
 
 /**
- * Sets the status of task `id` to `status` in one undo. Errors are thrown as
- * they are, for `ui` to report.
+ * The task's completion history holds something this plugin cannot read
+ * (an unknown version, or damaged), so it cannot be set to done: the history
+ * would be overwritten. Nothing was written.
+ */
+export class CompletionHistoryUnreadableError extends Error {
+  override name = "CompletionHistoryUnreadableError";
+}
+
+/**
+ * Sets the status of task `id` to `status` in one undo; entering done from
+ * another status also records a completion, in the same undo. Errors are
+ * thrown as they are, for `ui` to report.
  */
 export type ChangeStatus = (
   id: TaskId,
@@ -19,14 +42,42 @@ export type ChangeStatus = (
 
 export function createChangeStatus(deps: {
   repository: TaskRepository;
+  clock: Clock;
+  dayBoundary: DayBoundarySetting;
 }): ChangeStatus {
   return async (id, status) => {
     // An empty or unknown status already reads as inbox (taskFromNotes), so
     // choosing inbox for such a task writes nothing, as the icon says.
     const task = await deps.repository.getTask(id);
     if (task?.status === status) return { kind: "unchanged" };
-    // A block that is no longer a task fails here, writing nothing.
-    await deps.repository.updateTask(id, { status });
+    // A block that is no longer a task fails in updateTask, writing nothing.
+    if (!task || !recordsCompletion(task.status, status)) {
+      await deps.repository.updateTask(id, { status });
+      return { kind: "changed" };
+    }
+    const read = decodeCompletionHistory(
+      await deps.repository.readPluginBlockProperty(id, completionHistoryKey),
+    );
+    if (read.kind === "unreadable") {
+      throw new CompletionHistoryUnreadableError(
+        `the completion history of task ${id} cannot be read (${read.reason})`,
+      );
+    }
+    const now = deps.clock.now();
+    const history = historyAfterStatusChange(
+      read.history,
+      task.status,
+      status,
+      {
+        at: now,
+        day: logicalDay(now, deps.dayBoundary.current()),
+      },
+    );
+    await deps.repository.updateTask(
+      id,
+      { status },
+      { [completionHistoryKey]: encodeCompletionHistory(history) },
+    );
     return { kind: "changed" };
   };
 }

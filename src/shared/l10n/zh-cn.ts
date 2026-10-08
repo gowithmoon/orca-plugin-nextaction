@@ -55,6 +55,8 @@ const zhCN: Record<string, string> = {
   "Task dropped": "已放弃",
   "Could not drop the task: ${reason}": "无法放弃任务：${reason}",
   "Could not change the status: ${reason}": "无法修改状态：${reason}",
+  "Could not mark the task done: its completion history cannot be read and is kept as it is.":
+    "无法设为已完成：任务的完成历史无法读取，已原样保留。",
   "Could not open the task menu: ${reason}": "无法打开任务操作菜单：${reason}",
   "Task features are paused. See the plugin's earlier notice or its task tag setting.":
     "任务功能已暂停。请查看插件之前的通知或任务标签设置。",
