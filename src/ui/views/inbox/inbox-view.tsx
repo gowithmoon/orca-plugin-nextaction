@@ -4,7 +4,7 @@
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
-import type { CalendarDate, Task } from "../../../domain/task/task";
+import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { describeError } from "../../../shared/describe-error";
 import { t } from "../../../shared/l10n/l10n";
@@ -32,6 +32,8 @@ export interface InboxViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
+  /** A click on a card: the task opens in the task panel (#40). */
+  onOpenTask?: (taskId: TaskId) => void;
 }
 
 function Placeholder() {
@@ -124,6 +126,7 @@ function InboxContent(props: {
             today={today}
             actions={actions}
             menuItems={menuItems}
+            onOpen={deps.onOpenTask && ((open) => deps.onOpenTask?.(open.id))}
           />
         </li>
       ))}

@@ -2,6 +2,7 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createReadInbox } from "../application/usecases/read-inbox";
+import type { TaskId } from "../domain/task/task";
 import { defaultDayBoundary, logicalDay } from "../domain/time/logical-day";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
@@ -34,6 +35,8 @@ export function createPanelFeature(
   changes: ChangeSignal,
   /** The current load's task menu registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined,
+  /** A click on a card (#40): the task panel opens as a popup. */
+  openTaskPanel: (taskId: TaskId) => void,
 ): {
   feature: FeatureModule;
   views: PanelViews;
@@ -64,6 +67,7 @@ export function createPanelFeature(
       changes,
       taskActions,
       menuItems,
+      onOpenTask: openTaskPanel,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.

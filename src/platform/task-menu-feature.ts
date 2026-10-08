@@ -2,6 +2,7 @@ import type { TaskRepository } from "../application/ports/task-repository";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createReadTask } from "../application/usecases/read-task";
+import type { TaskId } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
 import {
@@ -12,6 +13,7 @@ import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
 } from "../ui/task-menu/task-menu";
+import { registerTaskPanelMenuItem } from "../ui/task-panel/task-panel-menu-item";
 import type { FeatureModule } from "./bootstrap";
 import { dayBoundaryFrom } from "./day-boundary";
 
@@ -25,6 +27,8 @@ import { dayBoundaryFrom } from "./day-boundary";
 export function createTaskMenuFeature(
   repository: TaskRepository,
   taskTagBlockId: () => number | undefined,
+  /** "Open task panel" (#40): opens the popup; from Orca's menus, always. */
+  openTaskPanel: (taskId: TaskId) => void,
 ): { feature: FeatureModule; items: () => TaskMenuItems | undefined } {
   let current: TaskMenuItems | undefined;
   const feature: FeatureModule = (context) => {
@@ -39,6 +43,7 @@ export function createTaskMenuFeature(
       dropTask: createDropTask({ repository }),
       pluginName,
     });
+    registerTaskPanelMenuItem(items, openTaskPanel);
 
     const deps = {
       items,
