@@ -1,8 +1,10 @@
 // TaskRepository on Orca. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import type {
-  PluginBlockPropertyRead,
-  TaskFilter,
-  TaskRepository,
+import {
+  type ConvertToTaskResult,
+  type PluginBlockPropertyRead,
+  TaskFeaturesPausedError,
+  type TaskFilter,
+  type TaskRepository,
 } from "../../../application/ports/task-repository";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -17,6 +19,7 @@ import {
   mirrorSourceId,
   type TaskTagContext,
 } from "../codec/task-codec";
+import { planConversion } from "../codec/task-conversion";
 import { encodeTaskChanges } from "../codec/task-encode";
 import { invokeBackend, invokeEditorCommand, invokeGroup } from "../orca-calls";
 import { OrcaError } from "../orca-error";
@@ -75,7 +78,9 @@ export function createOrcaTaskRepository(
   const readyTag = () => {
     const state = tagState();
     if (state.kind !== "ready") {
-      throw new OrcaError(`task features are paused (${state.reason})`);
+      throw new TaskFeaturesPausedError(
+        `task features are paused (${state.reason})`,
+      );
     }
     return state;
   };
@@ -187,6 +192,50 @@ export function createOrcaTaskRepository(
           [plan.property],
         );
       });
+    },
+
+    async convertToTask(id: number): Promise<ConvertToTaskResult> {
+      const state = readyTag();
+      // Mirrors resolve first: tagging a mirror puts hidden task data on it
+      // (block-properties-json M4).
+      const block = await sourceBlock(id);
+      if (!block) throw new OrcaError(`no block ${id} to convert`);
+      // Decided before any call into Orca: insertTag on a journal block
+      // fails inside Orca (page-task P1).
+      const plan = planConversion(block, {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      });
+      switch (plan.kind) {
+        case "already-task":
+          return { kind: "already-task", id: block.id };
+        case "not-convertible":
+          return { kind: "not-convertible", reason: plan.reason };
+        case "mirror":
+          // sourceBlock never returns a mirror.
+          throw new OrcaError(`block ${block.id} is a mirror of a mirror`);
+        case "convertible":
+          await writeTo(block, async () => {
+            // Removing the task tag in Orca leaves plugin block properties
+            // behind (block-properties-json J4); a new task starts blank.
+            // deleteProperties deletes by name, dotted names included (J7).
+            if (plan.leftoverProperties.length > 0) {
+              await invokeEditorCommand(
+                "core.editor.deleteProperties",
+                [block.id],
+                plan.leftoverProperties,
+              );
+            }
+            // Without values every property takes its default, the status
+            // inbox (tag-operations).
+            await invokeEditorCommand(
+              "core.editor.insertTag",
+              block.id,
+              state.tagName,
+            );
+          });
+          return { kind: "converted", id: block.id };
+      }
     },
 
     async queryTasks(filter: TaskFilter): Promise<Task[]> {

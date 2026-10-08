@@ -1,4 +1,5 @@
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
+import { createConvertToTask } from "../application/usecases/convert-to-task";
 import {
   type NoteLanguage,
   noteLanguageFor,
@@ -19,6 +20,7 @@ import type { TaskTagState } from "../infra/orca/schema/task-tag-state";
 import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
+import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
 import { registerQueryInboxCommand } from "./dev/query-inbox-command";
 import { registerReadTaskCommand } from "./dev/read-task-command";
@@ -235,14 +237,25 @@ export function createTaskTagFeature(): {
   };
 
   const feature: FeatureModule = async (context) => {
-    // Statically false in production builds, so the commands and the
-    // repository they use are left out of the bundle (#20).
+    const repository = createOrcaTaskRepository(
+      () => state,
+      // No caches yet; step 4 connects the view cache here.
+      () => {},
+    );
+    // No shortcut is assigned: the user binds one in Orca's settings.
+    context.registry.editorCommand(
+      "convertToTask",
+      createConvertToTaskCommand(
+        createConvertToTask({ repository }),
+        context.pluginName,
+      ),
+      // The repository's invokeGroup is the undo unit.
+      () => undefined,
+      { label: t("Convert to task") },
+    );
+    // Statically false in production builds, so the debug commands are left
+    // out of the bundle (#20).
     if (import.meta.env.DEV) {
-      const repository = createOrcaTaskRepository(
-        () => state,
-        // No caches yet; step 4 connects the view cache here.
-        () => {},
-      );
       registerReadTaskCommand(context.registry, repository);
       registerQueryInboxCommand(context.registry, repository);
       registerWriteTaskCommands(context.registry, repository, systemClock);
