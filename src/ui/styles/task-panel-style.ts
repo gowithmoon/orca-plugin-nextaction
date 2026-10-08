@@ -101,7 +101,8 @@ export const taskPanelCss = `
 
 /* Fieldsets group the buttons for assistive technology; no box of their own. */
 .nextaction-status-buttons,
-.nextaction-rating-cells {
+.nextaction-rating-cells,
+.nextaction-choices-field {
   min-width: 0;
   margin: 0;
   padding: 0;

@@ -3,22 +3,30 @@
 // calls the use cases; it does not know whether it sits in a popup or a side
 // pane. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { ChoiceProperty } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
+import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadTask } from "../../application/usecases/read-task";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
-import { effortName, importanceName } from "../components/format";
+import {
+  effortName,
+  formatContext,
+  importanceName,
+} from "../components/format";
 import { StatusIcon } from "../components/status-icon";
+import { useCandidates } from "../hooks/use-candidates";
 import { useLiveTask } from "../hooks/use-live-task";
 import {
   type TaskActionsDeps,
   useTaskActions,
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
+import { ChoicesField } from "./choices-field";
 import {
   DateField,
   Field,
@@ -31,6 +39,8 @@ export interface TaskPanelFormDeps {
   readTask: ReadTask;
   editTask: EditTask;
   dropTask: DropTask;
+  /** Values offered for contexts and labels. */
+  readCandidates: ReadCandidates;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -109,6 +119,7 @@ function Fields(props: {
   actions: ReturnType<typeof useTaskPanelActions>;
   /** Whether a note typed but not saved is still written on leaving. */
   saveOnLeave: () => boolean;
+  candidates: Record<ChoiceProperty, readonly string[]>;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -158,6 +169,26 @@ function Fields(props: {
           onChange={(due) => void actions.edit({ due })}
         />
       </Field>
+      <Field label={t("Context")} labelId={id("contexts")}>
+        <ChoicesField
+          labelId={id("contexts")}
+          values={task.contexts}
+          candidates={props.candidates.contexts}
+          display={formatContext}
+          placeholder={t("No context")}
+          onChange={(contexts) => void actions.edit({ contexts })}
+        />
+      </Field>
+      <Field label={t("Label")} labelId={id("labels")}>
+        <ChoicesField
+          labelId={id("labels")}
+          values={task.labels}
+          candidates={props.candidates.labels}
+          display={(label) => label}
+          placeholder={t("No label")}
+          onChange={(labels) => void actions.edit({ labels })}
+        />
+      </Field>
       <Field label={t("Note")} labelId={id("note")}>
         <NoteField
           labelId={id("note")}
@@ -177,6 +208,19 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const { state, reload } = useLiveTask(deps.readTask, taskId, deps.changes);
   const actions = useTaskPanelActions(deps, taskId, reload);
   const taskActions = useTaskActions(deps.actions);
+  const { notify } = deps.actions;
+  const contexts = useCandidates(
+    deps.readCandidates,
+    "contexts",
+    deps.changes,
+    notify,
+  );
+  const labels = useCandidates(
+    deps.readCandidates,
+    "labels",
+    deps.changes,
+    notify,
+  );
   /** Set once the task is going away, so nothing more is written or told. */
   const leaving = React.useRef(false);
   const saveOnLeave = React.useCallback(() => !leaving.current, []);
@@ -205,6 +249,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         idPrefix={idPrefix}
         actions={actions}
         saveOnLeave={saveOnLeave}
+        candidates={{ contexts, labels }}
       />
     );
   } else if (state.kind === "paused") {

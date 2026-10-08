@@ -20,6 +20,9 @@ export interface ValuesFilter {
   excludes?: readonly string[];
 }
 
+/** The multi-value properties whose values the user picks from candidates. */
+export type ChoiceProperty = "contexts" | "labels";
+
 /**
  * Which tasks a query matches. Every given condition must hold; an empty
  * filter matches every task.
@@ -81,12 +84,21 @@ export interface TaskRepository {
   queryTasks(filter: TaskFilter): Promise<Task[]>;
 
   /**
+   * The values to offer for contexts or labels, each once, in no particular
+   * order: the task tag's choices for that property, and the values tasks
+   * already hold. An invalidated property has none.
+   */
+  readCandidates(property: ChoiceProperty): Promise<string[]>;
+
+  /**
    * Writes the properties present in `changes` and leaves the others as they
    * are; with `completionHistory`, also replaces the task's completion
-   * history with it. The user undoes the whole write with one undo. Fails,
-   * writing nothing, when the block is not a task, a property is
-   * invalidated, or the completion history is to be replaced but reads as
-   * unreadable. A mirror block's ID writes to its source block.
+   * history with it. Contexts and labels written are made choices of the
+   * task tag first, so they show in the notes and become candidates. The
+   * user undoes the whole write with one undo. Fails, writing nothing, when
+   * the block is not a task, a property is invalidated, or the completion
+   * history is to be replaced but reads as unreadable. A mirror block's ID
+   * writes to its source block.
    */
   updateTask(
     id: TaskId,
