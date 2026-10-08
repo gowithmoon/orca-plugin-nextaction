@@ -13,7 +13,15 @@ const zhTag: TaskTagNames = {
   invalidated: [],
 };
 
-const notOrphan = { kind: 9, hasParent: true };
+// ADR 0013: a task has a parent or an alias (page-task P2), so pages count
+// and orphans and journal blocks do not.
+const notOrphan = {
+  kind: 101,
+  conditions: [
+    { kind: 9, hasParent: true },
+    { kind: 9, hasAliases: true },
+  ],
+};
 const allResults = 100_000;
 
 describe("buildTaskQuery", () => {

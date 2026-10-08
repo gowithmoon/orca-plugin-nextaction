@@ -162,34 +162,36 @@ describe("decodeTask", () => {
     });
   });
 
-  it("reads an orphan block (no parent) as not a task, though still tagged", () => {
+  it("reads an orphan block (no parent, no alias) as not a task, though still tagged", () => {
     expect(decodeTask(blocks.orphan, zhTag)).toEqual({
       kind: "not-task",
       reason: "orphan",
     });
   });
 
-  // The task query asks for `{ kind: 9, hasParent: true }` (#21), so reading
-  // by ID agrees with it: any tagged block without a parent is not a task
-  // (#20), whatever else it is.
-  it.each([
-    ["a page (it has an alias)", { aliases: ["NA页面"] }],
-    [
-      "a journal block",
-      {
-        properties: blocks.zhFilled.properties.map((p) =>
-          p.name === "_repr" ? { ...p, value: { type: "journal" } } : p,
-        ),
-      },
-    ],
-  ])(
-    "reads a tagged block without a parent as not a task, even %s",
-    (_, change) => {
-      expect(
-        decodeTask({ ...blocks.zhFilled, parent: null, ...change }, zhTag),
-      ).toEqual({ kind: "not-task", reason: "orphan" });
-    },
-  );
+  // ADR 0013: a page is a root-level block with an alias, and can be a task.
+  // Reading by ID agrees with the task query's "has a parent or an alias".
+  it("reads a tagged page (no parent, but an alias) as a task", () => {
+    const page = { ...blocks.zhFilled, parent: null, aliases: ["NA页面"] };
+    expect(decodedTask(page)).toMatchObject({ id: page.id, status: "todo" });
+  });
+
+  // A journal block is root-level without an alias (page-task P1), so it
+  // reads like an orphan: not a task, though tagged.
+  it("reads a tagged journal block (no parent, no alias) as not a task", () => {
+    const journal = {
+      ...blocks.zhFilled,
+      parent: null,
+      aliases: [],
+      properties: blocks.zhFilled.properties.map((p) =>
+        p.name === "_repr" ? { ...p, value: { type: "journal" } } : p,
+      ),
+    };
+    expect(decodeTask(journal, zhTag)).toEqual({
+      kind: "not-task",
+      reason: "orphan",
+    });
+  });
 });
 
 describe("decodeTask with values of the wrong kind", () => {

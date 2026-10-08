@@ -68,13 +68,14 @@ export function mirrorSourceId(
 }
 
 /**
- * A block without a parent (#20), such as one deleted while still referenced
- * (tag-operations, rounds 4–5), which keeps its task tag. Pages and journal
- * blocks have no parent either and count too, so reading by ID agrees with
- * the task query’s `{ kind: 9, hasParent: true }` (#21).
+ * A block with neither a parent nor an alias (ADR 0013): one deleted while
+ * still referenced (tag-operations, rounds 4–5), which keeps its task tag, or
+ * a journal block (page-task P1). A page has no parent but has an alias, so
+ * it can be a task. Reading by ID agrees with the task query’s "has a parent
+ * or an alias" (page-task P2).
  */
 function isOrphan(block: RawBlock): boolean {
-  return block.parent == null;
+  return block.parent == null && block.aliases.length === 0;
 }
 
 /** Orca `RefType.Property`: a tag reference (plugin-docs/constants/db.md). */
