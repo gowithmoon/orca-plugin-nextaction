@@ -8,7 +8,15 @@ import { createTaskTagFeature } from "./platform/task-tag-feature";
 // Feature modules are wired in here; later roadmap steps add more.
 const taskChanges = createTaskChangesFeature();
 const taskTag = createTaskTagFeature(() => taskChanges.changes.changed());
-const panel = createPanelFeature(taskTag.repository, taskChanges.changes);
+const taskMenu = createTaskMenuFeature(
+  taskTag.repository,
+  taskTag.taskTagBlockId,
+);
+const panel = createPanelFeature(
+  taskTag.repository,
+  taskChanges.changes,
+  taskMenu.items,
+);
 const plugin = createPlugin({
   features: [
     // First, so its timers and hooks exist before anything writes, and are
@@ -17,7 +25,7 @@ const plugin = createPlugin({
     // Before the task tag feature, so it hears the outcome of startup.
     createStatusIconFeature(taskTag.names),
     taskTag.feature,
-    createTaskMenuFeature(taskTag.repository, taskTag.taskTagBlockId),
+    taskMenu.feature,
     panel.feature,
   ],
 });

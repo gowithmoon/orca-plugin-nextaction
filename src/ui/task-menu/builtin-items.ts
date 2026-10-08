@@ -5,7 +5,11 @@ import {
   CompletionHistoryUnreadableError,
 } from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
-import { taskStatuses } from "../../domain/task/task";
+import {
+  type TaskId,
+  type TaskStatus,
+  taskStatuses,
+} from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { statusLabel } from "../components/status-label";
 import { createNotify, type Notify, notifyFailure } from "../notify";
@@ -29,6 +33,34 @@ export function notifyMenuFailure(
   });
 }
 
+/**
+ * Changes the status and reports a failure; success says nothing (the icon
+ * changes). Never throws. Shared by the menu items and the plugin panel.
+ */
+export async function changeStatusReporting(
+  changeStatus: ChangeStatus,
+  notify: Notify,
+  id: TaskId,
+  status: TaskStatus,
+): Promise<void> {
+  try {
+    await changeStatus(id, status);
+  } catch (error) {
+    if (error instanceof CompletionHistoryUnreadableError) {
+      notify(
+        "error",
+        t(
+          "Could not mark the task done: its completion history cannot be read and is kept as it is.",
+        ),
+      );
+      return;
+    }
+    notifyMenuFailure(notify, error, (reason) =>
+      t("Could not change the status: ${reason}", { reason }),
+    );
+  }
+}
+
 export function registerBuiltinTaskMenuItems(
   items: TaskMenuItems,
   deps: { changeStatus: ChangeStatus; dropTask: DropTask; pluginName: string },
@@ -50,25 +82,8 @@ export function registerBuiltinTaskMenuItems(
       icon: statusIcons[status].className,
       // An empty or unknown status reads as inbox, as the icon shows it.
       isCurrent: (task) => task.status === status,
-      async run(task) {
-        try {
-          // Success says nothing: the icon changes.
-          await deps.changeStatus(task.id, status);
-        } catch (error) {
-          if (error instanceof CompletionHistoryUnreadableError) {
-            notify(
-              "error",
-              t(
-                "Could not mark the task done: its completion history cannot be read and is kept as it is.",
-              ),
-            );
-            return;
-          }
-          notifyMenuFailure(notify, error, (reason) =>
-            t("Could not change the status: ${reason}", { reason }),
-          );
-        }
-      },
+      run: (task) =>
+        changeStatusReporting(deps.changeStatus, notify, task.id, status),
     });
   });
 

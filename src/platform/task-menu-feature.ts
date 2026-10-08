@@ -4,7 +4,10 @@ import { createDropTask } from "../application/usecases/drop-task";
 import { createReadTask } from "../application/usecases/read-task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
-import { createTaskMenuItems } from "../ui/task-menu/menu-items";
+import {
+  createTaskMenuItems,
+  type TaskMenuItems,
+} from "../ui/task-menu/menu-items";
 import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
@@ -15,13 +18,16 @@ import { dayBoundaryFrom } from "./day-boundary";
 /**
  * Puts the task menu (#31) into Orca's own menus: the tag menu of the task
  * tag and the block handle's menu (official-task-menus). The status icon only
- * displays; nothing listens to Orca's mouse events.
+ * displays; nothing listens to Orca's mouse events. `items` is this load's
+ * registration, also rendered by the plugin panel's right-click menu (#39);
+ * `undefined` before the feature loads.
  */
 export function createTaskMenuFeature(
   repository: TaskRepository,
   taskTagBlockId: () => number | undefined,
-): FeatureModule {
-  return (context) => {
+): { feature: FeatureModule; items: () => TaskMenuItems | undefined } {
+  let current: TaskMenuItems | undefined;
+  const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
     const items = createTaskMenuItems();
     registerBuiltinTaskMenuItems(items, {
@@ -45,5 +51,8 @@ export function createTaskMenuFeature(
       "taskMenu.block",
       createTaskBlockMenuCommand(deps),
     );
+    // Each load replaces the previous load's registration.
+    current = items;
   };
+  return { feature, items: () => current };
 }
