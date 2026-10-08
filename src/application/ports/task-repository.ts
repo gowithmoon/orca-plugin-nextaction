@@ -33,11 +33,35 @@ export interface TaskFilter {
 }
 
 /**
+ * Task features are paused (the task tag is still starting, was refused or
+ * failed to set up), so the repository neither reads nor writes. Thrown by
+ * every method; `ui` tells the user why nothing happened.
+ */
+export class TaskFeaturesPausedError extends Error {
+  override name = "TaskFeaturesPausedError";
+}
+
+/**
+ * Why a block cannot be converted to a task (ADR 0013): it has neither a
+ * parent nor an alias (a journal block, or an orphan left behind when a
+ * referenced block was deleted), or it is the task tag block itself.
+ */
+export type NotConvertibleReason = "journal-or-orphan" | "task-tag";
+
+/** What converting a block to a task did. `id` is the (source) block's. */
+export type ConvertToTaskResult =
+  | { kind: "converted"; id: TaskId }
+  /** Nothing was written. */
+  | { kind: "already-task"; id: TaskId }
+  /** Nothing was written. */
+  | { kind: "not-convertible"; reason: NotConvertibleReason };
+
+/**
  * Where tasks are read from and written to. Implementations hide every Orca
  * detail: mirror blocks, orphans, note-facing names and error conversion.
  *
  * Step 2 built this port: reading (#20), querying (#21), writing properties
- * and plugin block properties (#22).
+ * and plugin block properties (#22). Step 3 adds converting (#27).
  */
 export interface TaskRepository {
   /**
@@ -77,4 +101,14 @@ export interface TaskRepository {
     key: string,
     data: Readonly<Record<string, unknown>>,
   ): Promise<void>;
+
+  /**
+   * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror
+   * block's ID converts its source block. In one undo, every plugin block
+   * property left on the block (e.g. by removing the task tag in Orca) is
+   * deleted, then the task tag is added without values, so every property
+   * takes its default. A task, or a block that cannot be converted, is left
+   * as it is. Fails, writing nothing, when the write fails.
+   */
+  convertToTask(id: number): Promise<ConvertToTaskResult>;
 }
