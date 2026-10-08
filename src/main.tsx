@@ -10,7 +10,7 @@ const plugin = createPlugin({
     // Before the task tag feature, so it hears the outcome of startup.
     createStatusIconFeature(taskTag.names),
     taskTag.feature,
-    createTaskMenuFeature(taskTag.repository, taskTag.names),
+    createTaskMenuFeature(taskTag.repository, taskTag.taskTagBlockId),
   ],
 });
 

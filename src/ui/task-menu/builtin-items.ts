@@ -51,6 +51,13 @@ export function registerBuiltinTaskMenuItems(
   deps: { changeStatus: ChangeStatus; dropTask: DropTask; pluginName: string },
 ): void {
   const notify = createNotify(deps.pluginName);
+  // Six statuses would crowd Orca's own menus: one entry naming the current
+  // status opens them.
+  items.registerSubmenu(taskMenuGroups.status, {
+    label: (task) =>
+      t("Status: ${status}", { status: statusLabel(task.status) }),
+    icon: (task) => statusIcons[task.status].className,
+  });
   taskStatuses.forEach((status, index) => {
     items.register({
       id: `status.${status}`,

@@ -1,25 +1,25 @@
 import type { TaskRepository } from "../application/ports/task-repository";
-import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createReadTask } from "../application/usecases/read-task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
 import { createTaskMenuItems } from "../ui/task-menu/menu-items";
-import { statusIconAt } from "../ui/task-menu/orca-dom";
-import { createTaskMenuController } from "../ui/task-menu/task-menu";
+import {
+  createTaskBlockMenuCommand,
+  createTaskTagMenuCommand,
+} from "../ui/task-menu/task-menu";
 import type { FeatureModule } from "./bootstrap";
 import { dayBoundaryFrom } from "./day-boundary";
 
 /**
- * Opens the task menu when a status icon is clicked (#31). Listens in the
- * capture phase so that a hit never reaches Orca: the cursor stays where it
- * was (status-icon-task-menu). Nothing is hit while task features are paused,
- * as no icons are drawn then.
+ * Puts the task menu (#31) into Orca's own menus: the tag menu of the task
+ * tag and the block handle's menu (official-task-menus). The status icon only
+ * displays; nothing listens to Orca's mouse events.
  */
 export function createTaskMenuFeature(
   repository: TaskRepository,
-  names: TaskTagNamesSource,
+  taskTagBlockId: () => number | undefined,
 ): FeatureModule {
   return (context) => {
     const { pluginName, registry } = context;
@@ -34,43 +34,16 @@ export function createTaskMenuFeature(
       pluginName,
     });
 
-    const root = registry.reactRoot("taskMenu", null);
-    const open = createTaskMenuController({
+    const deps = {
       items,
       readTask: createReadTask({ repository }),
       pluginName,
-      render: root.render,
-    });
-
-    const hitOf = (event: Event) => {
-      const tagName = names.current()?.tagName;
-      if (!tagName || !(event instanceof MouseEvent) || event.button !== 0) {
-        return undefined;
-      }
-      return statusIconAt(event, tagName);
+      taskTagBlockId,
     };
-    const swallow = (event: Event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    registry.listener(
-      document,
-      "mousedown",
-      (event) => {
-        if (hitOf(event)) swallow(event);
-      },
-      true,
-    );
-    registry.listener(
-      document,
-      "click",
-      (event) => {
-        const hit = hitOf(event);
-        if (!hit) return;
-        swallow(event);
-        void open(hit);
-      },
-      true,
+    registry.tagMenuCommand("taskMenu.tag", createTaskTagMenuCommand(deps));
+    registry.blockMenuCommand(
+      "taskMenu.block",
+      createTaskBlockMenuCommand(deps),
     );
   };
 }

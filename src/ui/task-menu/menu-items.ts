@@ -6,7 +6,7 @@ import type { Task } from "../../domain/task/task";
 export interface TaskMenuItem {
   /** Stable identifier, unique within the menu. */
   readonly id: string;
-  /** Items of one group sit together; groups are split by separators, lowest first. */
+  /** Items of one group sit together, lowest group first. */
   readonly group: number;
   /** Position within the group, lowest first. */
   readonly order: number;
@@ -23,15 +23,34 @@ export interface TaskMenuItem {
   readonly run: (task: Task) => Promise<void>;
 }
 
+/** Shows a group as one entry that opens its items, instead of the items themselves. */
+export interface TaskMenuSubmenu {
+  /** The entry's text, already translated (e.g. naming the current status). */
+  readonly label: (task: Task) => string;
+  /** A tabler icon class. */
+  readonly icon?: (task: Task) => string;
+}
+
+/** A non-empty group of the menu, in menu order. */
+export interface TaskMenuGroup {
+  readonly group: number;
+  /** Present when the group shows as a submenu. */
+  readonly submenu?: TaskMenuSubmenu;
+  readonly items: readonly TaskMenuItem[];
+}
+
 export interface TaskMenuItems {
   /** Adds an item. Throws when its identifier is already registered. */
   register(item: TaskMenuItem): void;
+  /** Shows `group` as a submenu. Throws when the group already has one. */
+  registerSubmenu(group: number, submenu: TaskMenuSubmenu): void;
   /** The items shown for `task`, as non-empty groups in menu order. */
-  arrange(task: Task): TaskMenuItem[][];
+  arrange(task: Task): TaskMenuGroup[];
 }
 
 export function createTaskMenuItems(): TaskMenuItems {
   const items: TaskMenuItem[] = [];
+  const submenus = new Map<number, TaskMenuSubmenu>();
   return {
     register(item) {
       if (items.some((existing) => existing.id === item.id)) {
@@ -39,18 +58,26 @@ export function createTaskMenuItems(): TaskMenuItems {
       }
       items.push(item);
     },
+    registerSubmenu(group, submenu) {
+      if (submenus.has(group)) {
+        throw new Error(`Task menu group ${group} already has a submenu`);
+      }
+      submenus.set(group, submenu);
+    },
     arrange(task) {
       const shown = items
         .filter((item) => item.isShownFor?.(task) ?? true)
         .sort((a, b) => a.group - b.group || a.order - b.order);
-      const groups: TaskMenuItem[][] = [];
-      let last: number | undefined;
+      const groups: { group: number; items: TaskMenuItem[] }[] = [];
       for (const item of shown) {
-        if (item.group !== last) groups.push([]);
-        groups.at(-1)?.push(item);
-        last = item.group;
+        const last = groups.at(-1);
+        if (last?.group === item.group) last.items.push(item);
+        else groups.push({ group: item.group, items: [item] });
       }
-      return groups;
+      return groups.map((entry) => {
+        const submenu = submenus.get(entry.group);
+        return submenu ? { ...entry, submenu } : entry;
+      });
     },
   };
 }
