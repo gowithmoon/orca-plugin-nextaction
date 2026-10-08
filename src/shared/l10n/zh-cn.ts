@@ -6,6 +6,9 @@ const zhCN: Record<string, string> = {
   "Task tag name": "任务标签名",
   "The Orca tag that marks a block as a task. Changing it renames the tag; existing tasks keep it.":
     "用来把块标记为任务的 Orca 标签。修改后会重命名这个标签，已有任务不受影响。",
+  "Day boundary": "日界线",
+  "A day starts at this time. Usually set in the early morning.":
+    "一天从这个时刻开始，一般设在凌晨。",
   'The task tag name cannot be empty. It was set back to "${name}".':
     "任务标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':
@@ -24,6 +27,7 @@ const zhCN: Record<string, string> = {
   "Read and write a test plugin block property (debug)":
     "读写测试用的插件块属性（调试）",
   "Query inbox tasks (debug)": "查询收集箱中的任务（调试）",
+  "Print the current logical day (debug)": "打印当前逻辑日（调试）",
 };
 
 export default zhCN;
