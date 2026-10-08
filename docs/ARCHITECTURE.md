@@ -65,9 +65,11 @@ src/
     hooks/                 React hooks（只调用 application）
     styles/                CSS
   platform/
-    bootstrap.ts           组合根：创建实现、注入用例、注册 UI
+    bootstrap.ts           组合根：创建实现、注入用例、注册 UI，各功能之间的装配都在这里
     registry.ts            注册表
     settings.ts            设置项的唯一定义处
+    panel-*.ts、note-navigation.ts
+                           面板导航胶水（orca.nav）：要用 ui 的面板参数类型，而 infra 不能依赖 ui，所以放在 platform；其中的日期仍经 infra 构造（见 §4 日记与日期）
   shared/
     l10n/                  t() 与翻译字典
 tests/
@@ -130,7 +132,7 @@ tests/
 
 日记与日期（`journal-capture`）：
 - `get-journal-block` 会在日记不存在时创建它，只在要写入日记时调用。
-- `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造，`domain` 只用年、月、日表示日期。
+- `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造（`infra/orca/journal-date.ts`），`domain` 只用年、月、日表示日期。
 - `time` 类型的设置只取本地的小时和分钟（`plugin-lifecycle-settings`）。
 - 开始日期、截止日期是 `date` 子类型（ADR 0012）：读取时只取本地年月日，写入时传本地零点。Orca 不会截掉代码写入的时刻（`date-subtype`）。
 
