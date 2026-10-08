@@ -34,6 +34,53 @@ export const componentCss = `
   padding: var(--orca-spacing-md);
 }
 
+.nextaction-task-card[data-clickable] {
+  cursor: pointer;
+}
+
+.nextaction-task-card[data-clickable]:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+/* The card's small icon buttons: the status icon and "open in notes". */
+.nextaction-task-card-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: transparent;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nextaction-task-card-button:hover {
+  background-color: var(--orca-color-bg-2);
+  color: var(--orca-color-text-1);
+}
+
+.nextaction-task-card-button:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-task-card-open {
+  /* One text line high, level with the first line of the text. */
+  height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
+  aspect-ratio: 1;
+  font-size: var(--orca-fontsize-md);
+}
+
+/* Only on hover or focus, unless the pointer cannot hover. */
+@media (hover: hover) {
+  .nextaction-task-card:not(:hover, :focus-within) .nextaction-task-card-open {
+    opacity: 0;
+  }
+}
+
 .nextaction-task-card-status {
   flex: 0 0 auto;
   display: flex;

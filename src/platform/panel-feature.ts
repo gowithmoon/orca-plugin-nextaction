@@ -1,36 +1,60 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createChangeStatus } from "../application/usecases/change-status";
 import { createReadInbox } from "../application/usecases/read-inbox";
 import { defaultDayBoundary, logicalDay } from "../domain/time/logical-day";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
+import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
+import { createNotify } from "../ui/notify";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
+import type { OpenInNotes } from "../ui/panel/open-in-notes";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import { componentCss } from "../ui/styles/component-style";
 import { panelCss } from "../ui/styles/panel-style";
+import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import type { FeatureModule } from "./bootstrap";
 import { dayBoundaryFrom } from "./day-boundary";
+import { createOpenInNotes } from "./open-in-notes";
 import { createPanelPlacement } from "./panel-placement";
 
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
- * style sheet, with the inbox view (#37). `views` is the navigation's
- * registration; later features append their views to it before this feature
- * loads.
+ * style sheet, with the inbox view (#37) and its card actions (#39). `views`
+ * is the navigation's registration; later features append their views to it
+ * before this feature loads. `taskActions` are the current load's status
+ * change and "open in notes", for anything else showing a task (e.g. the task
+ * panel).
  */
 export function createPanelFeature(
   repository: TaskRepository,
   /** The task change signal; focus and the refresh button give it at once. */
   changes: ChangeSignal,
+  /** The current load's task menu registrations, for a right-click on a card. */
+  menuItems: () => TaskMenuItems | undefined,
 ): {
   feature: FeatureModule;
   views: PanelViews;
+  taskActions: TaskActionsDeps;
 } {
-  // The settings of the current load; the view is created before any load.
+  // What the current load knows; the views are created before any load.
   let dayBoundary: DayBoundarySetting = {
     current: () => defaultDayBoundary,
+  };
+  let pluginName = "";
+  let openInNotes: OpenInNotes = () => {
+    throw new Error("the plugin is not loaded");
+  };
+  const taskActions: TaskActionsDeps = {
+    changeStatus: createChangeStatus({
+      repository,
+      clock: systemClock,
+      dayBoundary: { current: () => dayBoundary.current() },
+    }),
+    openInNotes: (blockId, from) => openInNotes(blockId, from),
+    notify: (type, message) => createNotify(pluginName)(type, message),
   };
   const views = createPanelViews();
   views.register(
@@ -38,6 +62,8 @@ export function createPanelFeature(
       readInbox: createReadInbox({ repository }),
       today: () => logicalDay(systemClock.now(), dayBoundary.current()),
       changes,
+      taskActions,
+      menuItems,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -50,7 +76,8 @@ export function createPanelFeature(
   });
 
   const feature: FeatureModule = (context) => {
-    const { pluginName, registry } = context;
+    const { registry } = context;
+    pluginName = context.pluginName;
     dayBoundary = dayBoundaryFrom(context);
     // Identifiers share one namespace across kinds: the style sheet must not
     // be named like the panel type.
@@ -58,6 +85,7 @@ export function createPanelFeature(
     registry.css("componentStyle", componentCss);
     const panelType = `${pluginName}.panel`;
     const placement = createPanelPlacement(panelType);
+    openInNotes = createOpenInNotes(panelType);
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).
     registry.panel("panel", panelRenderer, {
@@ -68,5 +96,5 @@ export function createPanelFeature(
       createPanelButton(placement.toggle, pluginName),
     );
   };
-  return { feature, views };
+  return { feature, views, taskActions };
 }
