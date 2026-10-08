@@ -115,6 +115,7 @@ tests/
 - 检查返回值是不是数组：出错时返回 `{ code: "SQLITE_ERROR" }`，不抛异常。
 - 不使用 `sort` 和 `page`，排序和分页在内存中做。
 - 单选属性"是几个值之一"用 OR 组表达；多选属性"不包含"用取反组表达。不要用 `op: 3` 传数组，也不要用 `op: 4`。
+- 状态为空或无法识别的任务读作收集箱，但任何查询条件都匹配不到它们（`op: 1` 漏掉，单选属性的 `op: 11` 一个都不命中）。要包含收集箱的结果，查询全部任务后在内存中按解码后的状态筛选（`inbox-anomalous-status`）。
 - 任务查询一律加上"有父块或有别名"的 OR 组 `{ kind: 101, conditions: [{ kind: 9, hasParent: true }, { kind: 9, hasAliases: true }] }`，排除日记块和被删除后残留的孤立块，保留页面任务（ADR 0013，`tag-operations`、`page-task`）。按 ID 读取使用同一条规则。
 
 读写任务数据（`tag-operations`、`block-properties-json`）：
