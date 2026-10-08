@@ -1,5 +1,4 @@
 import { createPlugin } from "./platform/bootstrap";
-import { createDayBoundaryFeature } from "./platform/day-boundary";
 import { createStatusIconFeature } from "./platform/status-icon-feature";
 import { createTaskMenuFeature } from "./platform/task-menu-feature";
 import { createTaskTagFeature } from "./platform/task-tag-feature";
@@ -12,7 +11,6 @@ const plugin = createPlugin({
     createStatusIconFeature(taskTag.names),
     taskTag.feature,
     createTaskMenuFeature(taskTag.repository, taskTag.names),
-    createDayBoundaryFeature(),
   ],
 });
 
