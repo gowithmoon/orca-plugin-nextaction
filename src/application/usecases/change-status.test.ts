@@ -5,17 +5,17 @@ import {
   createInMemoryTaskRepository,
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
-import { type TaskId, taskStatuses } from "../../domain/task/task";
+import { taskStatuses } from "../../domain/task/task";
 import {
   CompletionHistoryUnreadableError,
   createChangeStatus,
 } from "./change-status";
 
-/** What the task's `nextaction.completions` holds, without its version. */
-async function completionsOf(repository: InMemoryTaskRepository, id: TaskId) {
-  const read = await repository.readPluginBlockProperty(id, "completions");
-  return read.kind === "present" ? read.data : read;
-}
+/** The completion recorded at the clock of `deps`. */
+const nineOClockOct8 = {
+  at: new Date("2026-10-08T01:00:00.000Z"),
+  day: { year: 2026, month: 10, day: 8 },
+};
 
 const deps = (repository: InMemoryTaskRepository) => ({
   repository,
@@ -95,8 +95,14 @@ describe("change status: completion history", () => {
     await changeStatus(40, "done");
 
     expect((await repository.getTask(40))?.status).toBe("done");
-    expect(await completionsOf(repository, 40)).toEqual({
-      entries: [{ at: "2026-10-08T01:15:00.000Z", day: "2026-10-08" }],
+    expect(await repository.readCompletionHistory(40)).toEqual({
+      kind: "readable",
+      history: [
+        {
+          at: new Date("2026-10-08T01:15:00.000Z"),
+          day: { year: 2026, month: 10, day: 8 },
+        },
+      ],
     });
     // Status and history in one write, so one undo.
     expect(repository.writeCount()).toBe(1);
@@ -111,8 +117,9 @@ describe("change status: completion history", () => {
 
       await changeStatus(41, "done");
 
-      expect(await completionsOf(repository, 41)).toEqual({
-        entries: [{ at: "2026-10-08T01:00:00.000Z", day: "2026-10-08" }],
+      expect(await repository.readCompletionHistory(41)).toEqual({
+        kind: "readable",
+        history: [nineOClockOct8],
       });
     },
   );
@@ -128,28 +135,34 @@ describe("change status: completion history", () => {
 
     await changeStatus(42, "done");
 
-    expect(await completionsOf(repository, 42)).toEqual({
-      entries: [{ at: "2026-10-08T18:00:00.000Z", day: "2026-10-08" }],
+    expect(await repository.readCompletionHistory(42)).toEqual({
+      kind: "readable",
+      history: [
+        {
+          at: new Date("2026-10-08T18:00:00.000Z"),
+          day: { year: 2026, month: 10, day: 8 },
+        },
+      ],
     });
   });
 
   it("appends to the completions already recorded", async () => {
     const repository = createInMemoryTaskRepository();
-    const earlier = { at: "2026-10-01T01:00:00.000Z", day: "2026-10-01" };
+    const earlier = {
+      at: new Date("2026-10-01T01:00:00.000Z"),
+      day: { year: 2026, month: 10, day: 1 },
+    };
     repository.addTask(
       { id: 43, status: "todo" },
-      {
-        pluginProperties: {
-          completions: { kind: "present", data: { entries: [earlier] } },
-        },
-      },
+      { completionHistory: { kind: "readable", history: [earlier] } },
     );
     const changeStatus = createChangeStatus(deps(repository));
 
     await changeStatus(43, "done");
 
-    expect(await completionsOf(repository, 43)).toEqual({
-      entries: [earlier, { at: "2026-10-08T01:00:00.000Z", day: "2026-10-08" }],
+    expect(await repository.readCompletionHistory(43)).toEqual({
+      kind: "readable",
+      history: [earlier, nineOClockOct8],
     });
   });
 
@@ -161,8 +174,9 @@ describe("change status: completion history", () => {
 
     expect(await changeStatus(44, "done")).toEqual({ kind: "unchanged" });
 
-    expect(await completionsOf(repository, 44)).toEqual({
-      entries: [{ at: "2026-10-08T01:00:00.000Z", day: "2026-10-08" }],
+    expect(await repository.readCompletionHistory(44)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
     });
     expect(repository.writeCount()).toBe(1);
   });
@@ -176,56 +190,42 @@ describe("change status: completion history", () => {
     await changeStatus(45, "todo");
 
     expect((await repository.getTask(45))?.status).toBe("todo");
-    expect(await completionsOf(repository, 45)).toEqual({
-      entries: [{ at: "2026-10-08T01:00:00.000Z", day: "2026-10-08" }],
+    expect(await repository.readCompletionHistory(45)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
     });
   });
 
-  it.each([
-    [
-      "of an unknown version",
-      { kind: "unreadable", reason: "unknown version 2" } as const,
-    ],
-    [
-      "with damaged entries",
-      { kind: "present", data: { entries: [{ at: "yesterday" }] } } as const,
-    ],
-  ])(
-    "fails to set done, changing nothing, when the history is %s",
-    async (_, stored) => {
-      const repository = createInMemoryTaskRepository();
-      repository.addTask(
-        { id: 46, status: "doing" },
-        { pluginProperties: { completions: stored } },
-      );
-      const changeStatus = createChangeStatus(deps(repository));
+  it("fails to set done, changing nothing, when the history is unreadable", async () => {
+    const repository = createInMemoryTaskRepository();
+    const stored = { kind: "unreadable", reason: "unknown version 2" } as const;
+    repository.addTask(
+      { id: 46, status: "doing" },
+      { completionHistory: stored },
+    );
+    const changeStatus = createChangeStatus(deps(repository));
 
-      await expect(changeStatus(46, "done")).rejects.toBeInstanceOf(
-        CompletionHistoryUnreadableError,
-      );
+    await expect(changeStatus(46, "done")).rejects.toBeInstanceOf(
+      CompletionHistoryUnreadableError,
+    );
 
-      expect((await repository.getTask(46))?.status).toBe("doing");
-      expect(
-        await repository.readPluginBlockProperty(46, "completions"),
-      ).toEqual(stored);
-      expect(repository.writeCount()).toBe(0);
-    },
-  );
+    expect((await repository.getTask(46))?.status).toBe("doing");
+    expect(await repository.readCompletionHistory(46)).toEqual(stored);
+    expect(repository.writeCount()).toBe(0);
+  });
 
   it("still changes other statuses of a task whose history is unreadable", async () => {
     const repository = createInMemoryTaskRepository();
     const stored = { kind: "unreadable", reason: "unknown version 2" } as const;
     repository.addTask(
       { id: 47, status: "done" },
-      { pluginProperties: { completions: stored } },
+      { completionHistory: stored },
     );
     const changeStatus = createChangeStatus(deps(repository));
 
     await changeStatus(47, "todo");
 
     expect((await repository.getTask(47))?.status).toBe("todo");
-    expect(await repository.readPluginBlockProperty(47, "completions")).toEqual(
-      stored,
-    );
+    expect(await repository.readCompletionHistory(47)).toEqual(stored);
   });
 });

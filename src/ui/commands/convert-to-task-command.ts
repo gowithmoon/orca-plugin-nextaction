@@ -1,14 +1,11 @@
 // The "Convert to task" editor command: runs the use case on the block at the
 // cursor and tells the user what happened. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
-import {
-  type ConvertToTaskResult,
-  TaskFeaturesPausedError,
-} from "../../application/ports/task-repository";
+import type { ConvertToTaskResult } from "../../application/ports/task-repository";
 import type { ConvertToTask } from "../../application/usecases/convert-to-task";
 import type { EditorCommandFn } from "../../orca.d.ts";
-import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
+import { createNotify, notifyFailure } from "../notify";
 
 /** What to tell the user; success says nothing (the status icon shows it). */
 function noticeFor(
@@ -36,8 +33,7 @@ export function createConvertToTaskCommand(
   convertToTask: ConvertToTask,
   pluginName: string,
 ): EditorCommandFn {
-  const notify = (type: "info" | "warn" | "error", message: string) =>
-    orca.notify(type, message, { title: pluginName });
+  const notify = createNotify(pluginName);
 
   return async ([, , cursor]) => {
     const id = cursor?.anchor.blockId;
@@ -49,21 +45,13 @@ export function createConvertToTaskCommand(
       const notice = noticeFor(await convertToTask(id));
       if (notice) notify(notice.type, notice.message);
     } catch (error) {
-      if (error instanceof TaskFeaturesPausedError) {
-        notify(
-          "warn",
-          t(
-            "Task features are paused, so the block was not converted. See the plugin's earlier notice or its task tag setting.",
-          ),
-        );
-      } else {
-        notify(
-          "error",
-          t("Could not convert to a task: ${reason}", {
-            reason: describeError(error),
-          }),
-        );
-      }
+      notifyFailure(notify, error, {
+        paused: t(
+          "Task features are paused, so the block was not converted. See the plugin's earlier notice or its task tag setting.",
+        ),
+        failed: (reason) =>
+          t("Could not convert to a task: ${reason}", { reason }),
+      });
     }
     // The repository's invokeGroup is the undo unit; the command itself
     // leaves nothing for Orca to undo.

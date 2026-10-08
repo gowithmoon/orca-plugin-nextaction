@@ -23,9 +23,6 @@ export function createTaskMenuFeature(
 ): FeatureModule {
   return (context) => {
     const { pluginName, registry } = context;
-    const notify = (type: "info" | "warn" | "error", message: string) =>
-      orca.notify(type, message, { title: pluginName });
-
     const items = createTaskMenuItems();
     registerBuiltinTaskMenuItems(items, {
       changeStatus: createChangeStatus({
@@ -34,14 +31,14 @@ export function createTaskMenuFeature(
         dayBoundary: dayBoundaryFrom(context),
       }),
       dropTask: createDropTask({ repository }),
-      notify,
+      pluginName,
     });
 
     const root = registry.reactRoot("taskMenu", null);
     const open = createTaskMenuController({
       items,
       readTask: createReadTask({ repository }),
-      notify,
+      pluginName,
       render: root.render,
     });
 

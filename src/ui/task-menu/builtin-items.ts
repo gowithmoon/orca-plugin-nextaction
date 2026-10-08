@@ -1,15 +1,15 @@
 // The task menu items of step 3: the six statuses and drop (#31). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
-import { TaskFeaturesPausedError } from "../../application/ports/task-repository";
 import {
   type ChangeStatus,
   CompletionHistoryUnreadableError,
 } from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
 import { type TaskStatus, taskStatuses } from "../../domain/task/task";
-import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
+import { createNotify, type Notify, notifyFailure } from "../notify";
 import type { TaskMenuItems } from "./menu-items";
+import { statusIcons } from "./status-icons";
 
 /** Menu groups, lowest first. Gaps leave room for later steps (task panel, my day). */
 export const taskMenuGroups = { status: 10, drop: 100 } as const;
@@ -32,47 +32,32 @@ const statusLabel = (status: TaskStatus): string => {
   }
 };
 
-/** The same tabler icons as the status icons (status-icon-style). */
-const statusIcon: Record<TaskStatus, string> = {
-  inbox: "ti ti-inbox",
-  todo: "ti ti-circle",
-  doing: "ti ti-progress",
-  waiting: "ti ti-hourglass",
-  someday: "ti ti-cloud",
-  done: "ti ti-circle-check",
-};
-
-export type Notify = (type: "info" | "warn" | "error", message: string) => void;
-
-/** Tells the user why an action failed. */
-export function notifyFailure(
+/** Tells the user why a task menu action failed. */
+export function notifyMenuFailure(
   notify: Notify,
   error: unknown,
   failed: (reason: string) => string,
 ): void {
-  if (error instanceof TaskFeaturesPausedError) {
-    notify(
-      "warn",
-      t(
-        "Task features are paused. See the plugin's earlier notice or its task tag setting.",
-      ),
-    );
-  } else {
-    notify("error", failed(describeError(error)));
-  }
+  notifyFailure(notify, error, {
+    paused: t(
+      "Task features are paused. See the plugin's earlier notice or its task tag setting.",
+    ),
+    failed,
+  });
 }
 
 export function registerBuiltinTaskMenuItems(
   items: TaskMenuItems,
-  deps: { changeStatus: ChangeStatus; dropTask: DropTask; notify: Notify },
+  deps: { changeStatus: ChangeStatus; dropTask: DropTask; pluginName: string },
 ): void {
+  const notify = createNotify(deps.pluginName);
   taskStatuses.forEach((status, index) => {
     items.register({
       id: `status.${status}`,
       group: taskMenuGroups.status,
       order: index,
       label: () => statusLabel(status),
-      icon: statusIcon[status],
+      icon: statusIcons[status].className,
       // An empty or unknown status reads as inbox, as the icon shows it.
       isCurrent: (task) => task.status === status,
       async run(task) {
@@ -81,7 +66,7 @@ export function registerBuiltinTaskMenuItems(
           await deps.changeStatus(task.id, status);
         } catch (error) {
           if (error instanceof CompletionHistoryUnreadableError) {
-            deps.notify(
+            notify(
               "error",
               t(
                 "Could not mark the task done: its completion history cannot be read and is kept as it is.",
@@ -89,7 +74,7 @@ export function registerBuiltinTaskMenuItems(
             );
             return;
           }
-          notifyFailure(deps.notify, error, (reason) =>
+          notifyMenuFailure(notify, error, (reason) =>
             t("Could not change the status: ${reason}", { reason }),
           );
         }
@@ -108,9 +93,9 @@ export function registerBuiltinTaskMenuItems(
     async run(task) {
       try {
         await deps.dropTask(task.id);
-        deps.notify("info", t("Task dropped"));
+        notify("info", t("Task dropped"));
       } catch (error) {
-        notifyFailure(deps.notify, error, (reason) =>
+        notifyMenuFailure(notify, error, (reason) =>
           t("Could not drop the task: ${reason}", { reason }),
         );
       }

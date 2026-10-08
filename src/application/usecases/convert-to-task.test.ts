@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import { createConvertToTask } from "./convert-to-task";
 
+const completion = {
+  at: new Date("2026-10-01T01:00:00.000Z"),
+  day: { year: 2026, month: 10, day: 1 },
+};
+
 describe("convert to task", () => {
   it("converts a block into an inbox task with default values", async () => {
     const repository = createInMemoryTaskRepository();
@@ -28,11 +33,7 @@ describe("convert to task", () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask(
       { id: 11, status: "done", importance: 6 },
-      {
-        pluginProperties: {
-          completions: { kind: "present", data: { entries: [] } },
-        },
-      },
+      { completionHistory: { kind: "readable", history: [completion] } },
     );
     const convertToTask = createConvertToTask({ repository });
     const before = await repository.getTask(11);
@@ -40,9 +41,10 @@ describe("convert to task", () => {
     expect(await convertToTask(11)).toEqual({ kind: "already-task", id: 11 });
     expect(repository.writeCount()).toBe(0);
     expect(await repository.getTask(11)).toEqual(before);
-    expect(await repository.readPluginBlockProperty(11, "completions")).toEqual(
-      { kind: "present", data: { entries: [] } },
-    );
+    expect(await repository.readCompletionHistory(11)).toEqual({
+      kind: "readable",
+      history: [completion],
+    });
   });
 
   it("refuses a block that cannot be converted, giving the reason", async () => {
@@ -67,29 +69,28 @@ describe("convert to task", () => {
     const repository = createInMemoryTaskRepository();
     // The task tag was removed in Orca; the completion history stayed.
     repository.addBlock(14, {
-      pluginProperties: {
-        completions: { kind: "present", data: { entries: [{ at: "x" }] } },
-        damaged: { kind: "unreadable", reason: "unknown version 9" },
-      },
+      completionHistory: { kind: "readable", history: [completion] },
+    });
+    repository.addBlock(16, {
+      completionHistory: { kind: "unreadable", reason: "unknown version 9" },
     });
     const convertToTask = createConvertToTask({ repository });
 
     await convertToTask(14);
+    await convertToTask(16);
 
-    expect(await repository.readPluginBlockProperty(14, "completions")).toEqual(
-      { kind: "absent" },
-    );
-    expect(await repository.readPluginBlockProperty(14, "damaged")).toEqual({
-      kind: "absent",
-    });
+    for (const id of [14, 16]) {
+      expect(await repository.readCompletionHistory(id)).toEqual({
+        kind: "readable",
+        history: [],
+      });
+    }
   });
 
   it("throws when the write fails, leaving the block as it was", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addBlock(15, {
-      pluginProperties: {
-        completions: { kind: "present", data: { entries: [] } },
-      },
+      completionHistory: { kind: "readable", history: [completion] },
     });
     const failure = new Error("Orca is gone");
     repository.failWrites(failure);

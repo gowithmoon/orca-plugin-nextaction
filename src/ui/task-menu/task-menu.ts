@@ -5,7 +5,8 @@ import { createElement, type ReactNode, useRef } from "react";
 import type { ReadTask } from "../../application/usecases/read-task";
 import type { Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { type Notify, notifyFailure } from "./builtin-items";
+import { createNotify } from "../notify";
+import { notifyMenuFailure } from "./builtin-items";
 import type { TaskMenuItem, TaskMenuItems } from "./menu-items";
 import type { StatusIconHit } from "./orca-dom";
 
@@ -71,10 +72,12 @@ export type OpenTaskMenu = (hit: StatusIconHit) => Promise<void>;
 export function createTaskMenuController(deps: {
   items: TaskMenuItems;
   readTask: ReadTask;
-  notify: Notify;
+  /** Titles the notices. */
+  pluginName: string;
   /** Renders into the menu's own root; `null` empties it. */
   render: (node: ReactNode) => void;
 }): OpenTaskMenu {
+  const notify = createNotify(deps.pluginName);
   // Every open bumps it, so a slow read never shows a stale menu.
   let generation = 0;
 
@@ -85,7 +88,7 @@ export function createTaskMenuController(deps: {
       // The block ID may be a mirror's; the task read is the source's.
       task = await deps.readTask(hit.blockId);
     } catch (error) {
-      notifyFailure(deps.notify, error, (reason) =>
+      notifyMenuFailure(notify, error, (reason) =>
         t("Could not open the task menu: ${reason}", { reason }),
       );
       return;

@@ -1,20 +1,16 @@
+import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
 
 /**
- * What a plugin block property of a task holds. `unreadable`: something is
- * stored, but not in a format this plugin reads (a newer version wrote it, or
- * it is damaged); it is kept as it is and cannot be written.
+ * What a task's completion history (GLOSSARY: 完成历史) reads as. A task
+ * without one reads as an empty history. `unreadable`: something is stored
+ * that this plugin cannot read (an unknown version, or damaged); it is kept
+ * as it is and cannot be written.
  */
-export type PluginBlockPropertyRead =
-  | { kind: "present"; data: Readonly<Record<string, unknown>> }
-  | { kind: "absent" }
+export type CompletionHistoryRead =
+  | { kind: "readable"; history: CompletionHistory }
   | { kind: "unreadable"; reason: string };
-
-/** Plugin block properties to replace: data by key, without the version. */
-export type PluginBlockPropertyWrites = Readonly<
-  Record<string, Readonly<Record<string, unknown>>>
->;
 
 /** Values a multi-value property (contexts, labels) must or must not hold. */
 export interface ValuesFilter {
@@ -66,7 +62,8 @@ export type ConvertToTaskResult =
  * detail: mirror blocks, orphans, note-facing names and error conversion.
  *
  * Step 2 built this port: reading (#20), querying (#21), writing properties
- * and plugin block properties (#22). Step 3 adds converting (#27).
+ * and plugin block properties (#22). Step 3 adds converting (#27), dropping
+ * (#31), quick capture and the completion history (#32).
  */
 export interface TaskRepository {
   /**
@@ -81,38 +78,23 @@ export interface TaskRepository {
 
   /**
    * Writes the properties present in `changes` and leaves the others as they
-   * are; with `pluginBlockProperties`, also replaces each of those plugin
-   * block properties (by key) with its data. The user undoes the whole write
-   * with one undo. Fails, writing nothing, when the block is not a task, a
-   * property is invalidated, or one of those plugin block properties holds a
-   * value this plugin cannot read. A mirror block's ID writes to its source
-   * block.
+   * are; with `completionHistory`, also replaces the task's completion
+   * history with it. The user undoes the whole write with one undo. Fails,
+   * writing nothing, when the block is not a task, a property is
+   * invalidated, or the completion history is to be replaced but reads as
+   * unreadable. A mirror block's ID writes to its source block.
    */
   updateTask(
     id: TaskId,
     changes: TaskChanges,
-    pluginBlockProperties?: PluginBlockPropertyWrites,
+    completionHistory?: CompletionHistory,
   ): Promise<void>;
 
   /**
-   * The plugin block property `key` of a task. A block that is not a task
-   * reads as `absent`, even if it still holds such a property.
+   * The completion history of a task. A block that is not a task reads as an
+   * empty history, even if it still holds one.
    */
-  readPluginBlockProperty(
-    id: TaskId,
-    key: string,
-  ): Promise<PluginBlockPropertyRead>;
-
-  /**
-   * Replaces the plugin block property `key` of a task with `data`. Fails,
-   * writing nothing, when the block is not a task or the property holds a
-   * value this plugin cannot read.
-   */
-  writePluginBlockProperty(
-    id: TaskId,
-    key: string,
-    data: Readonly<Record<string, unknown>>,
-  ): Promise<void>;
+  readCompletionHistory(id: TaskId): Promise<CompletionHistoryRead>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

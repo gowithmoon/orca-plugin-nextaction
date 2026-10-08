@@ -59,12 +59,21 @@ export function createTaskTagFeature(): {
    * `starting`), its outcome (alignment, invalidated properties, refusal,
    * failure) and renames.
    */
-  const stateChanged = () => {
+  const stateChanged = (pluginName: string) => {
     for (const listener of [...listeners]) {
       try {
         listener();
       } catch (error) {
+        // Kept for the stack; the notice tells the user.
         console.error("[nextaction] task tag state listener failed", error);
+        orca.notify(
+          "error",
+          t(
+            "A feature could not follow the change of the task tag: ${reason}",
+            { reason: describeError(error) },
+          ),
+          { title: pluginName },
+        );
       }
     }
   };
@@ -84,7 +93,7 @@ export function createTaskTagFeature(): {
     uiLanguage: NoteLanguage,
   ) => {
     state = { kind: "paused", reason: "starting" };
-    stateChanged();
+    stateChanged(pluginName);
     const setting = settings()[settingKey];
     const cache = await readTaskTagCache(pluginName);
     let tagName = resolveTagName(setting, uiLanguage, cache);
@@ -97,11 +106,11 @@ export function createTaskTagFeature(): {
         cache,
       );
       state = outcome.state;
-      stateChanged();
+      stateChanged(pluginName);
       reverted = outcome.reverted;
     } catch (error) {
       state = { kind: "paused", reason: "failed" };
-      stateChanged();
+      stateChanged(pluginName);
       orca.notify(
         "error",
         t('Could not set up the task tag "${name}": ${reason}', {
@@ -208,7 +217,7 @@ export function createTaskTagFeature(): {
         // Repositories read `state()` on every call, so they see it at once.
         if (state.kind === "ready" && state.tagBlockId === current.tagBlockId) {
           state = { ...state, tagName: plan.to };
-          stateChanged();
+          stateChanged(pluginName);
         }
         return;
       case "revert":

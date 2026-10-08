@@ -17,6 +17,8 @@ const zhCN: Record<string, string> = {
     "无法重命名任务标签“${name}”：${reason}",
   'Could not set up the task tag "${name}": ${reason}':
     "无法设置任务标签“${name}”：${reason}",
+  "A feature could not follow the change of the task tag: ${reason}":
+    "有功能未能跟上任务标签的变化：${reason}",
   'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Task features are paused. Choose another task tag name in the plugin settings.':
     "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。任务功能已暂停，请在插件设置中换一个任务标签名。",
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':

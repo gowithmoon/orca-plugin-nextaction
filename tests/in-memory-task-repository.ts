@@ -1,13 +1,13 @@
 // A TaskRepository in memory, for use case tests (docs/ARCHITECTURE.md §5).
 // It keeps the port's semantics: a block that is not a task reads as `null`
-// and its plugin block properties as `absent`; a write that fails changes
+// and its completion history as empty; a write that fails changes
 // nothing. Orca details (mirrors, orphans, note-facing names) are covered by
 // the codec tests and not modelled here: a block that cannot be converted is
 // simply marked so.
 import type {
+  CompletionHistoryRead,
   ConvertToTaskResult,
   NotConvertibleReason,
-  PluginBlockPropertyRead,
   TaskFilter,
   TaskRepository,
   ValuesFilter,
@@ -15,24 +15,24 @@ import type {
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
 
-/** Plugin block properties by key (without the `nextaction.` prefix). */
-type PluginProperties = Record<string, PluginBlockPropertyRead>;
-
 interface StoredBlock {
   text: string;
   parentId: number | undefined;
   notConvertible: NotConvertibleReason | undefined;
   /** Present while the block carries the task tag. */
   task: Task | undefined;
-  /** Kept when the task tag goes, as Orca does (block-properties-json J4). */
-  pluginProperties: Map<string, PluginBlockPropertyRead>;
+  /**
+   * The stored completion history, `undefined` when none is. Kept when the
+   * task tag goes, as Orca does (block-properties-json J4).
+   */
+  completionHistory: CompletionHistoryRead | undefined;
 }
 
 export interface BlockSetup {
   text?: string;
   parentId?: number;
   notConvertible?: NotConvertibleReason;
-  pluginProperties?: PluginProperties;
+  completionHistory?: CompletionHistoryRead;
 }
 
 export interface InMemoryTaskRepository extends TaskRepository {
@@ -103,12 +103,12 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     return block as StoredBlock & { task: Task };
   };
 
-  /** A plugin block property this plugin cannot read is never overwritten. */
-  const refuseUnreadable = (block: StoredBlock, id: TaskId, key: string) => {
-    const current = block.pluginProperties.get(key);
+  /** A completion history this plugin cannot read is never overwritten. */
+  const refuseUnreadable = (block: StoredBlock, id: TaskId) => {
+    const current = block.completionHistory;
     if (current?.kind === "unreadable") {
       throw new Error(
-        `plugin block property "${key}" of block ${id} holds a value this plugin cannot read (${current.reason})`,
+        `the completion history of block ${id} holds a value this plugin cannot read (${current.reason})`,
       );
     }
   };
@@ -138,7 +138,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         parentId: setup.parentId,
         notConvertible: setup.notConvertible,
         task: undefined,
-        pluginProperties: new Map(Object.entries(setup.pluginProperties ?? {})),
+        completionHistory: setup.completionHistory,
       });
     },
 
@@ -149,7 +149,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         parentId: setup.parentId,
         notConvertible: undefined,
         task: full,
-        pluginProperties: new Map(Object.entries(setup.pluginProperties ?? {})),
+        completionHistory: setup.completionHistory,
       });
     },
 
@@ -184,33 +184,25 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return tasks;
     },
 
-    async updateTask(id, changes: TaskChanges, pluginBlockProperties = {}) {
+    async updateTask(id, changes: TaskChanges, completionHistory) {
       const block = taskToWrite(id);
-      const entries = Object.entries(pluginBlockProperties);
-      for (const [key] of entries) refuseUnreadable(block, id, key);
+      if (completionHistory) refuseUnreadable(block, id);
       write(() => {
         block.task = { ...block.task, ...changes };
-        for (const [key, data] of entries) {
-          block.pluginProperties.set(key, {
-            kind: "present",
-            data: { ...data },
-          });
+        if (completionHistory) {
+          block.completionHistory = {
+            kind: "readable",
+            history: [...completionHistory],
+          };
         }
       });
     },
 
-    async readPluginBlockProperty(id, key) {
+    async readCompletionHistory(id) {
       const block = blocks.get(id);
-      if (!block?.task) return { kind: "absent" };
-      return block.pluginProperties.get(key) ?? { kind: "absent" };
-    },
-
-    async writePluginBlockProperty(id, key, data) {
-      const block = taskToWrite(id);
-      refuseUnreadable(block, id, key);
-      write(() => {
-        block.pluginProperties.set(key, { kind: "present", data: { ...data } });
-      });
+      const empty: CompletionHistoryRead = { kind: "readable", history: [] };
+      if (!block?.task) return empty;
+      return block.completionHistory ?? empty;
     },
 
     async convertToTask(id): Promise<ConvertToTaskResult> {
@@ -221,7 +213,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       }
       if (block.task) return { kind: "already-task", id };
       write(() => {
-        block.pluginProperties.clear();
+        block.completionHistory = undefined;
         block.task = freshTask(id, block.text);
       });
       return { kind: "converted", id };
@@ -230,7 +222,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     async dropTask(id) {
       const block: StoredBlock = taskToWrite(id);
       write(() => {
-        block.pluginProperties.clear();
+        block.completionHistory = undefined;
         block.task = undefined;
       });
     },
@@ -249,7 +241,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           parentId: undefined,
           notConvertible: undefined,
           task: freshTask(id, text),
-          pluginProperties: new Map(),
+          completionHistory: undefined,
         });
       });
       return id;
