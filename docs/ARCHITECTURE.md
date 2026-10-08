@@ -115,7 +115,7 @@ tests/
 - 检查返回值是不是数组：出错时返回 `{ code: "SQLITE_ERROR" }`，不抛异常。
 - 不使用 `sort` 和 `page`，排序和分页在内存中做。
 - 单选属性"是几个值之一"用 OR 组表达；多选属性"不包含"用取反组表达。不要用 `op: 3` 传数组，也不要用 `op: 4`。
-- 任务查询一律加上 `{ kind: 9, hasParent: true }`，排除被删除后残留的孤立块（`tag-operations`）。
+- 任务查询一律加上"有父块或有别名"的 OR 组 `{ kind: 101, conditions: [{ kind: 9, hasParent: true }, { kind: 9, hasAliases: true }] }`，排除日记块和被删除后残留的孤立块，保留页面任务（ADR 0013，`tag-operations`、`page-task`）。按 ID 读取使用同一条规则。
 
 读写任务数据（`tag-operations`、`block-properties-json`）：
 - 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；日期是 ISO 字符串。
@@ -142,7 +142,7 @@ tests/
 - `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。
 
 界面注入（`status-icon-task-menu`）：
-- 依赖 Orca 内部 DOM 结构的选择器和命中判断，全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配。
+- 依赖 Orca 内部 DOM 结构的选择器和命中判断，全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
 
 ### 注册与清理
 
