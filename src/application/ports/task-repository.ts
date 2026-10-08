@@ -25,7 +25,11 @@ export interface ValuesFilter {
  * filter matches every task.
  */
 export interface TaskFilter {
-  /** The task is in one of these statuses. */
+  /**
+   * The task is in one of these statuses. A task whose status is empty or
+   * unknown in the notes reads as inbox, but matches no status filter, not
+   * even inbox (inbox-anomalous-status): filter the decoded status instead.
+   */
   statuses?: readonly [TaskStatus, ...TaskStatus[]];
   contexts?: ValuesFilter;
   labels?: ValuesFilter;

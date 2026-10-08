@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import fixtures from "../../../../tests/fixtures/task-blocks.json";
+import { blocks, tagBlocks } from "../../../../tests/task-block-fixtures";
 import type { TaskTagContext } from "./task-codec";
 import { planConversion } from "./task-conversion";
 
-const { blocks, tagBlocks } = fixtures;
 const zhTag: TaskTagContext = { tagBlockId: tagBlocks.zh.id, invalidated: [] };
 
 /** A root-level journal block: no parent, no alias (page-task P1). */

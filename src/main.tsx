@@ -6,7 +6,7 @@ import { createTaskTagFeature } from "./platform/task-tag-feature";
 
 // Feature modules are wired in here; later roadmap steps add more.
 const taskTag = createTaskTagFeature();
-const panel = createPanelFeature();
+const panel = createPanelFeature(taskTag.repository);
 const plugin = createPlugin({
   features: [
     // Before the task tag feature, so it hears the outcome of startup.
