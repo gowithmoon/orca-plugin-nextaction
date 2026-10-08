@@ -12,6 +12,7 @@ import {
 } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { statusLabel } from "../components/status-label";
+import { markedStatus } from "../components/status-menu";
 import { createNotify, type Notify, notifyFailure } from "../notify";
 import type { TaskMenuItems } from "./menu-items";
 import { statusIcons } from "./status-icons";
@@ -80,8 +81,8 @@ export function registerBuiltinTaskMenuItems(
       order: index,
       label: () => statusLabel(status),
       icon: statusIcons[status].className,
-      // An empty or unknown status reads as inbox, as the icon shows it.
-      isCurrent: (task) => task.status === status,
+      // An empty or unknown status marks none, so choosing inbox repairs it.
+      isCurrent: (task) => markedStatus(task) === status,
       run: (task) =>
         changeStatusReporting(deps.changeStatus, notify, task.id, status),
     });

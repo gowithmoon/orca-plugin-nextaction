@@ -19,6 +19,7 @@ import {
   importanceName,
 } from "../components/format";
 import { StatusIcon } from "../components/status-icon";
+import { markedStatus } from "../components/status-menu";
 import { useCandidates } from "../hooks/use-candidates";
 import { useLiveTask } from "../hooks/use-live-task";
 import {
@@ -132,7 +133,7 @@ function Fields(props: {
       <Field label={t("Status")} labelId={id("status")}>
         <StatusField
           labelId={id("status")}
-          status={task.status}
+          status={markedStatus(task)}
           onChange={(status) => void actions.changeStatus(status)}
         />
       </Field>

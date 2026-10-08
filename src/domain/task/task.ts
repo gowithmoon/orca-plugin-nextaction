@@ -78,6 +78,14 @@ export interface TaskInNotes {
 
 const defaultRating: Rating = 4;
 
+/**
+ * The notes hold an empty or unknown status for the task: it reads as inbox,
+ * but no status of the plugin is stored yet.
+ */
+export function hasStatusAnomaly(task: Pick<Task, "anomalies">): boolean {
+  return task.anomalies.some((anomaly) => anomaly.property === "status");
+}
+
 function isRating(value: number | null): value is Rating {
   return value !== null && Number.isInteger(value) && value >= 1 && value <= 7;
 }

@@ -230,6 +230,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           }
         }
         block.task = { ...block.task, ...changes };
+        // A status written is one of the plugin's: it reads back without the
+        // anomaly an empty or unknown one had, as decoding does.
+        if (changes.status !== undefined) {
+          block.task = {
+            ...block.task,
+            anomalies: block.task.anomalies.filter(
+              (anomaly) => anomaly.property !== "status",
+            ),
+          };
+        }
         if (completionHistory) {
           block.completionHistory = {
             kind: "readable",

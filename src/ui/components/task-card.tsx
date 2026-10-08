@@ -11,7 +11,7 @@ import type { TaskMenuItems, TaskMenuPlace } from "../task-menu/menu-items";
 import { TaskMenu } from "../task-menu/task-menu";
 import { PropertyRow } from "./property-row";
 import { StatusIcon } from "./status-icon";
-import { StatusMenu } from "./status-menu";
+import { markedStatus, StatusMenu } from "./status-menu";
 
 export interface TaskCardProps {
   task: Task;
@@ -46,7 +46,7 @@ function StatusButton(props: { task: Task; actions: TaskActions }) {
     <ContextMenu
       menu={(close) => (
         <StatusMenu
-          current={task.status}
+          current={markedStatus(task)}
           onChoose={(status) => actions.changeStatus(task, status)}
           close={close}
         />

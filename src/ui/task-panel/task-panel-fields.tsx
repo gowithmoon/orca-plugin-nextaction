@@ -30,10 +30,13 @@ export function Field(props: {
   );
 }
 
-/** Six buttons in the status colours; the current one stands out. */
+/**
+ * Six buttons in the status colours; the current one stands out. None does
+ * while the notes hold an empty or unknown status (`markedStatus`).
+ */
 export function StatusField(props: {
   labelId: string;
-  status: TaskStatus;
+  status: TaskStatus | undefined;
   onChange: (status: TaskStatus) => void;
 }) {
   return (
