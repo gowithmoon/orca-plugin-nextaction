@@ -6,11 +6,6 @@ import {
 } from "../../domain/task/completion-history";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
-import {
-  completionHistoryKey,
-  decodeCompletionHistory,
-  encodeCompletionHistory,
-} from "../codecs/completion-history-codec";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
@@ -55,9 +50,7 @@ export function createChangeStatus(deps: {
       await deps.repository.updateTask(id, { status });
       return { kind: "changed" };
     }
-    const read = decodeCompletionHistory(
-      await deps.repository.readPluginBlockProperty(id, completionHistoryKey),
-    );
+    const read = await deps.repository.readCompletionHistory(id);
     if (read.kind === "unreadable") {
       throw new CompletionHistoryUnreadableError(
         `the completion history of task ${id} cannot be read (${read.reason})`,
@@ -73,11 +66,7 @@ export function createChangeStatus(deps: {
         day: logicalDay(now, deps.dayBoundary.current()),
       },
     );
-    await deps.repository.updateTask(
-      id,
-      { status },
-      { [completionHistoryKey]: encodeCompletionHistory(history) },
-    );
+    await deps.repository.updateTask(id, { status }, history);
     return { kind: "changed" };
   };
 }
