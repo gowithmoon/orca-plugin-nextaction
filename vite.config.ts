@@ -3,12 +3,16 @@ import externalGlobals from "rollup-plugin-external-globals";
 import { defineConfig } from "vite";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command }) => {
+// `vite build` is the production build. `vite build --mode development`
+// (pnpm build:dev) is a development build that Orca can load: it keeps
+// development-only code such as debug commands (`import.meta.env.DEV`).
+export default defineConfig(({ command, mode }) => {
+  const production = command === "build" && mode !== "development";
   return {
     define: {
       "process.env": "{}",
       "process.env.NODE_ENV": JSON.stringify(
-        command === "build" ? "production" : "development",
+        production ? "production" : "development",
       ),
     },
     build: {
