@@ -9,14 +9,24 @@ import { createTaskTagFeature } from "./platform/task-tag-feature";
 // Feature modules are wired in here; later roadmap steps add more.
 const taskChanges = createTaskChangesFeature();
 const taskTag = createTaskTagFeature(() => taskChanges.changes.changed());
-const taskPanel = createTaskPanelFeature(
+// The task panel needs the plugin panel's task actions, and the menus and the
+// cards open the task panel: they reach it through this function.
+const openTaskPanel = (taskId: number) => taskPanel.open(taskId);
+const taskMenu = createTaskMenuFeature(
   taskTag.repository,
-  taskChanges.changes,
+  taskTag.taskTagBlockId,
+  openTaskPanel,
 );
 const panel = createPanelFeature(
   taskTag.repository,
   taskChanges.changes,
-  taskPanel.open,
+  taskMenu.items,
+  openTaskPanel,
+);
+const taskPanel = createTaskPanelFeature(
+  taskTag.repository,
+  taskChanges.changes,
+  panel.taskActions,
 );
 const plugin = createPlugin({
   features: [
@@ -29,11 +39,7 @@ const plugin = createPlugin({
     // Before the menus and the plugin panel that open it, so its root is
     // released after them.
     taskPanel.feature,
-    createTaskMenuFeature(
-      taskTag.repository,
-      taskTag.taskTagBlockId,
-      taskPanel.open,
-    ),
+    taskMenu.feature,
     panel.feature,
   ],
 });

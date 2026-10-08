@@ -1,54 +1,54 @@
 // The task panel's writes (#35 "任务属性面板"): every change is its own use
-// case call, so one write is one undo. Failures are told to the user here.
-// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// case call, so one write is one undo. Failures are told to the user with the
+// same notices as the task menu. Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import {
-  type ChangeStatus,
-  CompletionHistoryUnreadableError,
-} from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { createNotify } from "../notify";
-// The same notices as the task menu, including the paused one.
-import { notifyMenuFailure } from "../task-menu/builtin-items";
+import {
+  changeStatusReporting,
+  notifyMenuFailure,
+} from "../task-menu/builtin-items";
+import type { TaskActionsDeps } from "./use-task-actions";
 
-export interface TaskPanelUseCases {
+export interface TaskPanelWrites {
   editTask: EditTask;
-  changeStatus: ChangeStatus;
   dropTask: DropTask;
+  /** The plugin panel's status change and notices (#39). */
+  actions: TaskActionsDeps;
 }
 
 /**
- * Writes for task `id`. Each resolves to whether the write succeeded; after
- * a failure the user was told why and `onFailed` is called (the panel reads
- * the task again, to show what the notes really hold).
+ * Writes for task `id`. `edit` and `drop` resolve to whether the write
+ * succeeded; after a failure the user was told why and `onFailed` is called
+ * (the panel reads the task again, to show what the notes really hold).
+ * `changeStatus` reports its own failures and never throws.
  */
 export function useTaskPanelActions(
-  useCases: TaskPanelUseCases,
+  writes: TaskPanelWrites,
   id: TaskId,
-  pluginName: string,
   onFailed: () => void,
 ): {
   edit(edits: TaskEdits): Promise<boolean>;
-  changeStatus(status: TaskStatus): Promise<boolean>;
+  changeStatus(status: TaskStatus): Promise<void>;
   drop(): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
 
   return React.useMemo(() => {
-    const notify = createNotify(pluginName);
+    const { notify } = writes.actions;
     const run = async (
       write: () => Promise<unknown>,
-      report: (error: unknown) => void,
+      reason: (reason: string) => string,
     ) => {
       try {
         await write();
         return true;
       } catch (error) {
-        report(error);
+        notifyMenuFailure(notify, error, reason);
         failed.current();
         return false;
       }
@@ -56,41 +56,19 @@ export function useTaskPanelActions(
     return {
       edit: (edits) =>
         run(
-          () => useCases.editTask(id, edits),
-          (error) =>
-            notifyMenuFailure(notify, error, (reason) =>
-              t("Could not save the change: ${reason}", { reason }),
-            ),
+          () => writes.editTask(id, edits),
+          (reason) => t("Could not save the change: ${reason}", { reason }),
         ),
       changeStatus: (status) =>
-        run(
-          () => useCases.changeStatus(id, status),
-          (error) => {
-            if (error instanceof CompletionHistoryUnreadableError) {
-              notify(
-                "error",
-                t(
-                  "Could not mark the task done: its completion history cannot be read and is kept as it is.",
-                ),
-              );
-              return;
-            }
-            notifyMenuFailure(notify, error, (reason) =>
-              t("Could not change the status: ${reason}", { reason }),
-            );
-          },
-        ),
+        changeStatusReporting(writes.actions.changeStatus, notify, id, status),
       async drop() {
         const dropped = await run(
-          () => useCases.dropTask(id),
-          (error) =>
-            notifyMenuFailure(notify, error, (reason) =>
-              t("Could not drop the task: ${reason}", { reason }),
-            ),
+          () => writes.dropTask(id),
+          (reason) => t("Could not drop the task: ${reason}", { reason }),
         );
         if (dropped) notify("info", t("Task dropped"));
         return dropped;
       },
     };
-  }, [useCases, id, pluginName]);
+  }, [writes, id]);
 }

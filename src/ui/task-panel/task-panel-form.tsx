@@ -3,6 +3,8 @@
 // calls the use cases; it does not know whether it sits in a popup or a side
 // pane. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { DropTask } from "../../application/usecases/drop-task";
+import type { EditTask } from "../../application/usecases/edit-task";
 import type { ReadTask } from "../../application/usecases/read-task";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
@@ -13,10 +15,10 @@ import { effortName, importanceName } from "../components/format";
 import { StatusIcon } from "../components/status-icon";
 import { useLiveTask } from "../hooks/use-live-task";
 import {
-  type TaskPanelUseCases,
-  useTaskPanelActions,
-} from "../hooks/use-task-panel-actions";
-import { createNotify } from "../notify";
+  type TaskActionsDeps,
+  useTaskActions,
+} from "../hooks/use-task-actions";
+import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import {
   DateField,
   Field,
@@ -27,11 +29,12 @@ import {
 
 export interface TaskPanelFormDeps {
   readTask: ReadTask;
-  useCases: TaskPanelUseCases;
+  editTask: EditTask;
+  dropTask: DropTask;
+  /** Status change, "open in notes" and notices, shared with the task card (#39). */
+  actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
   changes: ChangeSignalSource;
-  /** Titles the notices. */
-  pluginName: string;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
 }
@@ -42,8 +45,8 @@ export interface TaskPanelFormProps {
   taskId: TaskId;
   /** The task went away (dropped here or elsewhere) or the user closed it. */
   onClose: () => void;
-  /** The "Open in notes" button; its failures are the shell's to report. */
-  onOpenInNotes: (taskId: TaskId) => void;
+  /** After "Open in notes" (e.g. a popup closes, as it would cover the block). */
+  onOpenedInNotes?: () => void;
 }
 
 function Notice(props: {
@@ -172,12 +175,8 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const { Button } = orca.components;
   const idPrefix = React.useId();
   const { state, reload } = useLiveTask(deps.readTask, taskId, deps.changes);
-  const actions = useTaskPanelActions(
-    deps.useCases,
-    taskId,
-    deps.pluginName,
-    reload,
-  );
+  const actions = useTaskPanelActions(deps, taskId, reload);
+  const taskActions = useTaskActions(deps.actions);
   /** Set once the task is going away, so nothing more is written or told. */
   const leaving = React.useRef(false);
   const saveOnLeave = React.useCallback(() => !leaving.current, []);
@@ -186,9 +185,9 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   React.useEffect(() => {
     if (state.kind !== "gone" || leaving.current) return;
     leaving.current = true;
-    createNotify(deps.pluginName)("warn", t("This block is no longer a task"));
+    deps.actions.notify("warn", t("This block is no longer a task"));
     onClose();
-  }, [state.kind, deps.pluginName, onClose]);
+  }, [state.kind, deps.actions, onClose]);
 
   const drop = async () => {
     leaving.current = true;
@@ -247,7 +246,14 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
       <Header
         task={task}
         titleId={`${idPrefix}-title`}
-        onOpenInNotes={task && (() => props.onOpenInNotes(task.id))}
+        onOpenInNotes={
+          task &&
+          (() => {
+            // Failures are told by the shared action (#39).
+            taskActions.openInNotes(task);
+            props.onOpenedInNotes?.();
+          })
+        }
         onClose={onClose}
       />
       <div className="nextaction-task-panel-body">{body}</div>

@@ -4,21 +4,13 @@
 // (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { TaskId } from "../../domain/task/task";
-import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
-import { createNotify } from "../notify";
 import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
-
-/** Where "Open in notes" opens the block; the plugin panel passes its origin. */
-export interface OpenFrom {
-  readonly originPanelId?: string;
-}
 
 function TaskPanelPopup(props: {
   deps: TaskPanelFormDeps;
   taskId: TaskId;
   onClose: () => void;
-  onOpenInNotes: (taskId: TaskId) => void;
 }) {
   const { ModalOverlay } = orca.components;
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -47,7 +39,8 @@ function TaskPanelPopup(props: {
           deps={props.deps}
           taskId={props.taskId}
           onClose={props.onClose}
-          onOpenInNotes={props.onOpenInNotes}
+          // The popup would cover the block just opened.
+          onOpenedInNotes={props.onClose}
         />
       </div>
     </ModalOverlay>
@@ -56,39 +49,24 @@ function TaskPanelPopup(props: {
 
 /**
  * Opens task `taskId` in the popup, in `render`'s root; another one already
- * open is replaced. "Open in notes" opens the block with `openInNotes`, then
- * closes the popup, which would cover it.
+ * open is replaced. Outside the plugin panel's React tree, so "open in notes"
+ * works out the plugin panel from the active panel (#39's helper).
  */
 export function createTaskPanelPopup(options: {
   deps: TaskPanelFormDeps;
   render: (node: React.ReactNode) => void;
-  openInNotes: (blockId: number, originPanelId?: string) => void;
-}): (taskId: TaskId, from?: OpenFrom) => void {
+}): (taskId: TaskId) => void {
   const { deps, render } = options;
-  const notify = createNotify(deps.pluginName);
   /** Which opening is shown, so a late close of a replaced one does nothing. */
   let shown = 0;
 
-  return (taskId, from = {}) => {
+  return (taskId) => {
     shown += 1;
     const mine = shown;
     const close = () => {
       if (mine !== shown) return;
       shown += 1;
       render(null);
-    };
-    const openInNotes = (id: TaskId) => {
-      try {
-        options.openInNotes(id, from.originPanelId);
-        close();
-      } catch (error) {
-        notify(
-          "error",
-          t("Could not open the task in the notes: ${reason}", {
-            reason: describeError(error),
-          }),
-        );
-      }
     };
     render(
       <TaskPanelPopup
@@ -97,7 +75,6 @@ export function createTaskPanelPopup(options: {
         deps={deps}
         taskId={taskId}
         onClose={close}
-        onOpenInNotes={openInNotes}
       />,
     );
   };

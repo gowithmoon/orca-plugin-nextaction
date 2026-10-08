@@ -1,58 +1,48 @@
-// Opens a task's block in the notes (#35 "在笔记中打开"), for the task panel's
-// button. Kept minimal and in one file: #39 builds the card's version, and
-// the two are unified when they meet. Orca behaviour, verified by hand in
-// Orca (docs/ARCHITECTURE.md §5).
-import type { ColumnPanel, RowPanel, ViewPanel } from "../orca.d.ts";
+// "Open in notes" (#35 "在笔记中打开"): shows a task's block in a note panel,
+// never in the plugin panel itself. Shared by the task card and the task
+// panel. Orca behaviour, verified by hand in Orca (docs/ARCHITECTURE.md §5).
+import type { NextActionPanelArgs } from "../ui/panel/nextaction-panel";
+import type { OpenInNotes } from "../ui/panel/open-in-notes";
 
-type AnyPanel = RowPanel | ColumnPanel | ViewPanel;
+/** "Open in notes" for the plugin panel of type `panelType`. */
+export function createOpenInNotes(panelType: string): OpenInNotes {
+  const viewPanel = (id: string | undefined) =>
+    id === undefined
+      ? undefined
+      : (orca.nav.findViewPanel(id, orca.state.panels) ?? undefined);
 
-/** The first open view panel showing `view`. Read before navigating: the tree is live. */
-function findView(view: string): ViewPanel | undefined {
-  const walk = (panel: AnyPanel): ViewPanel | undefined => {
-    if (!("children" in panel)) return panel.view === view ? panel : undefined;
-    for (const child of panel.children) {
-      const found = walk(child);
-      if (found) return found;
-    }
-    return undefined;
-  };
-  return walk(orca.state.panels);
-}
-
-/**
- * Opens block `blockId` with `goTo` (Orca's back button returns): in
- * `originPanelId` when it is still open (the panel the plugin panel was
- * opened from, never the covered one), otherwise in the active panel. Never
- * in the plugin panel (type `panelType`): when that is the only candidate, a
- * new panel opens to its left.
- */
-export function createOpenInNotes(
-  panelType: string,
-): (blockId: number, originPanelId?: string) => void {
-  const usable = (id: string | undefined) => {
-    if (id === undefined) return undefined;
-    const panel = orca.nav.findViewPanel(id, orca.state.panels);
-    return panel && panel.view !== panelType ? panel : undefined;
+  /**
+   * The plugin panel asking: the one given, else the active panel when it is
+   * the plugin panel (e.g. a popup opened from a card has no panel of its own).
+   */
+  const askingPluginPanel = (from: Parameters<OpenInNotes>[1]) => {
+    if (from) return from;
+    const active = viewPanel(orca.state.activePanel);
+    if (active?.view !== panelType) return undefined;
+    const args = active.viewArgs as Partial<NextActionPanelArgs>;
+    return { panelId: active.id, originPanelId: args.originPanelId };
   };
 
-  return (blockId, originPanelId) => {
-    // `blockId` stays a number: a wrong type crashes Orca (editor-sidetool-panel).
-    const args = { blockId };
-    const target = usable(originPanelId) ?? usable(orca.state.activePanel);
-    if (target) {
-      orca.nav.goTo("block", args, target.id);
-      return;
-    }
-    const plugin = findView(panelType);
+  return (blockId, from) => {
+    const plugin = askingPluginPanel(from);
     if (!plugin) {
-      orca.nav.goTo("block", args);
+      // Not from the plugin panel (e.g. Orca's own menus): the active panel.
+      orca.nav.goTo("block", { blockId }, orca.state.activePanel);
       return;
     }
-    const opened = orca.nav.addTo(plugin.id, "left", {
+    // The panel that opened the plugin panel, never the covered one. It may
+    // show something else by now; it is still the user's note panel.
+    const origin = viewPanel(plugin.originPanelId);
+    if (origin && origin.view !== panelType) {
+      orca.nav.goTo("block", { blockId }, origin.id);
+      return;
+    }
+    // The origin was closed: a new panel left of the plugin panel.
+    const opened = orca.nav.addTo(plugin.panelId, "left", {
       view: "block",
-      viewArgs: args,
+      viewArgs: { blockId },
       viewState: {},
     });
-    if (!opened) throw new Error("Orca did not open a panel for the block");
+    if (!opened) throw new Error("Orca did not open a panel");
   };
 }

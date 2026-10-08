@@ -1,7 +1,7 @@
 // The inbox view (GLOSSARY: 收集箱视图, #37): every task in the inbox, in the
-// order they were captured, as read-only task cards. It reads when the plugin
-// panel opens and again on every task change signal (#38). Verified by hand
-// in Orca (docs/ARCHITECTURE.md §5).
+// order they were captured, as task cards with their actions (#39). It reads
+// when the plugin panel opens and again on every task change signal (#38).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
@@ -11,11 +11,16 @@ import { t } from "../../../shared/l10n/l10n";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
+  type TaskActionsDeps,
+  useTaskActions,
+} from "../../hooks/use-task-actions";
+import {
   createViewQuery,
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
 import type { PanelView } from "../../panel/panel-views";
+import type { TaskMenuItems } from "../../task-menu/menu-items";
 
 export interface InboxViewDeps {
   readInbox: ReadInbox;
@@ -23,7 +28,11 @@ export interface InboxViewDeps {
   today: () => CalendarDate;
   /** Tasks may have changed: the inbox is read again. */
   changes: ChangeSignalSource;
-  /** A card was clicked: the task opens in the task panel (#40). */
+  /** The cards' status menu and "open in notes". */
+  taskActions: TaskActionsDeps;
+  /** The task menu's registrations, for a right-click on a card. */
+  menuItems: () => TaskMenuItems | undefined;
+  /** A click on a card: the task opens in the task panel (#40). */
   onOpenTask?: (taskId: TaskId) => void;
 }
 
@@ -65,10 +74,12 @@ function Notice(props: {
 function InboxContent(props: {
   query: ViewQuery<Task[]>;
   today: CalendarDate;
-  onOpenTask?: (taskId: TaskId) => void;
+  deps: InboxViewDeps;
 }) {
-  const { query, today, onOpenTask } = props;
+  const { query, today, deps } = props;
   const state = useViewQuery(query);
+  const actions = useTaskActions(deps.taskActions);
+  const menuItems = deps.menuItems();
   const { Button } = orca.components;
 
   if (state.kind === "loading") return <Placeholder />;
@@ -113,7 +124,9 @@ function InboxContent(props: {
           <TaskCard
             task={task}
             today={today}
-            onOpen={onOpenTask && ((open) => onOpenTask(open.id))}
+            actions={actions}
+            menuItems={menuItems}
+            onOpen={deps.onOpenTask && ((open) => deps.onOpenTask?.(open.id))}
           />
         </li>
       ))}
@@ -139,11 +152,7 @@ export function createInboxView(deps: InboxViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("Inbox")} count={count} />
-        <InboxContent
-          query={query}
-          today={deps.today()}
-          onOpenTask={deps.onOpenTask}
-        />
+        <InboxContent query={query} today={deps.today()} deps={deps} />
       </>
     );
   }
