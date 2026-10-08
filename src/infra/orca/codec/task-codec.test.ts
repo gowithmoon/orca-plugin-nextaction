@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { blocks, tagBlocks } from "../../../../tests/task-block-fixtures";
 import { decodeTask, type TaskTagContext } from "./task-codec";
 
@@ -89,6 +89,41 @@ describe("decodeTask", () => {
       new Date("2026-10-05T01:00:00.000Z"),
     );
   });
+
+  it("reads a creation time given as an ISO string", () => {
+    const block = { ...blocks.zhFilled, created: "2026-10-05T01:00:00.000Z" };
+    expect(decodedTask(block).created).toEqual(
+      new Date("2026-10-05T01:00:00.000Z"),
+    );
+  });
+
+  it("reads a creation time given as milliseconds since the epoch", () => {
+    // 2026-10-05T01:00:00.000Z
+    const block = { ...blocks.zhFilled, created: 1_791_162_000_000 };
+    expect(decodedTask(block).created).toEqual(
+      new Date("2026-10-05T01:00:00.000Z"),
+    );
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+    ["an object", {}],
+    ["an unparsable string", "yesterday-ish"],
+    ["an invalid Date", new Date(Number.NaN)],
+  ])(
+    "reads a creation time that is %s as the epoch, with a warning",
+    (_, created) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const task = decodedTask({ ...blocks.zhFilled, created });
+        expect(task.created).toEqual(new Date(0));
+        expect(warn).toHaveBeenCalledOnce();
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
 
   it("reads an unknown status as inbox and keeps the original value", () => {
     // "放弃" is an option the user added to the tag; it is no plugin status.
