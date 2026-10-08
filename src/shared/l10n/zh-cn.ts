@@ -94,6 +94,10 @@ const zhCN: Record<string, string> = {
   "Loading tasks": "正在读取任务",
   "Could not read the inbox: ${reason}": "无法读取收集箱：${reason}",
   Retry: "重试",
+  "Change status": "修改状态",
+  "Open in notes": "在笔记中打开",
+  "Could not open the task in the notes: ${reason}":
+    "无法在笔记中打开任务：${reason}",
   "Inbox is clear": "收集箱已清空",
   "New tasks you capture appear here.": "新捕获的任务会出现在这里。",
 };

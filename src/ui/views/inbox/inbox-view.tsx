@@ -1,7 +1,7 @@
 // The inbox view (GLOSSARY: 收集箱视图, #37): every task in the inbox, in the
-// order they were captured, as read-only task cards. It reads when the plugin
-// panel opens and again on every task change signal (#38). Verified by hand
-// in Orca (docs/ARCHITECTURE.md §5).
+// order they were captured, as task cards with their actions (#39). It reads
+// when the plugin panel opens and again on every task change signal (#38).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task } from "../../../domain/task/task";
@@ -11,11 +11,16 @@ import { t } from "../../../shared/l10n/l10n";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
+  type TaskActionsDeps,
+  useTaskActions,
+} from "../../hooks/use-task-actions";
+import {
   createViewQuery,
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
 import type { PanelView } from "../../panel/panel-views";
+import type { TaskMenuItems } from "../../task-menu/menu-items";
 
 export interface InboxViewDeps {
   readInbox: ReadInbox;
@@ -23,6 +28,10 @@ export interface InboxViewDeps {
   today: () => CalendarDate;
   /** Tasks may have changed: the inbox is read again. */
   changes: ChangeSignalSource;
+  /** The cards' status menu and "open in notes". */
+  taskActions: TaskActionsDeps;
+  /** The task menu's registrations, for a right-click on a card. */
+  menuItems: () => TaskMenuItems | undefined;
 }
 
 function Placeholder() {
@@ -63,9 +72,12 @@ function Notice(props: {
 function InboxContent(props: {
   query: ViewQuery<Task[]>;
   today: CalendarDate;
+  deps: InboxViewDeps;
 }) {
-  const { query, today } = props;
+  const { query, today, deps } = props;
   const state = useViewQuery(query);
+  const actions = useTaskActions(deps.taskActions);
+  const menuItems = deps.menuItems();
   const { Button } = orca.components;
 
   if (state.kind === "loading") return <Placeholder />;
@@ -107,7 +119,12 @@ function InboxContent(props: {
     <ul className="nextaction-task-list">
       {state.data.map((task) => (
         <li key={task.id}>
-          <TaskCard task={task} today={today} />
+          <TaskCard
+            task={task}
+            today={today}
+            actions={actions}
+            menuItems={menuItems}
+          />
         </li>
       ))}
     </ul>
@@ -132,7 +149,7 @@ export function createInboxView(deps: InboxViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("Inbox")} count={count} />
-        <InboxContent query={query} today={deps.today()} />
+        <InboxContent query={query} today={deps.today()} deps={deps} />
       </>
     );
   }
