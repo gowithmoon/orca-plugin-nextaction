@@ -46,6 +46,7 @@ const zhCN: Record<string, string> = {
   Waiting: "等待中",
   Someday: "将来/也许",
   Done: "已完成",
+  "Status: ${status}": "状态：${status}",
   "Drop task": "放弃",
   "Task dropped": "已放弃",
   "Could not drop the task: ${reason}": "无法放弃任务：${reason}",

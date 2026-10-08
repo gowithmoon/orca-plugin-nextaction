@@ -1,7 +1,8 @@
 // Everything that depends on Orca's internal DOM (class names, structure, the
-// `data-` attributes on `.orca-tag`) lives in this file only. None of it is a
-// public API: check it by hand in Orca after every Orca upgrade
-// (status-icon-task-menu, page-task spikes).
+// `data-` attributes on `.orca-tag`) lives in this file only: the selectors of
+// the status icon style sheet, which only displays (official-task-menus).
+// None of it is a public API: check it by hand in Orca after every Orca
+// upgrade (status-icon-task-menu, page-task spikes).
 
 /** A tag property value to match, by the property's and option's note-facing names. */
 export interface TagValueMatch {
@@ -10,7 +11,7 @@ export interface TagValueMatch {
 }
 
 /** The element whose `::before` draws the status icon. */
-export const iconHostClass = "orca-repr-main-content";
+const iconHostClass = "orca-repr-main-content";
 
 /** Quotes a string for a CSS attribute selector value. */
 const quoted = (value: string) =>
@@ -55,43 +56,4 @@ function iconHostSelectors(tagName: string, match?: TagValueMatch): string[] {
     `.orca-repr:has(>.orca-repr-card-title>.orca-tags>${tag})>.orca-repr-main>${host}`,
     `.orca-query-card-title:has(>.orca-tags>${tag}) ~ .orca-block>.orca-repr>.orca-repr-main>${host}`,
   ];
-}
-
-/** A status icon under the pointer. */
-export interface StatusIconHit {
-  /** The ID of the block the icon belongs to; a mirror's own ID, resolved by the repository. */
-  blockId: number;
-  /** Where the icon is drawn, to place the task menu at. */
-  rect: DOMRect;
-}
-
-/**
- * The status icon the pointer event lands on, if any. Pseudo-elements are
- * not event targets, so the event is on the icon host and the point is
- * checked against the `::before` box: its width plus margin, and the first
- * line's height, with a few pixels to spare (status-icon-task-menu).
- */
-export function statusIconAt(
-  event: MouseEvent,
-  tagName: string,
-): StatusIconHit | undefined {
-  if (!(event.target instanceof Element)) return undefined;
-  const host = event.target.closest<HTMLElement>(`.${iconHostClass}`);
-  if (!host?.matches(iconHostSelectors(tagName).join(","))) return undefined;
-  const blockId = Number(host.closest<HTMLElement>(".orca-block")?.dataset.id);
-  if (!Number.isInteger(blockId)) return undefined;
-
-  const hostStyle = getComputedStyle(host);
-  const icon = getComputedStyle(host, "::before");
-  const fontSize = Number.parseFloat(icon.fontSize) || 16;
-  const width =
-    (Number.parseFloat(icon.width) || fontSize) +
-    (Number.parseFloat(icon.marginRight) || 0);
-  const lineHeight = Number.parseFloat(hostStyle.lineHeight) || fontSize * 1.6;
-  const box = host.getBoundingClientRect();
-  const left = box.left + (Number.parseFloat(hostStyle.paddingLeft) || 0);
-  const x = event.clientX - left;
-  const y = event.clientY - box.top;
-  if (x < -2 || x > width + 2 || y < -2 || y > lineHeight + 4) return undefined;
-  return { blockId, rect: new DOMRect(left, box.top, width, lineHeight) };
 }

@@ -51,6 +51,8 @@ export function createTaskTagFeature(): {
   names: TaskTagNamesSource;
   /** Tasks in the notes; it reads the tag state on every call. */
   repository: TaskRepository;
+  /** The task tag block's ID; `undefined` while task features are paused. */
+  taskTagBlockId: () => number | undefined;
 } {
   let state: TaskTagState = { kind: "paused", reason: "starting" };
   const listeners = new Set<() => void>();
@@ -299,5 +301,8 @@ export function createTaskTagFeature(): {
     });
   };
 
-  return { feature, names, repository };
+  const taskTagBlockId = () =>
+    state.kind === "ready" ? state.tagBlockId : undefined;
+
+  return { feature, names, repository, taskTagBlockId };
 }
