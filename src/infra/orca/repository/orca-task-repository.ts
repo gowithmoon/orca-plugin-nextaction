@@ -11,6 +11,7 @@ import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block } from "../../../orca.d.ts";
 import {
   planPluginPropertyWrite,
+  pluginPropertyPrefix,
   readPluginProperty,
 } from "../codec/plugin-block-property-codec";
 import {
@@ -236,6 +237,33 @@ export function createOrcaTaskRepository(
           });
           return { kind: "converted", id: block.id };
       }
+    },
+
+    async dropTask(id: TaskId): Promise<void> {
+      const state = readyTag();
+      const block = await taskBlockToWrite(id, {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      });
+      const pluginProperties = block.properties
+        .map((p) => p.name)
+        .filter((name) => name.startsWith(pluginPropertyPrefix));
+      // removeTag leaves plugin block properties behind (block-properties-json
+      // J4), so both happen in one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand(
+          "core.editor.removeTag",
+          block.id,
+          state.tagName,
+        );
+        if (pluginProperties.length > 0) {
+          await invokeEditorCommand(
+            "core.editor.deleteProperties",
+            [block.id],
+            pluginProperties,
+          );
+        }
+      });
     },
 
     async appendTaskToJournal(text: string, now: Date): Promise<TaskId> {

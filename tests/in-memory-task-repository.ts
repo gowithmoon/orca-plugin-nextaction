@@ -214,6 +214,14 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return { kind: "converted", id };
     },
 
+    async dropTask(id) {
+      const block: StoredBlock = taskToWrite(id);
+      write(() => {
+        block.pluginProperties.clear();
+        block.task = undefined;
+      });
+    },
+
     async appendTaskToJournal(text, now) {
       const id = nextId++;
       write(() => {

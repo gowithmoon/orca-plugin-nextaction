@@ -113,6 +113,15 @@ export interface TaskRepository {
   convertToTask(id: number): Promise<ConvertToTaskResult>;
 
   /**
+   * Drops the task (GLOSSARY: 放弃): in one undo, removes the task tag and
+   * deletes every plugin block property of the block, so it is a plain block
+   * again. Subtasks are left as they are. A mirror block's ID drops its
+   * source block. Fails, writing nothing, when the block is not a task or the
+   * write fails.
+   */
+  dropTask(id: TaskId): Promise<void>;
+
+  /**
    * Creates an inbox task with `text`, as plain text, at the end of the
    * journal of the calendar day `now` falls on in local time (not the logical
    * day, ADR 0005), creating that journal if it does not exist yet. The user
