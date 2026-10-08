@@ -25,9 +25,6 @@ import { t } from "../shared/l10n/l10n";
 import { createQuickCaptureCommand } from "../ui/capture/quick-capture-popup";
 import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
-import { registerQueryInboxCommand } from "./dev/query-inbox-command";
-import { registerReadTaskCommand } from "./dev/read-task-command";
-import { registerWriteTaskCommands } from "./dev/write-task-commands";
 import { writeSetting } from "./settings";
 
 const settingKey = "taskTagName";
@@ -271,13 +268,6 @@ export function createTaskTagFeature(): {
       ),
       t("Quick capture"),
     );
-    // Statically false in production builds, so the debug commands are left
-    // out of the bundle (#20).
-    if (import.meta.env.DEV) {
-      registerReadTaskCommand(context.registry, repository);
-      registerQueryInboxCommand(context.registry, repository);
-      registerWriteTaskCommands(context.registry, repository, systemClock);
-    }
     const uiLanguage = noteLanguageFor(orca.state.locale);
     await start(context, uiLanguage);
 
