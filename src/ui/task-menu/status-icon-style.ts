@@ -3,22 +3,8 @@ import type { TaskStatus } from "../../domain/task/task";
 import { iconSelector } from "./orca-dom";
 import { statusIcons } from "./status-icons";
 
-/**
- * Orca colour variables per status, for the icons in `statusIcons`.
- * Preliminary; tuned after looking at them in Orca (#30).
- */
-const colors: Record<TaskStatus, string> = {
-  inbox: "var(--orca-color-text-2)",
-  todo: "var(--orca-color-text-blue)",
-  doing: "var(--orca-color-text-yellow)",
-  // No purple variable has been observed; falls back to the muted colour.
-  waiting: "var(--orca-color-text-purple, var(--orca-color-text-2))",
-  someday: "var(--orca-color-text-2)",
-  done: "var(--orca-color-text-green)",
-};
-
 const iconRule = (selector: string, status: TaskStatus) =>
-  `${selector} {\n  content: "${statusIcons[status].codePoint}";\n  color: ${colors[status]};\n}`;
+  `${selector} {\n  content: "${statusIcons[status].codePoint}";\n  color: ${statusIcons[status].color};\n}`;
 
 /**
  * The style sheet for the status icons. A base rule draws the inbox icon on

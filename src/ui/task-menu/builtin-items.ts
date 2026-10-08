@@ -5,32 +5,15 @@ import {
   CompletionHistoryUnreadableError,
 } from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
-import { type TaskStatus, taskStatuses } from "../../domain/task/task";
+import { taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { statusLabel } from "../components/status-label";
 import { createNotify, type Notify, notifyFailure } from "../notify";
 import type { TaskMenuItems } from "./menu-items";
 import { statusIcons } from "./status-icons";
 
 /** Menu groups, lowest first. Gaps leave room for later steps (task panel, my day). */
 export const taskMenuGroups = { status: 10, drop: 100 } as const;
-
-/** Status names in the interface language; the note-facing names live in infra. */
-const statusLabel = (status: TaskStatus): string => {
-  switch (status) {
-    case "inbox":
-      return t("Inbox");
-    case "todo":
-      return t("Todo");
-    case "doing":
-      return t("Doing");
-    case "waiting":
-      return t("Waiting");
-    case "someday":
-      return t("Someday");
-    case "done":
-      return t("Done");
-  }
-};
 
 /** Tells the user why a task menu action failed. */
 export function notifyMenuFailure(
