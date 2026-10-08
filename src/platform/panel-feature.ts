@@ -13,6 +13,12 @@ import { createInboxView } from "../ui/views/inbox/inbox-view";
 import type { FeatureModule } from "./bootstrap";
 import { dayBoundaryFrom } from "./day-boundary";
 import { createPanelPlacement } from "./panel-placement";
+import type { OpenTaskPanel } from "./task-panel-feature";
+
+/** The plugin panel's type: the registry prefixes the name `panel`. */
+export function pluginPanelType(pluginName: string): string {
+  return `${pluginName}.panel`;
+}
 
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
@@ -24,6 +30,8 @@ export function createPanelFeature(
   repository: TaskRepository,
   /** The task change signal; focus and the refresh button give it at once. */
   changes: ChangeSignal,
+  /** A card was clicked (#40): the task panel opens as a popup. */
+  openTaskPanel: OpenTaskPanel,
 ): {
   feature: FeatureModule;
   views: PanelViews;
@@ -38,6 +46,7 @@ export function createPanelFeature(
       readInbox: createReadInbox({ repository }),
       today: () => logicalDay(systemClock.now(), dayBoundary.current()),
       changes,
+      onOpenTask: openTaskPanel,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -56,7 +65,7 @@ export function createPanelFeature(
     // be named like the panel type.
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
-    const panelType = `${pluginName}.panel`;
+    const panelType = pluginPanelType(pluginName);
     const placement = createPanelPlacement(panelType);
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).

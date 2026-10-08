@@ -34,6 +34,14 @@ export const componentCss = `
   padding: var(--orca-spacing-md);
 }
 
+.nextaction-task-card[data-openable] {
+  cursor: pointer;
+}
+
+.nextaction-task-card[data-openable]:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
 .nextaction-task-card-status {
   flex: 0 0 auto;
   display: flex;

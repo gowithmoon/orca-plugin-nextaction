@@ -4,7 +4,7 @@
 // in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
-import type { CalendarDate, Task } from "../../../domain/task/task";
+import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { describeError } from "../../../shared/describe-error";
 import { t } from "../../../shared/l10n/l10n";
@@ -23,6 +23,8 @@ export interface InboxViewDeps {
   today: () => CalendarDate;
   /** Tasks may have changed: the inbox is read again. */
   changes: ChangeSignalSource;
+  /** A card was clicked: the task opens in the task panel (#40). */
+  onOpenTask?: (taskId: TaskId) => void;
 }
 
 function Placeholder() {
@@ -63,8 +65,9 @@ function Notice(props: {
 function InboxContent(props: {
   query: ViewQuery<Task[]>;
   today: CalendarDate;
+  onOpenTask?: (taskId: TaskId) => void;
 }) {
-  const { query, today } = props;
+  const { query, today, onOpenTask } = props;
   const state = useViewQuery(query);
   const { Button } = orca.components;
 
@@ -107,7 +110,11 @@ function InboxContent(props: {
     <ul className="nextaction-task-list">
       {state.data.map((task) => (
         <li key={task.id}>
-          <TaskCard task={task} today={today} />
+          <TaskCard
+            task={task}
+            today={today}
+            onOpen={onOpenTask && ((open) => onOpenTask(open.id))}
+          />
         </li>
       ))}
     </ul>
@@ -132,7 +139,11 @@ export function createInboxView(deps: InboxViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("Inbox")} count={count} />
-        <InboxContent query={query} today={deps.today()} />
+        <InboxContent
+          query={query}
+          today={deps.today()}
+          onOpenTask={deps.onOpenTask}
+        />
       </>
     );
   }

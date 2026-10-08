@@ -9,8 +9,10 @@ import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
 } from "../ui/task-menu/task-menu";
+import { registerTaskPanelMenuItem } from "../ui/task-panel/task-panel-menu-item";
 import type { FeatureModule } from "./bootstrap";
 import { dayBoundaryFrom } from "./day-boundary";
+import type { OpenTaskPanel } from "./task-panel-feature";
 
 /**
  * Puts the task menu (#31) into Orca's own menus: the tag menu of the task
@@ -20,6 +22,8 @@ import { dayBoundaryFrom } from "./day-boundary";
 export function createTaskMenuFeature(
   repository: TaskRepository,
   taskTagBlockId: () => number | undefined,
+  /** "Open task panel" (#40): from Orca's menus it always opens the popup. */
+  openTaskPanel: OpenTaskPanel,
 ): FeatureModule {
   return (context) => {
     const { pluginName, registry } = context;
@@ -33,6 +37,7 @@ export function createTaskMenuFeature(
       dropTask: createDropTask({ repository }),
       pluginName,
     });
+    registerTaskPanelMenuItem(items, (taskId) => openTaskPanel(taskId));
 
     const deps = {
       items,

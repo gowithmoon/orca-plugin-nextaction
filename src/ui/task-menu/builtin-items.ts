@@ -13,7 +13,7 @@ import type { TaskMenuItems } from "./menu-items";
 import { statusIcons } from "./status-icons";
 
 /** Menu groups, lowest first. Gaps leave room for later steps (task panel, my day). */
-export const taskMenuGroups = { status: 10, drop: 100 } as const;
+export const taskMenuGroups = { status: 10, taskPanel: 50, drop: 100 } as const;
 
 /** Tells the user why a task menu action failed. */
 export function notifyMenuFailure(
