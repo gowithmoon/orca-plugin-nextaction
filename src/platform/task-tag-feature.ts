@@ -45,7 +45,10 @@ const isBlank = (value: unknown) =>
  * invalidated properties are reported to the user but do not fail the load,
  * so the settings page stays usable (e.g. to pick another name).
  */
-export function createTaskTagFeature(): {
+export function createTaskTagFeature(
+  /** Called after every write of the plugin's to a task, also a failed one. */
+  onWritten: () => void,
+): {
   feature: FeatureModule;
   /** The tag's note-facing names, following every change of the tag state. */
   names: TaskTagNamesSource;
@@ -249,11 +252,7 @@ export function createTaskTagFeature(): {
     }
   };
 
-  const repository = createOrcaTaskRepository(
-    () => state,
-    // No caches yet; step 4 connects the view cache here.
-    () => {},
-  );
+  const repository = createOrcaTaskRepository(() => state, onWritten);
 
   const feature: FeatureModule = async (context) => {
     // No shortcut is assigned: the user binds one in Orca's settings.

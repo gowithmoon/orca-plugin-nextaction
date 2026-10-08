@@ -3,6 +3,7 @@ import type { TaskRepository } from "../application/ports/task-repository";
 import { createReadInbox } from "../application/usecases/read-inbox";
 import { defaultDayBoundary, logicalDay } from "../domain/time/logical-day";
 import { systemClock } from "../infra/system-clock";
+import type { ChangeSignal } from "../shared/change-signal";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
@@ -19,7 +20,11 @@ import { createPanelPlacement } from "./panel-placement";
  * registration; later features append their views to it before this feature
  * loads.
  */
-export function createPanelFeature(repository: TaskRepository): {
+export function createPanelFeature(
+  repository: TaskRepository,
+  /** The task change signal; focus and the refresh button give it at once. */
+  changes: ChangeSignal,
+): {
   feature: FeatureModule;
   views: PanelViews;
 } {
@@ -32,8 +37,17 @@ export function createPanelFeature(repository: TaskRepository): {
     createInboxView({
       readInbox: createReadInbox({ repository }),
       today: () => logicalDay(systemClock.now(), dayBoundary.current()),
+      changes,
     }),
   );
+  // Created once, so the panel's renderer keeps the same component.
+  const refresh = () => changes.now();
+  const panelRenderer = createNextActionPanel({
+    views,
+    onRefresh: refresh,
+    // Changes made elsewhere without a hook (e.g. sync) show on return.
+    onActivated: refresh,
+  });
 
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
@@ -46,7 +60,7 @@ export function createPanelFeature(repository: TaskRepository): {
     const placement = createPanelPlacement(panelType);
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).
-    registry.panel("panel", createNextActionPanel({ views }), {
+    registry.panel("panel", panelRenderer, {
       closePanel: placement.close,
     });
     registry.editorSidetool(

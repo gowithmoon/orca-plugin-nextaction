@@ -29,6 +29,20 @@ export interface NextActionPanelOptions {
   sidePane?: React.ComponentType;
   /** Shows the refresh button beside the navigation when present. */
   onRefresh?: () => void;
+  /**
+   * The plugin panel became the active panel again (not when it opens: it
+   * opens active, and its views read then).
+   */
+  onActivated?: () => void;
+}
+
+/** Calls `onActivated` each time `active` turns true after the first render. */
+function useActivated(active: boolean, onActivated: (() => void) | undefined) {
+  const previous = React.useRef(active);
+  React.useEffect(() => {
+    if (active && !previous.current) onActivated?.();
+    previous.current = active;
+  }, [active, onActivated]);
 }
 
 /** Follows the element's width; `undefined` until it is first measured. */
@@ -53,11 +67,12 @@ function useTier(ref: React.RefObject<HTMLElement>): PanelTier | undefined {
 export function createNextActionPanel(
   options: NextActionPanelOptions,
 ): React.ComponentType<PanelProps & Partial<NextActionPanelArgs>> {
-  const { views, sidePane: SidePane, onRefresh } = options;
+  const { views, sidePane: SidePane, onRefresh, onActivated } = options;
 
   return function NextActionPanel(props) {
     const root = React.useRef<HTMLDivElement>(null);
     const tier = useTier(root);
+    useActivated(props.active, onActivated);
     const list = views.list();
     const [currentId, setCurrentId] = React.useState(list[0]?.id);
     const current = list.find((view) => view.id === currentId) ?? list[0];

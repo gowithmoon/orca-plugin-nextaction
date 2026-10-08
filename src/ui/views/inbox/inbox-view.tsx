@@ -1,11 +1,11 @@
 // The inbox view (GLOSSARY: 收集箱视图, #37): every task in the inbox, in the
-// order they were captured, as read-only task cards. It reads once when it
-// mounts; #38 adds automatic refresh. Verified by hand in Orca
-// (docs/ARCHITECTURE.md §5).
-import * as React from "react";
-import { TaskFeaturesPausedError } from "../../../application/ports/task-repository";
+// order they were captured, as read-only task cards. It reads when the plugin
+// panel opens and again on every task change signal (#38). Verified by hand
+// in Orca (docs/ARCHITECTURE.md §5).
+import type * as React from "react";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task } from "../../../domain/task/task";
+import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { describeError } from "../../../shared/describe-error";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskCard } from "../../components/task-card";
@@ -21,6 +21,8 @@ export interface InboxViewDeps {
   readInbox: ReadInbox;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
+  /** Tasks may have changed: the inbox is read again. */
+  changes: ChangeSignalSource;
 }
 
 function Placeholder() {
@@ -67,17 +69,17 @@ function InboxContent(props: {
   const { Button } = orca.components;
 
   if (state.kind === "loading") return <Placeholder />;
+  if (state.kind === "paused") {
+    return (
+      <Notice
+        icon="ti ti-player-pause"
+        title={t(
+          "Task features are paused. See the plugin's earlier notice or its task tag setting.",
+        )}
+      />
+    );
+  }
   if (state.kind === "failed") {
-    if (state.error instanceof TaskFeaturesPausedError) {
-      return (
-        <Notice
-          icon="ti ti-player-pause"
-          title={t(
-            "Task features are paused. See the plugin's earlier notice or its task tag setting.",
-          )}
-        />
-      );
-    }
     return (
       <Notice
         icon="ti ti-alert-circle"
@@ -113,12 +115,12 @@ function InboxContent(props: {
 }
 
 /**
- * The inbox view. Its query is shared with the count in the navigation and
- * read afresh each time the view mounts, so every opening of the plugin
- * panel starts from what the notes hold now.
+ * The inbox view. Its query is shared with the count in the navigation; it
+ * starts when the plugin panel opens and stops when it closes, so every
+ * opening starts from what the notes hold then.
  */
 export function createInboxView(deps: InboxViewDeps): PanelView {
-  const query = createViewQuery(() => deps.readInbox());
+  const query = createViewQuery(() => deps.readInbox(), deps.changes);
 
   const useCount = () => {
     const state = useViewQuery(query);
@@ -126,9 +128,6 @@ export function createInboxView(deps: InboxViewDeps): PanelView {
   };
 
   function InboxView() {
-    React.useEffect(() => {
-      query.reset();
-    }, []);
     const count = useCount();
     return (
       <>

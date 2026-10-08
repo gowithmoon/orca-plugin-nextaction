@@ -91,8 +91,7 @@ function plannedWrite(block: Block, plan: PluginPropertyWrite) {
  *   repository neither reads nor writes; when ready, its invalidated
  *   properties read as empty and cannot be written.
  * @param onWritten Called after every write to a task, also a failed one
- *   (what Orca applied is then unknown), so caches drop what they hold for
- *   it. Views connect to it in step 4.
+ *   (what Orca applied is then unknown), so views read again (ADR 0007).
  */
 export function createOrcaTaskRepository(
   tagState: () => TaskTagState,
