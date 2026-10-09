@@ -14,7 +14,11 @@ import { t } from "../../shared/l10n/l10n";
 import type { Notify } from "../notify";
 import { createLatestRead } from "./latest-read";
 
-const none: BlockingReasonsRead = { reasons: [], tasks: new Map() };
+const none: BlockingReasonsRead = {
+  reasons: [],
+  tasks: new Map(),
+  dependencies: [],
+};
 
 /**
  * The blocking reasons of task `id`, none until the first read ends. A new

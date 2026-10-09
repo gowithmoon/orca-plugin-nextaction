@@ -55,6 +55,12 @@ export interface Task {
    * 顺序执行). Off unless the notes hold it switched on.
    */
   readonly sequential: boolean;
+  /**
+   * The tasks this one waits for (GLOSSARY: 依赖), by the IDs of their
+   * (source) blocks, in the order the notes hold them. A target that is no
+   * longer a task (a stale dependency) is still listed; the task graph tells.
+   */
+  readonly dependencies: readonly TaskId[];
   /** When the block was created; read-only, it orders the inbox. */
   readonly created: Date;
   readonly anomalies: readonly DataAnomaly[];
@@ -79,6 +85,7 @@ export interface TaskInNotes {
   labels: readonly string[];
   note: string | null;
   sequential: boolean;
+  dependencies: readonly TaskId[];
   created: Date;
 }
 
@@ -119,6 +126,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     labels: [...input.labels],
     note: input.note,
     sequential: input.sequential,
+    dependencies: [...input.dependencies],
     created: input.created,
     anomalies,
   };

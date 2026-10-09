@@ -19,6 +19,8 @@ function kindLabel(reason: BlockingReason): string {
       return t("Subtasks");
     case "sequential":
       return t("Sequential");
+    case "dependencies":
+      return t("Dependencies");
   }
 }
 

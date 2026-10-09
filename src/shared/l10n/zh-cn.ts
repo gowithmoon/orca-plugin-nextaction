@@ -160,6 +160,14 @@ const zhCN: Record<string, string> = {
   "${kind} (from ": "${kind}（来自 ",
   "): ": "）：",
   "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
+  Dependencies: "依赖",
+  "(No longer a task)": "（已不是任务）",
+  Stale: "已失效",
+  "Remove dependency": "移除依赖",
+  "Search tasks": "搜索任务",
+  "Add a dependency": "添加依赖",
+  "Could not read the tasks to depend on: ${reason}":
+    "无法读取可依赖的任务：${reason}",
 };
 
 export default zhCN;

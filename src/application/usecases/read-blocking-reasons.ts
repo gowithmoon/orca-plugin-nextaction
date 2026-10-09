@@ -23,6 +23,23 @@ export interface BlockingReasonsRead {
   readonly reasons: readonly BlockingReason[];
   /** Every task the reasons name (sources and waited-for tasks), by ID. */
   readonly tasks: ReadonlyMap<TaskId, RelatedTask>;
+  /**
+   * The task's own dependencies (GLOSSARY: 依赖), in the order the notes
+   * hold them; empty when it has none or is not a task.
+   */
+  readonly dependencies: readonly DependencyRead[];
+}
+
+/** One of the task's own dependencies, for the task panel's list (#57). */
+export interface DependencyRead {
+  readonly id: TaskId;
+  /** The target task's text; `null` for a stale dependency. */
+  readonly text: string | null;
+  /**
+   * A stale dependency (GLOSSARY: 失效依赖): its target is no longer a
+   * task. It counts as met; it is cleared on the next dependency edit.
+   */
+  readonly stale: boolean;
 }
 
 /** Reads why task `id` is blocked. Errors are thrown as they are. */
@@ -47,6 +64,16 @@ export function createReadBlockingReasons(deps: {
         if (entry) tasks.set(related, { id: related, text: entry.task.text });
       }
     }
-    return { reasons, tasks };
+    // A target not among the snapshot's tasks is stale, as the task graph
+    // judges it; nothing is written (ADR 0016).
+    const dependencies = (graph.entry(id)?.task.dependencies ?? []).map(
+      (target): DependencyRead => {
+        const entry = graph.entry(target);
+        return entry
+          ? { id: target, text: entry.task.text, stale: false }
+          : { id: target, text: null, stale: true };
+      },
+    );
+    return { reasons, tasks, dependencies };
   };
 }

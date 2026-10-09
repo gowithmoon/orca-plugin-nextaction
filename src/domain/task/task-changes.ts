@@ -1,4 +1,10 @@
-import type { CalendarDate, Effort, Importance, TaskStatus } from "./task";
+import type {
+  CalendarDate,
+  Effort,
+  Importance,
+  TaskId,
+  TaskStatus,
+} from "./task";
 
 /**
  * The task properties to write and their new values. Only the properties
@@ -14,4 +20,9 @@ export interface TaskChanges {
   readonly labels?: readonly string[];
   readonly note?: string | null;
   readonly sequential?: boolean;
+  /**
+   * The tasks this one waits for (GLOSSARY: 依赖): the whole list, replacing
+   * what the notes hold; an empty list removes every dependency.
+   */
+  readonly dependencies?: readonly TaskId[];
 }

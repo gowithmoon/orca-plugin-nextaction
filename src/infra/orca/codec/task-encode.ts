@@ -105,6 +105,22 @@ export function encodeTaskChanges(
   return items;
 }
 
+/**
+ * The dependencies value: reference IDs, never block IDs (tag-operations
+ * A2), written with the block reference type as the spikes did. An empty list
+ * removes every dependency and Orca deletes their references (A4).
+ */
+export function encodeDependencies(
+  refIds: readonly number[],
+  tag: Pick<TaskWriteContext, "language">,
+): RefDataItem {
+  return {
+    name: propertyName("dependencies", tag.language),
+    type: PropType.BlockRefs,
+    value: [...refIds],
+  };
+}
+
 /** A date, or `null` to clear it as tag-operations step 06 did. */
 function dateItem(name: string, date: CalendarDate | null): RefDataItem {
   return date === null
@@ -124,6 +140,9 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   label: "labels",
   note: "note",
   sequential: "sequential",
+  // Checked here like the others, but written apart: references come first
+  // (encodeDependencies, tag-operations A2).
+  dependencies: "dependencies",
 };
 
 /**

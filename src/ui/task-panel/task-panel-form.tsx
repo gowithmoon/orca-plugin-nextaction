@@ -8,7 +8,9 @@ import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
 import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
+import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadTask } from "../../application/usecases/read-task";
+import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
@@ -32,6 +34,7 @@ import {
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import { BlockingReasonsField } from "./blocking-reasons-field";
 import { ChoicesField } from "./choices-field";
+import { DependenciesField } from "./dependencies-field";
 import {
   DateField,
   Field,
@@ -51,6 +54,10 @@ export interface TaskPanelFormDeps {
   readBlockingReasons: ReadBlockingReasons;
   /** Switches sequential on or off (#59). */
   setSequential: SetSequential;
+  /** Tasks offered to add as dependencies (#57). */
+  readDependencyCandidates: ReadDependencyCandidates;
+  /** Replaces the task's dependencies (#57). */
+  setDependencies: SetDependencies;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -128,6 +135,8 @@ function Fields(props: {
   candidates: Candidates;
   /** Read only, after the status: only shown while something blocks the task. */
   blockingReasons: React.ReactNode;
+  /** The dependencies list and search to add (#57). */
+  dependencies: React.ReactNode;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -214,6 +223,9 @@ function Fields(props: {
           onChange={(sequential) => void actions.setSequential(sequential)}
         />
       </Field>
+      <Field label={t("Dependencies")} labelId={id("dependencies")}>
+        {props.dependencies}
+      </Field>
     </div>
   );
 }
@@ -269,6 +281,21 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
             changes={deps.changes}
             notify={notify}
             labelId={`${idPrefix}-blocked-by`}
+            onSelectTask={props.onSelectTask}
+          />
+        }
+        dependencies={
+          <DependenciesField
+            labelId={`${idPrefix}-dependencies`}
+            taskId={state.task.id}
+            dependencies={state.task.dependencies}
+            readBlockingReasons={deps.readBlockingReasons}
+            readDependencyCandidates={deps.readDependencyCandidates}
+            changes={deps.changes}
+            notify={notify}
+            onChange={(dependencies) =>
+              void actions.setDependencies(dependencies)
+            }
             onSelectTask={props.onSelectTask}
           />
         }

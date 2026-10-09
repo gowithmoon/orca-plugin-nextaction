@@ -87,6 +87,9 @@ const structure: readonly {
     type: PropType.Boolean,
     typeArgs: () => ({ defaultEnabled: true, default: false }),
   },
+  // Block references (#57): the values are reference IDs (tag-operations
+  // A2); no type arguments were written in any spike.
+  { key: "dependencies", type: PropType.BlockRefs },
 ];
 
 /** Every property definition of a newly created task tag, in `pos` order. */

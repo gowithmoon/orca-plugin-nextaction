@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  encodeDependencies,
   encodeTaskChanges,
   InvalidatedPropertyError,
   type TaskWriteContext,
@@ -131,6 +132,47 @@ describe("encodeTaskChanges: sequential", () => {
     expect(() => encodeTaskChanges({ sequential: false }, tag)).toThrow(
       InvalidatedPropertyError,
     );
+  });
+});
+
+describe("encodeDependencies", () => {
+  // tag-operations A4: the value is a list of reference IDs, written with the
+  // block reference type; an empty list clears it.
+  it("writes reference IDs as a block reference value under the Chinese name", () => {
+    expect(encodeDependencies([262, 263], zh)).toEqual({
+      name: "依赖",
+      type: 2,
+      value: [262, 263],
+    });
+  });
+
+  it("writes an empty list to clear every dependency, under the English name", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeDependencies([], en)).toEqual({
+      name: "Dependencies",
+      type: 2,
+      value: [],
+    });
+  });
+});
+
+describe("encodeTaskChanges: dependencies", () => {
+  // Dependencies need references created first (tag-operations A2), so they
+  // are written apart, never as part of the plain values.
+  it("leaves dependencies out of the plain values", () => {
+    expect(encodeTaskChanges({ dependencies: [201], note: "x" }, zh)).toEqual([
+      { name: "备注", value: "x" },
+    ]);
+  });
+
+  it("refuses the whole write when dependencies are invalidated", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["dependencies"],
+    };
+    expect(() =>
+      encodeTaskChanges({ dependencies: [], note: "x" }, tag),
+    ).toThrow(InvalidatedPropertyError);
   });
 });
 

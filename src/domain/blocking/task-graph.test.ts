@@ -15,6 +15,7 @@ function task(
     parent?: TaskId;
     start?: CalendarDate;
     sequential?: boolean;
+    dependencies?: TaskId[];
     /** Its place in the notes; defaults to its ID. */
     position?: number;
   } = {},
@@ -32,6 +33,7 @@ function task(
     labels: [],
     note: null,
     sequential: setup.sequential ?? false,
+    dependencies: setup.dependencies ?? [],
     anomalies: [],
   };
   return {
@@ -201,6 +203,109 @@ describe("task graph: effective start", () => {
     );
 
     expect(nextActionIds(graph)).toEqual([1]);
+  });
+});
+
+describe("task graph: dependency blocking", () => {
+  it("a dependency on a task not done yet blocks the task, from the task itself", () => {
+    const graph = analyze([task(1, { dependencies: [2] }), task(2)]);
+
+    expect(graph.entry(1)?.nextAction).toBe(false);
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [2] },
+    ]);
+  });
+
+  it("an ancestor task's unmet dependency blocks every descendant, naming the ancestor as the source", () => {
+    // 1 depends on 9; 3 sits two levels below 1 (ADR 0015).
+    const graph = analyze([
+      task(1, { status: "inbox", dependencies: [9] }),
+      task(2, { status: "done", parent: 1 }),
+      task(3, { parent: 2 }),
+      task(9),
+    ]);
+
+    expect(graph.entry(3)?.nextAction).toBe(false);
+    expect(graph.entry(3)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [9] },
+    ]);
+  });
+
+  it("a dependency is met once its target is done, and the task is a next action again", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2] }),
+      task(2, { status: "done" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("a dependency on a task in someday is not met", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2] }),
+      task(2, { status: "someday" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [2] },
+    ]);
+  });
+
+  it("a dependency on a target in the inbox or waiting is not met", () => {
+    for (const status of ["inbox", "waiting", "doing"] as const) {
+      const graph = analyze([
+        task(1, { dependencies: [2] }),
+        task(2, { status }),
+      ]);
+
+      expect(graph.entry(1)?.nextAction).toBe(false);
+    }
+  });
+
+  it("a stale dependency (its target is not a task) counts as met", () => {
+    // 7 is not in the snapshot: deleted, dropped or untagged.
+    const graph = analyze([task(1, { dependencies: [7] })]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("with several dependencies, every one must be met; the reason lists the unmet ones in order", () => {
+    const graph = analyze([
+      task(1, { dependencies: [4, 2, 7, 3] }),
+      task(2, { status: "done" }),
+      task(3, { status: "someday" }),
+      task(4),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [4, 3] },
+    ]);
+  });
+
+  it("the task's own and its ancestors' dependency reasons are listed nearest first", () => {
+    const graph = analyze([
+      task(1, { status: "inbox", dependencies: [8] }),
+      task(2, { parent: 1, dependencies: [9] }),
+      task(8),
+      task(9),
+    ]);
+
+    expect(graph.entry(2)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 2, waitingFor: [9] },
+      { kind: "dependencies", source: 1, waitingFor: [8] },
+    ]);
+  });
+
+  it("a met dependency of an ancestor does not hold its descendants back", () => {
+    const graph = analyze([
+      task(1, { status: "inbox", dependencies: [9] }),
+      task(2, { parent: 1 }),
+      task(9, { status: "done" }),
+    ]);
+
+    expect(graph.entry(2)?.nextAction).toBe(true);
   });
 });
 
