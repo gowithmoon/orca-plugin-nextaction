@@ -17,13 +17,12 @@ export const componentCss = `
 
 /*
  * The card and its loading placeholder look alike (#45 "任务卡片"): a light
- * border, the window's radius (\`--orca-radius-md\` is not verified to exist,
- * hence the fallback), roomy padding.
+ * border, the window's radius, roomy padding.
  */
 .nextaction-task-card,
 .nextaction-task-card-placeholder {
   border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
-  border-radius: var(--orca-radius-md, var(--orca-radius-sm));
+  border-radius: var(--orca-radius-md);
   background-color: var(--orca-color-bg-1);
   padding: var(--orca-spacing-md) var(--orca-spacing-lg);
 }

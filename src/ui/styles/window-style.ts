@@ -10,8 +10,8 @@
 // column; the one that may grow scrolls itself (`min-height: 0`).
 // `--nextaction-window-width` sets a window's preferred width.
 //
-// Neither `--orca-radius-md` nor an Orca shadow variable shows up in the
-// plugin docs or `orca.d.ts`, so both fall back to what is known to exist.
+// `--orca-radius-md` and `--orca-shadow-popup` were measured in Orca
+// (capture-initial-properties).
 
 export const windowCss = `
 .nextaction-window {
@@ -27,9 +27,9 @@ export const windowCss = `
   );
   max-height: calc(100vh - 2 * var(--orca-spacing-lg));
   border: 1px solid var(--orca-color-border);
-  border-radius: var(--orca-radius-md, var(--orca-radius-sm));
+  border-radius: var(--orca-radius-md);
   background-color: var(--orca-color-bg-1);
-  box-shadow: var(--orca-shadow-popup, 0 8px 24px rgb(0 0 0 / 0.16));
+  box-shadow: var(--orca-shadow-popup);
   color: var(--orca-color-text-1);
   overflow: hidden;
 }

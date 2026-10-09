@@ -69,8 +69,7 @@ export const panelCss = `
   height: var(--orca-height-segmented);
   padding: 0 var(--orca-spacing-md);
   border: none;
-  /* --orca-radius-md is not verified to exist. */
-  border-radius: var(--orca-radius-md, var(--orca-radius-sm));
+  border-radius: var(--orca-radius-md);
   background: transparent;
   color: var(--orca-color-text-2);
   font: inherit;
