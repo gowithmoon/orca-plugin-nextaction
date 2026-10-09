@@ -6,8 +6,6 @@ import { createReadTask } from "../application/usecases/read-task";
 import type { CalendarDate } from "../domain/task/task";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
-import { taskPanelCss } from "../ui/styles/task-panel-style";
-import { windowCss } from "../ui/styles/window-style";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import {
   createTaskPanelPopup,
@@ -16,8 +14,8 @@ import {
 import type { FeatureModule } from "./bootstrap";
 
 /**
- * The task panel (#40, #42): the popup's style sheet and its own React root,
- * unmounted on unload. `open` is what the task menu and the plugin panel call
+ * The task panel (#40, #42): the popup's own React root, unmounted on unload;
+ * its style sheets come from the popup styles feature. `open` is what the task menu and the plugin panel call
  * for the popup; it may be handed out before the feature loads and does
  * nothing outside a load. `formDeps` is what the form needs wherever it shows
  * (the popup, the plugin panel's side pane).
@@ -53,8 +51,6 @@ export function createTaskPanelFeature(deps: {
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
     releasing = context.releasing;
-    registry.css("windowStyle", windowCss);
-    registry.css("taskPanelStyle", taskPanelCss);
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;
     const open = createTaskPanelPopup({

@@ -270,8 +270,8 @@ export function createTaskTagFeature(
       () => undefined,
       { label: t("Convert to task") },
     );
-    // Its own style sheet; the window look and the fields' styles come with
-    // the task panel feature. The popup's own root, empty until the command
+    // Its own style sheet; the window look and the fields' styles come from
+    // the popup styles feature. The popup's own root, empty until the command
     // opens it; unload unmounts it.
     context.registry.css("quickCaptureStyle", quickCaptureCss);
     const captureRoot = context.registry.reactRoot("quickCapturePopup", null);

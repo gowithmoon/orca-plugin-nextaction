@@ -7,11 +7,12 @@
 // accessible name. The others only show with a value. Items are told apart by
 // spacing and their own icon or background, not separators.
 import { isOverdue } from "../../domain/task/overdue";
-import type {
-  CalendarDate,
-  DataAnomaly,
-  Rating,
-  Task,
+import {
+  type CalendarDate,
+  type DataAnomaly,
+  defaultRating,
+  type Rating,
+  type Task,
 } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import {
@@ -21,8 +22,6 @@ import {
   importanceName,
 } from "./format";
 import { statusLabel } from "./status-label";
-
-const defaultRating: Rating = 4;
 
 function anomalyText(anomaly: DataAnomaly): string {
   const { value } = anomaly;

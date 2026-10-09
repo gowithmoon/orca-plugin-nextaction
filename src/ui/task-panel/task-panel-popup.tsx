@@ -5,31 +5,8 @@
 import * as React from "react";
 import type { TaskId } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { useFocusInside } from "../hooks/use-focus-inside";
 import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
-
-/**
- * Moves the focus into the popup when it opens, and back where it was (e.g.
- * the note editor) when it closes, unless `restore` was turned off (the user
- * went to the block in the notes). Without it, keys keep going to the editor
- * behind the popup: typing edits the note and Esc never reaches the popup.
- */
-export function useFocusInside(
-  ref: React.RefObject<HTMLElement>,
-  restore: React.RefObject<boolean>,
-) {
-  React.useEffect(() => {
-    const before =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : undefined;
-    ref.current?.focus({ preventScroll: true });
-    return () => {
-      if (restore.current && before?.isConnected) {
-        before.focus({ preventScroll: true });
-      }
-    };
-  }, [ref, restore]);
-}
 
 function TaskPanelPopup(props: {
   deps: TaskPanelFormDeps;

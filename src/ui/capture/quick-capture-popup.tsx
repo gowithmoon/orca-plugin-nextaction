@@ -5,16 +5,17 @@
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
 import type { QuickCapture } from "../../application/usecases/quick-capture";
-import type { CalendarDate, Rating } from "../../domain/task/task";
+import {
+  type CalendarDate,
+  defaultRating,
+  type Rating,
+} from "../../domain/task/task";
 import type { CommandFn } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { effortName, importanceName } from "../components/format";
+import { useFocusInside } from "../hooks/use-focus-inside";
 import { useQuickCapture } from "../hooks/use-quick-capture";
 import { DateField, Field, RatingField } from "../task-panel/task-panel-fields";
-import { useFocusInside } from "../task-panel/task-panel-popup";
-
-/** Importance and effort default to 4 (GLOSSARY). */
-const defaultRating: Rating = 4;
 
 interface Draft {
   importance: Rating;
@@ -130,9 +131,8 @@ function QuickCapturePopup(props: {
         <div className="nextaction-capture-body">
           <CompositionInput
             ref={input}
-            autoFocus
             className="nextaction-capture-text"
-            aria-label={t("Task text")}
+            aria-label={t("Quick capture")}
             placeholder={t("What's on your mind? Press Enter to capture")}
             value={text}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
