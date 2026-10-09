@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { CalendarDate, Task, TaskId, TaskStatus } from "../task/task";
+import type {
+  CalendarDate,
+  DependencyMode,
+  Task,
+  TaskId,
+  TaskStatus,
+} from "../task/task";
 import {
   analyzeTaskGraph,
   type SnapshotTask,
@@ -16,6 +22,7 @@ function task(
     start?: CalendarDate;
     sequential?: boolean;
     dependencies?: TaskId[];
+    dependencyMode?: DependencyMode;
     /** Its place in the notes; defaults to its ID. */
     position?: number;
   } = {},
@@ -34,6 +41,7 @@ function task(
     note: null,
     sequential: setup.sequential ?? false,
     dependencies: setup.dependencies ?? [],
+    dependencyMode: setup.dependencyMode ?? "all",
     anomalies: [],
   };
   return {
@@ -302,6 +310,66 @@ describe("task graph: dependency blocking", () => {
     const graph = analyze([
       task(1, { status: "inbox", dependencies: [9] }),
       task(2, { parent: 1 }),
+      task(9, { status: "done" }),
+    ]);
+
+    expect(graph.entry(2)?.nextAction).toBe(true);
+  });
+});
+
+describe("task graph: dependency mode", () => {
+  it("in mode any, one met dependency is enough: the task is not blocked", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2, 3], dependencyMode: "any" }),
+      task(2),
+      task(3, { status: "done" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("in mode any, a task none of whose dependencies is met is blocked, waiting for all of them", () => {
+    const graph = analyze([
+      task(1, { dependencies: [3, 2], dependencyMode: "any" }),
+      task(2, { status: "someday" }),
+      task(3),
+    ]);
+
+    expect(graph.entry(1)?.nextAction).toBe(false);
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [3, 2] },
+    ]);
+  });
+
+  it("in mode any, a stale dependency is the one met: the task is not blocked", () => {
+    // 7 is not in the snapshot: deleted, dropped or untagged.
+    const graph = analyze([
+      task(1, { dependencies: [2, 7], dependencyMode: "any" }),
+      task(2),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("in mode all, one met dependency is not enough", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2, 3], dependencyMode: "all" }),
+      task(2),
+      task(3, { status: "done" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [2] },
+    ]);
+  });
+
+  it("an ancestor task in mode any with one met dependency does not hold its descendants back", () => {
+    const graph = analyze([
+      task(1, { status: "inbox", dependencies: [8, 9], dependencyMode: "any" }),
+      task(2, { parent: 1 }),
+      task(8),
       task(9, { status: "done" }),
     ]);
 

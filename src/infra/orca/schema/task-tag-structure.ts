@@ -1,6 +1,8 @@
 // The structure the plugin expects on the task tag (spec #16, ADR 0008).
 import type { BlockProperty } from "../../../orca.d.ts";
 import {
+  dependencyModeKeys,
+  dependencyModeName,
   type NoteLanguage,
   type PropertyKey,
   propertyName,
@@ -90,6 +92,22 @@ const structure: readonly {
   // Block references (#57): the values are reference IDs (tag-operations
   // A2); no type arguments were written in any spike.
   { key: "dependencies", type: PropType.BlockRefs },
+  // Single choice, "all" by default (#58). No fixed colors: choices carry
+  // `c: ""` as the plugin adds context and label choices
+  // (multi-choices-created).
+  {
+    key: "dependencyMode",
+    type: PropType.TextChoices,
+    typeArgs: (language) => ({
+      subType: "single",
+      defaultEnabled: true,
+      default: dependencyModeName("all", language),
+      choices: dependencyModeKeys.map((key) => ({
+        n: dependencyModeName(key, language),
+        c: "",
+      })),
+    }),
+  },
 ];
 
 /** Every property definition of a newly created task tag, in `pos` order. */

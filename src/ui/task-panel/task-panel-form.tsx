@@ -11,6 +11,7 @@ import type { ReadCandidates } from "../../application/usecases/read-candidates"
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadTask } from "../../application/usecases/read-task";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
+import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
@@ -37,6 +38,7 @@ import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
 import {
   DateField,
+  DependencyModeField,
   Field,
   NoteField,
   RatingField,
@@ -58,6 +60,8 @@ export interface TaskPanelFormDeps {
   readDependencyCandidates: ReadDependencyCandidates;
   /** Replaces the task's dependencies (#57). */
   setDependencies: SetDependencies;
+  /** Chooses how the task's dependencies are met (#58). */
+  setDependencyMode: SetDependencyMode;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -226,6 +230,16 @@ function Fields(props: {
       <Field label={t("Dependencies")} labelId={id("dependencies")}>
         {props.dependencies}
       </Field>
+      {/* Only with two dependencies or more, stale ones included (#58). */}
+      {task.dependencies.length >= 2 && (
+        <Field label={t("Dependency mode")} labelId={id("dependency-mode")}>
+          <DependencyModeField
+            labelId={id("dependency-mode")}
+            mode={task.dependencyMode}
+            onChange={(mode) => void actions.setDependencyMode(mode)}
+          />
+        </Field>
+      )}
     </div>
   );
 }

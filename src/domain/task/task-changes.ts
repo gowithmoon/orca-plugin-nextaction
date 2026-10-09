@@ -1,5 +1,6 @@
 import type {
   CalendarDate,
+  DependencyMode,
   Effort,
   Importance,
   TaskId,
@@ -25,4 +26,6 @@ export interface TaskChanges {
    * what the notes hold; an empty list removes every dependency.
    */
   readonly dependencies?: readonly TaskId[];
+  /** Whether every dependency must be met or one is enough (GLOSSARY: 依赖模式). */
+  readonly dependencyMode?: DependencyMode;
 }

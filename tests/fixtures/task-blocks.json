@@ -547,7 +547,8 @@
           "data": [
             { "name": "Status", "type": 6, "value": "Inbox" },
             { "name": "Importance", "type": 3, "value": 4 },
-            { "name": "Dependencies", "type": 2, "value": [362, 363] }
+            { "name": "Dependencies", "type": 2, "value": [362, 363] },
+            { "name": "Dependency mode", "type": 6, "value": "Any" }
           ]
         },
         {

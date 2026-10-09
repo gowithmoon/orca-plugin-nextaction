@@ -168,6 +168,9 @@ const zhCN: Record<string, string> = {
   "Add a dependency": "添加依赖",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
+  "Dependency mode": "依赖模式",
+  All: "全部",
+  Any: "任一",
 };
 
 export default zhCN;

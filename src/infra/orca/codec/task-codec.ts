@@ -4,10 +4,16 @@
 
 import {
   type CalendarDate,
+  type DependencyMode,
   type Task,
   taskFromNotes,
 } from "../../../domain/task/task";
-import { findPropertyKey, findStatusKey, type PropertyKey } from "./names";
+import {
+  findDependencyModeKey,
+  findPropertyKey,
+  findStatusKey,
+  type PropertyKey,
+} from "./names";
 
 /** What the codec needs to know about the task tag. */
 export interface TaskTagContext {
@@ -135,6 +141,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       note: textValue(values.get("note")),
       sequential: booleanValue(values.get("sequential")),
       dependencies: dependencyTargets(block, values.get("dependencies")),
+      dependencyMode: dependencyModeValue(values.get("dependencyMode")),
       created: createdValue(block.id, block.created),
     }),
   };
@@ -172,6 +179,18 @@ function textValue(value: unknown): string | null {
  */
 function booleanValue(value: unknown): boolean {
   return value === true;
+}
+
+/**
+ * A single choice: "any" only for the name of the any option in either
+ * language; empty, unknown and anything else read as "all" (#58), so data
+ * spoilt by hand never lets a task out early.
+ */
+function dependencyModeValue(value: unknown): DependencyMode {
+  return typeof value === "string" &&
+    findDependencyModeKey(value)?.key === "any"
+    ? "any"
+    : "all";
 }
 
 /** Orca `RefType.RefData`: what a block reference property's value points through. */

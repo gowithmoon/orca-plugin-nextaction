@@ -5,6 +5,7 @@ import type { CalendarDate } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import { PropType } from "../prop-type";
 import {
+  dependencyModeName,
   type NoteLanguage,
   type PropertyKey,
   propertyName,
@@ -102,6 +103,13 @@ export function encodeTaskChanges(
       value: changes.sequential,
     });
   }
+  if (changes.dependencyMode !== undefined) {
+    // A single choice, written as its option name like the status (#58).
+    items.push({
+      name: propertyName("dependencyMode", tag.language),
+      value: dependencyModeName(changes.dependencyMode, tag.language),
+    });
+  }
   return items;
 }
 
@@ -143,6 +151,7 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   // Checked here like the others, but written apart: references come first
   // (encodeDependencies, tag-operations A2).
   dependencies: "dependencies",
+  dependencyMode: "dependencyMode",
 };
 
 /**

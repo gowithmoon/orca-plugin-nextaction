@@ -6,8 +6,13 @@ import * as React from "react";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
+import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
-import type { TaskId, TaskStatus } from "../../domain/task/task";
+import type {
+  DependencyMode,
+  TaskId,
+  TaskStatus,
+} from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { changeStatusReporting, notifyActionFailure } from "../notify";
 import type { TaskActionsDeps } from "./use-task-actions";
@@ -18,6 +23,8 @@ export interface TaskPanelWrites {
   setSequential: SetSequential;
   /** Replaces the task's dependencies (#57). */
   setDependencies: SetDependencies;
+  /** Chooses how the task's dependencies are met (#58). */
+  setDependencyMode: SetDependencyMode;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -38,6 +45,7 @@ export function useTaskPanelActions(
   drop(): Promise<boolean>;
   setSequential(sequential: boolean): Promise<boolean>;
   setDependencies(dependencies: readonly TaskId[]): Promise<boolean>;
+  setDependencyMode(mode: DependencyMode): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -81,6 +89,11 @@ export function useTaskPanelActions(
       setDependencies: (dependencies) =>
         run(
           () => writes.setDependencies(id, dependencies),
+          (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
+      setDependencyMode: (mode) =>
+        run(
+          () => writes.setDependencyMode(id, mode),
           (reason) => t("Could not save the change: ${reason}", { reason }),
         ),
     };

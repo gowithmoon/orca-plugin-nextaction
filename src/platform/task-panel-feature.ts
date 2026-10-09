@@ -7,6 +7,7 @@ import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadTask } from "../application/usecases/read-task";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
+import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
@@ -57,6 +58,7 @@ export function createTaskPanelFeature(deps: {
     setSequential: createSetSequential({ repository }),
     readDependencyCandidates: createReadDependencyCandidates({ repository }),
     setDependencies: createSetDependencies({ repository }),
+    setDependencyMode: createSetDependencyMode({ repository }),
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,

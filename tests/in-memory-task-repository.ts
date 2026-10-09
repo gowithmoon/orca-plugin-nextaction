@@ -87,6 +87,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     note: null,
     sequential: false,
     dependencies: [],
+    dependencyMode: "all",
     anomalies: [],
   };
 }
