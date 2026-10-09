@@ -51,6 +51,35 @@ describe("read blocking reasons", () => {
     expect(read.tasks.size).toBe(0);
   });
 
+  it("returns the task's own dependencies in order, marking the stale ones", async () => {
+    const { repository, readBlockingReasons } = setup();
+    // 7 was dropped: a block, but no longer a task. 8 is gone altogether.
+    repository.addTask({ id: 1, dependencies: [2, 7, 3, 8] });
+    repository.addTask({ id: 2, text: "Collect the data" });
+    repository.addTask({ id: 3, text: "Ask Wang", status: "done" });
+    repository.addBlock(7, { text: "Dropped" });
+
+    const read = await readBlockingReasons(1);
+
+    expect(read.dependencies).toEqual([
+      { id: 2, text: "Collect the data", stale: false },
+      { id: 7, text: null, stale: true },
+      { id: 3, text: "Ask Wang", stale: false },
+      { id: 8, text: null, stale: true },
+    ]);
+  });
+
+  it("writes nothing when reading, stale dependencies included (ADR 0016)", async () => {
+    const { repository, readBlockingReasons } = setup();
+    repository.addTask({ id: 1, dependencies: [7, 2] });
+    repository.addTask({ id: 2 });
+
+    await readBlockingReasons(1);
+
+    expect(repository.writeCount()).toBe(0);
+    expect((await repository.getTask(1))?.dependencies).toEqual([7, 2]);
+  });
+
   it("returns no reasons for a block that is not a task", async () => {
     const { repository, readBlockingReasons } = setup();
     repository.addBlock(1);

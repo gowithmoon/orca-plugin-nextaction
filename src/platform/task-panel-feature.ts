@@ -4,7 +4,9 @@ import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
 import { createReadBlockingReasons } from "../application/usecases/read-blocking-reasons";
 import { createReadCandidates } from "../application/usecases/read-candidates";
+import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadTask } from "../application/usecases/read-task";
+import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
@@ -53,6 +55,8 @@ export function createTaskPanelFeature(deps: {
       dayBoundary: deps.dayBoundary,
     }),
     setSequential: createSetSequential({ repository }),
+    readDependencyCandidates: createReadDependencyCandidates({ repository }),
+    setDependencies: createSetDependencies({ repository }),
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,

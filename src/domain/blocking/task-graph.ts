@@ -42,7 +42,7 @@ export interface TaskGraphOptions {
  *   0015); `waitingFor` are its earlier siblings.
  */
 export type BlockingReason = {
-  readonly kind: "subtasks" | "sequential";
+  readonly kind: "subtasks" | "sequential" | "dependencies";
   /**
    * The task the blocking comes from: the task itself, or an ancestor task
    * for blocking passed down (ADR 0015).
@@ -138,6 +138,19 @@ export function analyzeTaskGraph(
       .map((sibling) => sibling.task.id);
   };
 
+  /**
+   * The dependencies of `item` not yet met (GLOSSARY: 依赖), in the order
+   * the notes hold them. A dependency is met when its target is done; a
+   * target that is not a task in the snapshot is a stale dependency and
+   * counts as met. Every dependency must be met ("all"); the dependency mode
+   * (#58) decides this here.
+   */
+  const unmetDependencies = (item: SnapshotTask): TaskId[] =>
+    item.task.dependencies.filter((target) => {
+      const dependency = byId.get(target);
+      return dependency !== undefined && dependency.task.status !== "done";
+    });
+
   const entries = new Map<TaskId, TaskGraphEntry>();
   for (const item of ordered) {
     const blockedBy: BlockingReason[] = [];
@@ -148,6 +161,18 @@ export function analyzeTaskGraph(
       blockedBy.push({ kind: "subtasks", source: item.task.id, waitingFor });
     }
     const chain = selfAndAncestors(item);
+    // Dependency blocking of the task or any ancestor task passes down (ADR
+    // 0015): one reason per link whose dependencies are unmet, nearest first.
+    for (const link of chain) {
+      const waitingFor = unmetDependencies(link);
+      if (waitingFor.length > 0) {
+        blockedBy.push({
+          kind: "dependencies",
+          source: link.task.id,
+          waitingFor,
+        });
+      }
+    }
     // Sequential blocking of the task or any ancestor task passes down (ADR
     // 0015): one reason per link held back, nearest first.
     for (const link of chain) {

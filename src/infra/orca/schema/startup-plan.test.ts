@@ -57,6 +57,9 @@ const zhDefinitions = [
     pos: 8,
     typeArgs: { defaultEnabled: true, default: false },
   },
+  // Block references (#57): the values are reference IDs, no type arguments
+  // (tag-operations A2).
+  { name: "依赖", type: 2, pos: 9 },
 ];
 
 const enDefinitions = [
@@ -111,6 +114,7 @@ const enDefinitions = [
     pos: 8,
     typeArgs: { defaultEnabled: true, default: false },
   },
+  { name: "Dependencies", type: 2, pos: 9 },
 ];
 
 /**
@@ -301,6 +305,17 @@ describe("startup plan", () => {
         typeArgs: { defaultEnabled: true, default: 4 },
       },
     ]);
+  });
+
+  it("adds the dependencies property to a tag from before step 5, leaving the others as they are", () => {
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["依赖"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }).writes,
+    ).toEqual([{ name: "依赖", type: 2, pos: 9 }]);
   });
 
   it("names a missing property in the tag's language, not the interface's", () => {

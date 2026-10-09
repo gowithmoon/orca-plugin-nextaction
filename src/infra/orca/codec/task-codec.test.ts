@@ -1,9 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
 import { blocks, tagBlocks } from "../../../../tests/task-block-fixtures";
-import { decodeTask, type TaskTagContext } from "./task-codec";
+import {
+  decodeTask,
+  resolveDependencyTargets,
+  type TaskTagContext,
+} from "./task-codec";
 
 const zhTag: TaskTagContext = { tagBlockId: tagBlocks.zh.id, invalidated: [] };
 const enTag: TaskTagContext = { tagBlockId: tagBlocks.en.id, invalidated: [] };
+
+/** The one-dependency sample with its dependency value replaced. */
+function withDependencyValue(value: unknown) {
+  const block = blocks.zhOneDependency;
+  return {
+    ...block,
+    refs: block.refs.map((ref) =>
+      ref.type === 2
+        ? {
+            ...ref,
+            data: (ref.data ?? []).map((item) =>
+              item.name === "依赖" ? { ...item, value } : item,
+            ),
+          }
+        : ref,
+    ),
+  };
+}
 
 function decodedTask(block: Parameters<typeof decodeTask>[0], tag = zhTag) {
   const result = decodeTask(block, tag);
@@ -27,6 +49,7 @@ describe("decodeTask", () => {
       labels: [],
       note: null,
       sequential: false,
+      dependencies: [],
       created: new Date("2026-10-05T01:00:00.000Z"),
       anomalies: [],
     });
@@ -45,6 +68,7 @@ describe("decodeTask", () => {
       labels: ["house"],
       note: "after 9am",
       sequential: true,
+      dependencies: [],
       created: new Date("2026-10-06T08:00:00.000Z"),
       anomalies: [],
     });
@@ -64,6 +88,7 @@ describe("decodeTask", () => {
       labels: [],
       note: null,
       sequential: false,
+      dependencies: [],
       created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [],
     });
@@ -82,6 +107,7 @@ describe("decodeTask", () => {
       labels: [],
       note: null,
       sequential: false,
+      dependencies: [],
       created: new Date("2026-10-05T01:20:00.000Z"),
       anomalies: [{ property: "status", value: null }],
     });
@@ -217,6 +243,83 @@ describe("decodeTask", () => {
           invalidated: ["sequential"],
         }).sequential,
       ).toBe(false);
+    });
+  });
+
+  describe("dependencies", () => {
+    // tag-operations A2/A5: the value holds reference IDs; each is a
+    // `type: 3` reference of the task block whose `to` is the target.
+    it("reads one dependency as the target block's ID, on a Chinese task tag", () => {
+      expect(decodedTask(blocks.zhOneDependency).dependencies).toEqual([201]);
+    });
+
+    it("reads no dependencies when the value is missing", () => {
+      expect(decodedTask(blocks.zhDefaultsOnly).dependencies).toEqual([]);
+    });
+
+    it("reads several dependencies in the order of the value, on an English task tag", () => {
+      expect(decodedTask(blocks.enTwoDependencies, enTag).dependencies).toEqual(
+        [301, 364],
+      );
+    });
+
+    it("reads a dependency on a mirror as the mirror's block ID, for the repository to resolve", () => {
+      // The codec sees one block; resolving a mirror to its source needs the
+      // target block, read by the repository (block-properties-json M1).
+      expect(decodedTask(blocks.zhMirrorDependency).dependencies).toEqual([
+        242,
+      ]);
+    });
+
+    it.each([
+      ["a single number", 262],
+      ["a list of strings", ["262"]],
+      ["null", null],
+      ["an object", { 262: true }],
+    ])(
+      "reads a value that is %s as no dependencies, without failing",
+      (_, value) => {
+        expect(decodedTask(withDependencyValue(value)).dependencies).toEqual(
+          [],
+        );
+      },
+    );
+
+    it("skips a reference ID the block has no block reference for", () => {
+      // 999: no such reference; 202 is not on this block.
+      expect(
+        decodedTask(withDependencyValue([999, 262, 202])).dependencies,
+      ).toEqual([201]);
+    });
+
+    it("does not take the tag reference for a dependency", () => {
+      // 261 is the block's reference to the task tag (type 2), not type 3.
+      expect(decodedTask(withDependencyValue([261])).dependencies).toEqual([]);
+    });
+
+    it("resolves a dependency on a mirror to the mirror's source block", () => {
+      // block-properties-json M1: the mirror 242 shows block 201.
+      const targets = new Map([[242, blocks.mirror]]);
+      expect(resolveDependencyTargets([242], targets)).toEqual([201]);
+    });
+
+    it("keeps a target that is no mirror, or was not read, as it is", () => {
+      const targets = new Map([[201, blocks.zhFilled]]);
+      expect(resolveDependencyTargets([201, 7], targets)).toEqual([201, 7]);
+    });
+
+    it("lists a target once when a mirror and its source are both listed", () => {
+      const targets = new Map([[242, blocks.mirror]]);
+      expect(resolveDependencyTargets([201, 242], targets)).toEqual([201]);
+    });
+
+    it("reads an invalidated dependencies property as no dependencies", () => {
+      expect(
+        decodedTask(blocks.zhOneDependency, {
+          tagBlockId: tagBlocks.zh.id,
+          invalidated: ["dependencies"],
+        }).dependencies,
+      ).toEqual([]);
     });
   });
 
@@ -362,6 +465,7 @@ describe("decodeTask with values of the wrong kind", () => {
       labels: ["house"],
       note: null,
       sequential: false,
+      dependencies: [],
       created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [{ property: "status", value: ["待开始"] }],
     });

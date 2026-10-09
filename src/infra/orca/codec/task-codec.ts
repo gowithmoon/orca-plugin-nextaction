@@ -45,6 +45,8 @@ export interface RawBlock {
   content?: readonly { t: string; v: unknown }[] | null;
   properties: readonly { name: string; value?: unknown }[];
   refs: readonly {
+    /** The reference's own ID: what a block reference property's value holds. */
+    id: number;
     type: number;
     to: number;
     data?: readonly { name: string; value?: unknown }[] | null;
@@ -132,6 +134,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       labels: choicesValue(values.get("label")),
       note: textValue(values.get("note")),
       sequential: booleanValue(values.get("sequential")),
+      dependencies: dependencyTargets(block, values.get("dependencies")),
       created: createdValue(block.id, block.created),
     }),
   };
@@ -169,6 +172,46 @@ function textValue(value: unknown): string | null {
  */
 function booleanValue(value: unknown): boolean {
   return value === true;
+}
+
+/** Orca `RefType.RefData`: what a block reference property's value points through. */
+const refDataRef = 3;
+
+/**
+ * The target block IDs of a dependencies value. The value holds reference
+ * IDs, never block IDs (tag-operations A2): each is resolved through the
+ * block's own `type: 3` reference of that ID to the block it points at.
+ */
+function dependencyTargets(
+  block: Pick<RawBlock, "refs">,
+  value: unknown,
+): number[] {
+  if (!Array.isArray(value)) return [];
+  const targets: number[] = [];
+  for (const refId of value) {
+    const ref = block.refs.find((r) => r.id === refId && r.type === refDataRef);
+    if (ref) targets.push(ref.to);
+  }
+  return targets;
+}
+
+/**
+ * Dependency targets with every mirror replaced by its source block
+ * (block-properties-json M1), each once, in order. `blocks` holds the target
+ * blocks as read; a target not among them, or no mirror, stays as it is.
+ * One hop only, as for every other block ID (a mirror of a mirror is not
+ * measured).
+ */
+export function resolveDependencyTargets(
+  targets: readonly number[],
+  blocks: ReadonlyMap<number, Pick<RawBlock, "properties">>,
+): number[] {
+  const resolved = new Set<number>();
+  for (const target of targets) {
+    const block = blocks.get(target);
+    resolved.add((block && mirrorSourceId(block)) ?? target);
+  }
+  return [...resolved];
 }
 
 function choicesValue(value: unknown): string[] {
