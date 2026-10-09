@@ -289,7 +289,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
-    async appendTaskToJournal(text, now) {
+    async appendTaskToJournal(text, now, initial = {}) {
       const id = nextId++;
       write(() => {
         // get-journal-block picks the journal by local date (journal-capture J3).
@@ -303,7 +303,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           created: now,
           parentId: undefined,
           notConvertible: undefined,
-          task: freshTask(id, text, now),
+          // Properties not given keep the defaults, as Orca fills them.
+          task: { ...freshTask(id, text, now), ...initial },
           completionHistory: undefined,
         });
       });

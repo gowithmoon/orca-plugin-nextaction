@@ -2,6 +2,7 @@ import type { TaskRepository } from "../application/ports/task-repository";
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createConvertToTask } from "../application/usecases/convert-to-task";
 import { createQuickCapture } from "../application/usecases/quick-capture";
+import type { CalendarDate } from "../domain/task/task";
 import {
   type NoteLanguage,
   noteLanguageFor,
@@ -24,6 +25,7 @@ import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
 import { createQuickCaptureCommand } from "../ui/capture/quick-capture-popup";
 import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
+import { quickCaptureCss } from "../ui/styles/quick-capture-style";
 import type { FeatureContext, FeatureModule } from "./bootstrap";
 import { writeSetting } from "./settings";
 
@@ -48,6 +50,8 @@ const isBlank = (value: unknown) =>
 export function createTaskTagFeature(
   /** Called after every write of the plugin's to a task, also a failed one. */
   onWritten: () => void,
+  /** The current logical day, for the quick capture window's dates. */
+  today: () => CalendarDate,
 ): {
   feature: FeatureModule;
   /** The tag's note-facing names, following every change of the tag state. */
@@ -266,14 +270,17 @@ export function createTaskTagFeature(
       () => undefined,
       { label: t("Convert to task") },
     );
-    // The popup's own root, empty until the command opens it; unload
-    // unmounts it.
+    // Its own style sheet; the window look and the fields' styles come with
+    // the task panel feature. The popup's own root, empty until the command
+    // opens it; unload unmounts it.
+    context.registry.css("quickCaptureStyle", quickCaptureCss);
     const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
     context.registry.command(
       "quickCapture",
       createQuickCaptureCommand(
         createQuickCapture({ repository, clock: systemClock }),
         context.pluginName,
+        today,
         captureRoot.render,
       ),
       t("Quick capture"),

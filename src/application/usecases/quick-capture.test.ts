@@ -16,6 +16,22 @@ describe("quick capture", () => {
     },
   );
 
+  it("writes nothing for blank text, even with initial properties", async () => {
+    const repository = createInMemoryTaskRepository();
+    const quickCapture = createQuickCapture({
+      repository,
+      clock: createFixedClock("2026-10-08T10:00:00+08:00"),
+    });
+
+    const result = await quickCapture("  ", {
+      importance: 7,
+      due: { year: 2026, month: 10, day: 20 },
+    });
+
+    expect(result).toEqual({ kind: "empty" });
+    expect(repository.writeCount()).toBe(0);
+  });
+
   it("creates an inbox task with the text in today's journal", async () => {
     const repository = createInMemoryTaskRepository();
     const clock = createFixedClock("2026-10-08T10:00:00+08:00");
@@ -29,11 +45,58 @@ describe("quick capture", () => {
       id: result.id,
       text: "Buy #milk **now**",
       status: "inbox",
+      importance: 4,
+      effort: 4,
+      start: null,
+      due: null,
     });
     expect(repository.journalOf(result.id)).toEqual({
       year: 2026,
       month: 10,
       day: 8,
+    });
+  });
+
+  it("captures the task with the initial properties given", async () => {
+    const repository = createInMemoryTaskRepository();
+    const clock = createFixedClock("2026-10-08T10:00:00+08:00");
+    const quickCapture = createQuickCapture({ repository, clock });
+
+    const result = await quickCapture("Plan the trip", {
+      importance: 6,
+      effort: 2,
+      start: { year: 2026, month: 10, day: 12 },
+      due: { year: 2026, month: 10, day: 20 },
+    });
+
+    if (result.kind !== "captured") throw new Error("not captured");
+    expect(await repository.getTask(result.id)).toMatchObject({
+      text: "Plan the trip",
+      status: "inbox",
+      importance: 6,
+      effort: 2,
+      start: { year: 2026, month: 10, day: 12 },
+      due: { year: 2026, month: 10, day: 20 },
+    });
+  });
+
+  it("gives the properties not set their defaults", async () => {
+    const repository = createInMemoryTaskRepository();
+    const clock = createFixedClock("2026-10-08T10:00:00+08:00");
+    const quickCapture = createQuickCapture({ repository, clock });
+
+    const result = await quickCapture("Renew passport", {
+      effort: 6,
+      due: { year: 2026, month: 11, day: 1 },
+    });
+
+    if (result.kind !== "captured") throw new Error("not captured");
+    expect(await repository.getTask(result.id)).toMatchObject({
+      status: "inbox",
+      importance: 4,
+      effort: 6,
+      start: null,
+      due: { year: 2026, month: 11, day: 1 },
     });
   });
 
@@ -62,7 +125,12 @@ describe("quick capture", () => {
       clock: createFixedClock("2026-10-08T10:00:00+08:00"),
     });
 
-    await expect(quickCapture("Call mum")).rejects.toBe(failure);
+    await expect(
+      quickCapture("Call mum", {
+        importance: 6,
+        start: { year: 2026, month: 10, day: 9 },
+      }),
+    ).rejects.toBe(failure);
     expect(await repository.queryTasks({})).toEqual([]);
   });
 });
