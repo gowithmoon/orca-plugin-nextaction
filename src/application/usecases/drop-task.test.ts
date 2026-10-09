@@ -49,6 +49,51 @@ describe("drop task", () => {
     expect((await repository.getTask(32))?.status).toBe("doing");
   });
 
+  it("clears the dependency of a task that depended on it, keeping its others", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 40, status: "todo" });
+    repository.addTask({ id: 41, status: "todo" });
+    repository.addTask({ id: 42, status: "todo", dependencies: [41, 40] });
+    const dropTask = createDropTask({ repository });
+
+    await dropTask(40);
+
+    expect((await repository.getTask(42))?.dependencies).toEqual([41]);
+    // All of it is one write: one undo restores the task and the dependency.
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("clears it from every task that depended on it, in one write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 50, status: "todo" });
+    repository.addTask({ id: 51, status: "todo" });
+    repository.addTask({ id: 52, status: "todo", dependencies: [50] });
+    repository.addTask({ id: 53, status: "doing", dependencies: [50, 51] });
+    repository.addTask({ id: 54, status: "todo", dependencies: [51] });
+    const dropTask = createDropTask({ repository });
+
+    await dropTask(50);
+
+    expect((await repository.getTask(52))?.dependencies).toEqual([]);
+    expect((await repository.getTask(53))?.dependencies).toEqual([51]);
+    expect((await repository.getTask(54))?.dependencies).toEqual([51]);
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("leaves other tasks' dependencies as they are when none was on it", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 60, status: "todo" });
+    repository.addTask({ id: 61, status: "todo" });
+    repository.addTask({ id: 62, status: "todo", dependencies: [61] });
+    const dropTask = createDropTask({ repository });
+
+    await dropTask(60);
+
+    expect(await repository.getTask(60)).toBeNull();
+    expect((await repository.getTask(62))?.dependencies).toEqual([61]);
+    expect(repository.writeCount()).toBe(1);
+  });
+
   it("throws when the write fails, leaving the task as it was", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask(
