@@ -2,11 +2,51 @@
 // view, highest score first (#53).
 import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import { rankByScore } from "../../domain/scoring/score";
-import type { Task, TaskId } from "../../domain/task/task";
+import type { Importance, Task, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
+
+/**
+ * What one multi-value dimension (contexts, labels) lets through: a task
+ * holding any of `values`, or, with `none`, a task holding no value at all.
+ */
+export interface ValuesChoice {
+  readonly values: readonly string[];
+  readonly none: boolean;
+}
+
+/**
+ * The next action view's filter (#55). Within a dimension any choice is
+ * enough ("or"); every dimension given must let the task through ("and").
+ */
+export interface NextActionFilter {
+  readonly contexts?: ValuesChoice;
+  readonly labels?: ValuesChoice;
+  /** The importance levels let through. */
+  readonly importance?: readonly Importance[];
+}
+
+function choiceLets(
+  choice: ValuesChoice | undefined,
+  held: readonly string[],
+): boolean {
+  // Nothing chosen: the dimension does not filter.
+  if (!choice || (choice.values.length === 0 && !choice.none)) return true;
+  if (choice.none && held.length === 0) return true;
+  return choice.values.some((value) => held.includes(value));
+}
+
+function filterLets(filter: NextActionFilter, task: Task): boolean {
+  return (
+    choiceLets(filter.contexts, task.contexts) &&
+    choiceLets(filter.labels, task.labels) &&
+    (!filter.importance ||
+      filter.importance.length === 0 ||
+      filter.importance.includes(task.importance))
+  );
+}
 
 export interface ReadNextActionsOptions {
   /**
@@ -14,6 +54,8 @@ export interface ReadNextActionsOptions {
    * being edited, as in the inbox view), in its place by score.
    */
   readonly keep?: TaskId;
+  /** Only the next actions it lets through are listed; none: every one. */
+  readonly filter?: NextActionFilter;
 }
 
 /** A task in the list. */
@@ -21,6 +63,16 @@ export interface NextActionItem {
   readonly task: Task;
   /** `false` only for the task kept by `keep` after it left. */
   readonly nextAction: boolean;
+  /**
+   * Listed only because of `keep`: it is no longer a next action, or the
+   * filter no longer lets it through.
+   */
+  readonly kept: boolean;
+  /**
+   * The text of its parent task (GLOSSARY: 父任务), as the notes hold it;
+   * `null` when it has none.
+   */
+  readonly parentText: string | null;
 }
 
 export interface NextActionsRead {
@@ -47,17 +99,26 @@ export function createReadNextActions(deps: {
       // #56 adds the start preview setting; until then, none.
       previewDays: 0,
     });
-    const shown = [...graph.nextActions];
+    const filter = options.filter ?? {};
+    const shown = graph.nextActions.filter((entry) =>
+      filterLets(filter, entry.task),
+    );
     // Only a task still in the snapshot: a block that is no longer a task
     // is not listed.
     const kept =
       options.keep === undefined ? undefined : graph.entry(options.keep);
-    if (kept && !kept.nextAction) shown.push(kept);
+    const keptAlone = kept !== undefined && !shown.includes(kept);
+    if (kept && keptAlone) shown.push(kept);
     const ranked = rankByScore(shown, today);
     return {
       items: ranked.map((entry) => ({
         task: entry.task,
         nextAction: entry.nextAction,
+        kept: keptAlone && entry === kept,
+        parentText:
+          entry.parentId === null
+            ? null
+            : (graph.entry(entry.parentId)?.task.text ?? null),
       })),
       total: graph.nextActions.length,
     };
