@@ -21,7 +21,9 @@ export function ViewNotice(props: {
       {props.detail && (
         <div className="nextaction-view-notice-detail">{props.detail}</div>
       )}
-      {props.action}
+      {props.action && (
+        <div className="nextaction-view-notice-action">{props.action}</div>
+      )}
     </div>
   );
 }
