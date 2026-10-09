@@ -1,7 +1,8 @@
 // The status menu (#35 "任务卡片与组件"): the six statuses, the current one
 // marked. Choosing the current status does nothing. Shared by the task card
-// and the task panel; render it inside a ContextMenu's `menu`. Verified by
-// hand in Orca (docs/ARCHITECTURE.md §5).
+// and the task panel; render it as a ContextMenu's `menu`, which is already a
+// menu: an `orca.components.Menu` around it draws a second background and
+// shadow. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import {
   hasStatusAnomaly,
   type Task,
@@ -27,9 +28,9 @@ export function StatusMenu(props: {
   close: () => void;
 }) {
   const { current, onChoose, close } = props;
-  const { Menu, MenuText } = orca.components;
+  const { MenuText } = orca.components;
   return (
-    <Menu>
+    <>
       {taskStatuses.map((status) => {
         const isCurrent = status === current;
         return (
@@ -46,6 +47,6 @@ export function StatusMenu(props: {
           />
         );
       })}
-    </Menu>
+    </>
   );
 }

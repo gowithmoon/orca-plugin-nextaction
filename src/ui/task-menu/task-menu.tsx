@@ -84,8 +84,10 @@ function TaskMenuEntries(props: {
 }
 
 /**
- * The task menu as a whole menu, e.g. for `ContextMenu` inside the plugin
- * panel: the same registrations as in Orca's own menus.
+ * The task menu for a `ContextMenu` inside the plugin panel: the same
+ * registrations as in Orca's own menus. `ContextMenu` is already a menu
+ * (`.orca-menu.orca-context-menu`), so the entries go in without another
+ * `Menu`: one would draw a second background and shadow.
  */
 export function TaskMenu(props: {
   items: TaskMenuItems;
@@ -93,12 +95,7 @@ export function TaskMenu(props: {
   close: () => void;
   place?: TaskMenuPlace;
 }) {
-  const { Menu } = orca.components;
-  return (
-    <Menu>
-      <TaskMenuEntries {...props} />
-    </Menu>
-  );
+  return <TaskMenuEntries {...props} />;
 }
 
 /** Reads the task, then shows its entries; nothing for a block that is not a task. */
