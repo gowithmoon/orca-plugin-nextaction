@@ -59,6 +59,7 @@ export const panelCss = `
   overflow: hidden;
 }
 
+/* Pills (#48): the current view filled and bold, the others plain text. */
 .nextaction-panel-nav-item {
   display: inline-flex;
   align-items: center;
@@ -68,27 +69,27 @@ export const panelCss = `
   height: var(--orca-height-segmented);
   padding: 0 var(--orca-spacing-md);
   border: none;
-  border-radius: var(--orca-radius-sm);
+  /* --orca-radius-md is not verified to exist. */
+  border-radius: var(--orca-radius-md, var(--orca-radius-sm));
   background: transparent;
   color: var(--orca-color-text-2);
   font: inherit;
-  font-weight: var(--orca-fontweight-lg);
   cursor: pointer;
 }
 
 .nextaction-panel-nav-item:hover {
-  background-color: var(--orca-color-bg-2);
   color: var(--orca-color-text-1);
 }
 
 .nextaction-panel-nav-item[aria-selected="true"] {
   background-color: var(--orca-color-bg-2);
   color: var(--orca-color-text-1);
+  font-weight: var(--orca-fontweight-lg);
 }
 
 .nextaction-panel-nav-item:focus-visible {
   outline: var(--orca-border-box);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .nextaction-panel-nav-item > .ti {
@@ -102,10 +103,19 @@ export const panelCss = `
   white-space: nowrap;
 }
 
+/* A small grey badge; tinted from the text colour, so it shows on the
+   current item's fill as well as on the panel's background. */
 .nextaction-panel-nav-count {
   flex: 0 0 auto;
+  min-width: calc(var(--orca-fontsize-xs) * 1.6);
+  padding: 0 var(--orca-spacing-xs);
+  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
+  background-color: color-mix(in srgb, var(--orca-color-text-2) 15%, transparent);
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-xs);
+  font-weight: normal;
+  line-height: var(--orca-lineheight-sm);
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -161,6 +171,7 @@ export const panelCss = `
   margin-bottom: var(--orca-spacing-md);
 }
 
+/* The largest, heaviest text in the plugin panel (#48). */
 .nextaction-view-title {
   margin: 0;
   min-width: 0;
@@ -170,9 +181,11 @@ export const panelCss = `
   line-height: var(--orca-lineheight-sm);
 }
 
+/* Narrow tier only, where the navigation shows no counts. */
 .nextaction-view-count {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-md);
   font-variant-numeric: tabular-nums;
 }
 `;

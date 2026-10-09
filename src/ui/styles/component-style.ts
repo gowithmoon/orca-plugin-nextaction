@@ -216,23 +216,39 @@ export const componentCss = `
   }
 }
 
+/* Empty, paused, failed (#48): centred, a large icon, then the title and
+   the detail as two levels, below the view title's. */
 .nextaction-view-notice {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--orca-spacing-sm);
-  padding: var(--orca-spacing-lg) var(--orca-spacing-md);
+  justify-content: center;
+  gap: var(--orca-spacing-xs);
+  padding: calc(var(--orca-spacing-lg) * 2) var(--orca-spacing-md);
   color: var(--orca-color-text-2);
   text-align: center;
   overflow-wrap: anywhere;
 }
 
 .nextaction-view-notice > .ti {
-  font-size: var(--orca-fontsize-lg);
+  margin-bottom: var(--orca-spacing-sm);
+  font-size: calc(var(--orca-fontsize-lg) * 2);
+  line-height: 1;
 }
 
 .nextaction-view-notice-title {
   color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-md);
   font-weight: var(--orca-fontweight-lg);
+}
+
+.nextaction-view-notice-detail {
+  max-width: 36em;
+  font-size: var(--orca-fontsize-sm);
+  line-height: var(--orca-lineheight-md);
+}
+
+.nextaction-view-notice-action {
+  margin-top: var(--orca-spacing-md);
 }
 `;
