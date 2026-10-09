@@ -23,7 +23,7 @@
 ### 布尔属性（`PropType.Boolean` = 4）
 
 - 标签上的定义：`{ name, type: 4, pos }`，不需要 `typeArgs`。加上 `typeArgs: { defaultEnabled: true, default: false }` 后，打标签时 `data` 中写入 `false`，界面显示为未勾选的复选框（用户确认）。
-- **`insertTag` 传布尔值时，值项必须带 `type: 4`。** 不带 `type` 的 `{ name, value: true }` 或 `{ value: false }`，标签整个打不上（块没有 `_tags`，`text` 不变），`invokeEditorCommand` 不抛异常，控制台打出 `SQLite3 can only bind numbers, strings, bigints, buffers, and null`。和其他属性一起传也一样打不上（第二轮"状态加布尔true"）。带 `type: 4` 时 `true`、`false` 都正确写入。
+- **`insertTag` 传布尔值时，值项必须带 `type: 4`。** 不带 `type` 的 `{ name, value: true }` 或 `{ value: false }`，标签整个打不上（块没有 `_tags`，`text` 不变），`invokeEditorCommand` 不抛异常，控制台打出 `SQLite3 can only bind numbers, strings, bigints, buffers, and null`（Orca 自己用 `console.error` 打的，异常没有传给调用方）。调用方能看到的唯一信号是返回值：成功时 `insertTag` 返回标签块 ID，这种失败时返回 `undefined`。和其他属性一起传也一样打不上（第二轮"状态加布尔true"）。带 `type: 4` 时 `true`、`false` 都正确写入。
 - 不带 `type` 的非布尔值会被 Orca 换算：字符串 `"yes"`、`"true"`、`"false"` 和数字 `1` 都读作 `true`，数字 `0` 读作 `false`。插件不依赖这种换算。
 - `setRefData` 写入 `{ name, type: 4, value }`：`true`、`false`、`null` 都原样读回。写 `null` 后，这一项留在 `data` 里，值为 `null`，不会消失。
 - 界面上切换复选框，存的也是 `true` / `false`（第二段 `b1`）。
