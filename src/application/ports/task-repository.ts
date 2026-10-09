@@ -1,12 +1,5 @@
 import type { CompletionHistory } from "../../domain/task/completion-history";
-import type {
-  CalendarDate,
-  Effort,
-  Importance,
-  Task,
-  TaskId,
-  TaskStatus,
-} from "../../domain/task/task";
+import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
 
 /**
@@ -85,14 +78,13 @@ export type ConvertToTaskResult =
 
 /**
  * Properties a quick capture sets on the new task (GLOSSARY: 快速捕获). Those
- * not given take their defaults: importance and effort 4, no dates.
+ * not given take their defaults: importance and effort 4, no dates. Taken from
+ * `TaskChanges`, so the two cannot drift; a new task has no date to clear, so
+ * the dates are never `null`.
  */
-export interface InitialProperties {
-  readonly importance?: Importance;
-  readonly effort?: Effort;
-  readonly start?: CalendarDate;
-  readonly due?: CalendarDate;
-}
+export type InitialProperties = Pick<TaskChanges, "importance" | "effort"> & {
+  readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
+};
 
 /**
  * Where tasks are read from and written to. Implementations hide every Orca

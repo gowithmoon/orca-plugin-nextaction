@@ -5,6 +5,26 @@
 // above the fields below that; status buttons in three columns and two rows
 // when very narrow. Header, body and footer space and separate like the
 // plugin panel's header and view (#45 "任务属性面板").
+//
+// The fields also show in the quick capture window, inside a container of its
+// own (nextaction-capture-fields); the field layout follows either container.
+
+/** Labels to the left from 420px, for the fields inside `container`. */
+const wideFieldsCss = (container: string) => `
+@container ${container} (min-width: 420px) {
+  .nextaction-task-field {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--orca-spacing-md);
+  }
+  .nextaction-task-field-label {
+    flex: 0 0 6rem;
+  }
+  .nextaction-task-field-control {
+    flex: 1 1 auto;
+  }
+}
+`;
 
 export const taskPanelCss = `
 .nextaction-task-panel {
@@ -77,19 +97,8 @@ export const taskPanelCss = `
   min-width: 0;
 }
 
-@container nextaction-task-panel (min-width: 420px) {
-  .nextaction-task-field {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--orca-spacing-md);
-  }
-  .nextaction-task-field-label {
-    flex: 0 0 6rem;
-  }
-  .nextaction-task-field-control {
-    flex: 1 1 auto;
-  }
-}
+${wideFieldsCss("nextaction-task-panel")}
+${wideFieldsCss("nextaction-capture-fields")}
 
 /* Fieldsets group the buttons for assistive technology; no box of their own. */
 .nextaction-status-buttons,
@@ -269,12 +278,13 @@ export const taskPanelCss = `
 }
 
 /* The least used action stays grey until pointed at (#45 "任务属性面板"). */
-.nextaction-task-drop {
+/* Scoped to the footer so it outweighs the colours of Orca's plain Button. */
+.nextaction-task-panel-footer .nextaction-task-drop {
   color: var(--orca-color-text-2);
 }
 
-.nextaction-task-drop:hover,
-.nextaction-task-drop:focus-visible {
+.nextaction-task-panel-footer .nextaction-task-drop:hover,
+.nextaction-task-panel-footer .nextaction-task-drop:focus-visible {
   color: var(--orca-color-dangerous-5);
 }
 `;

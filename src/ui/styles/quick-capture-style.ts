@@ -1,6 +1,7 @@
 // Styles of the quick capture window (#45 "快速捕获"), injected through the
 // registry. It wears the shared window look (window-style.ts) and reuses the
-// task panel's field styles (task-panel-style.ts); only its own layout is
+// task panel's field styles (task-panel-style.ts), both injected by the popup
+// styles feature (platform/popup-style-feature.ts); only its own layout is
 // here. Orca's CSS variables only; class names start with `nextaction-`.
 
 export const quickCaptureCss = `
@@ -33,12 +34,11 @@ export const quickCaptureCss = `
 }
 
 /*
- * The task panel's fields lay out by the width of a container named
- * nextaction-task-panel (labels to the left from 420px); this one gives them
- * the same layout here.
+ * The fields lay out by the width of this container as they do by the task
+ * panel's (labels to the left from 420px, task-panel-style.ts).
  */
 .nextaction-capture-fields {
-  container: nextaction-task-panel / inline-size;
+  container: nextaction-capture-fields / inline-size;
 }
 
 .nextaction-capture-footer {

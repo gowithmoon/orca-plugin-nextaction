@@ -3,15 +3,13 @@
 // by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { CalendarDate, Rating, TaskStatus } from "../../domain/task/task";
-import { taskStatuses } from "../../domain/task/task";
+import { defaultRating, taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
 import { statusLabel } from "../components/status-label";
 import { statusIcons } from "../task-menu/status-icons";
 
 const ratings: readonly Rating[] = [1, 2, 3, 4, 5, 6, 7];
-/** Importance and effort default to 4 (GLOSSARY). */
-const defaultRating: Rating = 4;
 
 /** A labelled field: label to the left on a wide panel, above it otherwise (CSS). */
 export function Field(props: {
