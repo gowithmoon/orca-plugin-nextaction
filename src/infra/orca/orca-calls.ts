@@ -19,16 +19,16 @@ export async function invokeBackend(
 }
 
 /**
- * Runs an editor command without a cursor, through a note panel
- * (`inNotePanel`): from the plugin panel it would silently write nothing.
- * Inside `invokeGroup` the note panel is already the active one.
+ * Runs an editor command without a cursor, through a panel with an editor
+ * (`withEditor`): without one it would silently write nothing. Inside
+ * `invokeGroup` that panel is already the active one.
  */
 export async function invokeEditorCommand(
   command: string,
   ...args: unknown[]
 ): Promise<unknown> {
   try {
-    return await inNotePanel(() =>
+    return await withEditor(() =>
       orca.commands.invokeEditorCommand(command, null, ...args),
     );
   } catch (error) {
@@ -42,28 +42,32 @@ export async function invokeEditorCommand(
 // The same walk as platform/panel-tree.ts, which infra may not import.
 type AnyPanel = RowPanel | ColumnPanel | ViewPanel;
 
-/** Views with a block editor, which Orca writes through (plugin-panel-writes). */
-const noteViews: readonly string[] = ["journal", "block"];
+/**
+ * Orca runs editor commands and `invokeGroup` through the active panel's
+ * editor (`viewState.editor`, plugin-panel-writes). Journal and block panels
+ * have one; the plugin panel has one through the editor it hides.
+ */
+function hasEditor(panel: ViewPanel | null): boolean {
+  const editor: unknown = panel?.viewState?.editor;
+  return typeof editor === "object" && editor !== null;
+}
 
-function isNotePanel(id: string): boolean {
-  const panel = orca.nav.findViewPanel(id, orca.state.panels);
-  return panel !== null && noteViews.includes(panel.view);
+function panelHasEditor(id: string): boolean {
+  return hasEditor(orca.nav.findViewPanel(id, orca.state.panels));
 }
 
 /**
- * A note panel to write through: the most recently active one still open,
- * else the first in the layout.
+ * A panel to write through: the most recently active one still open with an
+ * editor, else the first in the layout.
  */
-function findNotePanel(): string | undefined {
+function findEditorPanel(): string | undefined {
   const history = orca.state.panelBackHistory;
   for (let i = history.length - 1; i >= 0; i--) {
     const id = history[i]?.activePanel;
-    if (id !== undefined && isNotePanel(id)) return id;
+    if (id !== undefined && panelHasEditor(id)) return id;
   }
   const walk = (panel: AnyPanel): string | undefined => {
-    if (!("children" in panel)) {
-      return noteViews.includes(panel.view) ? panel.id : undefined;
-    }
+    if (!("children" in panel)) return hasEditor(panel) ? panel.id : undefined;
     for (const child of panel.children) {
       const found = walk(child);
       if (found) return found;
@@ -74,43 +78,44 @@ function findNotePanel(): string | undefined {
 }
 
 /**
- * While writes are under way: the panel and element to give the focus back
- * to once the last of them ends. Writes can overlap (e.g. a note saved on
- * blur while a status is chosen); switching back after the first would leave
- * the others writing nothing.
+ * While writes are under way through a panel switched to: the panel and
+ * element to give the focus back to once the last of them ends. Writes can
+ * overlap (e.g. a note saved on blur while a status is chosen); switching
+ * back after the first would leave the others writing nothing.
  */
 let switched:
   | { count: number; previous: string; focused: HTMLElement | undefined }
   | undefined;
 
 /**
- * Makes a note panel the active one for the length of `run`, then gives the
- * focus back. Orca's `invokeGroup` and editor commands write through the
- * active panel's editor: from the plugin panel, `invokeGroup` throws and an
- * editor command writes nothing (plugin-panel-writes). The undo step is
- * recorded in that note panel.
+ * Runs `run` with a panel that has an editor as the active one. Usually the
+ * active panel has one (a note panel, or the plugin panel); otherwise one is
+ * made active for the length of `run` and the focus given back afterwards.
+ * The undo step is recorded in that panel and undone from it
+ * (plugin-panel-writes, round 3).
  */
-async function inNotePanel<T>(run: () => Promise<T>): Promise<T> {
+async function withEditor<T>(run: () => Promise<T>): Promise<T> {
   if (switched) {
     switched.count += 1;
   } else {
-    if (isNotePanel(orca.state.activePanel)) return run();
-    const target = findNotePanel();
+    if (panelHasEditor(orca.state.activePanel)) return run();
+    const target = findEditorPanel();
     if (target === undefined) {
-      throw new NoNotePanelError("no journal or block panel is open");
+      throw new NoNotePanelError("no panel with an editor is open");
     }
     switched = {
       count: 1,
       previous: orca.state.activePanel,
-      // The element the user is in (e.g. the task panel popup), so switching
-      // panels does not leave keys going to the editor behind it.
+      // The element the user is in, so switching panels does not leave keys
+      // going to the editor of the panel switched to.
       focused:
         document.activeElement instanceof HTMLElement
           ? document.activeElement
           : undefined,
     };
-    // Takes effect at once (plugin-panel-writes, f); checked all the same,
-    // as an editor command would otherwise write nothing without a word.
+    // Takes effect at once and adds no back history (plugin-panel-writes);
+    // checked all the same, as an editor command would otherwise write
+    // nothing without a word.
     orca.nav.switchFocusTo(target);
     if (orca.state.activePanel !== target) {
       switched = undefined;
@@ -137,16 +142,17 @@ async function inNotePanel<T>(run: () => Promise<T>): Promise<T> {
 
 /**
  * Runs `write` as one undo step (tag-operations, round 2 F1/F2), through a
- * note panel (`inNotePanel`). Whether `invokeGroup` rethrows an error from
+ * panel with an editor (`withEditor`). Whether `invokeGroup` rethrows an error from
  * its callback is not measured, so the failure is carried out of the group
  * and thrown after it. Orca skips the callback when the active panel has no
- * view state (its source, plugin-panel-writes), so a write that never ran fails.
+ * view state (its source, plugin-panel-writes), so a write that never ran
+ * fails.
  */
 export async function invokeGroup(write: () => Promise<void>): Promise<void> {
   let ran = false;
   let failure: { error: unknown } | undefined;
   try {
-    await inNotePanel(() =>
+    await withEditor(() =>
       orca.commands.invokeGroup(async () => {
         ran = true;
         try {

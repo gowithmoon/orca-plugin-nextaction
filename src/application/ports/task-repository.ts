@@ -53,9 +53,9 @@ export class TaskFeaturesPausedError extends Error {
 }
 
 /**
- * Orca writes only through a journal or block panel, and none is open (e.g.
- * only the plugin panel is left). Nothing was written; `ui` asks the user to
- * open one.
+ * Orca writes only through a panel with an editor (a journal or block panel,
+ * or the plugin panel), and none is open. Nothing was written; `ui` asks the
+ * user to open one.
  */
 export class NoNotePanelError extends Error {
   override name = "NoNotePanelError";

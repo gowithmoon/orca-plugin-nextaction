@@ -151,6 +151,11 @@ export function createNextActionPlugin(): Plugin {
     taskActions: taskActions.taskActions,
     menuItems: taskMenu.items,
     taskPanel: { openPopup: taskPanel.open, formDeps: taskPanel.formDeps },
+    // The task tag block exists whenever tasks can be written.
+    editorHost: {
+      current: taskTag.taskTagBlockId,
+      subscribe: taskTag.names.subscribe,
+    },
   });
   return createPlugin({
     features: [

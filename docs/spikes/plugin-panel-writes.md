@@ -71,3 +71,41 @@
 | g | 同 f 的状态下写截止日期（本地 2026-10-20 零点） | 成功，读回 `Date` `2026-10-19T16:00:00.000Z` | 3 |
 
 撤销：第一次 Ctrl+Z 后紧接着读到重要性 3、截止日期仍在；第二次 Ctrl+Z 后读到重要性 4、截止日期已清空。
+
+## 第二轮：插件面板自己带编辑器
+
+2026-10-09，`.scratch/spikes/step4-embedded-editor.js`。临时面板类型 `spikeEditor`，从日记右侧打开，活动面板始终是这个临时面板。
+
+- **编辑器命令也通过活动面板的编辑器执行。** `orca.commands.invokeEditorCommand` 的源码：
+
+  ```js
+  async function invokeEditorCommand(mr, ur, ...pr) {
+    const Ji = orca.nav.findViewPanel(orca.state.activePanel, orca.state.panels);
+    if (!(!Ji || !Ji.viewState?.editor?.invokeCommand)) return await Ji.viewState.editor.invokeCommand(mr, ur, ...pr)
+  }
+  ```
+
+  活动面板没有编辑器时，它直接返回 `undefined`，什么都不做，这就是第一轮 b 的原因。`invokeTopEditorCommand` 同理。所以不用 `invokeGroup` 也绕不开编辑器。
+- **在面板里渲染 `orca.components.Block`，面板不会因此获得编辑器**（E3）：`viewState` 为空；块能显示、能点进去编辑，但 `invokeEditorCommand` 不写，`invokeGroup` 报错。
+- **在面板里渲染 Orca 的块面板渲染器 `orca.state.panelRenderers.block`（传入面板自己的 props 和 `blockId`），面板就有了编辑器**（E4）：`viewState` 出现 `editor` 和以块 ID 为键的一项，`invokeEditorCommand`、`invokeGroup`、`viewState.editor.invokeGroup` 都写入成功。块能点进去编辑，界面正常，没有报错（界面已确认）。
+- **直接调用另一个面板编辑器的 `invokeGroup`，不切换活动面板，写不进去**（E3 的 w3：返回成功，值没变）：组里的编辑器命令仍然找活动面板的编辑器。
+- E2（空面板）的结果与 E4 完全相同，而面板此时本应什么都不渲染。脚本的模式变量跨 `run()` 保留，多次运行时新面板一开始就是上一次的渲染器模式，原因没有确认，不作为结论。空面板没有编辑器，第一轮已经测过（插件面板）。
+
+## 第三轮：把编辑器藏起来
+
+2026-10-09，`.scratch/spikes/step4-hidden-editor.js`。临时面板里放一个按钮、一个输入框，以及一个隐藏的块面板渲染器（显示日记里的宿主块）。
+
+- **藏起来照样能写**：`display: none`（H1）和尺寸为 0（H2）两种方式，面板的 `viewState` 都有 `editor`，活动面板是这个面板时 `invokeGroup` 写入成功。宿主块没有露出来，界面上看不到（界面已确认）。
+- **撤销按面板分开记**：
+  - 在面板里点"写入"后，焦点留在按钮上按 Ctrl+Z，撤回了这次写入（重要性 1 → 5）。按钮不在编辑器里，Orca 仍把 Ctrl+Z 交给活动面板的编辑器。
+  - 在面板里写入后，点进日记按 Ctrl+Z，**没有**撤回这次写入（重要性仍是 3），撤回的是日记面板自己最近的一次修改：脚本早先在日记面板里建的宿主块被撤销掉了。
+  - 推论：写入记在执行它的那个面板的撤销历史里，只有在那个面板里按 Ctrl+Z 才撤回。当前分支"切到笔记面板写入"的做法，写入记在笔记面板里，在插件面板里按 Ctrl+Z 撤不回来。
+- **输入框不受影响**：在面板的输入框里打字正常，文字没有跑到宿主块里；在输入框里按 Ctrl+Z 撤销的是输入框的文字（浏览器自己的撤销），任务的值不变。键盘焦点始终不在隐藏的编辑器里。
+- **`switchFocusTo` 不产生后退历史**：打开面板、切到笔记面板、再切回来，`panelBackHistory` 的长度都是 0。
+- 没有红色报错。
+
+## 对第四步的影响（第三轮后修订）
+
+- 插件面板藏一个块面板渲染器（`display: none`），显示任务标签块，插件面板因此有了自己的编辑器。从插件面板（卡片、右键菜单、侧栏、从插件面板打开的弹窗）写入时，活动面板就是插件面板，写入和撤销都在插件面板里，不切换焦点，也不需要笔记面板。
+- `orca-calls` 保留"活动面板没有编辑器时切到一个有编辑器的面板"的退路，判断条件从"是日记或块视图"改为"`viewState.editor` 存在"。
+- 没有实测：隐藏的块面板渲染器显示任务标签块时，会不会把标签页上"带这个标签的块"一并渲染出来（任务多时影响性能）；焦点在插件面板之外的弹窗里按 Ctrl+Z 撤销什么。留给 #43 的手动验证。

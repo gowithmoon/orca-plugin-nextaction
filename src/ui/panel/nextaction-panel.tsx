@@ -8,6 +8,7 @@ import type { PanelProps } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import type { OpenTaskPanelPopup } from "../task-panel/task-panel-popup";
 import type { TaskPanelSidePaneProps } from "../task-panel/task-panel-side-pane";
+import { type EditorHost, HiddenEditor } from "./hidden-editor";
 import { PanelContext, type PanelContextValue } from "./panel-context";
 import { PanelNavigation } from "./panel-navigation";
 import type { PanelViews } from "./panel-views";
@@ -35,6 +36,8 @@ export interface NextActionPanelOptions {
   openPopup: OpenTaskPanelPopup;
   /** The refresh button beside the navigation. */
   onRefresh: () => void;
+  /** The block of the editor the panel hides, so it can write (plugin-panel-writes). */
+  editorHost: EditorHost;
   /**
    * The plugin panel became the active panel again (not when it opens: it
    * opens active, and its views read then).
@@ -97,6 +100,7 @@ export function createNextActionPanel(
     openPopup,
     onRefresh,
     onActivated,
+    editorHost,
   } = options;
 
   return function NextActionPanel(props) {
@@ -134,6 +138,11 @@ export function createNextActionPanel(
     const View = current?.component;
     return (
       <div className="nextaction-panel" data-tier={tier} ref={root}>
+        <HiddenEditor
+          panelId={props.panelId}
+          active={props.active}
+          host={editorHost}
+        />
         {context && (
           <PanelContext.Provider value={context}>
             <PanelNavigation

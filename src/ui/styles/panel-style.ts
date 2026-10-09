@@ -28,6 +28,11 @@ export const panelCss = `
   user-select: text;
 }
 
+/* The editor that lets the panel write (ui/panel/hidden-editor.tsx). */
+.nextaction-hidden-editor {
+  display: none;
+}
+
 .nextaction-panel *,
 .nextaction-panel *::before,
 .nextaction-panel *::after {

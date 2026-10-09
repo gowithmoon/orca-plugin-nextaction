@@ -3,6 +3,7 @@ import { createReadInbox } from "../application/usecases/read-inbox";
 import type { CalendarDate } from "../domain/task/task";
 import type { ChangeSignal } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
+import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
@@ -42,6 +43,8 @@ export function createPanelFeature(deps: {
    * the wide tier and in the popup otherwise.
    */
   taskPanel: { openPopup: OpenTaskPanelPopup; formDeps: TaskPanelFormDeps };
+  /** The block the panel's hidden editor shows: the task tag block. */
+  editorHost: EditorHost;
 }): { feature: FeatureModule; views: PanelViews } {
   const { repository, changes, taskPanel } = deps;
   const views = createPanelViews();
@@ -61,6 +64,7 @@ export function createPanelFeature(deps: {
     sidePane: createTaskPanelSidePane(taskPanel.formDeps),
     openPopup: taskPanel.openPopup,
     onRefresh: refresh,
+    editorHost: deps.editorHost,
     // Changes made elsewhere without a hook (e.g. sync) show on return.
     onActivated: refresh,
   });
