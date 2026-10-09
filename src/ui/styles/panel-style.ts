@@ -12,6 +12,10 @@ export const panelCss = `
   --nextaction-side-ratio: ${sidePaneWidth.ratio * 100}%;
   display: flex;
   flex-direction: column;
+  /* Orca's panel wrapper is a row flex box; without these the panel shrinks
+     to its content's width and never leaves the narrow tier (plugin-panel-writes). */
+  flex: 1 1 0;
+  width: 100%;
   height: 100%;
   min-width: 0;
   overflow: hidden;
