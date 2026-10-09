@@ -104,6 +104,36 @@ describe("encodeTaskChanges", () => {
   });
 });
 
+describe("encodeTaskChanges: sequential", () => {
+  // next-action-hierarchy-boolean-deps: a Boolean value without `type: 4`
+  // makes insertTag silently tag nothing, so the type always goes with it.
+  it("writes sequential on and off as Booleans carrying type 4", () => {
+    expect(encodeTaskChanges({ sequential: true }, zh)).toEqual([
+      { name: "顺序执行", type: 4, value: true },
+    ]);
+    expect(encodeTaskChanges({ sequential: false }, zh)).toEqual([
+      { name: "顺序执行", type: 4, value: false },
+    ]);
+  });
+
+  it("writes sequential under the English name Sequential", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeTaskChanges({ sequential: true }, en)).toEqual([
+      { name: "Sequential", type: 4, value: true },
+    ]);
+  });
+
+  it("refuses to write an invalidated sequential", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["sequential"],
+    };
+    expect(() => encodeTaskChanges({ sequential: false }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+});
+
 describe("encodeTaskChanges on an English task tag", () => {
   const en: TaskWriteContext = { language: "en", invalidated: [] };
 

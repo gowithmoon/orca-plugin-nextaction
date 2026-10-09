@@ -80,6 +80,13 @@ const structure: readonly {
   },
   // Text takes no type arguments (tag-operations spike writes it bare).
   { key: "note", type: PropType.Text },
+  // Unchecked by default; without the default a tagged block holds no value
+  // (next-action-hierarchy-boolean-deps).
+  {
+    key: "sequential",
+    type: PropType.Boolean,
+    typeArgs: () => ({ defaultEnabled: true, default: false }),
+  },
 ];
 
 /** Every property definition of a newly created task tag, in `pos` order. */

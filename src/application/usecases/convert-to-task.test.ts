@@ -28,6 +28,8 @@ describe("convert to task", () => {
       contexts: [],
       labels: [],
       note: null,
+      // Sequential is off by default (#59).
+      sequential: false,
       // The block's own creation time, however long ago it was written (#35).
       created: new Date("2026-03-02T08:00:00.000Z"),
       anomalies: [],

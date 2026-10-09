@@ -5,6 +5,7 @@ import { createEditTask } from "../application/usecases/edit-task";
 import { createReadBlockingReasons } from "../application/usecases/read-blocking-reasons";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadTask } from "../application/usecases/read-task";
+import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
@@ -51,6 +52,7 @@ export function createTaskPanelFeature(deps: {
       clock: systemClock,
       dayBoundary: deps.dayBoundary,
     }),
+    setSequential: createSetSequential({ repository }),
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,

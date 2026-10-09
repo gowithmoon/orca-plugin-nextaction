@@ -356,6 +356,16 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   font-style: italic;
 }
 
+.nextaction-sequential-field {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-sequential-hint {
+  color: var(--orca-color-text-2);
+}
+
 .nextaction-task-panel-footer {
   display: flex;
   justify-content: flex-end;

@@ -50,6 +50,11 @@ export interface Task {
   readonly contexts: readonly string[];
   readonly labels: readonly string[];
   readonly note: string | null;
+  /**
+   * Its subtasks are done one after another, in note order (GLOSSARY:
+   * 顺序执行). Off unless the notes hold it switched on.
+   */
+  readonly sequential: boolean;
   /** When the block was created; read-only, it orders the inbox. */
   readonly created: Date;
   readonly anomalies: readonly DataAnomaly[];
@@ -73,6 +78,7 @@ export interface TaskInNotes {
   contexts: readonly string[];
   labels: readonly string[];
   note: string | null;
+  sequential: boolean;
   created: Date;
 }
 
@@ -112,6 +118,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     contexts: [...input.contexts],
     labels: [...input.labels],
     note: input.note,
+    sequential: input.sequential,
     created: input.created,
     anomalies,
   };

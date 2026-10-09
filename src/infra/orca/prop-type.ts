@@ -5,4 +5,5 @@ export const PropType = {
   Number: 3,
   DateTime: 5,
   TextChoices: 6,
+  Boolean: 4,
 } as const;

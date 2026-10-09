@@ -5,6 +5,7 @@
 import * as React from "react";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
+import type { SetSequential } from "../../application/usecases/set-sequential";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { changeStatusReporting, notifyActionFailure } from "../notify";
@@ -13,6 +14,7 @@ import type { TaskActionsDeps } from "./use-task-actions";
 export interface TaskPanelWrites {
   editTask: EditTask;
   dropTask: DropTask;
+  setSequential: SetSequential;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -31,6 +33,7 @@ export function useTaskPanelActions(
   edit(edits: TaskEdits): Promise<boolean>;
   changeStatus(status: TaskStatus): Promise<void>;
   drop(): Promise<boolean>;
+  setSequential(sequential: boolean): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -66,6 +69,11 @@ export function useTaskPanelActions(
         if (dropped) notify("info", t("Task dropped"));
         return dropped;
       },
+      setSequential: (sequential) =>
+        run(
+          () => writes.setSequential(id, sequential),
+          (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
     };
   }, [writes, id]);
 }

@@ -85,6 +85,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     contexts: [],
     labels: [],
     note: null,
+    sequential: false,
     anomalies: [],
   };
 }

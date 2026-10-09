@@ -300,3 +300,33 @@ export function NoteField(props: {
     </div>
   );
 }
+
+/**
+ * Sequential (GLOSSARY: 顺序执行): Orca's switch, with what it does beside it.
+ * Each change is one write, undone in Orca.
+ */
+export function SequentialField(props: {
+  labelId: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  const { Switch } = orca.components;
+  const hintId = `${props.labelId}-hint`;
+  return (
+    <div className="nextaction-sequential-field">
+      <Switch
+        role="switch"
+        aria-checked={props.on}
+        aria-labelledby={props.labelId}
+        aria-describedby={hintId}
+        on={props.on}
+        onChange={(on) => {
+          if (on !== props.on) props.onChange(on);
+        }}
+      />
+      <span id={hintId} className="nextaction-sequential-hint">
+        {t("Subtasks one at a time, in note order")}
+      </span>
+    </div>
+  );
+}

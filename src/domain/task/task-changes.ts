@@ -13,4 +13,5 @@ export interface TaskChanges {
   readonly contexts?: readonly string[];
   readonly labels?: readonly string[];
   readonly note?: string | null;
+  readonly sequential?: boolean;
 }

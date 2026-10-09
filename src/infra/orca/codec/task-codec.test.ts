@@ -26,6 +26,7 @@ describe("decodeTask", () => {
       contexts: ["@home"],
       labels: [],
       note: null,
+      sequential: false,
       created: new Date("2026-10-05T01:00:00.000Z"),
       anomalies: [],
     });
@@ -43,6 +44,7 @@ describe("decodeTask", () => {
       contexts: ["@phone", "@home"],
       labels: ["house"],
       note: "after 9am",
+      sequential: true,
       created: new Date("2026-10-06T08:00:00.000Z"),
       anomalies: [],
     });
@@ -61,6 +63,7 @@ describe("decodeTask", () => {
       contexts: [],
       labels: [],
       note: null,
+      sequential: false,
       created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [],
     });
@@ -78,6 +81,7 @@ describe("decodeTask", () => {
       contexts: [],
       labels: [],
       note: null,
+      sequential: false,
       created: new Date("2026-10-05T01:20:00.000Z"),
       anomalies: [{ property: "status", value: null }],
     });
@@ -179,6 +183,41 @@ describe("decodeTask", () => {
     const task = decodedTask(blocks.zhAbnormal);
     expect(task.contexts).toEqual([]);
     expect(task.labels).toEqual([]);
+  });
+
+  describe("sequential", () => {
+    // next-action-hierarchy-boolean-deps: only `true` is on.
+    it("reads true as on, on an English task tag", () => {
+      expect(decodedTask(blocks.enFilled, enTag).sequential).toBe(true);
+    });
+
+    it("reads false as off", () => {
+      expect(decodedTask(blocks.zhFilled).sequential).toBe(false);
+    });
+
+    it("reads a missing value as off", () => {
+      // Tagged before the property had a default: no item at all.
+      expect(decodedTask(blocks.zhDefaultsOnly).sequential).toBe(false);
+    });
+
+    it("reads a cleared (null) value as off", () => {
+      expect(decodedTask(blocks.zhCleared).sequential).toBe(false);
+    });
+
+    it("reads any other value as off", () => {
+      // "yes" is what Orca turns into true for insertTag without a type; as
+      // stored, it is no Boolean, and the plugin does not rely on it.
+      expect(decodedTask(blocks.zhAbnormal).sequential).toBe(false);
+    });
+
+    it("reads an invalidated sequential as off", () => {
+      expect(
+        decodedTask(blocks.enFilled, {
+          tagBlockId: tagBlocks.en.id,
+          invalidated: ["sequential"],
+        }).sequential,
+      ).toBe(false);
+    });
   });
 
   it("reads invalidated properties as empty", () => {
@@ -322,6 +361,7 @@ describe("decodeTask with values of the wrong kind", () => {
       contexts: [],
       labels: ["house"],
       note: null,
+      sequential: false,
       created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [{ property: "status", value: ["待开始"] }],
     });

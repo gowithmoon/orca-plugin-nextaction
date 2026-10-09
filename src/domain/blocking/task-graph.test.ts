@@ -14,6 +14,9 @@ function task(
     status?: TaskStatus;
     parent?: TaskId;
     start?: CalendarDate;
+    sequential?: boolean;
+    /** Its place in the notes; defaults to its ID. */
+    position?: number;
   } = {},
 ): SnapshotTask {
   const full: Task = {
@@ -28,9 +31,14 @@ function task(
     contexts: [],
     labels: [],
     note: null,
+    sequential: setup.sequential ?? false,
     anomalies: [],
   };
-  return { task: full, parentId: setup.parent ?? null, position: id };
+  return {
+    task: full,
+    parentId: setup.parent ?? null,
+    position: setup.position ?? id,
+  };
 }
 
 function analyze(tasks: SnapshotTask[], previewDays = 0): TaskGraph {
@@ -193,5 +201,148 @@ describe("task graph: effective start", () => {
     );
 
     expect(nextActionIds(graph)).toEqual([1]);
+  });
+});
+
+describe("task graph: sequential blocking", () => {
+  it("under a sequential parent, an earlier subtask to do blocks the later ones", () => {
+    const graph = analyze([
+      task(1, { sequential: true }),
+      task(2, { parent: 1 }),
+      task(3, { parent: 1 }),
+    ]);
+
+    expect(nextActionIds(graph)).toEqual([2]);
+    expect(graph.entry(3)?.blockedBy).toEqual([
+      { kind: "sequential", source: 3, waitingFor: [2] },
+    ]);
+  });
+
+  it("an earlier subtask in the inbox, to do, in progress or waiting blocks", () => {
+    for (const status of ["inbox", "todo", "doing", "waiting"] as const) {
+      const graph = analyze([
+        task(1, { sequential: true }),
+        task(2, { status, parent: 1 }),
+        task(3, { parent: 1 }),
+      ]);
+
+      expect(graph.entry(3)?.blockedBy).toEqual([
+        { kind: "sequential", source: 3, waitingFor: [2] },
+      ]);
+    }
+  });
+
+  it("an earlier subtask that is done or someday does not block", () => {
+    const graph = analyze([
+      task(1, { sequential: true }),
+      task(2, { status: "done", parent: 1 }),
+      task(3, { status: "someday", parent: 1 }),
+      task(4, { parent: 1 }),
+      task(5, { parent: 1 }),
+    ]);
+
+    expect(graph.entry(4)?.blockedBy).toEqual([]);
+    expect(graph.entry(5)?.blockedBy).toEqual([
+      { kind: "sequential", source: 5, waitingFor: [4] },
+    ]);
+    expect(nextActionIds(graph)).toEqual([4]);
+  });
+
+  it("goes by place in the notes, not by ID", () => {
+    // 3 was moved above 2 in the notes.
+    const graph = analyze([
+      task(1, { sequential: true }),
+      task(2, { parent: 1, position: 20 }),
+      task(3, { parent: 1, position: 10 }),
+    ]);
+
+    expect(nextActionIds(graph)).toEqual([3]);
+    expect(graph.entry(2)?.blockedBy).toEqual([
+      { kind: "sequential", source: 2, waitingFor: [3] },
+    ]);
+  });
+
+  it("plain blocks grouping the subtasks do not matter", () => {
+    // P{ 2, plain{ 3, 4 }, 5 }: all four have 1 as their parent task, in
+    // that order (ADR 0003); the plain block only leaves gaps in positions.
+    const graph = analyze([
+      task(1, { sequential: true, position: 1 }),
+      task(2, { status: "done", parent: 1, position: 2 }),
+      task(3, { parent: 1, position: 4 }),
+      task(4, { parent: 1, position: 5 }),
+      task(5, { parent: 1, position: 6 }),
+    ]);
+
+    expect(nextActionIds(graph)).toEqual([3]);
+    expect(graph.entry(5)?.blockedBy).toEqual([
+      { kind: "sequential", source: 5, waitingFor: [3, 4] },
+    ]);
+  });
+
+  it("subtasks of a parent with sequential off do not block each other", () => {
+    const graph = analyze([
+      task(1, { sequential: false }),
+      task(2, { parent: 1 }),
+      task(3, { parent: 1 }),
+    ]);
+
+    expect(graph.entry(3)?.blockedBy).toEqual([]);
+    expect(nextActionIds(graph)).toEqual([2, 3]);
+  });
+
+  it("is passed down to every descendant of a subtask held back, naming that subtask", () => {
+    const graph = analyze([
+      task(1, { sequential: true }),
+      task(2, { parent: 1 }),
+      task(3, { status: "inbox", parent: 1 }),
+      task(4, { parent: 3 }),
+      task(5, { parent: 4 }),
+    ]);
+
+    // 4 is also held back by its own open subtask 5.
+    expect(graph.entry(4)?.blockedBy).toEqual([
+      { kind: "subtasks", source: 4, waitingFor: [5] },
+      { kind: "sequential", source: 3, waitingFor: [2] },
+    ]);
+    expect(graph.entry(5)?.blockedBy).toEqual([
+      { kind: "sequential", source: 3, waitingFor: [2] },
+    ]);
+    expect(nextActionIds(graph)).toEqual([2]);
+  });
+
+  it("nested sequential parents each hold back their own later subtasks", () => {
+    // 1 (sequential) { 2, 3 (sequential) { 4, 5 } }
+    const nested = (first: TaskStatus) =>
+      analyze([
+        task(1, { sequential: true }),
+        task(2, { status: first, parent: 1 }),
+        task(3, { sequential: true, parent: 1 }),
+        task(4, { parent: 3 }),
+        task(5, { parent: 3 }),
+      ]);
+
+    const before = nested("todo");
+    expect(nextActionIds(before)).toEqual([2]);
+    expect(before.entry(5)?.blockedBy).toEqual([
+      { kind: "sequential", source: 5, waitingFor: [4] },
+      { kind: "sequential", source: 3, waitingFor: [2] },
+    ]);
+
+    const after = nested("done");
+    expect(nextActionIds(after)).toEqual([4]);
+    expect(after.entry(5)?.blockedBy).toEqual([
+      { kind: "sequential", source: 5, waitingFor: [4] },
+    ]);
+  });
+
+  it("a sequential task's own place among its siblings does not hold back its first subtask", () => {
+    // 1 is sequential but has no sequential parent: its first subtask is free.
+    const graph = analyze([
+      task(1, { sequential: true }),
+      task(2, { parent: 1 }),
+    ]);
+
+    expect(graph.entry(2)?.blockedBy).toEqual([]);
+    expect(nextActionIds(graph)).toEqual([2]);
   });
 });

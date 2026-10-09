@@ -93,6 +93,15 @@ export function encodeTaskChanges(
       value: changes.note,
     });
   }
+  if (changes.sequential !== undefined) {
+    // Always with `type: 4`: without it insertTag tags nothing and says
+    // nothing (next-action-hierarchy-boolean-deps).
+    items.push({
+      name: propertyName("sequential", tag.language),
+      type: PropType.Boolean,
+      value: changes.sequential,
+    });
+  }
   return items;
 }
 
@@ -114,6 +123,7 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   context: "contexts",
   label: "labels",
   note: "note",
+  sequential: "sequential",
 };
 
 /**
