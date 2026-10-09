@@ -21,5 +21,6 @@
 | [plugin-panel-writes.md](./plugin-panel-writes.md) | #39、#40 | 从插件面板写入、日期值的类型、页面任务的文字、插件面板的宽度（第四步验收补测） | 第四步起所有写入和日期读取 |
 | [capture-initial-properties.md](./capture-initial-properties.md) | #49 | 快速捕获带初始属性一次写入与撤销；`--orca-radius-md`、`--orca-shadow-popup` | 快速捕获；插件的圆角与弹窗阴影 |
 | [orca-popup-container.md](./orca-popup-container.md) | #45 | Orca 弹出层的容器、截断与指针处理（读源码，待实测） | 插件窗口中的日期选择器和下拉菜单 |
+| [next-action-hierarchy-boolean-deps.md](./next-action-hierarchy-boolean-deps.md) | #52 | 块层级与先后顺序的读法和耗时、布尔属性、依赖的反向查找（第五步开工前） | 第五步的任务图、顺序执行、依赖、放弃 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。

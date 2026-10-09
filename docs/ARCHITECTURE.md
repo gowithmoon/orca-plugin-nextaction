@@ -125,11 +125,14 @@ tests/
 - 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；`get-blocks` 返回的日期是 `Date`（`plugin-panel-writes`；早先记成 ISO 字符串是 JSON 打印造成的）。页面任务的 `content` 为空，文字取它的别名。
 - 修改标签块上的属性定义时，传入完整的 `typeArgs`（Orca 是整体替换），并显式写入 `pos`。
 - 块引用属性（依赖）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。
+- 依赖方从被依赖块 `backRefs` 中 `type: 3` 的引用找到，并以依赖方"依赖"值中含有该引用 ID 为准；行内引用是 `type: 1`，不算依赖（`next-action-hierarchy-boolean-deps`）。
+- 布尔属性的值项一律带 `type: 4`。`insertTag` 传不带 `type` 的 `true` / `false` 时，标签整个打不上，也不报错（`next-action-hierarchy-boolean-deps`）。
 - 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
 - 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
 - **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
 - `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。
+- 任务的父任务和先后位置：取回全部任务后，对不在任务集合中的 `parent` 按层用 `get-blocks` 补取，在内存中沿 `parent` 找最近的任务祖先、按"在父块 `children` 中的序号"路径排先后。1000 个任务约 32 ms。不用 `get-block-tree`（`next-action-hierarchy-boolean-deps`）。
 
 日记与日期（`journal-capture`）：
 - `get-journal-block` 会在日记不存在时创建它，只在要写入日记时调用。
