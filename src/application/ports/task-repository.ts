@@ -1,3 +1,4 @@
+import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
@@ -104,6 +105,14 @@ export interface TaskRepository {
 
   /** Every task matching the filter, in no particular order. */
   queryTasks(filter: TaskFilter): Promise<Task[]>;
+
+  /**
+   * Every task, done ones included, each with its parent task (its nearest
+   * task ancestor in the block tree, plain blocks in between not counting,
+   * ADR 0003; `null` for none) and its place in the notes (document
+   * preorder). Positions only compare: lower comes first. One read.
+   */
+  readTaskGraph(): Promise<TaskGraphSnapshot>;
 
   /**
    * The values to offer for contexts and labels, each once per property, in

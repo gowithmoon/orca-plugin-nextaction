@@ -102,6 +102,11 @@ const zhCN: Record<string, string> = {
   "Could not open the task in the notes: ${reason}":
     "无法在笔记中打开任务：${reason}",
   "Inbox is clear": "收集箱已清空",
+  "Next actions": "下一步行动",
+  "Could not read the next actions: ${reason}": "无法读取下一步行动：${reason}",
+  "Nothing to do right now": "现在没有可以做的事",
+  "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
+    "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
   "New tasks you capture appear here.": "新捕获的任务会出现在这里。",
   "Open task panel": "打开任务属性面板",
   "Task panel": "任务属性面板",

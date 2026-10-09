@@ -21,6 +21,8 @@ interface StoredBlock {
   /** When the block was created; a task keeps its block's. */
   created: Date;
   parentId: number | undefined;
+  /** Its place in the notes (document preorder): lower comes first. */
+  position: number;
   notConvertible: NotConvertibleReason | undefined;
   /** Present while the block carries the task tag. */
   task: Task | undefined;
@@ -36,6 +38,11 @@ export interface BlockSetup {
   /** Defaults to `defaultCreated`. */
   created?: Date;
   parentId?: number;
+  /**
+   * Its place in the notes, lower first. Defaults to the order blocks are
+   * added in, so a test that adds blocks top to bottom need not set it.
+   */
+  position?: number;
   notConvertible?: NotConvertibleReason;
   completionHistory?: CompletionHistoryRead;
 }
@@ -106,6 +113,12 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const journalDays = new Map<number, CalendarDate>();
   /** IDs of new blocks, far from the ones tests pick. */
   let nextId = 100_000;
+  /** Places in the notes for blocks added without one, in adding order. */
+  let nextPosition = 0;
+  const positionOf = (position: number | undefined) => {
+    nextPosition += 1;
+    return position ?? nextPosition;
+  };
 
   const store = (id: number, block: StoredBlock) => {
     if (blocks.has(id)) throw new Error(`block ${id} already exists`);
@@ -153,6 +166,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         text: setup.text ?? "",
         created: setup.created ?? defaultCreated,
         parentId: setup.parentId,
+        position: positionOf(setup.position),
         notConvertible: setup.notConvertible,
         task: undefined,
         completionHistory: setup.completionHistory,
@@ -165,6 +179,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         text: full.text,
         created: full.created,
         parentId: setup.parentId,
+        position: positionOf(setup.position),
         notConvertible: undefined,
         task: full,
         completionHistory: setup.completionHistory,
@@ -249,6 +264,32 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async readTaskGraph() {
+      /** The nearest ancestor block carrying a task, plain blocks skipped. */
+      const parentTaskOf = (id: number): TaskId | null => {
+        const seen = new Set<number>([id]);
+        let parentId = blocks.get(id)?.parentId;
+        while (parentId !== undefined && !seen.has(parentId)) {
+          const parent = blocks.get(parentId);
+          if (!parent) return null;
+          if (parent.task) return parentId;
+          seen.add(parentId);
+          parentId = parent.parentId;
+        }
+        return null;
+      };
+      const tasks = [];
+      for (const [id, block] of blocks) {
+        if (!block.task) continue;
+        tasks.push({
+          task: block.task,
+          parentId: parentTaskOf(id),
+          position: block.position,
+        });
+      }
+      return { tasks };
+    },
+
     async readCandidates() {
       const read = (property: ChoiceProperty) => {
         const values = new Set(choices[property]);
@@ -302,6 +343,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           text,
           created: now,
           parentId: undefined,
+          // Appended at the end of a journal: after every block so far.
+          position: positionOf(undefined),
           notConvertible: undefined,
           // Properties not given keep the defaults, as Orca fills them.
           task: { ...freshTask(id, text, now), ...initial },

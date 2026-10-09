@@ -9,6 +9,7 @@ import {
   type TaskFilter,
   type TaskRepository,
 } from "../../../application/ports/task-repository";
+import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { CompletionHistory } from "../../../domain/task/completion-history";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -38,6 +39,11 @@ import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
 import type { TaskTagState } from "../schema/task-tag-state";
 import type { PropertyDefinition } from "../schema/task-tag-structure";
+import {
+  type HierarchyBlock,
+  missingParents,
+  placeTasks,
+} from "./task-hierarchy";
 
 type ReadyTag = Extract<TaskTagState, { kind: "ready" }>;
 type ChoiceKey = Extract<PropertyKey, "context" | "label">;
@@ -188,6 +194,64 @@ export function createOrcaTaskRepository(
       if (decoded.kind === "task") tasks.push(decoded.task);
     }
     return tasks;
+  };
+
+  /**
+   * Every task with its parent task and place in the notes
+   * (next-action-hierarchy-boolean-deps): the query for every task, the task
+   * blocks with get-blocks, then the ancestors not among them, layer by
+   * layer up to the roots; the rest is worked out in memory. About 32 ms for
+   * 1000 tasks. get-block-tree is slower and not used.
+   */
+  const readTaskGraph = async (): Promise<TaskGraphSnapshot> => {
+    const state = readyTag();
+    const context: TaskTagContext = {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    };
+    const query = buildTaskQuery(
+      {},
+      {
+        tagName: state.tagName,
+        language: state.language,
+        invalidated: state.invalidated,
+      },
+    );
+    const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
+    if (ids.length === 0) return { tasks: [] };
+    const blocks = await getBlocks(ids);
+    const tasks: Task[] = [];
+    for (const id of ids) {
+      const block = blocks.get(id);
+      if (!block) continue;
+      const decoded = decodeTask(block, context);
+      // As in queryTasks: a mirror or an orphan is not expected here.
+      if (decoded.kind === "task") tasks.push(decoded.task);
+    }
+    const hierarchy = new Map<number, HierarchyBlock>(blocks);
+    const asked = new Set<number>(ids);
+    for (;;) {
+      const layer = missingParents(hierarchy, asked);
+      if (layer.length === 0) break;
+      for (const id of layer) asked.add(id);
+      // A parent get-blocks does not return ends its chain there.
+      for (const [id, block] of await getBlocks(layer))
+        hierarchy.set(id, block);
+    }
+    const places = placeTasks(
+      tasks.map((task) => task.id),
+      hierarchy,
+    );
+    return {
+      tasks: tasks.map((task) => {
+        const place = places.get(task.id);
+        return {
+          task,
+          parentId: place?.parentId ?? null,
+          position: place?.position ?? Number.MAX_SAFE_INTEGER,
+        };
+      }),
+    };
   };
 
   /**
@@ -474,5 +538,6 @@ export function createOrcaTaskRepository(
     },
 
     queryTasks,
+    readTaskGraph,
   };
 }
