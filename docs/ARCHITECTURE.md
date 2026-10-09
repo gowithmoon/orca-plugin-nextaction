@@ -65,9 +65,11 @@ src/
     hooks/                 React hooks（只调用 application）
     styles/                CSS
   platform/
-    bootstrap.ts           组合根：创建实现、注入用例、注册 UI
+    bootstrap.ts           组合根：创建实现、注入用例、注册 UI，各功能之间的装配都在这里
     registry.ts            注册表
     settings.ts            设置项的唯一定义处
+    panel-*.ts、note-navigation.ts
+                           面板导航胶水（orca.nav）：要用 ui 的面板参数类型，而 infra 不能依赖 ui，所以放在 platform；其中的日期仍经 infra 构造（见 §4 日记与日期）
   shared/
     l10n/                  t() 与翻译字典
 tests/
@@ -115,12 +117,14 @@ tests/
 - 检查返回值是不是数组：出错时返回 `{ code: "SQLITE_ERROR" }`，不抛异常。
 - 不使用 `sort` 和 `page`，排序和分页在内存中做。
 - 单选属性"是几个值之一"用 OR 组表达；多选属性"不包含"用取反组表达。不要用 `op: 3` 传数组，也不要用 `op: 4`。
+- 状态为空或无法识别的任务读作收集箱，但任何查询条件都匹配不到它们（`op: 1` 漏掉，单选属性的 `op: 11` 一个都不命中）。要包含收集箱的结果，查询全部任务后在内存中按解码后的状态筛选（`inbox-anomalous-status`）。
 - 任务查询一律加上"有父块或有别名"的 OR 组 `{ kind: 101, conditions: [{ kind: 9, hasParent: true }, { kind: 9, hasAliases: true }] }`，排除日记块和被删除后残留的孤立块，保留页面任务（ADR 0013，`tag-operations`、`page-task`）。按 ID 读取使用同一条规则。
 
 读写任务数据（`tag-operations`、`block-properties-json`）：
 - 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；日期是 ISO 字符串。
 - 修改标签块上的属性定义时，传入完整的 `typeArgs`（Orca 是整体替换），并显式写入 `pos`。
 - 块引用属性（依赖）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。
+- 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
 - 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
 - **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
@@ -128,7 +132,7 @@ tests/
 
 日记与日期（`journal-capture`）：
 - `get-journal-block` 会在日记不存在时创建它，只在要写入日记时调用。
-- `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造，`domain` 只用年、月、日表示日期。
+- `get-journal-block` 按传入时间的**本地日期**选日记；`nav.goTo`/`replace("journal", { date })` 需要该日期的 **UTC 零点**。两种参数只在 `infra` 的一个模块里构造（`infra/orca/journal-date.ts`），`domain` 只用年、月、日表示日期。
 - `time` 类型的设置只取本地的小时和分钟（`plugin-lifecycle-settings`）。
 - 开始日期、截止日期是 `date` 子类型（ADR 0012）：读取时只取本地年月日，写入时传本地零点。Orca 不会截掉代码写入的时刻（`date-subtype`）。
 

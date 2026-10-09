@@ -43,9 +43,10 @@ describe("change status", () => {
     expect(repository.writeCount()).toBe(0);
   });
 
-  it("treats a task with an empty or unknown status as inbox", async () => {
+  it("writes inbox to a task whose status is empty or unknown, repairing it", async () => {
     const repository = createInMemoryTaskRepository();
-    // How the codec reads a status the notes do not hold as an option.
+    // How the codec reads a status the notes do not hold as an option: it
+    // reads as inbox, but the notes hold no inbox status yet.
     repository.addTask({
       id: 22,
       status: "inbox",
@@ -53,8 +54,11 @@ describe("change status", () => {
     });
     const changeStatus = createChangeStatus(deps(repository));
 
-    expect(await changeStatus(22, "inbox")).toEqual({ kind: "unchanged" });
-    expect(repository.writeCount()).toBe(0);
+    expect(await changeStatus(22, "inbox")).toEqual({ kind: "changed" });
+    expect(repository.writeCount()).toBe(1);
+    const repaired = await repository.getTask(22);
+    expect(repaired?.status).toBe("inbox");
+    expect(repaired?.anomalies).toEqual([]);
   });
 
   it("writes the chosen status to a task with an unknown status", async () => {

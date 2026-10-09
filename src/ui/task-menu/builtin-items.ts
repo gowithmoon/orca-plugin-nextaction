@@ -1,50 +1,21 @@
 // The task menu items of step 3: the six statuses and drop (#31). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
-import {
-  type ChangeStatus,
-  CompletionHistoryUnreadableError,
-} from "../../application/usecases/change-status";
+import type { ChangeStatus } from "../../application/usecases/change-status";
 import type { DropTask } from "../../application/usecases/drop-task";
-import { type TaskStatus, taskStatuses } from "../../domain/task/task";
+import { taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { createNotify, type Notify, notifyFailure } from "../notify";
+import { statusLabel } from "../components/status-label";
+import { markedStatus } from "../components/status-menu";
+import {
+  changeStatusReporting,
+  createNotify,
+  notifyActionFailure,
+} from "../notify";
 import type { TaskMenuItems } from "./menu-items";
 import { statusIcons } from "./status-icons";
 
 /** Menu groups, lowest first. Gaps leave room for later steps (task panel, my day). */
-export const taskMenuGroups = { status: 10, drop: 100 } as const;
-
-/** Status names in the interface language; the note-facing names live in infra. */
-const statusLabel = (status: TaskStatus): string => {
-  switch (status) {
-    case "inbox":
-      return t("Inbox");
-    case "todo":
-      return t("Todo");
-    case "doing":
-      return t("Doing");
-    case "waiting":
-      return t("Waiting");
-    case "someday":
-      return t("Someday");
-    case "done":
-      return t("Done");
-  }
-};
-
-/** Tells the user why a task menu action failed. */
-export function notifyMenuFailure(
-  notify: Notify,
-  error: unknown,
-  failed: (reason: string) => string,
-): void {
-  notifyFailure(notify, error, {
-    paused: t(
-      "Task features are paused. See the plugin's earlier notice or its task tag setting.",
-    ),
-    failed,
-  });
-}
+export const taskMenuGroups = { status: 10, taskPanel: 50, drop: 100 } as const;
 
 export function registerBuiltinTaskMenuItems(
   items: TaskMenuItems,
@@ -65,27 +36,10 @@ export function registerBuiltinTaskMenuItems(
       order: index,
       label: () => statusLabel(status),
       icon: statusIcons[status].className,
-      // An empty or unknown status reads as inbox, as the icon shows it.
-      isCurrent: (task) => task.status === status,
-      async run(task) {
-        try {
-          // Success says nothing: the icon changes.
-          await deps.changeStatus(task.id, status);
-        } catch (error) {
-          if (error instanceof CompletionHistoryUnreadableError) {
-            notify(
-              "error",
-              t(
-                "Could not mark the task done: its completion history cannot be read and is kept as it is.",
-              ),
-            );
-            return;
-          }
-          notifyMenuFailure(notify, error, (reason) =>
-            t("Could not change the status: ${reason}", { reason }),
-          );
-        }
-      },
+      // An empty or unknown status marks none, so choosing inbox repairs it.
+      isCurrent: (task) => markedStatus(task) === status,
+      run: (task) =>
+        changeStatusReporting(deps.changeStatus, notify, task.id, status),
     });
   });
 
@@ -102,7 +56,7 @@ export function registerBuiltinTaskMenuItems(
         await deps.dropTask(task.id);
         notify("info", t("Task dropped"));
       } catch (error) {
-        notifyMenuFailure(notify, error, (reason) =>
+        notifyActionFailure(notify, error, (reason) =>
           t("Could not drop the task: ${reason}", { reason }),
         );
       }

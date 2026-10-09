@@ -20,12 +20,22 @@ export interface ValuesFilter {
   excludes?: readonly string[];
 }
 
+/** The multi-value properties whose values the user picks from candidates. */
+export type ChoiceProperty = "contexts" | "labels";
+
+/** The values offered for each multi-value property. */
+export type Candidates = Record<ChoiceProperty, string[]>;
+
 /**
  * Which tasks a query matches. Every given condition must hold; an empty
  * filter matches every task.
  */
 export interface TaskFilter {
-  /** The task is in one of these statuses. */
+  /**
+   * The task is in one of these statuses. A task whose status is empty or
+   * unknown in the notes reads as inbox, but matches no status filter, not
+   * even inbox (inbox-anomalous-status): filter the decoded status instead.
+   */
   statuses?: readonly [TaskStatus, ...TaskStatus[]];
   contexts?: ValuesFilter;
   labels?: ValuesFilter;
@@ -77,12 +87,22 @@ export interface TaskRepository {
   queryTasks(filter: TaskFilter): Promise<Task[]>;
 
   /**
+   * The values to offer for contexts and labels, each once per property, in
+   * no particular order: the task tag's choices for that property, and the
+   * values tasks already hold. An invalidated property has none. Both come
+   * from one read of the tasks.
+   */
+  readCandidates(): Promise<Candidates>;
+
+  /**
    * Writes the properties present in `changes` and leaves the others as they
    * are; with `completionHistory`, also replaces the task's completion
-   * history with it. The user undoes the whole write with one undo. Fails,
-   * writing nothing, when the block is not a task, a property is
-   * invalidated, or the completion history is to be replaced but reads as
-   * unreadable. A mirror block's ID writes to its source block.
+   * history with it. Contexts and labels written are made choices of the
+   * task tag first, so they show in the notes and become candidates. The
+   * user undoes the whole write with one undo. Fails, writing nothing, when
+   * the block is not a task, a property is invalidated, or the completion
+   * history is to be replaced but reads as unreadable. A mirror block's ID
+   * writes to its source block.
    */
   updateTask(
     id: TaskId,

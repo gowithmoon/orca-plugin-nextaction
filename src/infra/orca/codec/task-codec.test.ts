@@ -1,8 +1,7 @@
-import { describe, expect, it } from "vitest";
-import fixtures from "../../../../tests/fixtures/task-blocks.json";
+import { describe, expect, it, vi } from "vitest";
+import { blocks, tagBlocks } from "../../../../tests/task-block-fixtures";
 import { decodeTask, type TaskTagContext } from "./task-codec";
 
-const { blocks, tagBlocks } = fixtures;
 const zhTag: TaskTagContext = { tagBlockId: tagBlocks.zh.id, invalidated: [] };
 const enTag: TaskTagContext = { tagBlockId: tagBlocks.en.id, invalidated: [] };
 
@@ -27,6 +26,7 @@ describe("decodeTask", () => {
       contexts: ["@home"],
       labels: [],
       note: null,
+      created: new Date("2026-10-05T01:00:00.000Z"),
       anomalies: [],
     });
   });
@@ -43,6 +43,7 @@ describe("decodeTask", () => {
       contexts: ["@phone", "@home"],
       labels: ["house"],
       note: "after 9am",
+      created: new Date("2026-10-06T08:00:00.000Z"),
       anomalies: [],
     });
   });
@@ -60,6 +61,7 @@ describe("decodeTask", () => {
       contexts: [],
       labels: [],
       note: null,
+      created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [],
     });
   });
@@ -76,9 +78,52 @@ describe("decodeTask", () => {
       contexts: [],
       labels: [],
       note: null,
+      created: new Date("2026-10-05T01:20:00.000Z"),
       anomalies: [{ property: "status", value: null }],
     });
   });
+
+  it("reads when the block was created", () => {
+    // get-blocks returns `created` as a Date (multi-choices-created).
+    expect(decodedTask(blocks.zhFilled).created).toEqual(
+      new Date("2026-10-05T01:00:00.000Z"),
+    );
+  });
+
+  it("reads a creation time given as an ISO string", () => {
+    const block = { ...blocks.zhFilled, created: "2026-10-05T01:00:00.000Z" };
+    expect(decodedTask(block).created).toEqual(
+      new Date("2026-10-05T01:00:00.000Z"),
+    );
+  });
+
+  it("reads a creation time given as milliseconds since the epoch", () => {
+    // 2026-10-05T01:00:00.000Z
+    const block = { ...blocks.zhFilled, created: 1_791_162_000_000 };
+    expect(decodedTask(block).created).toEqual(
+      new Date("2026-10-05T01:00:00.000Z"),
+    );
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+    ["an object", {}],
+    ["an unparsable string", "yesterday-ish"],
+    ["an invalid Date", new Date(Number.NaN)],
+  ])(
+    "reads a creation time that is %s as the epoch, with a warning",
+    (_, created) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const task = decodedTask({ ...blocks.zhFilled, created });
+        expect(task.created).toEqual(new Date(0));
+        expect(warn).toHaveBeenCalledOnce();
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
 
   it("reads an unknown status as inbox and keeps the original value", () => {
     // "放弃" is an option the user added to the tag; it is no plugin status.
@@ -238,6 +283,7 @@ describe("decodeTask with values of the wrong kind", () => {
       contexts: [],
       labels: ["house"],
       note: null,
+      created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [{ property: "status", value: ["待开始"] }],
     });
   });

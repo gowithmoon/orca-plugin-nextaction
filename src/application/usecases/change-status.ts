@@ -4,7 +4,11 @@ import {
   historyAfterStatusChange,
   recordsCompletion,
 } from "../../domain/task/completion-history";
-import type { TaskId, TaskStatus } from "../../domain/task/task";
+import {
+  hasStatusAnomaly,
+  type TaskId,
+  type TaskStatus,
+} from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -13,7 +17,10 @@ import type { TaskRepository } from "../ports/task-repository";
 /** What changing the status did. */
 export type ChangeStatusResult =
   | { kind: "changed" }
-  /** The task already was in that status; nothing was written. */
+  /**
+   * The task already was in that status, and the notes hold it; nothing was
+   * written.
+   */
   | { kind: "unchanged" };
 
 /**
@@ -41,10 +48,12 @@ export function createChangeStatus(deps: {
   dayBoundary: DayBoundarySetting;
 }): ChangeStatus {
   return async (id, status) => {
-    // An empty or unknown status already reads as inbox (taskFromNotes), so
-    // choosing inbox for such a task writes nothing, as the icon says.
+    // An empty or unknown status reads as inbox (taskFromNotes) but holds no
+    // status: choosing inbox writes it, which repairs the task (#35 story 39).
     const task = await deps.repository.getTask(id);
-    if (task?.status === status) return { kind: "unchanged" };
+    if (task?.status === status && !hasStatusAnomaly(task)) {
+      return { kind: "unchanged" };
+    }
     // A block that is no longer a task fails in updateTask, writing nothing.
     if (!task || !recordsCompletion(task.status, status)) {
       await deps.repository.updateTask(id, { status });

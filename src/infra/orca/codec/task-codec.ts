@@ -35,6 +35,11 @@ export type DecodeResult =
  */
 export interface RawBlock {
   id: number;
+  /**
+   * A Date, as get-blocks returns it (multi-choices-created); checked all the
+   * same, as it orders the inbox (`createdValue`).
+   */
+  created: unknown;
   parent?: number | null;
   aliases: readonly string[];
   content?: readonly { t: string; v: unknown }[] | null;
@@ -128,6 +133,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       contexts: choicesValue(values.get("context")),
       labels: choicesValue(values.get("label")),
       note: textValue(values.get("note")),
+      created: createdValue(block.id, block.created),
     }),
   };
 }
@@ -148,6 +154,26 @@ function choicesValue(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+/**
+ * When the block was created: a Date, an ISO string or milliseconds since
+ * the epoch. Anything else, or an invalid date, reads as the epoch with a
+ * warning, so ordering by it never fails.
+ */
+function createdValue(blockId: number, value: unknown): Date {
+  const at =
+    value instanceof Date
+      ? value
+      : typeof value === "string" || typeof value === "number"
+        ? new Date(value)
+        : undefined;
+  if (at && !Number.isNaN(at.getTime())) return at;
+  console.warn(
+    `[nextaction] block ${blockId}: its creation time cannot be read; it reads as 1970-01-01`,
+    value,
+  );
+  return new Date(0);
 }
 
 /** The local calendar day of a stored instant (ADR 0012, date-subtype). */

@@ -5,6 +5,7 @@
 // the codec tests and not modelled here: a block that cannot be converted is
 // simply marked so.
 import type {
+  ChoiceProperty,
   CompletionHistoryRead,
   ConvertToTaskResult,
   NotConvertibleReason,
@@ -17,6 +18,8 @@ import type { TaskChanges } from "../src/domain/task/task-changes";
 
 interface StoredBlock {
   text: string;
+  /** When the block was created; a task keeps its block's. */
+  created: Date;
   parentId: number | undefined;
   notConvertible: NotConvertibleReason | undefined;
   /** Present while the block carries the task tag. */
@@ -30,6 +33,8 @@ interface StoredBlock {
 
 export interface BlockSetup {
   text?: string;
+  /** Defaults to `defaultCreated`. */
+  created?: Date;
   parentId?: number;
   notConvertible?: NotConvertibleReason;
   completionHistory?: CompletionHistoryRead;
@@ -43,6 +48,8 @@ export interface InMemoryTaskRepository extends TaskRepository {
     task: Partial<Task> & { id: TaskId },
     setup?: Omit<BlockSetup, "notConvertible" | "text">,
   ): void;
+  /** The task tag's choices for contexts or labels (none unless set). */
+  setChoices(property: ChoiceProperty, choices: readonly string[]): void;
   /** Every write from now on fails with `error`; `undefined` stops it. */
   failWrites(error: Error | undefined): void;
   /** How many writes succeeded. */
@@ -54,11 +61,15 @@ export interface InMemoryTaskRepository extends TaskRepository {
   journalOf(id: number): CalendarDate | undefined;
 }
 
+/** When a block was created, unless a test says otherwise. */
+export const defaultCreated = new Date("2026-01-01T00:00:00.000Z");
+
 /** What a block tagged without values reads as (tag-operations). */
-function freshTask(id: TaskId, text: string): Task {
+function freshTask(id: TaskId, text: string, created: Date): Task {
   return {
     id,
     text,
+    created,
     status: "inbox",
     importance: 4,
     effort: 4,
@@ -85,6 +96,11 @@ function matchesValues(
 export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const blocks = new Map<number, StoredBlock>();
   let failure: Error | undefined;
+  /** The task tag's choices per property. */
+  const choices: Record<ChoiceProperty, string[]> = {
+    contexts: [],
+    labels: [],
+  };
   let writes = 0;
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
@@ -135,6 +151,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     addBlock(id, setup = {}) {
       store(id, {
         text: setup.text ?? "",
+        created: setup.created ?? defaultCreated,
         parentId: setup.parentId,
         notConvertible: setup.notConvertible,
         task: undefined,
@@ -143,14 +160,19 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     addTask(task, setup = {}) {
-      const full = { ...freshTask(task.id, ""), ...task };
+      const full = { ...freshTask(task.id, "", defaultCreated), ...task };
       store(task.id, {
         text: full.text,
+        created: full.created,
         parentId: setup.parentId,
         notConvertible: undefined,
         task: full,
         completionHistory: setup.completionHistory,
       });
+    },
+
+    setChoices(property, values) {
+      choices[property] = [...values];
     },
 
     failWrites(error) {
@@ -170,7 +192,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       for (const [id, block] of blocks) {
         const task = block.task;
         if (!task) continue;
-        if (filter.statuses && !filter.statuses.includes(task.status)) continue;
+        // As in Orca, a status the notes do not hold as one of the plugin's
+        // matches no status filter (inbox-anomalous-status).
+        const statusAnomaly = task.anomalies.some(
+          (anomaly) => anomaly.property === "status",
+        );
+        if (
+          filter.statuses &&
+          (statusAnomaly || !filter.statuses.includes(task.status))
+        ) {
+          continue;
+        }
         if (!matchesValues(task.contexts, filter.contexts)) continue;
         if (!matchesValues(task.labels, filter.labels)) continue;
         if (
@@ -188,7 +220,26 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const block = taskToWrite(id);
       if (completionHistory) refuseUnreadable(block, id);
       write(() => {
+        // Written contexts and labels become choices of the task tag, as in
+        // Orca (multi-choices-created), so they stay candidates.
+        for (const property of ["contexts", "labels"] as const) {
+          for (const value of changes[property] ?? []) {
+            if (!choices[property].includes(value)) {
+              choices[property].push(value);
+            }
+          }
+        }
         block.task = { ...block.task, ...changes };
+        // A status written is one of the plugin's: it reads back without the
+        // anomaly an empty or unknown one had, as decoding does.
+        if (changes.status !== undefined) {
+          block.task = {
+            ...block.task,
+            anomalies: block.task.anomalies.filter(
+              (anomaly) => anomaly.property !== "status",
+            ),
+          };
+        }
         if (completionHistory) {
           block.completionHistory = {
             kind: "readable",
@@ -196,6 +247,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           };
         }
       });
+    },
+
+    async readCandidates() {
+      const read = (property: ChoiceProperty) => {
+        const values = new Set(choices[property]);
+        for (const block of blocks.values()) {
+          for (const value of block.task?.[property] ?? []) values.add(value);
+        }
+        return [...values];
+      };
+      return { contexts: read("contexts"), labels: read("labels") };
     },
 
     async readCompletionHistory(id) {
@@ -214,7 +276,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       if (block.task) return { kind: "already-task", id };
       write(() => {
         block.completionHistory = undefined;
-        block.task = freshTask(id, block.text);
+        block.task = freshTask(id, block.text, block.created);
       });
       return { kind: "converted", id };
     },
@@ -238,9 +300,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         });
         store(id, {
           text,
+          created: now,
           parentId: undefined,
           notConvertible: undefined,
-          task: freshTask(id, text),
+          task: freshTask(id, text, now),
           completionHistory: undefined,
         });
       });

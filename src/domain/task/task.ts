@@ -50,6 +50,8 @@ export interface Task {
   readonly contexts: readonly string[];
   readonly labels: readonly string[];
   readonly note: string | null;
+  /** When the block was created; read-only, it orders the inbox. */
+  readonly created: Date;
   readonly anomalies: readonly DataAnomaly[];
 }
 
@@ -71,9 +73,18 @@ export interface TaskInNotes {
   contexts: readonly string[];
   labels: readonly string[];
   note: string | null;
+  created: Date;
 }
 
 const defaultRating: Rating = 4;
+
+/**
+ * The notes hold an empty or unknown status for the task: it reads as inbox,
+ * but no status of the plugin is stored yet.
+ */
+export function hasStatusAnomaly(task: Pick<Task, "anomalies">): boolean {
+  return task.anomalies.some((anomaly) => anomaly.property === "status");
+}
 
 function isRating(value: number | null): value is Rating {
   return value !== null && Number.isInteger(value) && value >= 1 && value <= 7;
@@ -100,6 +111,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     contexts: [...input.contexts],
     labels: [...input.labels],
     note: input.note,
+    created: input.created,
     anomalies,
   };
 }
