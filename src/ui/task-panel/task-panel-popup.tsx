@@ -2,10 +2,28 @@
 // ModalOverlay, rendered into its own React root. At most one at a time:
 // opening another task replaces it. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
-import type * as React from "react";
+import * as React from "react";
 import type { TaskId } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
+
+/**
+ * Moves the focus into the popup when it opens, and back where it was (e.g.
+ * the note editor) when it closes. Without it, keys keep going to the editor
+ * behind the popup: typing edits the note and Esc never reaches the popup.
+ */
+function useFocusInside(ref: React.RefObject<HTMLElement>) {
+  React.useEffect(() => {
+    const before =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    ref.current?.focus({ preventScroll: true });
+    return () => {
+      if (before?.isConnected) before.focus({ preventScroll: true });
+    };
+  }, [ref]);
+}
 
 function TaskPanelPopup(props: {
   deps: TaskPanelFormDeps;
@@ -13,6 +31,8 @@ function TaskPanelPopup(props: {
   onClose: () => void;
 }) {
   const { ModalOverlay } = orca.components;
+  const dialog = React.useRef<HTMLDivElement>(null);
+  useFocusInside(dialog);
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Whether ModalOverlay closes on Esc by itself is not measured; a key a
     // control inside already handled (e.g. a picker closing) is left alone.
@@ -29,6 +49,9 @@ function TaskPanelPopup(props: {
   return (
     <ModalOverlay visible={true} canClose={true} onClose={props.onClose}>
       <div
+        ref={dialog}
+        // Focusable itself, so opening moves the focus here (useFocusInside).
+        tabIndex={-1}
         className="nextaction-task-panel-popup"
         role="dialog"
         aria-modal="true"

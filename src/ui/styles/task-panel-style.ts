@@ -16,6 +16,11 @@ export const taskPanelCss = `
   overflow: hidden;
 }
 
+/* Focused only to take the keys from the editor behind it; not a control. */
+.nextaction-task-panel-popup:focus {
+  outline: none;
+}
+
 .nextaction-task-panel {
   container: nextaction-task-panel / inline-size;
   display: flex;
