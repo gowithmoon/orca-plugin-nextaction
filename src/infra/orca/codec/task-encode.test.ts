@@ -135,6 +135,38 @@ describe("encodeTaskChanges: sequential", () => {
   });
 });
 
+describe("encodeTaskChanges: dependency mode", () => {
+  // A single choice, written as its option name like the status is.
+  it("writes the dependency mode as its Chinese option name", () => {
+    expect(encodeTaskChanges({ dependencyMode: "any" }, zh)).toEqual([
+      { name: "依赖模式", value: "任一" },
+    ]);
+    expect(encodeTaskChanges({ dependencyMode: "all" }, zh)).toEqual([
+      { name: "依赖模式", value: "全部" },
+    ]);
+  });
+
+  it("writes the dependency mode under English names on an English task tag", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeTaskChanges({ dependencyMode: "any" }, en)).toEqual([
+      { name: "Dependency mode", value: "Any" },
+    ]);
+    expect(encodeTaskChanges({ dependencyMode: "all" }, en)).toEqual([
+      { name: "Dependency mode", value: "All" },
+    ]);
+  });
+
+  it("refuses to write an invalidated dependency mode", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["dependencyMode"],
+    };
+    expect(() => encodeTaskChanges({ dependencyMode: "any" }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+});
+
 describe("encodeDependencies", () => {
   // tag-operations A4: the value is a list of reference IDs, written with the
   // block reference type; an empty list clears it.

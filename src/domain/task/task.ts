@@ -14,6 +14,13 @@ export const taskStatuses = [
 ] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
 
+/**
+ * How several dependencies are met (GLOSSARY: 依赖模式): every one ("all"),
+ * or at least one ("any").
+ */
+export const dependencyModes = ["all", "any"] as const;
+export type DependencyMode = (typeof dependencyModes)[number];
+
 /** Importance or effort: an integer from 1 to 7. */
 export type Rating = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Importance = Rating;
@@ -61,6 +68,11 @@ export interface Task {
    * longer a task (a stale dependency) is still listed; the task graph tells.
    */
   readonly dependencies: readonly TaskId[];
+  /**
+   * Whether every dependency must be met or one is enough (GLOSSARY:
+   * 依赖模式); "all" unless the notes hold "any".
+   */
+  readonly dependencyMode: DependencyMode;
   /** When the block was created; read-only, it orders the inbox. */
   readonly created: Date;
   readonly anomalies: readonly DataAnomaly[];
@@ -86,6 +98,7 @@ export interface TaskInNotes {
   note: string | null;
   sequential: boolean;
   dependencies: readonly TaskId[];
+  dependencyMode: DependencyMode;
   created: Date;
 }
 
@@ -127,6 +140,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     note: input.note,
     sequential: input.sequential,
     dependencies: [...input.dependencies],
+    dependencyMode: input.dependencyMode,
     created: input.created,
     anomalies,
   };

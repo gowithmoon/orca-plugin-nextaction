@@ -142,14 +142,18 @@ export function analyzeTaskGraph(
    * The dependencies of `item` not yet met (GLOSSARY: 依赖), in the order
    * the notes hold them. A dependency is met when its target is done; a
    * target that is not a task in the snapshot is a stale dependency and
-   * counts as met. Every dependency must be met ("all"); the dependency mode
-   * (#58) decides this here.
+   * counts as met. In mode "all" every dependency must be met; in mode "any"
+   * (GLOSSARY: 依赖模式) one met dependency, stale ones included, is enough,
+   * and none is listed then.
    */
-  const unmetDependencies = (item: SnapshotTask): TaskId[] =>
-    item.task.dependencies.filter((target) => {
+  const unmetDependencies = (item: SnapshotTask): TaskId[] => {
+    const unmet = item.task.dependencies.filter((target) => {
       const dependency = byId.get(target);
       return dependency !== undefined && dependency.task.status !== "done";
     });
+    const someMet = unmet.length < item.task.dependencies.length;
+    return item.task.dependencyMode === "any" && someMet ? [] : unmet;
+  };
 
   const entries = new Map<TaskId, TaskGraphEntry>();
   for (const item of ordered) {

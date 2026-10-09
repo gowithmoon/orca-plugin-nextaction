@@ -50,6 +50,7 @@ describe("decodeTask", () => {
       note: null,
       sequential: false,
       dependencies: [],
+      dependencyMode: "all",
       created: new Date("2026-10-05T01:00:00.000Z"),
       anomalies: [],
     });
@@ -69,6 +70,7 @@ describe("decodeTask", () => {
       note: "after 9am",
       sequential: true,
       dependencies: [],
+      dependencyMode: "all",
       created: new Date("2026-10-06T08:00:00.000Z"),
       anomalies: [],
     });
@@ -89,6 +91,7 @@ describe("decodeTask", () => {
       note: null,
       sequential: false,
       dependencies: [],
+      dependencyMode: "all",
       created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [],
     });
@@ -108,6 +111,7 @@ describe("decodeTask", () => {
       note: null,
       sequential: false,
       dependencies: [],
+      dependencyMode: "all",
       created: new Date("2026-10-05T01:20:00.000Z"),
       anomalies: [{ property: "status", value: null }],
     });
@@ -323,6 +327,63 @@ describe("decodeTask", () => {
     });
   });
 
+  describe("dependency mode", () => {
+    /** The one-dependency sample with a dependency mode value added. */
+    const withMode = (value: unknown) => {
+      const block = blocks.zhOneDependency;
+      return {
+        ...block,
+        refs: block.refs.map((ref) =>
+          ref.type === 2
+            ? {
+                ...ref,
+                data: [
+                  ...(ref.data ?? []),
+                  { name: "依赖模式", type: 6, value },
+                ],
+              }
+            : ref,
+        ),
+      };
+    };
+
+    it("reads 任一 as any, on a Chinese task tag", () => {
+      expect(decodedTask(withMode("任一")).dependencyMode).toBe("any");
+    });
+
+    it("reads 全部 as all", () => {
+      expect(decodedTask(withMode("全部")).dependencyMode).toBe("all");
+    });
+
+    it("reads Any as any, on an English task tag", () => {
+      expect(decodedTask(blocks.enTwoDependencies, enTag).dependencyMode).toBe(
+        "any",
+      );
+    });
+
+    it("reads a missing value as all", () => {
+      expect(decodedTask(blocks.zhOneDependency).dependencyMode).toBe("all");
+    });
+
+    it.each([
+      ["empty (null)", null],
+      ["an unknown option", "两条"],
+      ["a list", ["任一"]],
+      ["a number", 1],
+    ])("reads a value that is %s as all", (_, value) => {
+      expect(decodedTask(withMode(value)).dependencyMode).toBe("all");
+    });
+
+    it("reads an invalidated dependency mode as all", () => {
+      expect(
+        decodedTask(blocks.enTwoDependencies, {
+          tagBlockId: tagBlocks.en.id,
+          invalidated: ["dependencyMode"],
+        }).dependencyMode,
+      ).toBe("all");
+    });
+  });
+
   it("reads invalidated properties as empty", () => {
     const task = decodedTask(blocks.zhWithOtherTag, {
       tagBlockId: tagBlocks.zh.id,
@@ -466,6 +527,7 @@ describe("decodeTask with values of the wrong kind", () => {
       note: null,
       sequential: false,
       dependencies: [],
+      dependencyMode: "all",
       created: new Date("2026-10-05T01:10:00.000Z"),
       anomalies: [{ property: "status", value: ["待开始"] }],
     });

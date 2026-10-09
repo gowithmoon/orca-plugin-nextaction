@@ -60,6 +60,22 @@ const zhDefinitions = [
   // Block references (#57): the values are reference IDs, no type arguments
   // (tag-operations A2).
   { name: "依赖", type: 2, pos: 9 },
+  // Single choice, "全部" by default (#58); choices without a color, as the
+  // plugin adds context and label choices (multi-choices-created).
+  {
+    name: "依赖模式",
+    type: 6,
+    pos: 10,
+    typeArgs: {
+      subType: "single",
+      defaultEnabled: true,
+      default: "全部",
+      choices: [
+        { n: "全部", c: "" },
+        { n: "任一", c: "" },
+      ],
+    },
+  },
 ];
 
 const enDefinitions = [
@@ -115,6 +131,20 @@ const enDefinitions = [
     typeArgs: { defaultEnabled: true, default: false },
   },
   { name: "Dependencies", type: 2, pos: 9 },
+  {
+    name: "Dependency mode",
+    type: 6,
+    pos: 10,
+    typeArgs: {
+      subType: "single",
+      defaultEnabled: true,
+      default: "All",
+      choices: [
+        { n: "All", c: "" },
+        { n: "Any", c: "" },
+      ],
+    },
+  },
 ];
 
 /**
@@ -316,6 +346,71 @@ describe("startup plan", () => {
         uiLanguage: "en",
       }).writes,
     ).toEqual([{ name: "依赖", type: 2, pos: 9 }]);
+  });
+
+  it("appends the dependency mode with its choices and default to a tag from before #58", () => {
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["依赖模式"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }).writes,
+    ).toEqual([
+      {
+        name: "依赖模式",
+        type: 6,
+        pos: 10,
+        typeArgs: {
+          subType: "single",
+          defaultEnabled: true,
+          default: "全部",
+          choices: [
+            { n: "全部", c: "" },
+            { n: "任一", c: "" },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("adds a missing dependency mode option and keeps the ones the user recolored", () => {
+    const mode = {
+      name: "依赖模式",
+      type: 6,
+      pos: 10,
+      value: null,
+      typeArgs: {
+        subType: "single",
+        defaultEnabled: true,
+        default: "全部",
+        choices: [{ n: "全部", c: "#4caf50" }],
+      },
+    };
+
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock([...readBack(without(["依赖模式"])), mode]),
+        cache: takenOver,
+        uiLanguage: "zh",
+      }).writes,
+    ).toEqual([
+      {
+        name: "依赖模式",
+        type: 6,
+        pos: 10,
+        typeArgs: {
+          subType: "single",
+          defaultEnabled: true,
+          default: "全部",
+          choices: [
+            { n: "全部", c: "#4caf50" },
+            { n: "任一", c: "" },
+          ],
+        },
+      },
+    ]);
   });
 
   it("names a missing property in the tag's language, not the interface's", () => {
