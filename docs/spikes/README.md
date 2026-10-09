@@ -18,5 +18,6 @@
 | [page-task.md](./page-task.md) | — | 页面任务、"有父块或有别名"的查询条件、英文属性名的 `data-` 形态（第三步补测，ADR 0013） | 第三步起的任务识别、查询和状态图标 |
 | [multi-choices-created.md](./multi-choices-created.md) | — | 多选属性写入不在选项里的值；块的创建时间（第四步补测） | 第四步起的上下文、标记和收集箱排序 |
 | [inbox-anomalous-status.md](./inbox-anomalous-status.md) | #37 | 状态为空或无法识别的任务与"状态为收集箱"的查询（第四步补测） | 第四步起按状态筛选的视图 |
+| [plugin-panel-writes.md](./plugin-panel-writes.md) | #39、#40 | 从插件面板写入、日期值的类型、页面任务的文字、插件面板的宽度（第四步验收补测） | 第四步起所有写入和日期读取 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。

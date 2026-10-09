@@ -104,6 +104,7 @@ tests/
 ### 读写 Orca
 
 - 所有写操作都经过仓储，涉及多个步骤的写操作包在 `orca.commands.invokeGroup` 里，让用户能一次撤销。
+- `invokeGroup` 和编辑器命令都通过**活动面板的编辑器**执行：活动面板是插件面板时，`invokeGroup` 报错，编辑器命令不报错但什么也不写。写入前先切到一个笔记面板，写完切回（`infra/orca/orca-calls.ts`，`plugin-panel-writes`）。不要绕过 `orca-calls` 直接调用它们。
 - 属性名、类型码（`PropType`）、标签别名只在 `infra/orca` 中出现。
 - 读写块属性中的 JSON 时，必须经过带版本号的编解码函数；遇到无法解析的数据时保留原值并记录警告，禁止静默覆盖。
 - 视图按需查询，缓存遵循 ADR 0007：插件写入后、命令后钩子报告相关编辑后、视图获得焦点时，让相关缓存失效。
@@ -121,7 +122,7 @@ tests/
 - 任务查询一律加上"有父块或有别名"的 OR 组 `{ kind: 101, conditions: [{ kind: 9, hasParent: true }, { kind: 9, hasAliases: true }] }`，排除日记块和被删除后残留的孤立块，保留页面任务（ADR 0013，`tag-operations`、`page-task`）。按 ID 读取使用同一条规则。
 
 读写任务数据（`tag-operations`、`block-properties-json`）：
-- 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；日期是 ISO 字符串。
+- 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；`get-blocks` 返回的日期是 `Date`（`plugin-panel-writes`；早先记成 ISO 字符串是 JSON 打印造成的）。页面任务的 `content` 为空，文字取它的别名。
 - 修改标签块上的属性定义时，传入完整的 `typeArgs`（Orca 是整体替换），并显式写入 `pos`。
 - 块引用属性（依赖）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。
 - 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
