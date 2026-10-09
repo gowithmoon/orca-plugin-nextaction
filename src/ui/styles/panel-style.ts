@@ -109,9 +109,9 @@ export const panelCss = `
   font-variant-numeric: tabular-nums;
 }
 
-/* Narrow: icons only, except the current view. */
+/* Narrow: icons only, the current view too; the view header names it. */
 .nextaction-panel[data-tier="narrow"]
-  .nextaction-panel-nav-item:not([aria-selected="true"])
+  .nextaction-panel-nav-item
   :is(.nextaction-panel-nav-label, .nextaction-panel-nav-count) {
   display: none;
 }

@@ -39,8 +39,8 @@ function NavigationItem(props: {
       )}
     </button>
   );
-  // In the narrow tier only the current item shows its name.
-  return tier === "narrow" && !current ? (
+  // In the narrow tier items show only their icon; the name is a tooltip.
+  return tier === "narrow" ? (
     <Tooltip text={label} defaultPlacement="bottom">
       {item}
     </Tooltip>
