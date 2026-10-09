@@ -33,11 +33,12 @@ const zhCN: Record<string, string> = {
     "请把光标放在要转为任务的块中。",
   "Task features are paused, so the block was not converted. See the plugin's earlier notice or its task tag setting.":
     "任务功能已暂停，块没有转为任务。请查看插件之前的通知或任务标签设置。",
-  "Quick capture": "快速捕获",
-  "What's on your mind? Press Enter to capture": "想到什么？按 Enter 捕获",
+  "Create task": "创建任务",
+  "Task name": "任务名称",
+  "Task name, press Enter to create": "输入任务名称，按 Enter 快速创建任务",
   "Goes to today's journal, into the inbox": "记到今天的日记，进入收集箱",
   Cancel: "取消",
-  Capture: "捕获",
+  Create: "创建",
   "Task created and added to today's journal": "任务创建成功，已加入今日日记",
   "Task features are paused, so the task was not created. See the plugin's earlier notice or its task tag setting.":
     "任务功能已暂停，任务没有创建。请查看插件之前的通知或任务标签设置。",

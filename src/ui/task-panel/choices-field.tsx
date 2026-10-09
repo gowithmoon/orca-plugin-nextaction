@@ -5,6 +5,7 @@
 // (docs/ARCHITECTURE.md §5; #35 未验证二).
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
+import { usePopupLayer } from "../components/popup-layer";
 
 /**
  * Options matching `keyword`: by label or value, ignoring case, or by the
@@ -37,6 +38,7 @@ export function ChoicesField(props: {
   onChange: (values: string[]) => void;
 }) {
   const { Select } = orca.components;
+  const popupLayer = usePopupLayer();
   const { display } = props;
 
   const options: SelectOption[] = [
@@ -85,6 +87,8 @@ export function ChoicesField(props: {
         formatter={display}
         width="100%"
         alignment="left"
+        // Inside a window the menu would be cut off by it (popup-layer.tsx).
+        menuContainer={popupLayer}
         onChange={(selected) => {
           const same =
             selected.length === props.values.length &&

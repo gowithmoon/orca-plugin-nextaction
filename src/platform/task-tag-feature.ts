@@ -283,7 +283,7 @@ export function createTaskTagFeature(
         today,
         captureRoot.render,
       ),
-      t("Quick capture"),
+      t("Create task"),
     );
     const uiLanguage = noteLanguageFor(orca.state.locale);
     await start(context, uiLanguage);

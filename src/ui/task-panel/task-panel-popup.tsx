@@ -5,6 +5,7 @@
 import * as React from "react";
 import type { TaskId } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { PopupLayer } from "../components/popup-layer";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
 
@@ -32,30 +33,32 @@ function TaskPanelPopup(props: {
   // capture does), so opening again is never held up by `onClosed`.
   return (
     <ModalOverlay visible={true} canClose={true} onClose={props.onClose}>
-      <div
-        ref={dialog}
-        // Focusable itself, so opening moves the focus here (useFocusInside).
-        tabIndex={-1}
-        // The shared window look (window-style.ts), centred and scrolling
-        // inside when taller than the screen.
-        className="nextaction-window"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("Task panel")}
-        onKeyDown={onKeyDown}
-      >
-        <TaskPanelForm
-          deps={props.deps}
-          taskId={props.taskId}
-          onClose={props.onClose}
-          // The popup would cover the block just opened, and the focus
-          // belongs with that block now.
-          onOpenedInNotes={() => {
-            restoreFocus.current = false;
-            props.onClose();
-          }}
-        />
-      </div>
+      <PopupLayer>
+        <div
+          ref={dialog}
+          // Focusable itself, so opening moves the focus here (useFocusInside).
+          tabIndex={-1}
+          // The shared window look (window-style.ts), centred and scrolling
+          // inside when taller than the screen.
+          className="nextaction-window"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("Task panel")}
+          onKeyDown={onKeyDown}
+        >
+          <TaskPanelForm
+            deps={props.deps}
+            taskId={props.taskId}
+            onClose={props.onClose}
+            // The popup would cover the block just opened, and the focus
+            // belongs with that block now.
+            onOpenedInNotes={() => {
+              restoreFocus.current = false;
+              props.onClose();
+            }}
+          />
+        </div>
+      </PopupLayer>
     </ModalOverlay>
   );
 }
