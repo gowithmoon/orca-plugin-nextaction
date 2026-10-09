@@ -33,6 +33,11 @@ export interface TaskCardProps {
    * faded (not struck through, #45) and saying its new status.
    */
   kept?: boolean;
+  /**
+   * The text of the task's parent task (#55), one line above its own,
+   * cut short when too long and not clickable on its own; no line without it.
+   */
+  parentText?: string | null;
 }
 
 /** A click that selected text is not a click on the card. */
@@ -93,9 +98,37 @@ function OpenInNotesButton(props: { task: Task; actions: TaskActions }) {
   );
 }
 
+/** The parent task's text: plain text, so a click on it is a click on the card. */
+function ParentLine(props: { text: string }) {
+  const blank = props.text.trim() === "";
+  const text = blank ? t("(No text)") : props.text;
+  return (
+    <div
+      className="nextaction-task-card-parent"
+      data-empty={blank || undefined}
+      title={text}
+    >
+      <i className="ti ti-corner-left-up" aria-hidden="true" />
+      <span className="nextaction-task-card-parent-text">
+        <span className="nextaction-visually-hidden">{t("Parent task:")} </span>
+        {text}
+      </span>
+    </div>
+  );
+}
+
 export function TaskCard(props: TaskCardProps) {
-  const { task, today, actions, menuItems, onOpen, menuPlace, selected, kept } =
-    props;
+  const {
+    task,
+    today,
+    actions,
+    menuItems,
+    onOpen,
+    menuPlace,
+    selected,
+    kept,
+    parentText,
+  } = props;
   const { ContextMenu } = orca.components;
   const text = shownText(task);
 
@@ -144,6 +177,7 @@ export function TaskCard(props: TaskCardProps) {
         )}
       </div>
       <div className="nextaction-task-card-main">
+        {parentText != null && <ParentLine text={parentText} />}
         <div
           className="nextaction-task-card-text"
           data-empty={text.empty || undefined}

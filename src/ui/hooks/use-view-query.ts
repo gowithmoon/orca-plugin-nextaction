@@ -21,6 +21,12 @@ export interface ViewQuery<T> {
   subscribe(listener: () => void): () => void;
   /** Reads from scratch: shows loading until the read ends. */
   reset(): void;
+  /**
+   * Reads again while started (e.g. its read's input changed), keeping what
+   * is shown until the read ends. Does nothing while stopped: the next start
+   * reads anyway.
+   */
+  reload(): void;
 }
 
 /**
@@ -65,6 +71,9 @@ export function createViewQuery<T>(
       };
     },
     reset,
+    reload() {
+      if (stopChanges) load();
+    },
   };
 }
 
