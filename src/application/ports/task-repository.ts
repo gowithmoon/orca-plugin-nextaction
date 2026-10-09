@@ -157,7 +157,9 @@ export interface TaskRepository {
   /**
    * Drops the task (GLOSSARY: 放弃): in one undo, removes the task tag and
    * deletes every plugin block property of the block, so it is a plain block
-   * again. Subtasks are left as they are. A mirror block's ID drops its
+   * again, and removes it from the dependencies of every task that depended
+   * on it, their other dependencies kept (ADR 0016). The block itself is
+   * never deleted. Subtasks are left as they are. A mirror block's ID drops its
    * source block. Fails, writing nothing, when the block is not a task or the
    * write fails.
    */

@@ -18,7 +18,11 @@ import {
   planCompletionHistoryWrite,
   readCompletionHistory,
 } from "../codec/completion-history-codec";
-import { planDependencyWrite } from "../codec/dependency-write";
+import {
+  dependenciesWithout,
+  dependentsOf,
+  planDependencyWrite,
+} from "../codec/dependency-write";
 import { type PropertyKey, propertyName } from "../codec/names";
 import {
   type PluginPropertyWrite,
@@ -155,6 +159,47 @@ export function createOrcaTaskRepository(
     const block = await taskBlock(id, context);
     if (!block) throw new OrcaError(`block ${id} is not a task`);
     return block;
+  };
+
+  /**
+   * The dependencies values to write so no task depends on `block` once it
+   * is dropped (ADR 0016): each task with a `type: 3` reference to it among
+   * its `backRefs`, confirmed by its dependencies value holding that
+   * reference ID (next-action-hierarchy-boolean-deps). Only tasks are
+   * written: a block that is not one (an orphan included) is left as it is.
+   * Dependencies on a mirror of the block are not looked for: a mirror's
+   * `backRefs` are not measured; they read as stale and go with the next
+   * edit of that task's dependencies.
+   */
+  const planDependencyClears = async (state: ReadyTag, block: Block) => {
+    if (state.invalidated.includes("dependencies")) return [];
+    const dependents = dependentsOf(block);
+    if (dependents.size === 0) return [];
+    const context: TaskTagContext = {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    };
+    const blocks = await getBlocks([...dependents.keys()]);
+    const clears: { ref: Block["refs"][number]; refIds: number[] }[] = [];
+    for (const [dependentId, refIds] of dependents) {
+      const dependent = blocks.get(dependentId);
+      if (!dependent || decodeTask(dependent, context).kind !== "task") {
+        continue;
+      }
+      const removal = dependenciesWithout(dependent, state.tagBlockId, refIds);
+      if (removal.kind === "unreadable") {
+        console.warn(
+          `[nextaction] block ${dependent.id}: the dependencies value is kept as it is`,
+          removal.raw,
+        );
+        continue;
+      }
+      const ref = findTaskTagRef(dependent.refs, state.tagBlockId);
+      if (removal.kind === "write" && ref) {
+        clears.push({ ref, refIds: removal.refIds });
+      }
+    }
+    return clears;
   };
 
   /** Writes to a task, then reports it written even if the write failed. */
@@ -551,9 +596,20 @@ export function createOrcaTaskRepository(
       const pluginProperties = block.properties
         .map((p) => p.name)
         .filter((name) => name.startsWith(pluginPropertyPrefix));
+      const dependencyClears = await planDependencyClears(state, block);
       // removeTag leaves plugin block properties behind (block-properties-json
-      // J4), so both happen in one undo.
+      // J4), so both happen in one undo; so does clearing every dependency
+      // on the task (ADR 0016), done first as the spike did
+      // (next-action-hierarchy-boolean-deps).
       await writeTo(block, async () => {
+        for (const { ref, refIds } of dependencyClears) {
+          // setRefData takes the whole reference object and changes only the
+          // items passed; reference IDs left out go with their references,
+          // `[]` removes the value (tag-operations A4, A5).
+          await invokeEditorCommand("core.editor.setRefData", ref, [
+            encodeDependencies(refIds, { language: state.language }),
+          ]);
+        }
         await invokeEditorCommand(
           "core.editor.removeTag",
           block.id,
