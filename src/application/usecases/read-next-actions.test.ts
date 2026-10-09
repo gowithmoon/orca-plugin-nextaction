@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import { createReadNextActions } from "./read-next-actions";
 
@@ -11,12 +12,14 @@ function setup() {
   const repository = createInMemoryTaskRepository();
   const clock = createFixedClock(morning);
   const dayBoundary = createFixedDayBoundary();
+  const startPreviewDays = createFixedStartPreviewDays();
   const readNextActions = createReadNextActions({
     repository,
     clock,
     dayBoundary,
+    startPreviewDays,
   });
-  return { repository, clock, readNextActions };
+  return { repository, clock, startPreviewDays, readNextActions };
 }
 
 describe("read next actions", () => {
@@ -68,6 +71,25 @@ describe("read next actions", () => {
     await repository.dropTask(2);
 
     const read = await readNextActions({ keep: 2 });
+
+    expect(read.items.map((item) => item.task.id)).toEqual([1]);
+  });
+
+  it("lists a task starting today plus the start preview days, not one starting a day later", async () => {
+    const { repository, startPreviewDays, readNextActions } = setup();
+    startPreviewDays.set(3);
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      start: { year: 2026, month: 10, day: 12 },
+    });
+    repository.addTask({
+      id: 2,
+      status: "todo",
+      start: { year: 2026, month: 10, day: 13 },
+    });
+
+    const read = await readNextActions();
 
     expect(read.items.map((item) => item.task.id)).toEqual([1]);
   });
