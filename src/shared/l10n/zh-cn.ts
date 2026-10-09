@@ -156,6 +156,10 @@ const zhCN: Record<string, string> = {
   ", ": "、",
   "Could not read why the task is blocked: ${reason}":
     "无法读取阻塞原因：${reason}",
+  Sequential: "顺序执行",
+  "${kind} (from ": "${kind}（来自 ",
+  "): ": "）：",
+  "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
 };
 
 export default zhCN;

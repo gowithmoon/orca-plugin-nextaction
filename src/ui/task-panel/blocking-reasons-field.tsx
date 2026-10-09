@@ -17,6 +17,8 @@ function kindLabel(reason: BlockingReason): string {
   switch (reason.kind) {
     case "subtasks":
       return t("Subtasks");
+    case "sequential":
+      return t("Sequential");
   }
 }
 
@@ -36,6 +38,22 @@ export function BlockingReasonsField(props: {
     props.notify,
   );
   if (reasons.length === 0) return null;
+  /** A task named in a reason, as a button that switches to it. */
+  const taskButton = (id: TaskId) => {
+    const related = tasks.get(id);
+    if (!related) return null;
+    const text = shownText(related);
+    return (
+      <button
+        type="button"
+        className="nextaction-blocking-reason-task"
+        data-empty={text.empty || undefined}
+        onClick={() => props.onSelectTask(id)}
+      >
+        {text.text}
+      </button>
+    );
+  };
   return (
     <Field label={t("Blocked by")} labelId={props.labelId}>
       <ul
@@ -47,9 +65,19 @@ export function BlockingReasonsField(props: {
             key={`${reason.kind}-${reason.source}`}
             className="nextaction-blocking-reason"
           >
-            <span className="nextaction-blocking-reason-kind">
-              {t("${kind}: ", { kind: kindLabel(reason) })}
-            </span>
+            {reason.source === props.taskId ? (
+              <span className="nextaction-blocking-reason-kind">
+                {t("${kind}: ", { kind: kindLabel(reason) })}
+              </span>
+            ) : (
+              // Passed down from an ancestor task (ADR 0015), e.g.
+              // "Sequential (from Draft): Outline".
+              <span className="nextaction-blocking-reason-kind">
+                {t("${kind} (from ", { kind: kindLabel(reason) })}
+                {taskButton(reason.source)}
+                {t("): ")}
+              </span>
+            )}
             {reason.waitingFor.map((id, index) => {
               const related = tasks.get(id);
               if (!related) return null;

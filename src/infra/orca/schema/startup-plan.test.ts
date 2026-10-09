@@ -50,6 +50,13 @@ const zhDefinitions = [
   // Text has no type arguments; written without typeArgs as in the
   // tag-operations spike.
   { name: "备注", type: 1, pos: 7 },
+  // Boolean, unchecked by default (next-action-hierarchy-boolean-deps).
+  {
+    name: "顺序执行",
+    type: 4,
+    pos: 8,
+    typeArgs: { defaultEnabled: true, default: false },
+  },
 ];
 
 const enDefinitions = [
@@ -98,6 +105,12 @@ const enDefinitions = [
     typeArgs: { subType: "multi", choices: [] },
   },
   { name: "Notes", type: 1, pos: 7 },
+  {
+    name: "Sequential",
+    type: 4,
+    pos: 8,
+    typeArgs: { defaultEnabled: true, default: false },
+  },
 ];
 
 /**
@@ -185,6 +198,28 @@ describe("startup plan", () => {
           type: 6,
           pos: 6,
           typeArgs: { subType: "multi", choices: [] },
+        },
+      ],
+    });
+  });
+
+  it("appends the sequential property to a task tag that predates it", () => {
+    // A tag created before step 5 (#59): the eight earlier properties only.
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["顺序执行"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [
+        {
+          name: "顺序执行",
+          type: 4,
+          pos: 8,
+          typeArgs: { defaultEnabled: true, default: false },
         },
       ],
     });

@@ -131,6 +131,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       contexts: choicesValue(values.get("context")),
       labels: choicesValue(values.get("label")),
       note: textValue(values.get("note")),
+      sequential: booleanValue(values.get("sequential")),
       created: createdValue(block.id, block.created),
     }),
   };
@@ -160,6 +161,14 @@ function numberValue(value: unknown): number | null {
 
 function textValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+/**
+ * Only `true` is on: `false`, `null`, a missing item and anything else are
+ * off (next-action-hierarchy-boolean-deps).
+ */
+function booleanValue(value: unknown): boolean {
+  return value === true;
 }
 
 function choicesValue(value: unknown): string[] {

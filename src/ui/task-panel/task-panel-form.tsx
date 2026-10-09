@@ -9,6 +9,7 @@ import type { EditTask } from "../../application/usecases/edit-task";
 import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadTask } from "../../application/usecases/read-task";
+import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
@@ -36,6 +37,7 @@ import {
   Field,
   NoteField,
   RatingField,
+  SequentialField,
   StatusField,
 } from "./task-panel-fields";
 
@@ -47,6 +49,8 @@ export interface TaskPanelFormDeps {
   readCandidates: ReadCandidates;
   /** Why the task is blocked, for the blocking reasons row (#54). */
   readBlockingReasons: ReadBlockingReasons;
+  /** Switches sequential on or off (#59). */
+  setSequential: SetSequential;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -200,6 +204,14 @@ function Fields(props: {
           note={task.note}
           onSave={saveNote}
           saveOnLeave={props.saveOnLeave}
+        />
+      </Field>
+      {/* Always shown, whether or not the task has subtasks (#59). */}
+      <Field label={t("Sequential")} labelId={id("sequential")}>
+        <SequentialField
+          labelId={id("sequential")}
+          on={task.sequential}
+          onChange={(sequential) => void actions.setSequential(sequential)}
         />
       </Field>
     </div>

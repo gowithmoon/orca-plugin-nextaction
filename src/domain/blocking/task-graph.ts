@@ -36,9 +36,13 @@ export interface TaskGraphOptions {
  *
  * - `subtasks` (子任务阻塞): direct subtasks neither done nor someday. Not
  *   passed down, so its source is always the task itself.
+ * - `sequential` (顺序阻塞): under a sequential parent, earlier sibling
+ *   subtasks neither done nor someday. `source` is the sibling held back:
+ *   the task itself, or an ancestor task for blocking passed down (ADR
+ *   0015); `waitingFor` are its earlier siblings.
  */
 export type BlockingReason = {
-  readonly kind: "subtasks";
+  readonly kind: "subtasks" | "sequential";
   /**
    * The task the blocking comes from: the task itself, or an ancestor task
    * for blocking passed down (ADR 0015).
@@ -118,6 +122,22 @@ export function analyzeTaskGraph(
     children.set(item.parentId, siblings);
   }
 
+  /**
+   * Under a sequential parent, the earlier sibling subtasks (note order) that
+   * hold `item` back: neither done nor someday (GLOSSARY: 顺序执行). Empty
+   * when its parent task is not sequential.
+   */
+  const earlierOpenSiblings = (item: SnapshotTask): TaskId[] => {
+    const parent = item.parentId === null ? undefined : byId.get(item.parentId);
+    if (!parent?.task.sequential) return [];
+    return (children.get(parent.task.id) ?? [])
+      .filter(
+        (sibling) =>
+          sibling.position < item.position && !releasesParent(sibling.task),
+      )
+      .map((sibling) => sibling.task.id);
+  };
+
   const entries = new Map<TaskId, TaskGraphEntry>();
   for (const item of ordered) {
     const blockedBy: BlockingReason[] = [];
@@ -128,6 +148,18 @@ export function analyzeTaskGraph(
       blockedBy.push({ kind: "subtasks", source: item.task.id, waitingFor });
     }
     const chain = selfAndAncestors(item);
+    // Sequential blocking of the task or any ancestor task passes down (ADR
+    // 0015): one reason per link held back, nearest first.
+    for (const link of chain) {
+      const waitingFor = earlierOpenSiblings(link);
+      if (waitingFor.length > 0) {
+        blockedBy.push({
+          kind: "sequential",
+          source: link.task.id,
+          waitingFor,
+        });
+      }
+    }
     const parked = chain.some((link) => parks(link.task));
     const effectiveStart = chain.reduce<CalendarDate | null>(
       (latest, link) => laterDay(latest, link.task.start),
