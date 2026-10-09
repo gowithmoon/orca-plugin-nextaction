@@ -112,14 +112,29 @@ export function createNextActionPanel(
     const current = list.find((view) => view.id === currentId) ?? list[0];
     // Only for this opening: nothing is selected when it opens (#42).
     const [selectedTaskId, setSelectedTaskId] = React.useState<TaskId>();
+    /**
+     * A task opened in the notes from the side pane: it stays selected, but
+     * does not move into the popup when the new note panel narrows the
+     * plugin panel. The popup would cover the block the user went to see.
+     * Selecting a task again lifts it.
+     */
+    const [heldFromPopup, setHeldFromPopup] = React.useState<TaskId>();
+    const selectTask = React.useCallback((taskId: TaskId) => {
+      setHeldFromPopup(undefined);
+      setSelectedTaskId(taskId);
+    }, []);
     const clearSelection = React.useCallback(
       () => setSelectedTaskId(undefined),
       [],
     );
+    const holdFromPopup = React.useCallback(
+      () => setHeldFromPopup(selectedTaskId),
+      [selectedTaskId],
+    );
     useSelectionPopup(
       openPopup,
       tier !== undefined && tier !== "wide",
-      selectedTaskId,
+      selectedTaskId === heldFromPopup ? undefined : selectedTaskId,
       clearSelection,
     );
 
@@ -130,9 +145,9 @@ export function createNextActionPanel(
           originPanelId: props.originPanelId,
           tier,
           selectedTaskId,
-          selectTask: setSelectedTaskId,
+          selectTask,
         },
-      [props.panelId, props.originPanelId, tier, selectedTaskId],
+      [props.panelId, props.originPanelId, tier, selectedTaskId, selectTask],
     );
 
     const View = current?.component;
@@ -165,7 +180,11 @@ export function createNextActionPanel(
                   className="nextaction-panel-side"
                   aria-label={t("Task panel")}
                 >
-                  <SidePane taskId={selectedTaskId} onClose={clearSelection} />
+                  <SidePane
+                    taskId={selectedTaskId}
+                    onClose={clearSelection}
+                    onOpenedInNotes={holdFromPopup}
+                  />
                 </aside>
               )}
             </div>
