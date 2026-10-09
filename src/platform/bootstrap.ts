@@ -3,6 +3,7 @@ import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
 import { createLoadDayBoundary } from "./day-boundary";
 import { createPanelFeature } from "./panel-feature";
+import { createPopupStyleFeature } from "./popup-style-feature";
 import { createRegistry, type Registry } from "./registry";
 import {
   applySettingsSchema,
@@ -126,9 +127,12 @@ export function createPlugin(options: {
  */
 export function createNextActionPlugin(): Plugin {
   const taskChanges = createTaskChangesFeature();
-  const taskTag = createTaskTagFeature(() => taskChanges.changes.changed());
-  const { repository } = taskTag;
   const day = createLoadDayBoundary();
+  const taskTag = createTaskTagFeature(
+    () => taskChanges.changes.changed(),
+    day.today,
+  );
+  const { repository } = taskTag;
   const taskActions = createTaskActionsFeature(repository, day.dayBoundary);
   const taskPanel = createTaskPanelFeature({
     repository,
@@ -167,6 +171,9 @@ export function createNextActionPlugin(): Plugin {
       taskActions.feature,
       // Before the task tag feature, so it hears the outcome of startup.
       createStatusIconFeature(taskTag.names),
+      // Before quick capture (in the task tag feature) and the task panel,
+      // which both wear these styles.
+      createPopupStyleFeature(),
       taskTag.feature,
       // Before the menus and the plugin panel that open it, so its root is
       // released after them.

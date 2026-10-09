@@ -196,7 +196,7 @@ function Fields(props: {
 
 export function TaskPanelForm(props: TaskPanelFormProps) {
   const { deps, taskId, onClose } = props;
-  const { Button } = orca.components;
+  const { Button, Tooltip } = orca.components;
   const idPrefix = React.useId();
   const { state, reload } = useLiveTask(deps.readTask, taskId, deps.changes);
   const actions = useTaskPanelActions(deps, taskId, reload);
@@ -281,10 +281,17 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
       <div className="nextaction-task-panel-body">{body}</div>
       {task && (
         <footer className="nextaction-task-panel-footer">
-          <Button variant="dangerous" onClick={() => void drop()}>
-            <i className="ti ti-trash" aria-hidden="true" />
-            {t("Drop this task")}
-          </Button>
+          {/* An icon, grey until pointed at; one click drops, undoable in Orca. */}
+          <Tooltip text={t("Drop this task")}>
+            <Button
+              variant="plain"
+              className="nextaction-task-drop"
+              aria-label={t("Drop this task")}
+              onClick={() => void drop()}
+            >
+              <i className="ti ti-trash" aria-hidden="true" />
+            </Button>
+          </Tooltip>
         </footer>
       )}
     </section>

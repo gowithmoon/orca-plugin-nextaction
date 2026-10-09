@@ -76,7 +76,8 @@ export interface TaskInNotes {
   created: Date;
 }
 
-const defaultRating: Rating = 4;
+/** Importance and effort default to 4 (GLOSSARY). */
+export const defaultRating: Rating = 4;
 
 /**
  * The notes hold an empty or unknown status for the task: it reads as inbox,

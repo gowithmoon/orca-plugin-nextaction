@@ -4,6 +4,7 @@ import {
   type ChoiceProperty,
   type CompletionHistoryRead,
   type ConvertToTaskResult,
+  type InitialProperties,
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
@@ -410,8 +411,19 @@ export function createOrcaTaskRepository(
       });
     },
 
-    async appendTaskToJournal(text: string, now: Date): Promise<TaskId> {
+    async appendTaskToJournal(
+      text: string,
+      now: Date,
+      initial: InitialProperties = {},
+    ): Promise<TaskId> {
       const state = readyTag();
+      // Encoded first: an invalidated property fails before anything is
+      // written. Only the properties given; Orca fills the others with their
+      // defaults (inbox-anomalous-status).
+      const items = encodeTaskChanges(initial, {
+        language: state.language,
+        invalidated: state.invalidated,
+      });
       // A local-time Date picks the journal by local date, and a missing
       // journal is created (journal-capture J2, J3). This runs outside the
       // group below, so a journal it creates is not removed by the one undo;
@@ -441,9 +453,14 @@ export function createOrcaTaskRepository(
           if (typeof id !== "number") {
             throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
           }
-          // Without values every property takes its default, the status
-          // inbox (tag-operations).
-          await invokeEditorCommand("core.editor.insertTag", id, state.tagName);
+          // Values not passed take their defaults, the status inbox; dates
+          // go in as for setRefData (tag-operations step 02, date-subtype D).
+          await invokeEditorCommand(
+            "core.editor.insertTag",
+            id,
+            state.tagName,
+            ...(items.length > 0 ? [items] : []),
+          );
         });
       } finally {
         if (typeof id === "number") onWritten(id);

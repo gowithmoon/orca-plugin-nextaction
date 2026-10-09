@@ -5,31 +5,9 @@
 import * as React from "react";
 import type { TaskId } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { PopupLayer } from "../components/popup-layer";
+import { useFocusInside } from "../hooks/use-focus-inside";
 import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
-
-/**
- * Moves the focus into the popup when it opens, and back where it was (e.g.
- * the note editor) when it closes, unless `restore` was turned off (the user
- * went to the block in the notes). Without it, keys keep going to the editor
- * behind the popup: typing edits the note and Esc never reaches the popup.
- */
-function useFocusInside(
-  ref: React.RefObject<HTMLElement>,
-  restore: React.RefObject<boolean>,
-) {
-  React.useEffect(() => {
-    const before =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : undefined;
-    ref.current?.focus({ preventScroll: true });
-    return () => {
-      if (restore.current && before?.isConnected) {
-        before.focus({ preventScroll: true });
-      }
-    };
-  }, [ref, restore]);
-}
 
 function TaskPanelPopup(props: {
   deps: TaskPanelFormDeps;
@@ -55,28 +33,32 @@ function TaskPanelPopup(props: {
   // capture does), so opening again is never held up by `onClosed`.
   return (
     <ModalOverlay visible={true} canClose={true} onClose={props.onClose}>
-      <div
-        ref={dialog}
-        // Focusable itself, so opening moves the focus here (useFocusInside).
-        tabIndex={-1}
-        className="nextaction-task-panel-popup"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("Task panel")}
-        onKeyDown={onKeyDown}
-      >
-        <TaskPanelForm
-          deps={props.deps}
-          taskId={props.taskId}
-          onClose={props.onClose}
-          // The popup would cover the block just opened, and the focus
-          // belongs with that block now.
-          onOpenedInNotes={() => {
-            restoreFocus.current = false;
-            props.onClose();
-          }}
-        />
-      </div>
+      <PopupLayer>
+        <div
+          ref={dialog}
+          // Focusable itself, so opening moves the focus here (useFocusInside).
+          tabIndex={-1}
+          // The shared window look (window-style.ts), centred and scrolling
+          // inside when taller than the screen.
+          className="nextaction-window"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("Task panel")}
+          onKeyDown={onKeyDown}
+        >
+          <TaskPanelForm
+            deps={props.deps}
+            taskId={props.taskId}
+            onClose={props.onClose}
+            // The popup would cover the block just opened, and the focus
+            // belongs with that block now.
+            onOpenedInNotes={() => {
+              restoreFocus.current = false;
+              props.onClose();
+            }}
+          />
+        </div>
+      </PopupLayer>
     </ModalOverlay>
   );
 }

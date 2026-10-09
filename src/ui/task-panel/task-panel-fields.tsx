@@ -3,15 +3,14 @@
 // by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { CalendarDate, Rating, TaskStatus } from "../../domain/task/task";
-import { taskStatuses } from "../../domain/task/task";
+import { defaultRating, taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
+import { usePopupLayer } from "../components/popup-layer";
 import { statusLabel } from "../components/status-label";
 import { statusIcons } from "../task-menu/status-icons";
 
 const ratings: readonly Rating[] = [1, 2, 3, 4, 5, 6, 7];
-/** Importance and effort default to 4 (GLOSSARY). */
-const defaultRating: Rating = 4;
 
 /** A labelled field: label to the left on a wide panel, above it otherwise (CSS). */
 export function Field(props: {
@@ -138,6 +137,7 @@ export function DateField(props: {
   onChange: (date: CalendarDate | null) => void;
 }) {
   const { Button, DatePicker } = orca.components;
+  const popupLayer = usePopupLayer();
   const [picking, setPicking] = React.useState(false);
   // A wrapper element anchors the picker: whether Orca's Button forwards a ref is unknown.
   const anchor = React.useRef<HTMLSpanElement>(null);
@@ -149,12 +149,14 @@ export function DateField(props: {
       <span ref={anchor} className="nextaction-date-trigger">
         <Button
           id={valueId}
+          className="nextaction-date-button"
           variant="outline"
           // Named by the field label and the date it shows.
           aria-labelledby={`${props.labelId} ${valueId}`}
           aria-haspopup="dialog"
           aria-expanded={picking}
           data-overdue={props.overdue || undefined}
+          data-empty={value ? undefined : true}
           onClick={() => setPicking((open) => !open)}
         >
           <i className="ti ti-calendar" aria-hidden="true" />
@@ -180,6 +182,8 @@ export function DateField(props: {
           // The picker needs a date: an empty value starts on today.
           value={toLocalDate(value ?? props.today)}
           refElement={anchor}
+          // Inside a window the picker would be cut off by it (popup-layer.tsx).
+          menuContainer={popupLayer}
           visible={true}
           onClose={() => setPicking(false)}
           onChange={(picked) => {

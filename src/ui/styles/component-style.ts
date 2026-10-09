@@ -9,17 +9,22 @@ export const componentCss = `
   container: nextaction-task-list / inline-size;
   display: flex;
   flex-direction: column;
-  gap: var(--orca-spacing-sm);
+  gap: var(--orca-spacing-md);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/*
+ * The card and its loading placeholder look alike (#45 "任务卡片"): a light
+ * border, the window's radius, roomy padding.
+ */
 .nextaction-task-card,
 .nextaction-task-card-placeholder {
-  border: 1px solid var(--orca-color-border);
-  border-radius: var(--orca-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  border-radius: var(--orca-radius-md);
   background-color: var(--orca-color-bg-1);
+  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
 }
 
 .nextaction-task-card {
@@ -27,11 +32,6 @@ export const componentCss = `
   align-items: flex-start;
   gap: var(--orca-spacing-md);
   min-width: 0;
-  padding: var(--orca-spacing-md);
-}
-
-.nextaction-task-card-placeholder {
-  padding: var(--orca-spacing-md);
 }
 
 .nextaction-task-card[data-clickable] {
@@ -39,22 +39,25 @@ export const componentCss = `
 }
 
 .nextaction-task-card[data-clickable]:hover {
+  border-color: var(--orca-color-border);
   background-color: var(--orca-color-bg-2);
 }
 
-/* The task open in the task panel. */
-.nextaction-task-card[data-selected] {
-  border-color: var(--orca-color-primary-5);
-  box-shadow: inset 3px 0 0 var(--orca-color-primary-5);
+.nextaction-task-card:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
 }
 
-/* Left the list but kept while selected (#42): faded and struck through. */
+/* The task open in the task panel: a primary border on a faint primary ground. */
+.nextaction-task-card[data-selected],
+.nextaction-task-card[data-selected]:hover {
+  border-color: var(--orca-color-primary-5);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 8%, var(--orca-color-bg-1));
+}
+
+/* Left the list but kept while selected (#42): only faded, not struck through (#45). */
 .nextaction-task-card[data-kept] {
   opacity: 0.6;
-}
-
-.nextaction-task-card[data-kept] .nextaction-task-card-text {
-  text-decoration: line-through;
 }
 
 .nextaction-property-kept {
@@ -144,7 +147,8 @@ export const componentCss = `
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--orca-spacing-xs) var(--orca-spacing-md);
+  /* The items are told apart by this spacing and their icons or grounds. */
+  gap: var(--orca-spacing-xs) var(--orca-spacing-lg);
   min-width: 0;
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-xs);
@@ -162,20 +166,35 @@ export const componentCss = `
   white-space: nowrap;
 }
 
+/* A pill tinted from the text colour, so it shows on a selected card's ground too. */
 .nextaction-property-chip {
   display: inline-block;
-  padding: 0 var(--orca-spacing-sm);
-  border-radius: var(--orca-radius-sm);
-  background-color: var(--orca-color-bg-2);
+  padding: 0 var(--orca-spacing-md);
+  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
+  background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
   color: var(--orca-color-text-1);
 }
 
+/* Overdue: the whole due item turns red and carries an "overdue" tag. */
 .nextaction-property[data-overdue],
 .nextaction-property-overdue {
   color: var(--orca-color-dangerous-5);
 }
 
 .nextaction-property-overdue {
+  padding: 0 var(--orca-spacing-xs);
+  border-radius: var(--orca-radius-sm);
+  background-color: color-mix(in srgb, var(--orca-color-dangerous-5) 12%, transparent);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+/* Importance and effort: faded at the default level, importance bold from "high" up. */
+.nextaction-property-rating[data-default] {
+  opacity: 0.7;
+}
+
+.nextaction-property-rating[data-strong] {
+  color: var(--orca-color-text-1);
   font-weight: var(--orca-fontweight-lg);
 }
 
@@ -185,32 +204,51 @@ export const componentCss = `
 
 /* A narrow list: tighter cards, so the text keeps its room. */
 @container nextaction-task-list (max-width: 320px) {
+  .nextaction-task-card,
+  .nextaction-task-card-placeholder {
+    padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  }
   .nextaction-task-card {
     gap: var(--orca-spacing-sm);
-    padding: var(--orca-spacing-sm);
   }
   .nextaction-property-row {
-    column-gap: var(--orca-spacing-sm);
+    column-gap: var(--orca-spacing-md);
   }
 }
 
+/* Empty, paused, failed (#48): centred, a large icon, then the title and
+   the detail as two levels, below the view title's. */
 .nextaction-view-notice {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--orca-spacing-sm);
-  padding: var(--orca-spacing-lg) var(--orca-spacing-md);
+  justify-content: center;
+  gap: var(--orca-spacing-xs);
+  padding: calc(var(--orca-spacing-lg) * 2) var(--orca-spacing-md);
   color: var(--orca-color-text-2);
   text-align: center;
   overflow-wrap: anywhere;
 }
 
 .nextaction-view-notice > .ti {
-  font-size: var(--orca-fontsize-lg);
+  margin-bottom: var(--orca-spacing-sm);
+  font-size: calc(var(--orca-fontsize-lg) * 2);
+  line-height: 1;
 }
 
 .nextaction-view-notice-title {
   color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-md);
   font-weight: var(--orca-fontweight-lg);
+}
+
+.nextaction-view-notice-detail {
+  max-width: 36em;
+  font-size: var(--orca-fontsize-sm);
+  line-height: var(--orca-lineheight-md);
+}
+
+.nextaction-view-notice-action {
+  margin-top: var(--orca-spacing-md);
 }
 `;

@@ -1,4 +1,5 @@
-// A task in a view's list (#35 "任务卡片与组件"): its status icon, its text
+// A task in a view's list (#35 "任务卡片与组件", restyled in #45 "任务卡片"),
+// the one card every view uses: its status icon, its text
 // (up to three lines, selectable), the "open in notes" button and its
 // property row. The status icon opens the status menu; a right-click opens the
 // task menu; a click elsewhere on the card calls `onOpen` (the task panel).
@@ -29,7 +30,7 @@ export interface TaskCardProps {
   selected?: boolean;
   /**
    * The task has left the view's list but stays while it is selected (#42):
-   * faded, struck through, and saying its new status.
+   * faded (not struck through, #45) and saying its new status.
    */
   kept?: boolean;
 }
