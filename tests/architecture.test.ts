@@ -10,7 +10,8 @@ import {
 // on" and "forbidden" entry is a layer rule, a usage rule, or listed under
 // `notChecked` with the reason. Change both together. The register*, CSS
 // injection, DOM listener and global React usage rules come from section 4
-// ("注册与清理", "React").
+// ("注册与清理", "React"); the editor command rule from section 4 ("读写
+// Orca") and ADR 0014.
 const rules: ArchitectureRules = {
   layers: {
     domain: {
@@ -72,6 +73,16 @@ const rules: ArchitectureRules = {
       forbiddenIn: ["ui"],
       allowed:
         "read and write through use cases via ui/hooks; ui may use orca.components and read orca.state",
+    },
+    {
+      name: "calls orca.commands.invokeEditorCommand or invokeGroup directly",
+      pattern:
+        /\borca\s*\.\s*commands\s*\.\s*(?:invokeEditorCommand|invokeTopEditorCommand|invokeGroup)\b/,
+      // ui is covered by the rule above, which forbids every invoke* call.
+      forbiddenIn: ["domain", "application", "infra", "shared", "platform"],
+      exceptIn: ["src/infra/orca/orca-calls.ts"],
+      allowed:
+        "write through src/infra/orca/orca-calls.ts: Orca writes through the active panel's editor, and the plugin panel has one only through its hidden editor (ADR 0014)",
     },
     {
       name: "calls Orca register*/unregister* directly",
@@ -164,6 +175,13 @@ describe("architecture rules", () => {
         "ui depends on infra",
         "ui calls orca.invokeBackend or orca.commands.invoke*",
         "ui calls orca.invokeBackend or orca.commands.invoke*",
+      ],
+    ],
+    [
+      "src/infra/writes-without-orca-calls.ts",
+      [
+        "infra calls orca.commands.invokeEditorCommand or invokeGroup directly",
+        "infra calls orca.commands.invokeEditorCommand or invokeGroup directly",
       ],
     ],
     [

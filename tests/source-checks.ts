@@ -40,6 +40,8 @@ export interface UsageRule {
   /** Matched against code with comments and string contents blanked out. */
   pattern: RegExp;
   forbiddenIn: string[];
+  /** Files exempt from this rule, e.g. the one module that wraps the call. */
+  exceptIn?: string[];
   allowed: string;
 }
 
@@ -208,6 +210,7 @@ export function checkArchitecture(
 
     for (const usage of rules.usages) {
       if (!usage.forbiddenIn.includes(ownName)) continue;
+      if (usage.exceptIn?.includes(file.path)) continue;
       const pattern = new RegExp(usage.pattern.source, "g");
       for (const match of code.matchAll(pattern)) {
         violations.push({

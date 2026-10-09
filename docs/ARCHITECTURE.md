@@ -104,7 +104,7 @@ tests/
 ### 读写 Orca
 
 - 所有写操作都经过仓储，涉及多个步骤的写操作包在 `orca.commands.invokeGroup` 里，让用户能一次撤销。
-- `invokeGroup` 和编辑器命令都通过**活动面板的编辑器**（`viewState.editor`）执行，没有编辑器的面板写不进去。插件面板里藏着一个 Orca 的块面板渲染器（`ui/panel/hidden-editor.tsx`），所以插件面板自己能写，撤销也在插件面板里。活动面板没有编辑器时，`infra/orca/orca-calls.ts` 先切到一个有编辑器的面板，写完切回。不要绕过 `orca-calls` 直接调用它们（`plugin-panel-writes`）。
+- `invokeGroup` 和编辑器命令都通过**活动面板的编辑器**（`viewState.editor`）执行，没有编辑器的面板写不进去，而且不报错。插件面板里藏着一个 Orca 的块面板渲染器（`ui/panel/hidden-editor.tsx`），插件面板因此能自己写入，撤销也在插件面板里。活动面板没有编辑器时，`infra/orca/orca-calls.ts` 先切到一个有编辑器的面板，写完再切回（ADR 0014，`plugin-panel-writes`）。只经过 `orca-calls` 调用它们，由架构测试检查；不要改用后端接口直接写，那样写入进不了 Orca 的撤销历史。
 - 属性名、类型码（`PropType`）、标签别名只在 `infra/orca` 中出现。
 - 读写块属性中的 JSON 时，必须经过带版本号的编解码函数；遇到无法解析的数据时保留原值并记录警告，禁止静默覆盖。
 - 视图按需查询，缓存遵循 ADR 0007：插件写入后、命令后钩子报告相关编辑后、视图获得焦点时，让相关缓存失效。
