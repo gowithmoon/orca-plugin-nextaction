@@ -1,6 +1,7 @@
 // The status menu (#35 "任务卡片与组件"): the six statuses, the current one
-// marked. Choosing the current status does nothing. Shared by the task card
-// and the task panel; render it as a ContextMenu's `menu`, which is already a
+// marked. Choosing the current status does nothing. The task card's status
+// button shows it (the task panel draws its own buttons); render it as a
+// ContextMenu's `menu`, which is already a
 // menu: an `orca.components.Menu` around it draws a second background and
 // shadow. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import {
