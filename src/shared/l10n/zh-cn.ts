@@ -139,6 +139,12 @@ const zhCN: Record<string, string> = {
   "Changed to ${status}": "已改为${status}",
   "Open a journal or page first: Orca saves changes to tasks through a note panel.":
     "请先打开一个日记或页面：Orca 需要通过笔记面板保存对任务的修改。",
+  "Blocked by": "阻塞原因",
+  Subtasks: "子任务",
+  "${kind}: ": "${kind}：",
+  ", ": "、",
+  "Could not read why the task is blocked: ${reason}":
+    "无法读取阻塞原因：${reason}",
 };
 
 export default zhCN;

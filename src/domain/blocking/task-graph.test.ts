@@ -62,9 +62,24 @@ describe("task graph: subtask blocking", () => {
 
       expect(graph.entry(1)?.nextAction).toBe(false);
       expect(graph.entry(1)?.blockedBy).toEqual([
-        { kind: "subtasks", waitingFor: [2] },
+        { kind: "subtasks", source: 1, waitingFor: [2] },
       ]);
     }
+  });
+
+  it("the reason lists every direct subtask neither done nor someday, in note order, from the task itself", () => {
+    const graph = analyze([
+      task(1),
+      task(2, { status: "done", parent: 1 }),
+      task(3, { status: "waiting", parent: 1 }),
+      task(4, { status: "someday", parent: 1 }),
+      task(5, { status: "inbox", parent: 1 }),
+      task(6, { status: "todo", parent: 5 }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "subtasks", source: 1, waitingFor: [3, 5] },
+    ]);
   });
 
   it("a subtask that is done or someday does not block its parent", () => {

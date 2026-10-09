@@ -6,6 +6,7 @@ import * as React from "react";
 import type { Candidates } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
+import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadTask } from "../../application/usecases/read-task";
 import { isOverdue } from "../../domain/task/overdue";
@@ -28,6 +29,7 @@ import {
   useTaskActions,
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
+import { BlockingReasonsField } from "./blocking-reasons-field";
 import { ChoicesField } from "./choices-field";
 import {
   DateField,
@@ -43,6 +45,8 @@ export interface TaskPanelFormDeps {
   dropTask: DropTask;
   /** Values offered for contexts and labels. */
   readCandidates: ReadCandidates;
+  /** Why the task is blocked, for the blocking reasons row (#54). */
+  readBlockingReasons: ReadBlockingReasons;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -64,6 +68,11 @@ export interface TaskPanelFormProps {
   onClose: () => void;
   /** After "Open in notes" (e.g. a popup closes, as it would cover the block). */
   onOpenedInNotes?: () => void;
+  /**
+   * The user picked another task from inside the form (a task named in the
+   * blocking reasons, #54): the task panel switches to it.
+   */
+  onSelectTask: (taskId: TaskId) => void;
 }
 
 function Header(props: {
@@ -113,6 +122,8 @@ function Fields(props: {
   /** Whether a note typed but not saved is still written on leaving. */
   saveOnLeave: () => boolean;
   candidates: Candidates;
+  /** Read only, after the status: only shown while something blocks the task. */
+  blockingReasons: React.ReactNode;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -129,6 +140,7 @@ function Fields(props: {
           onChange={(status) => void actions.changeStatus(status)}
         />
       </Field>
+      {props.blockingReasons}
       <Field label={t("Importance")} labelId={id("importance")}>
         <RatingField
           labelId={id("importance")}
@@ -238,6 +250,16 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         actions={actions}
         saveOnLeave={saveOnLeave}
         candidates={candidates}
+        blockingReasons={
+          <BlockingReasonsField
+            readBlockingReasons={deps.readBlockingReasons}
+            taskId={state.task.id}
+            changes={deps.changes}
+            notify={notify}
+            labelId={`${idPrefix}-blocked-by`}
+            onSelectTask={props.onSelectTask}
+          />
+        }
       />
     );
   } else if (state.kind === "paused") {

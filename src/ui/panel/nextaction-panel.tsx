@@ -83,11 +83,14 @@ function useSelectionPopup(
   inPopup: boolean,
   taskId: TaskId | undefined,
   clear: () => void,
+  select: (taskId: TaskId) => void,
 ) {
   React.useEffect(() => {
     if (!inPopup || taskId === undefined) return;
-    return openPopup(taskId, clear);
-  }, [openPopup, inPopup, taskId, clear]);
+    // Picking another task inside the popup selects it: the popup then
+    // follows the selection, as for a card.
+    return openPopup(taskId, clear, select);
+  }, [openPopup, inPopup, taskId, clear, select]);
 }
 
 /** The panel type's renderer. Each opening starts afresh on the first view. */
@@ -138,6 +141,7 @@ export function createNextActionPanel(
       tier !== undefined && tier !== "wide",
       selectedTaskId === heldFromPopup ? undefined : selectedTaskId,
       clearSelection,
+      selectTask,
     );
 
     const context = React.useMemo<PanelContextValue | undefined>(
@@ -190,7 +194,11 @@ export function createNextActionPanel(
                   className="nextaction-panel-side"
                   aria-label={t("Task panel")}
                 >
-                  <SidePane taskId={selectedTaskId} onClose={clearSelection} />
+                  <SidePane
+                    taskId={selectedTaskId}
+                    onClose={clearSelection}
+                    onSelectTask={selectTask}
+                  />
                 </aside>
               )}
             </div>

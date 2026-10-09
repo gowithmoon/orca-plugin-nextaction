@@ -7,7 +7,10 @@ import { t } from "../../shared/l10n/l10n";
  * The task's text as shown: a placeholder when it is blank, which `empty`
  * marks so it can be styled apart.
  */
-export function shownText(task: Task): { text: string; empty: boolean } {
+export function shownText(task: Pick<Task, "text">): {
+  text: string;
+  empty: boolean;
+} {
   return task.text.trim() === ""
     ? { text: t("(No text)"), empty: true }
     : { text: task.text, empty: false };

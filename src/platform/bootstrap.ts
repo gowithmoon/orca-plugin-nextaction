@@ -138,6 +138,7 @@ export function createNextActionPlugin(): Plugin {
     repository,
     changes: taskChanges.changes,
     today: day.today,
+    dayBoundary: day.dayBoundary,
     taskActions: taskActions.taskActions,
   });
   const taskMenu = createTaskMenuFeature({
