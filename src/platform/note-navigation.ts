@@ -3,6 +3,7 @@
 // panel. Orca behaviour, verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { NextActionPanelArgs } from "../ui/panel/nextaction-panel";
 import type { OpenInNotes } from "../ui/panel/open-in-notes";
+import { findViewPanels } from "./panel-tree";
 
 /** "Open in notes" for the plugin panel of type `panelType`. */
 export function createOpenInNotes(panelType: string): OpenInNotes {
@@ -23,6 +24,24 @@ export function createOpenInNotes(panelType: string): OpenInNotes {
     return { panelId: active.id, originPanelId: args.originPanelId };
   };
 
+  /**
+   * An open journal or block panel: the most recently active one, else the
+   * first in the layout.
+   */
+  const openNotePanel = (): string | undefined => {
+    const open = new Set(
+      [...findViewPanels("journal"), ...findViewPanels("block")].map(
+        (panel) => panel.id,
+      ),
+    );
+    const history = orca.state.panelBackHistory;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const id = history[i]?.activePanel;
+      if (id !== undefined && open.has(id)) return id;
+    }
+    return open.values().next().value;
+  };
+
   return (blockId, from) => {
     const plugin = askingPluginPanel(from);
     if (!plugin) {
@@ -37,7 +56,14 @@ export function createOpenInNotes(panelType: string): OpenInNotes {
       orca.nav.goTo("block", { blockId }, origin.id);
       return;
     }
-    // The origin was closed: a new panel left of the plugin panel.
+    // The origin was closed: another note panel, if one is open (e.g. the
+    // one opened here last time), so each task does not open a panel of its
+    // own; else a new panel left of the plugin panel.
+    const other = openNotePanel();
+    if (other) {
+      orca.nav.goTo("block", { blockId }, other);
+      return;
+    }
     const opened = orca.nav.addTo(plugin.panelId, "left", {
       view: "block",
       viewArgs: { blockId },
