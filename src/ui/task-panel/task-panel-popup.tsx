@@ -9,10 +9,14 @@ import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
 
 /**
  * Moves the focus into the popup when it opens, and back where it was (e.g.
- * the note editor) when it closes. Without it, keys keep going to the editor
+ * the note editor) when it closes, unless `restore` was turned off (the user
+ * went to the block in the notes). Without it, keys keep going to the editor
  * behind the popup: typing edits the note and Esc never reaches the popup.
  */
-function useFocusInside(ref: React.RefObject<HTMLElement>) {
+function useFocusInside(
+  ref: React.RefObject<HTMLElement>,
+  restore: React.RefObject<boolean>,
+) {
   React.useEffect(() => {
     const before =
       document.activeElement instanceof HTMLElement
@@ -20,9 +24,11 @@ function useFocusInside(ref: React.RefObject<HTMLElement>) {
         : undefined;
     ref.current?.focus({ preventScroll: true });
     return () => {
-      if (before?.isConnected) before.focus({ preventScroll: true });
+      if (restore.current && before?.isConnected) {
+        before.focus({ preventScroll: true });
+      }
     };
-  }, [ref]);
+  }, [ref, restore]);
 }
 
 function TaskPanelPopup(props: {
@@ -32,7 +38,8 @@ function TaskPanelPopup(props: {
 }) {
   const { ModalOverlay } = orca.components;
   const dialog = React.useRef<HTMLDivElement>(null);
-  useFocusInside(dialog);
+  const restoreFocus = React.useRef(true);
+  useFocusInside(dialog, restoreFocus);
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Whether ModalOverlay closes on Esc by itself is not measured; a key a
     // control inside already handled (e.g. a picker closing) is left alone.
@@ -62,8 +69,12 @@ function TaskPanelPopup(props: {
           deps={props.deps}
           taskId={props.taskId}
           onClose={props.onClose}
-          // The popup would cover the block just opened.
-          onOpenedInNotes={props.onClose}
+          // The popup would cover the block just opened, and the focus
+          // belongs with that block now.
+          onOpenedInNotes={() => {
+            restoreFocus.current = false;
+            props.onClose();
+          }}
         />
       </div>
     </ModalOverlay>

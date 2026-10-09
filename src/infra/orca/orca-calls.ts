@@ -1,5 +1,7 @@
 // The plugin's calls into Orca, each turning a failure into an `OrcaError`.
 // Thin Orca side; verified by hand in Orca (docs/ARCHITECTURE.md §5).
+
+import { NoNotePanelError } from "../../application/ports/task-repository";
 import type { APIMsg, ColumnPanel, RowPanel, ViewPanel } from "../../orca.d.ts";
 import { describeError } from "../../shared/describe-error";
 import { OrcaError } from "./orca-error";
@@ -30,11 +32,14 @@ export async function invokeEditorCommand(
       orca.commands.invokeEditorCommand(command, null, ...args),
     );
   } catch (error) {
-    if (error instanceof OrcaError) throw error;
+    if (error instanceof OrcaError || error instanceof NoNotePanelError) {
+      throw error;
+    }
     throw new OrcaError(`${command} failed: ${describeError(error)}`);
   }
 }
 
+// The same walk as platform/panel-tree.ts, which infra may not import.
 type AnyPanel = RowPanel | ColumnPanel | ViewPanel;
 
 /** Views with a block editor, which Orca writes through (plugin-panel-writes). */
@@ -69,40 +74,63 @@ function findNotePanel(): string | undefined {
 }
 
 /**
+ * While writes are under way: the panel and element to give the focus back
+ * to once the last of them ends. Writes can overlap (e.g. a note saved on
+ * blur while a status is chosen); switching back after the first would leave
+ * the others writing nothing.
+ */
+let switched:
+  | { count: number; previous: string; focused: HTMLElement | undefined }
+  | undefined;
+
+/**
  * Makes a note panel the active one for the length of `run`, then gives the
  * focus back. Orca's `invokeGroup` and editor commands write through the
  * active panel's editor: from the plugin panel, `invokeGroup` throws and an
- * editor command writes nothing (plugin-panel-writes). The undo step is recorded
- * in that note panel.
+ * editor command writes nothing (plugin-panel-writes). The undo step is
+ * recorded in that note panel.
  */
 async function inNotePanel<T>(run: () => Promise<T>): Promise<T> {
-  const previous = orca.state.activePanel;
-  if (isNotePanel(previous)) return run();
-  const target = findNotePanel();
-  if (target === undefined) {
-    throw new OrcaError("no journal or block panel is open to write through");
+  if (switched) {
+    switched.count += 1;
+  } else {
+    if (isNotePanel(orca.state.activePanel)) return run();
+    const target = findNotePanel();
+    if (target === undefined) {
+      throw new NoNotePanelError("no journal or block panel is open");
+    }
+    switched = {
+      count: 1,
+      previous: orca.state.activePanel,
+      // The element the user is in (e.g. the task panel popup), so switching
+      // panels does not leave keys going to the editor behind it.
+      focused:
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined,
+    };
+    // Takes effect at once (plugin-panel-writes, f); checked all the same,
+    // as an editor command would otherwise write nothing without a word.
+    orca.nav.switchFocusTo(target);
+    if (orca.state.activePanel !== target) {
+      switched = undefined;
+      throw new OrcaError(`could not make panel ${target} the active panel`);
+    }
   }
-  // The element the user is in (e.g. the task panel popup), so switching
-  // panels does not leave keys going to the editor behind it.
-  const focused =
-    document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : undefined;
-  // The switch took effect at once in plugin-panel-writes (f); a group that
-  // still finds no editor is caught by `invokeGroup`'s "did not run".
-  orca.nav.switchFocusTo(target);
   try {
     return await run();
   } finally {
-    // Only if nothing else moved the focus meanwhile.
-    if (
-      orca.state.activePanel === target &&
-      orca.nav.findViewPanel(previous, orca.state.panels)
-    ) {
-      orca.nav.switchFocusTo(previous);
-    }
-    if (focused?.isConnected && document.activeElement !== focused) {
-      focused.focus({ preventScroll: true });
+    const current = switched;
+    if (current) current.count -= 1;
+    if (current && current.count === 0) {
+      switched = undefined;
+      if (orca.nav.findViewPanel(current.previous, orca.state.panels)) {
+        orca.nav.switchFocusTo(current.previous);
+      }
+      const { focused } = current;
+      if (focused?.isConnected && document.activeElement !== focused) {
+        focused.focus({ preventScroll: true });
+      }
     }
   }
 }
@@ -129,7 +157,9 @@ export async function invokeGroup(write: () => Promise<void>): Promise<void> {
       }),
     );
   } catch (error) {
-    if (error instanceof OrcaError) throw error;
+    if (error instanceof OrcaError || error instanceof NoNotePanelError) {
+      throw error;
+    }
     throw new OrcaError(`invokeGroup failed: ${describeError(error)}`);
   }
   if (failure) {

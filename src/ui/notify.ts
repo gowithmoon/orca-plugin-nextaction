@@ -1,6 +1,9 @@
 // Telling the user what happened (docs/ARCHITECTURE.md §4 错误处理: errors are
 // caught in ui and reported with orca.notify). Verified by hand in Orca.
-import { TaskFeaturesPausedError } from "../application/ports/task-repository";
+import {
+  NoNotePanelError,
+  TaskFeaturesPausedError,
+} from "../application/ports/task-repository";
 import {
   type ChangeStatus,
   CompletionHistoryUnreadableError,
@@ -37,6 +40,13 @@ export function notifyFailure(
 ): void {
   if (error instanceof TaskFeaturesPausedError) {
     notify("warn", messages.paused);
+  } else if (error instanceof NoNotePanelError) {
+    notify(
+      "warn",
+      t(
+        "Open a journal or page first: Orca saves changes to tasks through a note panel.",
+      ),
+    );
   } else {
     notify("error", messages.failed(describeError(error)));
   }

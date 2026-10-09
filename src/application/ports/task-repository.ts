@@ -53,6 +53,15 @@ export class TaskFeaturesPausedError extends Error {
 }
 
 /**
+ * Orca writes only through a journal or block panel, and none is open (e.g.
+ * only the plugin panel is left). Nothing was written; `ui` asks the user to
+ * open one.
+ */
+export class NoNotePanelError extends Error {
+  override name = "NoNotePanelError";
+}
+
+/**
  * Why a block cannot be converted to a task (ADR 0013): it has neither a
  * parent nor an alias (a journal block, or an orphan left behind when a
  * referenced block was deleted), or it is the task tag block itself.

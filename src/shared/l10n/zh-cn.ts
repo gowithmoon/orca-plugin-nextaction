@@ -129,6 +129,8 @@ const zhCN: Record<string, string> = {
   "Pick a task to see and edit its properties here":
     "选一个任务，在这里查看和编辑属性",
   "Changed to ${status}": "已改为${status}",
+  "Open a journal or page first: Orca saves changes to tasks through a note panel.":
+    "请先打开一个日记或页面：Orca 需要通过笔记面板保存对任务的修改。",
 };
 
 export default zhCN;
