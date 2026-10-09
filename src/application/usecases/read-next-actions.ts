@@ -6,6 +6,7 @@ import type { Importance, Task, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
+import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
 /**
@@ -91,13 +92,13 @@ export function createReadNextActions(deps: {
   repository: TaskRepository;
   clock: Clock;
   dayBoundary: DayBoundarySetting;
+  startPreviewDays: StartPreviewDaysSetting;
 }): ReadNextActions {
   return async (options = {}) => {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const graph = analyzeTaskGraph(await deps.repository.readTaskGraph(), {
       today,
-      // #56 adds the start preview setting; until then, none.
-      previewDays: 0,
+      previewDays: deps.startPreviewDays.current(),
     });
     const filter = options.filter ?? {};
     const shown = graph.nextActions.filter((entry) =>

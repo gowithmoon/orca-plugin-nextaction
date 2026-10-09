@@ -12,6 +12,8 @@ export interface TaskPanelSidePaneProps {
   taskId: TaskId | undefined;
   /** The task went away or the user closed it: nothing is selected any more. */
   onClose: () => void;
+  /** The user picked another task from inside the form: select it. */
+  onSelectTask: (taskId: TaskId) => void;
 }
 
 /** The side pane, showing the form with `deps`. */
@@ -36,6 +38,7 @@ export function createTaskPanelSidePane(
         deps={deps}
         taskId={props.taskId}
         onClose={props.onClose}
+        onSelectTask={props.onSelectTask}
       />
     );
   };

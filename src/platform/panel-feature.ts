@@ -1,4 +1,5 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
+import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
@@ -43,6 +44,8 @@ export function createPanelFeature(deps: {
   today: () => CalendarDate;
   /** The day boundary, for the logical day the next actions are read on. */
   dayBoundary: DayBoundarySetting;
+  /** The start preview days, for how far ahead the next actions look. */
+  startPreviewDays: StartPreviewDaysSetting;
   /** The cards' status change, "open in notes" and notices (#39). */
   taskActions: TaskActionsDeps;
   /** The current load's task menu registrations, for a right-click on a card. */
@@ -66,6 +69,7 @@ export function createPanelFeature(deps: {
         repository,
         clock: systemClock,
         dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
       }),
       today: deps.today,
       changes,
