@@ -281,7 +281,12 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
       <div className="nextaction-task-panel-body">{body}</div>
       {task && (
         <footer className="nextaction-task-panel-footer">
-          <Button variant="dangerous" onClick={() => void drop()}>
+          {/* Grey until pointed at; one click drops, undoable in Orca. */}
+          <Button
+            variant="plain"
+            className="nextaction-task-drop"
+            onClick={() => void drop()}
+          >
             <i className="ti ti-trash" aria-hidden="true" />
             {t("Drop this task")}
           </Button>
