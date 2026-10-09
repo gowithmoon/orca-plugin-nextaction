@@ -330,6 +330,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       write(() => {
         block.completionHistory = undefined;
         block.task = undefined;
+        // In the same undo, no dependency is left pointing at it (ADR 0016).
+        for (const other of blocks.values()) {
+          if (other.task?.dependencies.includes(id)) {
+            other.task = {
+              ...other.task,
+              dependencies: other.task.dependencies.filter((d) => d !== id),
+            };
+          }
+        }
       });
     },
 
