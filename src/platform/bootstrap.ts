@@ -126,9 +126,12 @@ export function createPlugin(options: {
  */
 export function createNextActionPlugin(): Plugin {
   const taskChanges = createTaskChangesFeature();
-  const taskTag = createTaskTagFeature(() => taskChanges.changes.changed());
-  const { repository } = taskTag;
   const day = createLoadDayBoundary();
+  const taskTag = createTaskTagFeature(
+    () => taskChanges.changes.changed(),
+    day.today,
+  );
+  const { repository } = taskTag;
   const taskActions = createTaskActionsFeature(repository, day.dayBoundary);
   const taskPanel = createTaskPanelFeature({
     repository,

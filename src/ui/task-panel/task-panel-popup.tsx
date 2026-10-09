@@ -13,7 +13,7 @@ import { TaskPanelForm, type TaskPanelFormDeps } from "./task-panel-form";
  * went to the block in the notes). Without it, keys keep going to the editor
  * behind the popup: typing edits the note and Esc never reaches the popup.
  */
-function useFocusInside(
+export function useFocusInside(
   ref: React.RefObject<HTMLElement>,
   restore: React.RefObject<boolean>,
 ) {
