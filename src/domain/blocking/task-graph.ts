@@ -29,13 +29,22 @@ export interface TaskGraphOptions {
 }
 
 /**
- * Why a task is blocked (GLOSSARY: 阻塞), one entry per cause.
+ * Why a task is blocked (GLOSSARY: 阻塞), one entry per cause. Every kind
+ * says which task the blocking comes from and which tasks it waits for, so
+ * the task panel shows any kind the same way (#54); later kinds (dependency,
+ * sequential, cycle) are added to the union.
  *
- * - `subtasks` (子任务阻塞): direct subtasks neither done nor someday.
+ * - `subtasks` (子任务阻塞): direct subtasks neither done nor someday. Not
+ *   passed down, so its source is always the task itself.
  */
 export type BlockingReason = {
   readonly kind: "subtasks";
-  /** The subtasks it waits for, in note order. */
+  /**
+   * The task the blocking comes from: the task itself, or an ancestor task
+   * for blocking passed down (ADR 0015).
+   */
+  readonly source: TaskId;
+  /** The tasks it waits for, in note order. */
   readonly waitingFor: readonly TaskId[];
 };
 
@@ -115,7 +124,9 @@ export function analyzeTaskGraph(
     const waitingFor = (children.get(item.task.id) ?? [])
       .filter((child) => !releasesParent(child.task))
       .map((child) => child.task.id);
-    if (waitingFor.length > 0) blockedBy.push({ kind: "subtasks", waitingFor });
+    if (waitingFor.length > 0) {
+      blockedBy.push({ kind: "subtasks", source: item.task.id, waitingFor });
+    }
     const chain = selfAndAncestors(item);
     const parked = chain.some((link) => parks(link.task));
     const effectiveStart = chain.reduce<CalendarDate | null>(

@@ -13,6 +13,7 @@ function TaskPanelPopup(props: {
   deps: TaskPanelFormDeps;
   taskId: TaskId;
   onClose: () => void;
+  onSelectTask: (taskId: TaskId) => void;
 }) {
   const { ModalOverlay } = orca.components;
   const dialog = React.useRef<HTMLDivElement>(null);
@@ -50,6 +51,7 @@ function TaskPanelPopup(props: {
             deps={props.deps}
             taskId={props.taskId}
             onClose={props.onClose}
+            onSelectTask={props.onSelectTask}
             // The popup would cover the block just opened, and the focus
             // belongs with that block now.
             onOpenedInNotes={() => {
@@ -66,13 +68,17 @@ function TaskPanelPopup(props: {
 /**
  * Opens task `taskId` in the popup. `onClose` hears that the popup closed by
  * itself: the user closed it, the task went away, or another opening replaced
- * it. The returned function takes the popup away without `onClose` (e.g. the
- * plugin panel moving it into its side pane); it does nothing once the popup
- * is gone.
+ * it. `onSelect` hears that the user picked another task inside it (#54), and
+ * is then in charge of showing that task (the plugin panel selects it, which
+ * opens the popup again); without `onSelect` the popup switches to it itself,
+ * keeping `onClose`. The returned function takes the popup away without
+ * `onClose` (e.g. the plugin panel moving it into its side pane); it does
+ * nothing once the popup is gone.
  */
 export type OpenTaskPanelPopup = (
   taskId: TaskId,
   onClose?: () => void,
+  onSelect?: (taskId: TaskId) => void,
 ) => () => void;
 
 /**
@@ -90,7 +96,7 @@ export function createTaskPanelPopup(options: {
   /** The shown opening's `onClose`, told when another opening replaces it. */
   let replaced: (() => void) | undefined;
 
-  return (taskId, onClose) => {
+  const open: OpenTaskPanelPopup = (taskId, onClose, onSelect) => {
     const previous = replaced;
     shown += 1;
     const mine = shown;
@@ -111,6 +117,11 @@ export function createTaskPanelPopup(options: {
         onClose={() => {
           if (dismiss()) onClose?.();
         }}
+        onSelectTask={(next) => {
+          if (onSelect) onSelect(next);
+          // Switching is not closing: `onClose` moves to the new opening.
+          else if (dismiss()) open(next, onClose);
+        }}
       />,
     );
     previous?.();
@@ -118,4 +129,5 @@ export function createTaskPanelPopup(options: {
       dismiss();
     };
   };
+  return open;
 }
