@@ -1,26 +1,12 @@
-// Styles of the task panel (form and popup shell), injected through the
-// registry. Orca's CSS variables only; class names start with `nextaction-`.
-// Layout follows the panel's own width (container queries, #35 "档位与灵活布局"):
-// labels to the left from 420px, above the fields below that; status buttons
-// in three columns and two rows when very narrow.
+// Styles of the task panel form, injected through the registry; its popup
+// wears the shared window look (window-style.ts). Orca's CSS variables only;
+// class names start with `nextaction-`. Layout follows the panel's own width
+// (container queries, #35 "档位与灵活布局"): labels to the left from 420px,
+// above the fields below that; status buttons in three columns and two rows
+// when very narrow. Header, body and footer space and separate like the
+// plugin panel's header and view (#45 "任务属性面板").
 
 export const taskPanelCss = `
-.nextaction-task-panel-popup {
-  width: min(32rem, calc(100vw - 2 * var(--orca-spacing-lg)));
-  max-height: calc(100vh - 4 * var(--orca-spacing-lg));
-  margin: calc(2 * var(--orca-spacing-lg)) auto 0;
-  display: flex;
-  border: 1px solid var(--orca-color-border);
-  border-radius: var(--orca-radius-sm);
-  background-color: var(--orca-color-bg-1);
-  overflow: hidden;
-}
-
-/* Focused only to take the keys from the editor behind it; not a control. */
-.nextaction-task-panel-popup:focus {
-  outline: none;
-}
-
 .nextaction-task-panel {
   container: nextaction-task-panel / inline-size;
   display: flex;
@@ -35,8 +21,9 @@ export const taskPanelCss = `
   display: flex;
   align-items: flex-start;
   gap: var(--orca-spacing-sm);
-  padding: var(--orca-spacing-md);
-  border-bottom: 1px solid var(--orca-color-border);
+  flex: 0 0 auto;
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border-bottom: var(--orca-border-separator);
 }
 
 .nextaction-task-panel-header > .nextaction-status-icon {
@@ -276,7 +263,18 @@ export const taskPanelCss = `
 .nextaction-task-panel-footer {
   display: flex;
   justify-content: flex-end;
+  flex: 0 0 auto;
   padding: var(--orca-spacing-sm) var(--orca-spacing-md);
-  border-top: 1px solid var(--orca-color-border);
+  border-top: var(--orca-border-separator);
+}
+
+/* The least used action stays grey until pointed at (#45 "任务属性面板"). */
+.nextaction-task-drop {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-task-drop:hover,
+.nextaction-task-drop:focus-visible {
+  color: var(--orca-color-dangerous-5);
 }
 `;

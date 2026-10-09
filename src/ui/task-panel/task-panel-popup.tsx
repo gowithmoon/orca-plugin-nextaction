@@ -59,7 +59,9 @@ function TaskPanelPopup(props: {
         ref={dialog}
         // Focusable itself, so opening moves the focus here (useFocusInside).
         tabIndex={-1}
-        className="nextaction-task-panel-popup"
+        // The shared window look (window-style.ts), centred and scrolling
+        // inside when taller than the screen.
+        className="nextaction-window"
         role="dialog"
         aria-modal="true"
         aria-label={t("Task panel")}
