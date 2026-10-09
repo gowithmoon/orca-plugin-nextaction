@@ -27,6 +27,7 @@ export function useTaskActions(deps: TaskActionsDeps): TaskActions {
   const panel = React.useContext(PanelContext);
   const panelId = panel?.panelId;
   const originPanelId = panel?.originPanelId;
+  const openedInNotes = panel?.openedInNotes;
   return React.useMemo(
     () => ({
       changeStatus(task, status) {
@@ -44,8 +45,9 @@ export function useTaskActions(deps: TaskActionsDeps): TaskActions {
           task.id,
           panelId === undefined ? undefined : { panelId, originPanelId },
         );
+        openedInNotes?.();
       },
     }),
-    [deps, panelId, originPanelId],
+    [deps, panelId, originPanelId, openedInNotes],
   );
 }

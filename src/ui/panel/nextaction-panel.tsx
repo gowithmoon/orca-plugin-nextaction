@@ -113,12 +113,14 @@ export function createNextActionPanel(
     // Only for this opening: nothing is selected when it opens (#42).
     const [selectedTaskId, setSelectedTaskId] = React.useState<TaskId>();
     /**
-     * A task opened in the notes from the side pane: it stays selected, but
-     * does not move into the popup when the new note panel narrows the
-     * plugin panel. The popup would cover the block the user went to see.
-     * Selecting a task again lifts it.
+     * The task selected when one was opened in the notes from inside the
+     * plugin panel: it stays selected, but does not move into the popup when
+     * a new note panel narrows the plugin panel. The popup would cover the
+     * block the user went to see. Selecting a task again lifts it.
      */
     const [heldFromPopup, setHeldFromPopup] = React.useState<TaskId>();
+    const selected = React.useRef(selectedTaskId);
+    selected.current = selectedTaskId;
     const selectTask = React.useCallback((taskId: TaskId) => {
       setHeldFromPopup(undefined);
       setSelectedTaskId(taskId);
@@ -127,9 +129,9 @@ export function createNextActionPanel(
       () => setSelectedTaskId(undefined),
       [],
     );
-    const holdFromPopup = React.useCallback(
-      () => setHeldFromPopup(selectedTaskId),
-      [selectedTaskId],
+    const openedInNotes = React.useCallback(
+      () => setHeldFromPopup(selected.current),
+      [],
     );
     useSelectionPopup(
       openPopup,
@@ -146,8 +148,16 @@ export function createNextActionPanel(
           tier,
           selectedTaskId,
           selectTask,
+          openedInNotes,
         },
-      [props.panelId, props.originPanelId, tier, selectedTaskId, selectTask],
+      [
+        props.panelId,
+        props.originPanelId,
+        tier,
+        selectedTaskId,
+        selectTask,
+        openedInNotes,
+      ],
     );
 
     const View = current?.component;
@@ -180,11 +190,7 @@ export function createNextActionPanel(
                   className="nextaction-panel-side"
                   aria-label={t("Task panel")}
                 >
-                  <SidePane
-                    taskId={selectedTaskId}
-                    onClose={clearSelection}
-                    onOpenedInNotes={holdFromPopup}
-                  />
+                  <SidePane taskId={selectedTaskId} onClose={clearSelection} />
                 </aside>
               )}
             </div>

@@ -19,6 +19,12 @@ export interface PanelContextValue {
   readonly selectedTaskId: TaskId | undefined;
   /** Opens task `taskId` in the task panel, replacing the one selected. */
   readonly selectTask: (taskId: TaskId) => void;
+  /**
+   * A task was opened in the notes from inside the plugin panel (a card, the
+   * side pane): the selection stays, but does not move into the popup if the
+   * plugin panel narrows now. The popup would cover the block.
+   */
+  readonly openedInNotes: () => void;
 }
 
 export const PanelContext = React.createContext<PanelContextValue | undefined>(

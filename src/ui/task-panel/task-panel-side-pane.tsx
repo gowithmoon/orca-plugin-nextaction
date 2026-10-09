@@ -12,8 +12,6 @@ export interface TaskPanelSidePaneProps {
   taskId: TaskId | undefined;
   /** The task went away or the user closed it: nothing is selected any more. */
   onClose: () => void;
-  /** After "Open in notes": the user went to the block. */
-  onOpenedInNotes?: () => void;
 }
 
 /** The side pane, showing the form with `deps`. */
@@ -38,7 +36,6 @@ export function createTaskPanelSidePane(
         deps={deps}
         taskId={props.taskId}
         onClose={props.onClose}
-        onOpenedInNotes={props.onOpenedInNotes}
       />
     );
   };
