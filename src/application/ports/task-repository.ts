@@ -1,5 +1,12 @@
 import type { CompletionHistory } from "../../domain/task/completion-history";
-import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
+import type {
+  CalendarDate,
+  Effort,
+  Importance,
+  Task,
+  TaskId,
+  TaskStatus,
+} from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
 
 /**
@@ -77,6 +84,17 @@ export type ConvertToTaskResult =
   | { kind: "not-convertible"; reason: NotConvertibleReason };
 
 /**
+ * Properties a quick capture sets on the new task (GLOSSARY: 快速捕获). Those
+ * not given take their defaults: importance and effort 4, no dates.
+ */
+export interface InitialProperties {
+  readonly importance?: Importance;
+  readonly effort?: Effort;
+  readonly start?: CalendarDate;
+  readonly due?: CalendarDate;
+}
+
+/**
  * Where tasks are read from and written to. Implementations hide every Orca
  * detail: mirror blocks, orphans, note-facing names and error conversion.
  *
@@ -147,8 +165,13 @@ export interface TaskRepository {
   /**
    * Creates an inbox task with `text`, as plain text, at the end of the
    * journal of the calendar day `now` falls on in local time (not the logical
-   * day, ADR 0005), creating that journal if it does not exist yet. The user
-   * undoes it with one undo. Returns the new task's ID.
+   * day, ADR 0005), creating that journal if it does not exist yet, with the
+   * `initial` properties given. The user undoes it, properties included, with
+   * one undo. Returns the new task's ID.
    */
-  appendTaskToJournal(text: string, now: Date): Promise<TaskId>;
+  appendTaskToJournal(
+    text: string,
+    now: Date,
+    initial?: InitialProperties,
+  ): Promise<TaskId>;
 }
