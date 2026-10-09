@@ -152,6 +152,29 @@ describe("decodeTask", () => {
     expect(task.due).toEqual({ year: 2026, month: 10, day: 7 });
   });
 
+  it("reads dates given as Date objects, as get-blocks returns them", () => {
+    // plugin-panel-writes (2026-10-09): get-blocks returns date values as Date;
+    // 2026-10-22T16:00Z is local midnight of 2026-10-23 (UTC+8).
+    const block = {
+      ...blocks.zhDefaultsOnly,
+      refs: blocks.zhDefaultsOnly.refs.map((ref) => ({
+        ...ref,
+        data: [
+          ...(ref.data ?? []),
+          {
+            name: "截止日期",
+            type: 5,
+            value: new Date("2026-10-22T16:00:00.000Z"),
+          },
+          { name: "开始日期", type: 5, value: new Date(Number.NaN) },
+        ],
+      })),
+    };
+    const task = decodedTask(block);
+    expect(task.due).toEqual({ year: 2026, month: 10, day: 23 });
+    expect(task.start).toBeNull();
+  });
+
   it("reads empty multi-select arrays as no contexts and no labels", () => {
     const task = decodedTask(blocks.zhAbnormal);
     expect(task.contexts).toEqual([]);
@@ -219,6 +242,22 @@ describe("decodeTask", () => {
   it("reads a tagged page (no parent, but an alias) as a task", () => {
     const page = { ...blocks.zhFilled, parent: null, aliases: ["NA页面"] };
     expect(decodedTask(page)).toMatchObject({ id: page.id, status: "todo" });
+  });
+
+  // plugin-panel-writes (2026-10-09): a page's title is its alias; its content is empty.
+  it("reads a page's text from its alias", () => {
+    const page = {
+      ...blocks.zhFilled,
+      parent: null,
+      aliases: ["NA诊断页面"],
+      content: null,
+    };
+    expect(decodedTask(page).text).toBe("NA诊断页面");
+  });
+
+  it("reads a page's own content as its text when it has some", () => {
+    const page = { ...blocks.zhFilled, parent: null, aliases: ["NA页面"] };
+    expect(decodedTask(page).text).toBe("NA验证任务A");
   });
 
   // A journal block is root-level without an alias (page-task P1), so it

@@ -115,9 +115,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
     kind: "task",
     task: taskFromNotes({
       id: block.id,
-      text: (block.content ?? [])
-        .map((fragment) => (typeof fragment.v === "string" ? fragment.v : ""))
-        .join(""),
+      text: taskText(block),
       status: {
         key: statusInvalidated
           ? "inbox"
@@ -138,9 +136,23 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
   };
 }
 
+/**
+ * The block's own text. A page's title is its alias, its content empty
+ * (plugin-panel-writes), so a page without content reads as its first alias.
+ */
+function taskText(block: RawBlock): string {
+  const text = (block.content ?? [])
+    .map((fragment) => (typeof fragment.v === "string" ? fragment.v : ""))
+    .join("");
+  return text.trim() === "" && block.aliases[0] !== undefined
+    ? block.aliases[0]
+    : text;
+}
+
 // Value shapes per kind (tag-operations): numbers are numbers, single choice
-// and text are strings, multiple choice is an array of strings, dates are ISO
-// strings. Anything else reads as empty.
+// and text are strings, multiple choice is an array of strings, dates are
+// Dates (plugin-panel-writes; ISO strings are accepted too). Anything else reads
+// as empty.
 
 function numberValue(value: unknown): number | null {
   return typeof value === "number" ? value : null;
@@ -178,8 +190,13 @@ function createdValue(blockId: number, value: unknown): Date {
 
 /** The local calendar day of a stored instant (ADR 0012, date-subtype). */
 function dateValue(value: unknown): CalendarDate | null {
-  if (typeof value !== "string") return null;
-  const at = new Date(value);
+  const at =
+    value instanceof Date
+      ? value
+      : typeof value === "string"
+        ? new Date(value)
+        : undefined;
+  if (!at) return null;
   if (Number.isNaN(at.getTime())) return null;
   return {
     year: at.getFullYear(),
