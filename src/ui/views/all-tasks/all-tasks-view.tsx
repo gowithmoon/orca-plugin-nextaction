@@ -1,7 +1,8 @@
 // The all tasks view (GLOSSARY: 全部任务视图, #65): every task not done as a
 // tree by block hierarchy, done tasks kept faded where they sit, and the
 // tasks held back by a dependency, a sequential parent or a cycle marked
-// blocked. After the inbox in the navigation, with no count there. It reads
+// blocked; below it the done section (GLOSSARY: 已完成区, #66), collapsed by
+// default. After the inbox in the navigation, with no count there. It reads
 // when the plugin panel opens and again on every task change signal (ADR
 // 0007). Nodes with children collapse (#67). Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
@@ -9,6 +10,7 @@ import * as React from "react";
 import type {
   AllTasksNode,
   AllTasksRead,
+  DoneSection,
   ReadAllTasks,
 } from "../../../application/usecases/read-all-tasks";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
@@ -37,6 +39,7 @@ import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
+import type { DoneSectionStore } from "./done-section-store";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -52,6 +55,8 @@ export interface AllTasksViewDeps {
   collapse: AllTasksCollapseStore;
   /** The sort, kept in the plugin instance's memory (#68). */
   sort: AllTasksSortStore;
+  /** The done section's state, kept in the plugin instance's memory (#66). */
+  doneSection: DoneSectionStore;
 }
 
 /** The node or a node below it is a task not done. */
@@ -213,6 +218,69 @@ function TreeNodes(props: {
   );
 }
 
+/**
+ * The done section below the tree: its title, a toggle, counts the items of
+ * the current range. Collapsed, it renders none of them.
+ */
+function DoneSectionPart(props: {
+  done: DoneSection;
+  cards: TreeCards;
+  store: DoneSectionStore;
+}) {
+  const { done, cards, store } = props;
+  const state = React.useSyncExternalStore(store.subscribe, store.current);
+  // Nothing done at all: no section.
+  if (done.count === 0 && !done.hasEarlier) return null;
+  return (
+    <section className="nextaction-done-section">
+      <button
+        type="button"
+        className="nextaction-done-section-toggle"
+        aria-expanded={state.expanded}
+        onClick={() => store.set({ ...state, expanded: !state.expanded })}
+      >
+        <i
+          className={
+            state.expanded ? "ti ti-chevron-down" : "ti ti-chevron-right"
+          }
+          aria-hidden="true"
+        />
+        {t("Done · ${count}", { count: String(done.count) })}
+      </button>
+      {state.expanded && (
+        <>
+          {done.items.length > 0 && (
+            <ul className="nextaction-task-list">
+              {done.items.map((task) => (
+                <li key={task.id}>
+                  <TaskCard
+                    task={task}
+                    today={cards.today}
+                    actions={cards.actions}
+                    menuItems={cards.menuItems}
+                    menuPlace={cards.menuPlace}
+                    onOpen={(open) => cards.selectTask(open.id)}
+                    selected={task.id === cards.selectedTaskId}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          {done.hasEarlier && (
+            <button
+              type="button"
+              className="nextaction-done-section-earlier"
+              onClick={() => store.set({ ...state, showEarlier: true })}
+            >
+              {t("Show earlier")}
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function AllTasksContent(props: {
   query: ViewQuery<AllTasksRead>;
   today: CalendarDate;
@@ -243,7 +311,18 @@ function AllTasksContent(props: {
     );
   }
   const nodes = shownNodes(state.data.tree, selectedTaskId);
-  if (nodes.length === 0) {
+  const done = state.data.done;
+  const cards: TreeCards = {
+    today,
+    actions,
+    menuItems,
+    menuPlace,
+    selectedTaskId,
+    selectTask,
+    collapsed,
+    toggleCollapsed: deps.collapse.toggle,
+  };
+  if (nodes.length === 0 && done.count === 0 && !done.hasEarlier) {
     return (
       <ViewNotice
         icon="ti ti-list-tree"
@@ -255,20 +334,10 @@ function AllTasksContent(props: {
     );
   }
   return (
-    <TreeNodes
-      top
-      nodes={nodes}
-      cards={{
-        today,
-        actions,
-        menuItems,
-        menuPlace,
-        selectedTaskId,
-        selectTask,
-        collapsed,
-        toggleCollapsed: deps.collapse.toggle,
-      }}
-    />
+    <>
+      {nodes.length > 0 && <TreeNodes top nodes={nodes} cards={cards} />}
+      <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
+    </>
   );
 }
 
@@ -321,11 +390,25 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
    */
   let selected: TaskId | undefined;
   const query = createViewQuery(
-    () => deps.readAllTasks({ keep: selected, sort: deps.sort.current() }),
+    () =>
+      deps.readAllTasks({
+        keep: selected,
+        sort: deps.sort.current(),
+        showEarlierDone: deps.doneSection.current().showEarlier,
+      }),
     deps.changes,
   );
   // A new sort reads again; both live as long as the plugin instance.
   deps.sort.subscribe(() => query.reload());
+  // Showing earlier items reads again; expanding only renders what is read.
+  // Both live as long as the plugin instance.
+  let showEarlier = deps.doneSection.current().showEarlier;
+  deps.doneSection.subscribe(() => {
+    const next = deps.doneSection.current().showEarlier;
+    if (next === showEarlier) return;
+    showEarlier = next;
+    query.reload();
+  });
 
   function AllTasksView() {
     const { selectedTaskId } = usePanel();

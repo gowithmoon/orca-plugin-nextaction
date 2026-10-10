@@ -7,7 +7,7 @@ import {
 } from "../../domain/blocking/task-graph";
 import { score } from "../../domain/scoring/score";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
-import { compareDays } from "../../domain/time/calendar-days";
+import { addDays, compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -39,9 +39,23 @@ export interface AllTasksNode {
   readonly children: readonly AllTasksNode[];
 }
 
+/** The done section (GLOSSARY: 已完成区), below the tree. */
+export interface DoneSection {
+  /**
+   * One per done subtree: its top-level task, the most recent last
+   * completion first, those with none recorded after, in note order.
+   */
+  readonly items: readonly Task[];
+  /** How many items the current range lists (the N of its title). */
+  readonly count: number;
+  /** Items are left out for being earlier: "show earlier" has some to show. */
+  readonly hasEarlier: boolean;
+}
+
 export interface AllTasksRead {
   /** The top-level nodes, ordered as asked (`sort`). */
   readonly tree: readonly AllTasksNode[];
+  readonly done: DoneSection;
 }
 
 /**
@@ -71,7 +85,18 @@ export interface ReadAllTasksOptions {
    * viewed, as in the other views), in its place.
    */
   readonly keep?: TaskId;
+  /**
+   * The done section lists every item, not only those of the last
+   * `doneSectionDays` logical days ("show earlier").
+   */
+  readonly showEarlierDone?: boolean;
 }
+
+/**
+ * How many logical days back, today included, the done section lists by
+ * default (#63).
+ */
+export const doneSectionDays = 30;
 
 /** Reads all tasks. Errors are thrown as they are. */
 export type ReadAllTasks = (
@@ -170,9 +195,17 @@ export function createReadAllTasks(deps: {
     // section (GLOSSARY: 已完成区); every other task stays in its place. Only a
     // task still in the snapshot is kept: a block no longer a task is not.
     const tree: AllTasksNode[] = [];
+    const done: SnapshotTask[] = [];
     for (const item of topLevel) {
-      const shown = holdsOpen(item) ? node(item) : keptPath(item);
-      if (shown) tree.push(shown);
+      if (holdsOpen(item)) {
+        tree.push(node(item));
+        continue;
+      }
+      // A done subtree holding the kept task stays in the tree for it, so it
+      // is not in the done section too.
+      const kept = keptPath(item);
+      if (kept) tree.push(kept);
+      else done.push(item);
     }
     const scoreOf = (task: Task) =>
       score(
@@ -182,6 +215,28 @@ export function createReadAllTasks(deps: {
     const compare = comparator(options.sort ?? "note", scoreOf);
     // Stable: ties keep note order.
     if (compare) tree.sort(compare);
-    return { tree };
+    // By default only the last `doneSectionDays` logical days. A task with no
+    // completion recorded (e.g. made done in Orca directly) has no reliable
+    // time, so it is never among them.
+    const firstDay = addDays(today, 1 - doneSectionDays);
+    const listed = done.filter(
+      (item) =>
+        options.showEarlierDone ||
+        (item.lastCompletion !== undefined &&
+          compareDays(item.lastCompletion.day, firstDay) >= 0),
+    );
+    // The most recent last completion first; those with none after, in note
+    // order (`done` is in note order already, and the sort is stable).
+    const time = (item: SnapshotTask) =>
+      item.lastCompletion?.at.getTime() ?? Number.NEGATIVE_INFINITY;
+    listed.sort((a, b) => (time(a) === time(b) ? 0 : time(b) - time(a)));
+    return {
+      tree,
+      done: {
+        items: listed.map((item) => item.task),
+        count: listed.length,
+        hasEarlier: listed.length < done.length,
+      },
+    };
   };
 }

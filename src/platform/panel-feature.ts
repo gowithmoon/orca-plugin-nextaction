@@ -22,6 +22,7 @@ import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
 import { createAllTasksCollapseStore } from "../ui/views/all-tasks/all-tasks-collapse-store";
 import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-store";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
+import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
@@ -71,6 +72,8 @@ export function createPanelFeature(deps: {
   const allTasksCollapse = createAllTasksCollapseStore();
   // The all tasks view's sort (#68): in memory only, likewise.
   const allTasksSort = createAllTasksSortStore();
+  // The all tasks view's done section (#66): in memory only, as the filter.
+  const doneSection = createDoneSectionStore();
   views.register(
     createNextActionView({
       readNextActions: createReadNextActions({
@@ -110,6 +113,7 @@ export function createPanelFeature(deps: {
       menuItems: deps.menuItems,
       collapse: allTasksCollapse,
       sort: allTasksSort,
+      doneSection,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -133,6 +137,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.nextActionFilter`, nextActionFilter.clear);
     registry.add(`${pluginName}.allTasksCollapse`, allTasksCollapse.clear);
     registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
+    registry.add(`${pluginName}.doneSection`, doneSection.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     const placement = createPanelPlacement(pluginPanelType(pluginName));

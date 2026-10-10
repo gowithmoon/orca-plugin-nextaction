@@ -284,10 +284,14 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const tasks = [];
       for (const [id, block] of blocks) {
         if (!block.task) continue;
+        const stored = block.completionHistory;
+        const lastCompletion =
+          stored?.kind === "readable" ? stored.history.at(-1) : undefined;
         tasks.push({
           task: block.task,
           parentId: parentTaskOf(id),
           position: block.position,
+          ...(lastCompletion && { lastCompletion }),
         });
       }
       return { tasks };

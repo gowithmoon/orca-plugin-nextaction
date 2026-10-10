@@ -201,6 +201,8 @@ const zhCN: Record<string, string> = {
     "未添加：依赖 ${tasks} 会造成循环依赖。",
   "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.":
     "未打开顺序执行：${waiting} 会等待 ${waitingFor}，而后者已经在等待它，会造成循环依赖。",
+  "Done · ${count}": "已完成 · ${count}",
+  "Show earlier": "显示更早的",
 };
 
 export default zhCN;
