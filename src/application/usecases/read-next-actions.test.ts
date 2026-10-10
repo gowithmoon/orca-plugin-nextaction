@@ -39,6 +39,20 @@ describe("read next actions", () => {
     expect(read.items.map((item) => item.task.id)).toEqual([3, 4, 1]);
   });
 
+  it("does not list the tasks under a done ancestor task, at any level", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addTask({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "doing" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([5]);
+    expect(read.total).toBe(1);
+  });
+
   it("keeps the task given as `keep` after it left the list, by its score, marked as kept", async () => {
     const { repository, readNextActions } = setup();
     repository.addTask({ id: 1, status: "todo", importance: 7 });
@@ -182,6 +196,49 @@ describe("read next actions", () => {
       expect(ids(read)).toEqual([1, 2, 4]);
     });
 
+    it("by urgency: a task at any one of the chosen levels, its own urgency", async () => {
+      const { repository, readNextActions } = setup();
+      repository.addTask({ id: 1, status: "todo", urgency: 7 });
+      repository.addTask({ id: 2, status: "todo", urgency: 5 });
+      repository.addTask({ id: 3, status: "todo", urgency: 4 });
+      repository.addTask({ id: 4, status: "todo", urgency: 1 });
+      // A subtask at the default under a parent at 7 is still at 4.
+      repository.addTask({ id: 5, status: "todo", urgency: 7 });
+      repository.addTask({ id: 6, status: "todo" }, { parentId: 5 });
+
+      const read = await readNextActions({
+        filter: { urgency: [1, 5, 7] },
+      });
+
+      expect(ids(read).sort((a, b) => a - b)).toEqual([1, 2, 4]);
+    });
+
+    it("by urgency and another dimension: only a task both let through", async () => {
+      const { repository, readNextActions } = setup();
+      repository.addTask({
+        id: 1,
+        status: "todo",
+        urgency: 6,
+        contexts: ["office"],
+      });
+      repository.addTask({ id: 2, status: "todo", urgency: 6 });
+      repository.addTask({
+        id: 3,
+        status: "todo",
+        urgency: 2,
+        contexts: ["office"],
+      });
+
+      const read = await readNextActions({
+        filter: {
+          contexts: { values: ["office"], none: false },
+          urgency: [6, 7],
+        },
+      });
+
+      expect(ids(read)).toEqual([1]);
+    });
+
     it("with nothing chosen in any dimension: every next action", async () => {
       const { repository, readNextActions } = setup();
       repository.addTask({ id: 1, status: "todo", contexts: ["office"] });
@@ -193,6 +250,7 @@ describe("read next actions", () => {
           contexts: { values: [], none: false },
           labels: { values: [], none: false },
           importance: [],
+          urgency: [],
         },
       });
 

@@ -1,5 +1,5 @@
 // The task model and the rules for interpreting what the notes hold
-// (GLOSSARY: Status, Importance, Effort, Start, Due). Pure; no Orca types.
+// (GLOSSARY: Status, Importance, Urgency, Effort, Start, Due). Pure; no Orca types.
 
 /** Identifies a task. It is the ID of the task's (source) block. */
 export type TaskId = number;
@@ -21,9 +21,10 @@ export type TaskStatus = (typeof taskStatuses)[number];
 export const dependencyModes = ["all", "any"] as const;
 export type DependencyMode = (typeof dependencyModes)[number];
 
-/** Importance or effort: an integer from 1 to 7. */
+/** Importance, urgency or effort: an integer from 1 to 7. */
 export type Rating = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Importance = Rating;
+export type Urgency = Rating;
 export type Effort = Rating;
 
 /** A calendar date with no time of day and no time zone (ADR 0012). */
@@ -51,6 +52,8 @@ export interface Task {
   readonly text: string;
   readonly status: TaskStatus;
   readonly importance: Importance;
+  /** How soon it needs moving, apart from any due date (GLOSSARY: 紧急度). */
+  readonly urgency: Urgency;
   readonly effort: Effort;
   readonly start: CalendarDate | null;
   readonly due: CalendarDate | null;
@@ -95,6 +98,7 @@ export interface TaskInNotes {
   };
   /** A number, or `null` when the notes hold none. */
   importance: number | null;
+  urgency: number | null;
   effort: number | null;
   start: CalendarDate | null;
   due: CalendarDate | null;
@@ -109,7 +113,7 @@ export interface TaskInNotes {
   created: Date;
 }
 
-/** Importance and effort default to 4 (GLOSSARY). */
+/** Importance, urgency and effort default to 4 (GLOSSARY). */
 export const defaultRating: Rating = 4;
 
 /**
@@ -135,8 +139,8 @@ function isRating(value: number | null): value is Rating {
 
 /**
  * Reads a task from what the notes hold. An empty or unknown status reads as
- * inbox and is recorded as an anomaly; an importance or effort that is empty,
- * not an integer, or outside 1–7 reads as 4. Nothing is written back.
+ * inbox and is recorded as an anomaly; an importance, urgency or effort that
+ * is empty, not an integer, or outside 1–7 reads as 4. Nothing is written back.
  */
 export function taskFromNotes(input: TaskInNotes): Task {
   const anomalies: DataAnomaly[] = [];
@@ -148,6 +152,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     text: input.text,
     status: input.status.key ?? "inbox",
     importance: isRating(input.importance) ? input.importance : defaultRating,
+    urgency: isRating(input.urgency) ? input.urgency : defaultRating,
     effort: isRating(input.effort) ? input.effort : defaultRating,
     start: input.start,
     due: input.due,

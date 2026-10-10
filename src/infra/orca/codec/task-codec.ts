@@ -133,6 +133,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
         value: status ?? null,
       },
       importance: numberValue(values.get("importance")),
+      urgency: numberValue(values.get("urgency")),
       effort: numberValue(values.get("effort")),
       start: dateValue(values.get("start")),
       due: dateValue(values.get("due")),

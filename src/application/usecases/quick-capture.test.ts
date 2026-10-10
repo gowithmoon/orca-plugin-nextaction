@@ -80,6 +80,22 @@ describe("quick capture", () => {
     });
   });
 
+  it("captures the task with the urgency given", async () => {
+    const repository = createInMemoryTaskRepository();
+    const clock = createFixedClock("2026-10-08T10:00:00+08:00");
+    const quickCapture = createQuickCapture({ repository, clock });
+
+    const result = await quickCapture("Reply to the landlord", { urgency: 6 });
+
+    if (result.kind !== "captured") throw new Error("not captured");
+    expect(await repository.getTask(result.id)).toMatchObject({
+      status: "inbox",
+      importance: 4,
+      urgency: 6,
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
   it("gives the properties not set their defaults", async () => {
     const repository = createInMemoryTaskRepository();
     const clock = createFixedClock("2026-10-08T10:00:00+08:00");

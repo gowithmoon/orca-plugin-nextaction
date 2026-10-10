@@ -1,10 +1,10 @@
 // The row of a task's properties under its text (#45 "任务卡片的属性行", which
 // changes two rules of #35), in this order: the new status of a task that left
 // the view, the blocked mark (#65), an unrecognized status, due (red with "overdue" when overdue),
-// contexts, labels, importance, effort. The start date never shows on a card.
-// Importance and effort always show, as an icon and the level's name: faded at
-// the default, importance bold from "high" up, the full wording as tooltip and
-// accessible name. The others only show with a value. Items are told apart by
+// contexts, labels, importance, urgency (#79), effort. The start date never
+// shows on a card. Importance, urgency and effort always show, as an icon and
+// the level's name: faded at the default, importance and urgency bold from
+// "high" up, the full wording as tooltip and accessible name. The others only show with a value. Items are told apart by
 // spacing and their own icon or background, not separators.
 import { isOverdue } from "../../domain/task/overdue";
 import {
@@ -20,6 +20,7 @@ import {
   formatContext,
   formatDate,
   importanceName,
+  urgencyName,
 } from "./format";
 import { statusLabel } from "./status-label";
 
@@ -33,7 +34,7 @@ function anomalyText(anomaly: DataAnomaly): string {
   });
 }
 
-/** Importance or effort: an icon and the level's name, the full wording on hover. */
+/** Importance, urgency or effort: an icon and the level's name, the full wording on hover. */
 function RatingProperty(props: {
   icon: string;
   name: string;
@@ -71,6 +72,7 @@ export function PropertyRow(props: {
   const { task, today, kept, blocked } = props;
   const overdue = isOverdue(task, today);
   const importance = importanceName(task.importance);
+  const urgency = urgencyName(task.urgency);
   const effort = effortName(task.effort);
   return (
     <div className="nextaction-property-row">
@@ -128,6 +130,13 @@ export function PropertyRow(props: {
         label={t("Importance: ${level}", { level: importance })}
         level={task.importance}
         strong={task.importance > defaultRating}
+      />
+      <RatingProperty
+        icon="ti-bolt"
+        name={urgency}
+        label={t("Urgency: ${level}", { level: urgency })}
+        level={task.urgency}
+        strong={task.urgency > defaultRating}
       />
       <RatingProperty
         icon="ti-weight"

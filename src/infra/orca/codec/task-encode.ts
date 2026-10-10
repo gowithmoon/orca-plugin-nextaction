@@ -64,6 +64,12 @@ export function encodeTaskChanges(
       value: changes.importance,
     });
   }
+  if (changes.urgency !== undefined) {
+    items.push({
+      name: propertyName("urgency", tag.language),
+      value: changes.urgency,
+    });
+  }
   if (changes.effort !== undefined) {
     items.push({
       name: propertyName("effort", tag.language),
@@ -159,6 +165,7 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   // (encodeDependencies, tag-operations A2).
   dependencies: "dependencies",
   dependencyMode: "dependencyMode",
+  urgency: "urgency",
   dependencyDelay: "dependencyDelay",
 };
 

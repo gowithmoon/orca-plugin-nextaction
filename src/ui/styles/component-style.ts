@@ -211,7 +211,7 @@ export const componentCss = `
  * search box, the view controls (sort, direction, collapse or expand all),
  * then the filter fields. Laid out by its own width:
  * - narrow: the search box and the view controls share the first row, the
- *   four filters fill a 2 × 2 grid below;
+ *   five filters fill rows of two below, the last one alone;
  * - medium: the same two rows;
  * - wide: one row, the filters after the search box and the view controls
  *   at the far end, where controls of how a list shows usually sit.
@@ -257,8 +257,8 @@ export const componentCss = `
 @container nextaction-toolbar (min-width: 1000px) {
   .nextaction-toolbar > .nextaction-filter-bar {
     order: 1;
-    flex: 1 1 28em;
-    max-width: 50em;
+    flex: 1 1 36em;
+    max-width: 60em;
   }
   .nextaction-toolbar-view {
     order: 2;
@@ -336,7 +336,10 @@ export const componentCss = `
   font-weight: var(--orca-fontweight-lg);
 }
 
-/* Importance and effort: faded at the default level, importance bold from "high" up. */
+/*
+ * Importance, urgency and effort: faded at the default level, importance and
+ * urgency bold from "high" up.
+ */
 .nextaction-property-rating[data-default] {
   opacity: 0.7;
 }

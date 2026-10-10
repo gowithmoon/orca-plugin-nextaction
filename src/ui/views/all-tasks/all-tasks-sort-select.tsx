@@ -13,6 +13,7 @@ function sortOptions(): SelectOption[] {
     due: t("Due day"),
     start: t("Start day"),
     importance: t("Importance"),
+    urgency: t("Urgency"),
     score: t("Score"),
     captured: t("Capture time"),
   };

@@ -22,6 +22,7 @@ import {
   formatContext,
   importanceName,
   shownText,
+  urgencyName,
 } from "../components/format";
 import { StatusIcon } from "../components/status-icon";
 import { markedStatus } from "../components/status-menu";
@@ -165,6 +166,14 @@ function Fields(props: {
           value={task.importance}
           name={importanceName}
           onChange={(importance) => void actions.edit({ importance })}
+        />
+      </Field>
+      <Field label={t("Urgency")} labelId={id("urgency")}>
+        <RatingField
+          labelId={id("urgency")}
+          value={task.urgency}
+          name={urgencyName}
+          onChange={(urgency) => void actions.edit({ urgency })}
         />
       </Field>
       <Field label={t("Effort")} labelId={id("effort")}>

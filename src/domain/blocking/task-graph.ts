@@ -106,6 +106,12 @@ export interface TaskGraphEntry {
    */
   readonly parked: boolean;
   /**
+   * The nearest done ancestor task (GLOSSARY: 下一步行动): with one, at any
+   * level, the whole branch below it is out of the next actions; `null` when
+   * no ancestor task is done. The task itself does not count.
+   */
+  readonly doneAncestor: TaskId | null;
+  /**
    * The latest start among the task and all its ancestor tasks (GLOSSARY:
    * 开始日期, ADR 0015); `null` when none has one.
    */
@@ -205,7 +211,7 @@ export function analyzeTaskGraph(
    * "any": the logical day of its last completion record. A met dependency
    * without one (done outside the plugin, or stale) counts as done long ago:
    * left out in mode "all", and in mode "any" it lets the task in at once
-   * (ADR 0017).
+   * (ADR 0018).
    */
   const delayRelease = (
     item: SnapshotTask,
@@ -294,6 +300,9 @@ export function analyzeTaskGraph(
       });
     }
     const parked = chain.some((link) => parks(link.task));
+    const doneAncestor =
+      chain.slice(1).find((link) => link.task.status === "done")?.task.id ??
+      null;
     const effectiveStart = chain.reduce<CalendarDate | null>(
       (latest, link) => laterDay(latest, link.task.start),
       null,
@@ -306,11 +315,13 @@ export function analyzeTaskGraph(
       parentId: item.parentId,
       blockedBy,
       parked,
+      doneAncestor,
       effectiveStart,
       nextAction:
         (status === "todo" || status === "doing") &&
         blockedBy.length === 0 &&
         !parked &&
+        doneAncestor === null &&
         started,
     });
   }

@@ -1,6 +1,6 @@
 // The quick capture window (GLOSSARY: 快速捕获, #45 "快速捕获") and the command
-// that opens it: a line of text and, below it, importance, effort, start and
-// due with the task panel's controls. Nothing is written before the capture.
+// that opens it: a line of text and, below it, importance, urgency, effort,
+// start and due with the task panel's controls. Nothing is written before the capture.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
@@ -12,7 +12,7 @@ import {
 } from "../../domain/task/task";
 import type { CommandFn } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
-import { effortName, importanceName } from "../components/format";
+import { effortName, importanceName, urgencyName } from "../components/format";
 import { PopupLayer } from "../components/popup-layer";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import { useQuickCapture } from "../hooks/use-quick-capture";
@@ -20,6 +20,7 @@ import { DateField, Field, RatingField } from "../task-panel/task-panel-fields";
 
 interface Draft {
   importance: Rating;
+  urgency: Rating;
   effort: Rating;
   start: CalendarDate | null;
   due: CalendarDate | null;
@@ -27,6 +28,7 @@ interface Draft {
 
 const emptyDraft: Draft = {
   importance: defaultRating,
+  urgency: defaultRating,
   effort: defaultRating,
   start: null,
   due: null,
@@ -39,6 +41,7 @@ const emptyDraft: Draft = {
 function initialProperties(draft: Draft): InitialProperties {
   return {
     ...(draft.importance !== defaultRating && { importance: draft.importance }),
+    ...(draft.urgency !== defaultRating && { urgency: draft.urgency }),
     ...(draft.effort !== defaultRating && { effort: draft.effort }),
     ...(draft.start && { start: draft.start }),
     ...(draft.due && { due: draft.due }),
@@ -158,6 +161,14 @@ function QuickCapturePopup(props: {
                     value={draft.importance}
                     name={importanceName}
                     onChange={set("importance")}
+                  />
+                </Field>
+                <Field label={t("Urgency")} labelId={id("urgency")}>
+                  <RatingField
+                    labelId={id("urgency")}
+                    value={draft.urgency}
+                    name={urgencyName}
+                    onChange={set("urgency")}
                   />
                 </Field>
                 <Field label={t("Effort")} labelId={id("effort")}>

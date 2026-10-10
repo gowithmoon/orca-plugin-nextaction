@@ -77,9 +77,16 @@ const zhDefinitions = [
       ],
     },
   },
+  // A number, 4 by default, like importance and effort (#79).
+  {
+    name: "紧急度",
+    type: 3,
+    pos: 11,
+    typeArgs: { defaultEnabled: true, default: 4 },
+  },
   // A number with no default (#77): empty reads as 0 days. Written bare,
   // as numbers were in the tag-operations spike.
-  { name: "依赖延迟", type: 3, pos: 11 },
+  { name: "依赖延迟", type: 3, pos: 12 },
 ];
 
 const enDefinitions = [
@@ -149,7 +156,13 @@ const enDefinitions = [
       ],
     },
   },
-  { name: "Dependency delay", type: 3, pos: 11 },
+  {
+    name: "Urgency",
+    type: 3,
+    pos: 11,
+    typeArgs: { defaultEnabled: true, default: 4 },
+  },
+  { name: "Dependency delay", type: 3, pos: 12 },
 ];
 
 /**
@@ -478,6 +491,28 @@ describe("startup plan", () => {
     ]);
   });
 
+  it("appends the urgency after the existing properties to a tag from before #79", () => {
+    // The interface is English, but the tag's names are Chinese (ADR 0009).
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["紧急度"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [
+        {
+          name: "紧急度",
+          type: 3,
+          pos: 11,
+          typeArgs: { defaultEnabled: true, default: 4 },
+        },
+      ],
+    });
+  });
+
   it("appends the dependency delay, a number with no default, to a tag from before #77", () => {
     expect(
       planStartup({
@@ -486,14 +521,14 @@ describe("startup plan", () => {
         cache: takenOver,
         uiLanguage: "en",
       }).writes,
-    ).toEqual([{ name: "依赖延迟", type: 3, pos: 11 }]);
+    ).toEqual([{ name: "依赖延迟", type: 3, pos: 12 }]);
   });
 
   it("leaves a dependency delay the user gave a default as it is", () => {
     const delay = {
       name: "依赖延迟",
       type: 3,
-      pos: 11,
+      pos: 12,
       value: null,
       typeArgs: { defaultEnabled: true, default: 2 },
     };

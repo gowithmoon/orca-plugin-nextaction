@@ -74,6 +74,7 @@ const zhCN: Record<string, string> = {
   "Due ${date}": "截止 ${date}",
   Overdue: "逾期",
   "Importance: ${level}": "重要性：${level}",
+  "Urgency: ${level}": "紧急度：${level}",
   "Effort: ${level}": "工作量：${level}",
   Sun: "周日",
   Mon: "周一",
@@ -133,6 +134,7 @@ const zhCN: Record<string, string> = {
   "Any context": "全部上下文",
   "Any label": "全部标记",
   "Any importance": "全部重要性",
+  "Any urgency": "全部紧急度",
   "Any status": "全部状态",
   "Parent task:": "父任务：",
   "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
@@ -143,6 +145,7 @@ const zhCN: Record<string, string> = {
   Close: "关闭",
   Status: "状态",
   Importance: "重要性",
+  Urgency: "紧急度",
   Effort: "工作量",
   Start: "开始日期",
   Due: "截止日期",

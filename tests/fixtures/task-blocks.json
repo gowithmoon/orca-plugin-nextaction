@@ -1,5 +1,5 @@
 {
-  "source": "hand-written from docs/spikes (tag-operations, block-properties-json, date-subtype, multi-choices-created, next-action-hierarchy-boolean-deps; dependency samples follow tag-operations A2/A5: the value holds reference IDs, each a `type: 3` reference to the target); `created` is an ISO string because JSON has no Date, and tests/task-block-fixtures.ts turns it into the Date get-blocks returns; replace with a real export (see the #20 manual checklist). Task block `content` is modelled on the recorded tag block content; no spike recorded a task block's content.",
+  "source": "hand-written from docs/spikes (tag-operations, block-properties-json, date-subtype, multi-choices-created, next-action-hierarchy-boolean-deps; urgency samples follow importance, both numbers on the tag (#79); dependency samples follow tag-operations A2/A5: the value holds reference IDs, each a `type: 3` reference to the target); `created` is an ISO string because JSON has no Date, and tests/task-block-fixtures.ts turns it into the Date get-blocks returns; replace with a real export (see the #20 manual checklist). Task block `content` is modelled on the recorded tag block content; no spike recorded a task block's content.",
   "tagBlocks": {
     "zh": {
       "id": 211,
@@ -200,6 +200,12 @@
               "typeArgs": { "defaultEnabled": true, "default": 4 }
             },
             {
+              "name": "紧急度",
+              "type": 3,
+              "value": 5,
+              "typeArgs": { "defaultEnabled": true, "default": 4 }
+            },
+            {
               "name": "顺序执行",
               "type": 4,
               "value": false,
@@ -264,7 +270,8 @@
             { "name": "上下文", "type": 6, "value": null },
             { "name": "标记", "type": 6, "value": null },
             { "name": "备注", "type": 1, "value": null },
-            { "name": "顺序执行", "type": 4, "value": null }
+            { "name": "顺序执行", "type": 4, "value": null },
+            { "name": "紧急度", "type": 3, "value": null }
           ]
         }
       ],
@@ -292,6 +299,7 @@
             { "name": "状态", "type": 6, "value": "放弃" },
             { "name": "重要性", "type": 3, "value": 99 },
             { "name": "工作量", "type": 3, "value": 3.5 },
+            { "name": "紧急度", "type": 3, "value": 2.5 },
             {
               "name": "开始日期",
               "type": 5,
@@ -331,7 +339,8 @@
           "data": [
             { "name": "状态", "type": 6, "value": "收集箱" },
             { "name": "重要性", "type": 3, "value": 0 },
-            { "name": "工作量", "type": 3, "value": -2 }
+            { "name": "工作量", "type": 3, "value": -2 },
+            { "name": "紧急度", "type": 3, "value": 8 }
           ]
         }
       ],
@@ -395,6 +404,7 @@
             { "name": "Status", "type": 6, "value": "Waiting" },
             { "name": "Importance", "type": 3, "value": 2 },
             { "name": "Effort", "type": 3, "value": 5 },
+            { "name": "Urgency", "type": 3, "value": 3 },
             { "name": "Start", "type": 5, "value": "2026-10-06T16:00:00.000Z" },
             { "name": "Context", "type": 6, "value": ["@phone", "@home"] },
             { "name": "Label", "type": 6, "value": ["house"] },

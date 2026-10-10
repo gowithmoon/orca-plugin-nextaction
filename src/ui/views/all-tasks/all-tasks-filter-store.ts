@@ -20,6 +20,7 @@ export const noAllTasksFilter: AllTasksFilterState = {
     contexts: { values: [], none: false },
     labels: { values: [], none: false },
     importance: [],
+    urgency: [],
   },
   search: "",
 };
