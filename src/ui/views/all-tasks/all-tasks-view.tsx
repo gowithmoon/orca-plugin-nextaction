@@ -535,8 +535,9 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
         <ViewHeader
           title={t("All tasks")}
           count={count}
-          // The navigation shows no count, so it shows here in every tier.
-          countInEveryTier={true}
+          // As in the next action view: the count, only while filtering or
+          // searching, shows in every tier.
+          countInEveryTier={filtering}
         />
         <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
         <AllTasksFilterBar
