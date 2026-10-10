@@ -57,9 +57,10 @@ const zhDefinitions = [
     pos: 8,
     typeArgs: { defaultEnabled: true, default: false },
   },
-  // Block references (#57): the values are reference IDs, no type arguments
-  // (tag-operations A2).
-  { name: "依赖", type: 2, pos: 9 },
+  // Block references (#57): the values are reference IDs (tag-operations
+  // A2). The search scope is the task tag's name, which Orca keeps up to date
+  // when the tag is renamed (blockrefs-scope spike).
+  { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } },
   // Single choice, "全部" by default (#58); choices without a color, as the
   // plugin adds context and label choices (multi-choices-created).
   {
@@ -130,7 +131,7 @@ const enDefinitions = [
     pos: 8,
     typeArgs: { defaultEnabled: true, default: false },
   },
-  { name: "Dependencies", type: 2, pos: 9 },
+  { name: "Dependencies", type: 2, pos: 9, typeArgs: { scope: "Task" } },
   {
     name: "Dependency mode",
     type: 6,
@@ -169,6 +170,17 @@ const readBack = <T extends object>(definitions: T[]) =>
 
 const without = (names: string[]) =>
   zhDefinitions.filter((definition) => !names.includes(definition.name));
+
+/** `definitions` for a tag called `tagName`: the dependencies' scope. */
+const scopedTo = <T extends { name: string }>(
+  definitions: T[],
+  tagName: string,
+) =>
+  definitions.map((definition) =>
+    definition.name === "依赖" || definition.name === "Dependencies"
+      ? { ...definition, typeArgs: { scope: tagName } }
+      : definition,
+  );
 
 /** The cache says this tag block was already taken over. */
 const takenOver = { tagBlockId: 211, tagName: "任务" };
@@ -345,7 +357,95 @@ describe("startup plan", () => {
         cache: takenOver,
         uiLanguage: "en",
       }).writes,
-    ).toEqual([{ name: "依赖", type: 2, pos: 9 }]);
+    ).toEqual([{ name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } }]);
+  });
+
+  describe("search scope of the dependencies", () => {
+    const withDependencies = (typeArgs: unknown) =>
+      tagBlock(
+        readBack(zhDefinitions).map((definition) =>
+          definition.name === "依赖" ? { ...definition, typeArgs } : definition,
+        ),
+      );
+
+    it("sets the scope to the task tag when the dependencies have none", () => {
+      // Orca reads a block-reference property without arguments back as {}.
+      expect(
+        planStartup({
+          tagName: "任务",
+          tagBlock: withDependencies({}),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([
+        { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } },
+      ]);
+    });
+
+    it("leaves a scope the user chose alone", () => {
+      expect(
+        planStartup({
+          tagName: "任务",
+          tagBlock: withDependencies({ scope: "项目" }),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([]);
+    });
+
+    it("uses the new name when the tag is renamed while the plugin was off", () => {
+      expect(
+        planStartup({
+          tagName: "GTD",
+          tagBlock: undefined,
+          cache: takenOver,
+          cachedBlock: tagBlock(
+            readBack(zhDefinitions).map((definition) =>
+              definition.name === "依赖"
+                ? { ...definition, typeArgs: {} }
+                : definition,
+            ),
+            211,
+            ["任务"],
+          ),
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([
+        { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "GTD" } },
+      ]);
+    });
+
+    it("uses the name kept when the new name is taken", () => {
+      expect(
+        planStartup({
+          tagName: "已占用",
+          tagBlock: tagBlock([], 300, ["已占用"]),
+          cache: takenOver,
+          cachedBlock: tagBlock(
+            readBack(zhDefinitions).map((definition) =>
+              definition.name === "依赖"
+                ? { ...definition, typeArgs: {} }
+                : definition,
+            ),
+            211,
+            ["任务"],
+          ),
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([
+        { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } },
+      ]);
+    });
+
+    it("scopes a newly created tag to its own name", () => {
+      const dependencies = planStartup({
+        tagName: "GTD",
+        tagBlock: undefined,
+        cache: undefined,
+        uiLanguage: "zh",
+      }).writes.find((definition) => definition.name === "依赖");
+      expect(dependencies?.typeArgs).toEqual({ scope: "GTD" });
+    });
   });
 
   it("appends the dependency mode with its choices and default to a tag from before #58", () => {
@@ -691,7 +791,7 @@ describe("startup plan", () => {
         }),
       ).toEqual({
         action: { kind: "create", tagName: "GTD" },
-        writes: zhDefinitions,
+        writes: scopedTo(zhDefinitions, "GTD"),
       });
     });
 

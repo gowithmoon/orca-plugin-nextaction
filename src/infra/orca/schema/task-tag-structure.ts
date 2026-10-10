@@ -27,7 +27,11 @@ const statusColors = {
   done: "#4caf50",
 } as const;
 
-type TypeArgsFor = (language: NoteLanguage) => Record<string, unknown>;
+/** The type arguments, given the tag's language and its name in use. */
+type TypeArgsFor = (
+  language: NoteLanguage,
+  tagName: string,
+) => Record<string, unknown>;
 
 /** In display order; the index is the property's `pos`. */
 const structure: readonly {
@@ -90,8 +94,13 @@ const structure: readonly {
     typeArgs: () => ({ defaultEnabled: true, default: false }),
   },
   // Block references (#57): the values are reference IDs (tag-operations
-  // A2); no type arguments were written in any spike.
-  { key: "dependencies", type: PropType.BlockRefs },
+  // A2). Orca's own search for a value is scoped to the task tag; the scope
+  // holds the tag's name and Orca follows `renameAlias` (blockrefs-scope).
+  {
+    key: "dependencies",
+    type: PropType.BlockRefs,
+    typeArgs: (_, tagName) => ({ scope: tagName }),
+  },
   // Single choice, "all" by default (#58). No fixed colors: choices carry
   // `c: ""` as the plugin adds context and label choices
   // (multi-choices-created).
@@ -110,14 +119,17 @@ const structure: readonly {
   },
 ];
 
-/** Every property definition of a newly created task tag, in `pos` order. */
+/**
+ * Every property definition of a task tag called `tagName`, in `pos` order.
+ */
 export function taskTagDefinitions(
   language: NoteLanguage,
+  tagName: string,
 ): PropertyDefinition[] {
   return structure.map(({ key, type, typeArgs }, pos) => ({
     name: propertyName(key, language),
     type,
     pos,
-    ...(typeArgs ? { typeArgs: typeArgs(language) } : {}),
+    ...(typeArgs ? { typeArgs: typeArgs(language, tagName) } : {}),
   }));
 }
