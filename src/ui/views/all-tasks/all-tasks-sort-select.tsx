@@ -7,7 +7,7 @@ import { t } from "../../../shared/l10n/l10n";
 /** The sorts in the order offered, each with its label. */
 function sortOptions(): SelectOption[] {
   const labels: Record<AllTasksSort, string> = {
-    note: t("Note order"),
+    note: t("Default order"),
     due: t("Due day"),
     start: t("Start day"),
     importance: t("Importance"),
