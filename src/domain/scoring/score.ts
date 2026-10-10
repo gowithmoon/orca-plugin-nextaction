@@ -15,7 +15,7 @@ export interface ScoreInput {
   readonly effectiveStart: CalendarDate | null;
   /**
    * The importance and urgency of each ancestor task, nearest first, whatever
-   * its status (ADR 0018); empty for a task without one.
+   * its status (ADR 0019); empty for a task without one.
    */
   readonly ancestorRatings: readonly AncestorRatings[];
 }
@@ -56,7 +56,7 @@ function startScore(
 /**
  * Importance or urgency 1–7 mapped linearly onto 10–90, then scaled by each
  * ancestor task's factor 1 + 0.05 × (its value − 4), held within 0–100
- * (ADR 0018).
+ * (ADR 0019).
  */
 function ratingScore(rating: Rating, ancestors: readonly Rating[]): number {
   const own = 10 + ((rating - 1) / 6) * 80;

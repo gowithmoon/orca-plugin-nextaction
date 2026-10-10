@@ -118,7 +118,7 @@ export interface TaskGraphEntry {
   readonly effectiveStart: CalendarDate | null;
   /**
    * The importance and urgency of each ancestor task, nearest first, whatever
-   * its status: what the score inherits (GLOSSARY: 评分, ADR 0018). Empty for
+   * its status: what the score inherits (GLOSSARY: 评分, ADR 0019). Empty for
    * a task without one.
    */
   readonly ancestorRatings: readonly Pick<Task, "importance" | "urgency">[];
