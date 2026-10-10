@@ -114,6 +114,11 @@ const zhCN: Record<string, string> = {
   "Tasks not done show here as a tree, as they sit in the notes.":
     "未完成的任务会按笔记中的层级显示在这里。",
   Blocked: "阻塞",
+  Collapse: "折叠",
+  Expand: "展开",
+  "Hidden tasks: ${count}": "藏起 ${count} 个任务",
+  "Collapse all": "全部折叠",
+  "Expand all": "全部展开",
   Sort: "排序",
   "Note order": "笔记顺序",
   "Due day": "截止日期",
