@@ -5,7 +5,9 @@ import {
   type SnapshotTask,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
-import type { Task, TaskId } from "../../domain/task/task";
+import { score } from "../../domain/scoring/score";
+import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
+import { addDays, compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -37,18 +39,64 @@ export interface AllTasksNode {
   readonly children: readonly AllTasksNode[];
 }
 
-export interface AllTasksRead {
-  /** The top-level nodes, in note order. */
-  readonly tree: readonly AllTasksNode[];
+/** The done section (GLOSSARY: 已完成区), below the tree. */
+export interface DoneSection {
+  /**
+   * One per done subtree: its top-level task, the most recent last
+   * completion first, those with none recorded after, in note order.
+   */
+  readonly items: readonly Task[];
+  /** How many items the current range lists (the N of its title). */
+  readonly count: number;
+  /** Items are left out for being earlier: "show earlier" has some to show. */
+  readonly hasEarlier: boolean;
 }
 
+export interface AllTasksRead {
+  /** The top-level nodes, ordered as asked (`sort`). */
+  readonly tree: readonly AllTasksNode[];
+  readonly done: DoneSection;
+}
+
+/**
+ * How the top-level nodes are ordered; subtasks always keep note order. The
+ * direction is fixed, and ties keep note order.
+ * - `note`: note order.
+ * - `due`: the task's own due day, earliest first, none last.
+ * - `start`: the task's own start, earliest first, none last.
+ * - `importance`: highest first.
+ * - `score` (GLOSSARY: 评分): highest first, for a task of any status, from
+ *   its effective start (ADR 0015).
+ * - `captured`: when the block was created, newest first.
+ */
+export type AllTasksSort =
+  | "note"
+  | "due"
+  | "start"
+  | "importance"
+  | "score"
+  | "captured";
+
 export interface ReadAllTasksOptions {
+  /** Defaults to `note`. */
+  readonly sort?: AllTasksSort;
   /**
    * A task kept in the tree after it would have left it (the one being
    * viewed, as in the other views), in its place.
    */
   readonly keep?: TaskId;
+  /**
+   * The done section lists every item, not only those of the last
+   * `doneSectionDays` logical days ("show earlier").
+   */
+  readonly showEarlierDone?: boolean;
 }
+
+/**
+ * How many logical days back, today included, the done section lists by
+ * default (#63).
+ */
+export const doneSectionDays = 30;
 
 /** Reads all tasks. Errors are thrown as they are. */
 export type ReadAllTasks = (
@@ -62,6 +110,36 @@ function marksBlocked(entry: TaskGraphEntry | undefined): boolean {
   return entry.blockedBy.some((reason) => reason.kind !== "subtasks");
 }
 
+/** The earlier day first; none last. */
+function byDay(a: CalendarDate | null, b: CalendarDate | null): number {
+  if (a === null || b === null)
+    return (a === null ? 1 : 0) - (b === null ? 1 : 0);
+  return compareDays(a, b);
+}
+
+type NodeOrder = (a: AllTasksNode, b: AllTasksNode) => number;
+
+/** How top-level nodes compare for `sort`; `null` for note order. */
+function comparator(
+  sort: AllTasksSort,
+  scoreOf: (task: Task) => number,
+): NodeOrder | null {
+  switch (sort) {
+    case "note":
+      return null;
+    case "due":
+      return (a, b) => byDay(a.task.due, b.task.due);
+    case "start":
+      return (a, b) => byDay(a.task.start, b.task.start);
+    case "importance":
+      return (a, b) => b.task.importance - a.task.importance;
+    case "score":
+      return (a, b) => scoreOf(b.task) - scoreOf(a.task);
+    case "captured":
+      return (a, b) => b.task.created.getTime() - a.task.created.getTime();
+  }
+}
+
 export function createReadAllTasks(deps: {
   repository: TaskRepository;
   clock: Clock;
@@ -70,8 +148,9 @@ export function createReadAllTasks(deps: {
 }): ReadAllTasks {
   return async (options = {}) => {
     const snapshot = await deps.repository.readTaskGraph();
+    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const graph = analyzeTaskGraph(snapshot, {
-      today: logicalDay(deps.clock.now(), deps.dayBoundary.current()),
+      today,
       previewDays: deps.startPreviewDays.current(),
     });
     const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
@@ -116,10 +195,48 @@ export function createReadAllTasks(deps: {
     // section (GLOSSARY: 已完成区); every other task stays in its place. Only a
     // task still in the snapshot is kept: a block no longer a task is not.
     const tree: AllTasksNode[] = [];
+    const done: SnapshotTask[] = [];
     for (const item of topLevel) {
-      const shown = holdsOpen(item) ? node(item) : keptPath(item);
-      if (shown) tree.push(shown);
+      if (holdsOpen(item)) {
+        tree.push(node(item));
+        continue;
+      }
+      // A done subtree holding the kept task stays in the tree for it, so it
+      // is not in the done section too.
+      const kept = keptPath(item);
+      if (kept) tree.push(kept);
+      else done.push(item);
     }
-    return { tree };
+    const scoreOf = (task: Task) =>
+      score(
+        { task, effectiveStart: graph.entry(task.id)?.effectiveStart ?? null },
+        today,
+      );
+    const compare = comparator(options.sort ?? "note", scoreOf);
+    // Stable: ties keep note order.
+    if (compare) tree.sort(compare);
+    // By default only the last `doneSectionDays` logical days. A task with no
+    // completion recorded (e.g. made done in Orca directly) has no reliable
+    // time, so it is never among them.
+    const firstDay = addDays(today, 1 - doneSectionDays);
+    const listed = done.filter(
+      (item) =>
+        options.showEarlierDone ||
+        (item.lastCompletion !== undefined &&
+          compareDays(item.lastCompletion.day, firstDay) >= 0),
+    );
+    // The most recent last completion first; those with none after, in note
+    // order (`done` is in note order already, and the sort is stable).
+    const time = (item: SnapshotTask) =>
+      item.lastCompletion?.at.getTime() ?? Number.NEGATIVE_INFINITY;
+    listed.sort((a, b) => (time(a) === time(b) ? 0 : time(b) - time(a)));
+    return {
+      tree,
+      done: {
+        items: listed.map((item) => item.task),
+        count: listed.length,
+        hasEarlier: listed.length < done.length,
+      },
+    };
   };
 }

@@ -114,6 +114,17 @@ const zhCN: Record<string, string> = {
   "Tasks not done show here as a tree, as they sit in the notes.":
     "未完成的任务会按笔记中的层级显示在这里。",
   Blocked: "阻塞",
+  Collapse: "折叠",
+  Expand: "展开",
+  "Hidden tasks: ${count}": "藏起 ${count} 个任务",
+  "Collapse all": "全部折叠",
+  "Expand all": "全部展开",
+  Sort: "排序",
+  "Note order": "笔记顺序",
+  "Due day": "截止日期",
+  "Start day": "开始日期",
+  Score: "评分",
+  "Capture time": "捕获时间",
   "No tasks match the filter": "没有符合筛选的任务",
   "Clear filter": "清除筛选",
   Filter: "筛选",
@@ -190,6 +201,8 @@ const zhCN: Record<string, string> = {
     "未添加：依赖 ${tasks} 会造成循环依赖。",
   "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.":
     "未打开顺序执行：${waiting} 会等待 ${waitingFor}，而后者已经在等待它，会造成循环依赖。",
+  "Done · ${count}": "已完成 · ${count}",
+  "Show earlier": "显示更早的",
   "Not moved: there, ${moved} and ${cycleWith} would wait for each other, making a dependency cycle.":
     "未移动：移到那里后，${moved} 和 ${cycleWith} 会互相等待，造成循环依赖。",
   "Not moved: a task cannot go below itself.": "未移动：不能移到自己下面。",

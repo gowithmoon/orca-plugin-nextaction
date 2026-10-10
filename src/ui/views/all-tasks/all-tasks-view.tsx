@@ -1,14 +1,17 @@
 // The all tasks view (GLOSSARY: 全部任务视图, #65): every task not done as a
 // tree by block hierarchy, done tasks kept faded where they sit, and the
 // tasks held back by a dependency, a sequential parent or a cycle marked
-// blocked. After the inbox in the navigation, with no count there. It reads
+// blocked; below it the done section (GLOSSARY: 已完成区, #66), collapsed by
+// default. After the inbox in the navigation, with no count there. It reads
 // when the plugin panel opens and again on every task change signal (ADR
-// 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// 0007). Nodes with children collapse (#67). Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   AllTasksNode,
   AllTasksRead,
+  DoneSection,
   ReadAllTasks,
 } from "../../../application/usecases/read-all-tasks";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
@@ -35,6 +38,10 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
+import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
+import { AllTasksSortSelect } from "./all-tasks-sort-select";
+import type { AllTasksSortStore } from "./all-tasks-sort-store";
+import type { DoneSectionStore } from "./done-section-store";
 import { TaskDragArea, TaskDragHandle, TaskDropTarget } from "./task-drag";
 
 export interface AllTasksViewDeps {
@@ -47,6 +54,12 @@ export interface AllTasksViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
+  /** The collapsed nodes, kept in the plugin instance's memory (#67). */
+  collapse: AllTasksCollapseStore;
+  /** The sort, kept in the plugin instance's memory (#68). */
+  sort: AllTasksSortStore;
+  /** The done section's state, kept in the plugin instance's memory (#66). */
+  doneSection: DoneSectionStore;
   /** Dragging a card onto another (#70). */
   moveTask: MoveTask;
 }
@@ -77,6 +90,21 @@ function shownNodes(
   return shown;
 }
 
+/** How many tasks sit below the node in the tree: what collapsing it hides. */
+function descendantCount(node: AllTasksNode): number {
+  return node.children.reduce(
+    (count, child) => count + 1 + descendantCount(child),
+    0,
+  );
+}
+
+/** The tasks of the tree that have children: what "collapse all" collapses. */
+function parentIds(nodes: readonly AllTasksNode[]): TaskId[] {
+  return nodes.flatMap((node) =>
+    node.children.length > 0 ? [node.task.id, ...parentIds(node.children)] : [],
+  );
+}
+
 function Placeholder() {
   const { Skeleton } = orca.components;
   return (
@@ -102,6 +130,32 @@ interface TreeCards {
   menuPlace: TaskMenuPlace;
   selectedTaskId: TaskId | undefined;
   selectTask: (id: TaskId) => void;
+  collapsed: ReadonlySet<TaskId>;
+  toggleCollapsed: (id: TaskId) => void;
+}
+
+/** A node's collapse button. */
+function CollapseButton(props: { collapsed: boolean; onToggle: () => void }) {
+  const { Tooltip } = orca.components;
+  const label = props.collapsed ? t("Expand") : t("Collapse");
+  return (
+    <Tooltip text={label}>
+      <button
+        type="button"
+        className="nextaction-task-card-button nextaction-task-tree-toggle"
+        aria-expanded={!props.collapsed}
+        aria-label={label}
+        onClick={props.onToggle}
+      >
+        <i
+          className={
+            props.collapsed ? "ti ti-chevron-right" : "ti ti-chevron-down"
+          }
+          aria-hidden="true"
+        />
+      </button>
+    </Tooltip>
+  );
 }
 
 function TreeNodes(props: {
@@ -119,32 +173,121 @@ function TreeNodes(props: {
           : "nextaction-task-tree-children"
       }
     >
-      {props.nodes.map((node) => (
-        <li key={node.task.id}>
-          <TaskDropTarget id={node.task.id}>
-            <TaskDragHandle task={node.task} />
-            <TaskCard
-              task={node.task}
-              today={cards.today}
-              actions={cards.actions}
-              menuItems={cards.menuItems}
-              menuPlace={cards.menuPlace}
-              onOpen={(open) => cards.selectTask(open.id)}
-              selected={node.task.id === cards.selectedTaskId}
-              // Done or kept: the card's faded "kept" look (#65).
-              kept={node.faded !== null}
-              // Only faded: a done task's status icon already says why, and a
-              // kept one leaves for more reasons than its status.
-              keptStatusShown={false}
-              blocked={node.blocked}
-            />
-          </TaskDropTarget>
-          {node.children.length > 0 && (
-            <TreeNodes nodes={node.children} cards={cards} />
-          )}
-        </li>
-      ))}
+      {props.nodes.map((node) => {
+        const parent = node.children.length > 0;
+        const collapsed = parent && cards.collapsed.has(node.task.id);
+        return (
+          <li key={node.task.id}>
+            <div className="nextaction-task-tree-row">
+              {parent ? (
+                <CollapseButton
+                  collapsed={collapsed}
+                  onToggle={() => cards.toggleCollapsed(node.task.id)}
+                />
+              ) : (
+                // Keeps the cards of a level in line, toggle or not.
+                <span
+                  className="nextaction-task-tree-toggle"
+                  aria-hidden="true"
+                />
+              )}
+              {/* Only tree cards are dragged and dropped on, never the done
+                  section's (#70). */}
+              <TaskDropTarget id={node.task.id}>
+                <TaskDragHandle task={node.task} />
+                <TaskCard
+                  task={node.task}
+                  today={cards.today}
+                  actions={cards.actions}
+                  menuItems={cards.menuItems}
+                  menuPlace={cards.menuPlace}
+                  onOpen={(open) => cards.selectTask(open.id)}
+                  selected={node.task.id === cards.selectedTaskId}
+                  // Done or kept: the card's faded "kept" look (#65).
+                  kept={node.faded !== null}
+                  // Only faded: a done task's status icon already says why, and a
+                  // kept one leaves for more reasons than its status.
+                  keptStatusShown={false}
+                  blocked={node.blocked}
+                />
+              </TaskDropTarget>
+            </div>
+            {collapsed ? (
+              <div className="nextaction-task-tree-hidden">
+                {t("Hidden tasks: ${count}", {
+                  count: String(descendantCount(node)),
+                })}
+              </div>
+            ) : (
+              parent && <TreeNodes nodes={node.children} cards={cards} />
+            )}
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+/**
+ * The done section below the tree: its title, a toggle, counts the items of
+ * the current range. Collapsed, it renders none of them.
+ */
+function DoneSectionPart(props: {
+  done: DoneSection;
+  cards: TreeCards;
+  store: DoneSectionStore;
+}) {
+  const { done, cards, store } = props;
+  const state = React.useSyncExternalStore(store.subscribe, store.current);
+  // Nothing done at all: no section.
+  if (done.count === 0 && !done.hasEarlier) return null;
+  return (
+    <section className="nextaction-done-section">
+      <button
+        type="button"
+        className="nextaction-done-section-toggle"
+        aria-expanded={state.expanded}
+        onClick={() => store.set({ ...state, expanded: !state.expanded })}
+      >
+        <i
+          className={
+            state.expanded ? "ti ti-chevron-down" : "ti ti-chevron-right"
+          }
+          aria-hidden="true"
+        />
+        {t("Done · ${count}", { count: String(done.count) })}
+      </button>
+      {state.expanded && (
+        <>
+          {done.items.length > 0 && (
+            <ul className="nextaction-task-list">
+              {done.items.map((task) => (
+                <li key={task.id}>
+                  <TaskCard
+                    task={task}
+                    today={cards.today}
+                    actions={cards.actions}
+                    menuItems={cards.menuItems}
+                    menuPlace={cards.menuPlace}
+                    onOpen={(open) => cards.selectTask(open.id)}
+                    selected={task.id === cards.selectedTaskId}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          {done.hasEarlier && (
+            <button
+              type="button"
+              className="nextaction-done-section-earlier"
+              onClick={() => store.set({ ...state, showEarlier: true })}
+            >
+              {t("Show earlier")}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -160,6 +303,10 @@ function AllTasksContent(props: {
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const collapsed = React.useSyncExternalStore(
+    deps.collapse.subscribe,
+    deps.collapse.current,
+  );
 
   if (state.kind === "loading") return <Placeholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -175,7 +322,18 @@ function AllTasksContent(props: {
     );
   }
   const nodes = shownNodes(state.data.tree, selectedTaskId);
-  if (nodes.length === 0) {
+  const done = state.data.done;
+  const cards: TreeCards = {
+    today,
+    actions,
+    menuItems,
+    menuPlace,
+    selectedTaskId,
+    selectTask,
+    collapsed,
+    toggleCollapsed: deps.collapse.toggle,
+  };
+  if (nodes.length === 0 && done.count === 0 && !done.hasEarlier) {
     return (
       <ViewNotice
         icon="ti ti-list-tree"
@@ -188,19 +346,47 @@ function AllTasksContent(props: {
   }
   return (
     <TaskDragArea onMove={moveTask}>
-      <TreeNodes
-        top
-        nodes={nodes}
-        cards={{
-          today,
-          actions,
-          menuItems,
-          menuPlace,
-          selectedTaskId,
-          selectTask,
-        }}
-      />
+      {nodes.length > 0 && <TreeNodes top nodes={nodes} cards={cards} />}
+      <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
     </TaskDragArea>
+  );
+}
+
+/** "Collapse all" and "expand all", once the tree has a node to collapse. */
+function CollapseAllBar(props: {
+  query: ViewQuery<AllTasksRead>;
+  selectedTaskId: TaskId | undefined;
+  collapse: AllTasksCollapseStore;
+}) {
+  const { Button } = orca.components;
+  const state = useViewQuery(props.query);
+  const collapsed = React.useSyncExternalStore(
+    props.collapse.subscribe,
+    props.collapse.current,
+  );
+  if (state.kind !== "loaded") return null;
+  const ids = parentIds(shownNodes(state.data.tree, props.selectedTaskId));
+  if (ids.length === 0) return null;
+  return (
+    <div className="nextaction-tree-bar">
+      <Button
+        variant="plain"
+        disabled={ids.every((id) => collapsed.has(id))}
+        onClick={() => props.collapse.collapse(ids)}
+      >
+        <i className="ti ti-fold" aria-hidden="true" />
+        {t("Collapse all")}
+      </Button>
+      <Button
+        variant="plain"
+        // Records of tasks no longer in the tree count for nothing.
+        disabled={!ids.some((id) => collapsed.has(id))}
+        onClick={props.collapse.clear}
+      >
+        <i className="ti ti-fold-down" aria-hidden="true" />
+        {t("Expand all")}
+      </Button>
+    </div>
   );
 }
 
@@ -215,12 +401,32 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
    */
   let selected: TaskId | undefined;
   const query = createViewQuery(
-    () => deps.readAllTasks({ keep: selected }),
+    () =>
+      deps.readAllTasks({
+        keep: selected,
+        sort: deps.sort.current(),
+        showEarlierDone: deps.doneSection.current().showEarlier,
+      }),
     deps.changes,
   );
+  // A new sort reads again; both live as long as the plugin instance.
+  deps.sort.subscribe(() => query.reload());
+  // Showing earlier items reads again; expanding only renders what is read.
+  // Both live as long as the plugin instance.
+  let showEarlier = deps.doneSection.current().showEarlier;
+  deps.doneSection.subscribe(() => {
+    const next = deps.doneSection.current().showEarlier;
+    if (next === showEarlier) return;
+    showEarlier = next;
+    query.reload();
+  });
 
   function AllTasksView() {
     const { selectedTaskId } = usePanel();
+    const sort = React.useSyncExternalStore(
+      deps.sort.subscribe,
+      deps.sort.current,
+    );
     // Before any read the selection may cause: effects run before the
     // change signal's debounced read.
     React.useEffect(() => {
@@ -232,6 +438,12 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("All tasks")} />
+        <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
+        <CollapseAllBar
+          query={query}
+          selectedTaskId={selectedTaskId}
+          collapse={deps.collapse}
+        />
         <AllTasksContent query={query} today={deps.today()} deps={deps} />
       </>
     );

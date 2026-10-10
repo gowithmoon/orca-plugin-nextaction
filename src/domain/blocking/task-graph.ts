@@ -1,6 +1,7 @@
 // The task graph (GLOSSARY: 下一步行动, 阻塞, 搁置子树, 开始日期): which tasks
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
+import type { CompletionEntry } from "../task/completion-history";
 import type { CalendarDate, DependencyMode, Task, TaskId } from "../task/task";
 import { addDays, compareDays, laterDay } from "../time/calendar-days";
 import { findDependencyCycles } from "./dependency-cycles";
@@ -12,6 +13,11 @@ export interface SnapshotTask {
   readonly parentId: TaskId | null;
   /** Its place in the notes (document preorder): lower comes first. */
   readonly position: number;
+  /**
+   * The last entry of its completion history (GLOSSARY: 完成历史); absent
+   * when it has none, or the history cannot be read.
+   */
+  readonly lastCompletion?: CompletionEntry;
 }
 
 /** Every task, done ones included, as they stand in the notes. */
