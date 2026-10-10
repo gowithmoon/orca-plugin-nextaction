@@ -50,6 +50,37 @@ describe("readCompletionHistory", () => {
     });
   });
 
+  it("reads a time Orca hands back as a Date, as get-blocks does for what was written as an ISO string", () => {
+    // The shape read back in Orca (#72 acceptance, 72a-completions):
+    // `at` written as an ISO string comes back a Date; `day` stays a string.
+    const block = taskBlockWith({
+      name: "nextaction.completions",
+      value: {
+        v: 1,
+        entries: [
+          { at: new Date("2026-10-10T12:06:52.953Z"), day: "2026-10-10" },
+        ],
+      },
+    });
+    expect(readCompletionHistory(block)).toEqual({
+      kind: "readable",
+      history: [
+        {
+          at: new Date("2026-10-10T12:06:52.953Z"),
+          day: { year: 2026, month: 10, day: 10 },
+        },
+      ],
+    });
+  });
+
+  it("does not read an invalid Date as a time", () => {
+    const block = taskBlockWith({
+      name: "nextaction.completions",
+      value: { v: 1, entries: [{ at: new Date("x"), day: "2026-10-10" }] },
+    });
+    expect(readCompletionHistory(block).kind).toBe("unreadable");
+  });
+
   it("keeps a value of an unknown version as found", () => {
     const raw = { v: 2, entries: [] };
     const block = taskBlockWith({ name: "nextaction.completions", value: raw });
