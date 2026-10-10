@@ -3,7 +3,9 @@
 import {
   analyzeTaskGraph,
   type SnapshotTask,
+  type TaskGraph,
   type TaskGraphEntry,
+  type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import { score } from "../../domain/scoring/score";
 import type {
@@ -174,6 +176,196 @@ function comparator(
   }
 }
 
+/** The tasks as a tree, in note order. */
+interface TaskTree {
+  readonly topLevel: readonly SnapshotTask[];
+  /** The task's subtasks; none for a task without. */
+  childrenOf(id: TaskId): readonly SnapshotTask[];
+}
+
+function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
+  const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
+  const ids = new Set(ordered.map((item) => item.task.id));
+  const children = new Map<TaskId, SnapshotTask[]>();
+  const topLevel: SnapshotTask[] = [];
+  for (const item of ordered) {
+    // A parent missing from the snapshot leaves the task top-level.
+    if (item.parentId === null || !ids.has(item.parentId)) {
+      topLevel.push(item);
+      continue;
+    }
+    const siblings = children.get(item.parentId) ?? [];
+    siblings.push(item);
+    children.set(item.parentId, siblings);
+  }
+  return { topLevel, childrenOf: (id) => children.get(id) ?? [] };
+}
+
+/** Some task in the subtree of `item`, itself included, is not done. */
+function holdsOpen(tree: TaskTree, item: SnapshotTask): boolean {
+  return (
+    item.task.status !== "done" ||
+    tree.childrenOf(item.task.id).some((child) => holdsOpen(tree, child))
+  );
+}
+
+/** What turning snapshot tasks into nodes needs. */
+interface NodeContext {
+  readonly tree: TaskTree;
+  readonly graph: TaskGraph;
+  readonly keep: TaskId | undefined;
+}
+
+function node(context: NodeContext, item: SnapshotTask): AllTasksNode {
+  return {
+    task: item.task,
+    faded: item.task.status === "done" ? "done" : null,
+    blocked: marksBlocked(context.graph.entry(item.task.id)),
+    children: context.tree
+      .childrenOf(item.task.id)
+      .map((child) => node(context, child)),
+  };
+}
+
+/**
+ * The kept task with only its ancestor tasks above it, for where it sits;
+ * `undefined` when the subtree of `item` does not hold it.
+ */
+function keptPath(
+  context: NodeContext,
+  item: SnapshotTask,
+): AllTasksNode | undefined {
+  if (item.task.id === context.keep) {
+    return { ...node(context, item), faded: "kept", children: [] };
+  }
+  for (const child of context.tree.childrenOf(item.task.id)) {
+    const below = keptPath(context, child);
+    if (below) return { ...node(context, item), children: [below] };
+  }
+  return undefined;
+}
+
+/** What the filter and the search text let through. */
+interface Narrowing {
+  readonly filter: AllTasksFilter;
+  /** The words searched for, in lower case; none: no search. */
+  readonly words: readonly string[];
+}
+
+function narrowing(options: ReadAllTasksOptions): Narrowing {
+  return {
+    filter: options.filter ?? {},
+    words: (options.search ?? "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word !== ""),
+  };
+}
+
+/** The task's text holds every word searched for. */
+function found(narrow: Narrowing, task: Task): boolean {
+  const text = task.text.toLowerCase();
+  return narrow.words.every((word) => text.includes(word));
+}
+
+/** The task is let through in the tree. */
+function matches(narrow: Narrowing, task: Task): boolean {
+  const statuses = narrow.filter.statuses ?? [];
+  return (
+    (statuses.length === 0 ||
+      (task.status !== "done" && statuses.includes(task.status))) &&
+    filterLets(narrow.filter, task) &&
+    found(narrow, task)
+  );
+}
+
+/**
+ * The node of `item` with only what is let through, and the ancestor tasks
+ * of that for where it sits; `undefined`: nothing in its subtree. Adds the
+ * tasks let through to `counted`.
+ */
+function shownNode(
+  context: NodeContext,
+  narrow: Narrowing,
+  item: SnapshotTask,
+  counted: { matches: number },
+): AllTasksNode | undefined {
+  const below = context.tree
+    .childrenOf(item.task.id)
+    .flatMap((child) => shownNode(context, narrow, child, counted) ?? []);
+  if (matches(narrow, item.task)) {
+    counted.matches += 1;
+    return { ...node(context, item), children: below };
+  }
+  // The kept task no longer let through stays in its place, not counted.
+  if (item.task.id === context.keep)
+    return { ...node(context, item), faded: "kept", children: below };
+  if (below.length === 0) return undefined;
+  return { ...node(context, item), faded: "ancestor", children: below };
+}
+
+/**
+ * The tree in note order with only what is let through, how many tasks of
+ * it are, and the done section's items before its range, in note order.
+ */
+function narrowedTree(
+  context: NodeContext,
+  narrow: Narrowing,
+): { tree: AllTasksNode[]; matchCount: number; done: SnapshotTask[] } {
+  // A top-level task done with all its descendant tasks belongs to the done
+  // section (GLOSSARY: 已完成区); every other task stays in its place. Only a
+  // task still in the snapshot is kept: a block no longer a task is not.
+  const counted = { matches: 0 };
+  const tree: AllTasksNode[] = [];
+  const done: SnapshotTask[] = [];
+  for (const item of context.tree.topLevel) {
+    if (holdsOpen(context.tree, item)) {
+      const filtered = shownNode(context, narrow, item, counted);
+      if (filtered) tree.push(filtered);
+      continue;
+    }
+    // A done subtree holding the kept task stays in the tree for it, so it
+    // is not in the done section too.
+    const kept = keptPath(context, item);
+    if (kept) tree.push(kept);
+    // The status filter does not apply to the done section; the other
+    // dimensions and the search look at the item's own top-level task.
+    else if (filterLets(narrow.filter, item.task) && found(narrow, item.task))
+      done.push(item);
+  }
+  return { tree, matchCount: counted.matches, done };
+}
+
+/**
+ * The done section over `done` (in note order): by default only the last
+ * `doneSectionDays` logical days; `everyDay` lifts the range.
+ */
+function doneSection(
+  done: readonly SnapshotTask[],
+  today: CalendarDate,
+  everyDay: boolean,
+): DoneSection {
+  // A task with no completion recorded (e.g. made done in Orca directly) has
+  // no reliable time, so it is never among the recent ones.
+  const firstDay = addDays(today, 1 - doneSectionDays);
+  const listed = done.filter(
+    (item) =>
+      everyDay ||
+      (item.lastCompletion !== undefined &&
+        compareDays(item.lastCompletion.day, firstDay) >= 0),
+  );
+  // The most recent last completion first; those with none after, in note
+  // order (`done` is in note order already, and the sort is stable).
+  const time = (item: SnapshotTask) =>
+    item.lastCompletion?.at.getTime() ?? Number.NEGATIVE_INFINITY;
+  listed.sort((a, b) => (time(a) === time(b) ? 0 : time(b) - time(a)));
+  return {
+    items: listed.map((item) => item.task),
+    count: listed.length,
+    hasEarlier: listed.length < done.length,
+  };
+}
+
 export function createReadAllTasks(deps: {
   repository: TaskRepository;
   clock: Clock;
@@ -187,100 +379,13 @@ export function createReadAllTasks(deps: {
       today,
       previewDays: deps.startPreviewDays.current(),
     });
-    const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
-    const ids = new Set(ordered.map((item) => item.task.id));
-    const children = new Map<TaskId, SnapshotTask[]>();
-    const topLevel: SnapshotTask[] = [];
-    for (const item of ordered) {
-      // A parent missing from the snapshot leaves the task top-level.
-      if (item.parentId === null || !ids.has(item.parentId)) {
-        topLevel.push(item);
-        continue;
-      }
-      const siblings = children.get(item.parentId) ?? [];
-      siblings.push(item);
-      children.set(item.parentId, siblings);
-    }
-    /** Some task in the subtree of `item`, itself included, is not done. */
-    const holdsOpen = (item: SnapshotTask): boolean =>
-      item.task.status !== "done" ||
-      (children.get(item.task.id) ?? []).some(holdsOpen);
-    const node = (item: SnapshotTask): AllTasksNode => ({
-      task: item.task,
-      faded: item.task.status === "done" ? "done" : null,
-      blocked: marksBlocked(graph.entry(item.task.id)),
-      children: (children.get(item.task.id) ?? []).map(node),
-    });
-    /**
-     * The kept task with only its ancestor tasks above it, for where it
-     * sits; `undefined` when the subtree of `item` does not hold it.
-     */
-    const keptPath = (item: SnapshotTask): AllTasksNode | undefined => {
-      if (item.task.id === options.keep) {
-        return { ...node(item), faded: "kept", children: [] };
-      }
-      for (const child of children.get(item.task.id) ?? []) {
-        const below = keptPath(child);
-        if (below) return { ...node(item), children: [below] };
-      }
-      return undefined;
+    const context: NodeContext = {
+      tree: buildTaskTree(snapshot),
+      graph,
+      keep: options.keep,
     };
-    // A top-level task done with all its descendant tasks belongs to the done
-    // section (GLOSSARY: 已完成区); every other task stays in its place. Only a
-    // task still in the snapshot is kept: a block no longer a task is not.
-    const filter = options.filter ?? {};
-    const statuses = filter.statuses ?? [];
-    const words = (options.search ?? "")
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((word) => word !== "");
-    /** The task's text holds every word searched for. */
-    const found = (task: Task): boolean => {
-      const text = task.text.toLowerCase();
-      return words.every((word) => text.includes(word));
-    };
-    /** The task is let through in the tree. */
-    const matches = (task: Task): boolean =>
-      (statuses.length === 0 ||
-        (task.status !== "done" && statuses.includes(task.status))) &&
-      filterLets(filter, task) &&
-      found(task);
-    /**
-     * The node of `item` with only what is let through, and the ancestor
-     * tasks of that for where it sits; `undefined`: nothing in its subtree.
-     */
-    let matchCount = 0;
-    const shown = (item: SnapshotTask): AllTasksNode | undefined => {
-      const below = (children.get(item.task.id) ?? []).flatMap(
-        (child) => shown(child) ?? [],
-      );
-      if (matches(item.task)) {
-        matchCount += 1;
-        return { ...node(item), children: below };
-      }
-      // The kept task no longer let through stays in its place, not counted.
-      if (item.task.id === options.keep)
-        return { ...node(item), faded: "kept", children: below };
-      if (below.length === 0) return undefined;
-      return { ...node(item), faded: "ancestor", children: below };
-    };
-    const tree: AllTasksNode[] = [];
-    const done: SnapshotTask[] = [];
-    for (const item of topLevel) {
-      if (holdsOpen(item)) {
-        const filtered = shown(item);
-        if (filtered) tree.push(filtered);
-        continue;
-      }
-      // A done subtree holding the kept task stays in the tree for it, so it
-      // is not in the done section too.
-      const kept = keptPath(item);
-      if (kept) tree.push(kept);
-      // The status filter does not apply to the done section; the other
-      // dimensions and the search look at the item's own top-level task.
-      else if (filterLets(filter, item.task) && found(item.task))
-        done.push(item);
-    }
+    const narrow = narrowing(options);
+    const { tree, matchCount, done } = narrowedTree(context, narrow);
     const scoreOf = (task: Task) =>
       score(
         { task, effectiveStart: graph.entry(task.id)?.effectiveStart ?? null },
@@ -289,31 +394,9 @@ export function createReadAllTasks(deps: {
     const compare = comparator(options.sort ?? "note", scoreOf);
     // Stable: ties keep note order.
     if (compare) tree.sort(compare);
-    // By default only the last `doneSectionDays` logical days; showing earlier
-    // ones or searching lifts the range. A task with no completion recorded
-    // (e.g. made done in Orca directly) has no reliable time, so it is never
-    // among them.
-    const firstDay = addDays(today, 1 - doneSectionDays);
-    const everyDay = options.showEarlierDone || words.length > 0;
-    const listed = done.filter(
-      (item) =>
-        everyDay ||
-        (item.lastCompletion !== undefined &&
-          compareDays(item.lastCompletion.day, firstDay) >= 0),
-    );
-    // The most recent last completion first; those with none after, in note
-    // order (`done` is in note order already, and the sort is stable).
-    const time = (item: SnapshotTask) =>
-      item.lastCompletion?.at.getTime() ?? Number.NEGATIVE_INFINITY;
-    listed.sort((a, b) => (time(a) === time(b) ? 0 : time(b) - time(a)));
-    return {
-      tree,
-      matchCount,
-      done: {
-        items: listed.map((item) => item.task),
-        count: listed.length,
-        hasEarlier: listed.length < done.length,
-      },
-    };
+    // Showing earlier items or searching lifts the done section's range.
+    const everyDay =
+      options.showEarlierDone === true || narrow.words.length > 0;
+    return { tree, matchCount, done: doneSection(done, today, everyDay) };
   };
 }
