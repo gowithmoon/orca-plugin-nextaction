@@ -5,10 +5,10 @@
 import {
   analyzeTaskGraph,
   type BlockingReason,
+  statusAllowsNextAction,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
-import { addDays, compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -21,15 +21,17 @@ import type { TaskRepository } from "../ports/task-repository";
  * not blocking (the all tasks view does not mark a task blocked for them).
  * None of these waits for a task (`waitingFor` is empty).
  *
- * - `doneAncestor`: `source` is the nearest done ancestor task.
+ * - `doneAncestor` (ADR 0017): `source` is the nearest done ancestor task.
  * - `parked` (搁置子树): `source` is the nearest ancestor task that is
  *   waiting or someday.
  * - `notStarted` (开始日期): the effective start lies beyond today plus the
  *   start preview days; `source` is the task whose start it is (the task
  *   itself or an ancestor task), `startsOn` that start.
  */
-export type NotNextActionReason =
-  | BlockingReason
+export type NotNextActionReason = BlockingReason | NotBlockingReason;
+
+/** A reason that is not blocking (#78). */
+export type NotBlockingReason =
   | (OtherReasonBase & { readonly kind: "doneAncestor" | "parked" })
   | (OtherReasonBase & {
       readonly kind: "notStarted";
@@ -41,30 +43,40 @@ interface OtherReasonBase {
   readonly waitingFor: readonly TaskId[];
 }
 
-/** The order reasons are listed in, whichever link they come from (#78). */
-const reasonOrder: readonly NotNextActionReason["kind"][] = [
-  "doneAncestor",
-  "parked",
-  "subtasks",
-  "dependencies",
-  "dependencyDelay",
-  "sequential",
-  "cycle",
-  "notStarted",
-];
-
 /**
- * Why `entry` is not a next action; empty when it is one. `startsBy` is the
- * last effective start that still lets a task in: today plus the start
- * preview days, as the task graph judges it.
+ * Every kind of reason, the one place they are listed (the type checks none
+ * is missing): `order` is where it is listed, whichever link it comes from,
+ * lower first (#78); `blocking` is false for those not blocking.
  */
-function reasonsOf(
-  entry: TaskGraphEntry,
-  startsBy: CalendarDate,
-): NotNextActionReason[] {
+const reasonKinds: {
+  readonly [K in NotNextActionReason["kind"]]: {
+    readonly order: number;
+    readonly blocking: K extends BlockingReason["kind"] ? true : false;
+  };
+} = {
+  doneAncestor: { order: 0, blocking: false },
+  parked: { order: 1, blocking: false },
+  subtasks: { order: 2, blocking: true },
+  dependencies: { order: 3, blocking: true },
+  dependencyDelay: { order: 4, blocking: true },
+  sequential: { order: 5, blocking: true },
+  cycle: { order: 6, blocking: true },
+  notStarted: { order: 7, blocking: false },
+};
+
+/** Whether `reason` is not blocking (#78) rather than one from the graph. */
+export function isNotBlocking(
+  reason: NotNextActionReason,
+): reason is NotBlockingReason {
+  return !reasonKinds[reason.kind].blocking;
+}
+
+/** Why `entry` is not a next action; empty when it is one. */
+function reasonsOf(entry: TaskGraphEntry): NotNextActionReason[] {
   // Any other status already says why on the task panel (#78).
-  const status = entry.task.status;
-  if (entry.nextAction || (status !== "todo" && status !== "doing")) return [];
+  if (entry.nextAction || !statusAllowsNextAction(entry.task.status)) {
+    return [];
+  }
   const reasons: NotNextActionReason[] = [...entry.blockedBy];
   if (entry.doneAncestor !== null) {
     reasons.push({
@@ -78,9 +90,9 @@ function reasonsOf(
     reasons.push({ kind: "parked", source: entry.parkedBy, waitingFor: [] });
   }
   if (
+    !entry.started &&
     entry.effectiveStart !== null &&
-    entry.effectiveStartFrom !== null &&
-    compareDays(entry.effectiveStart, startsBy) > 0
+    entry.effectiveStartFrom !== null
   ) {
     reasons.push({
       kind: "notStarted",
@@ -91,7 +103,7 @@ function reasonsOf(
   }
   // A stable sort: reasons of one kind keep the graph's order, nearest first.
   return reasons.sort(
-    (a, b) => reasonOrder.indexOf(a.kind) - reasonOrder.indexOf(b.kind),
+    (a, b) => reasonKinds[a.kind].order - reasonKinds[b.kind].order,
   );
 }
 
@@ -105,9 +117,9 @@ export interface RelatedTask {
   readonly text: string;
 }
 
-export interface BlockingReasonsRead {
+export interface NotNextActionReasonsRead {
   /**
-   * In the order of `reasonOrder`. Empty when the task is a next action, is
+   * In the order of `reasonKinds`. Empty when the task is a next action, is
    * neither to do nor in progress, or is not a task.
    */
   readonly reasons: readonly NotNextActionReason[];
@@ -138,23 +150,24 @@ export interface DependencyRead {
 /**
  * Reads why task `id` is not a next action. Errors are thrown as they are.
  */
-export type ReadBlockingReasons = (id: TaskId) => Promise<BlockingReasonsRead>;
+export type ReadNotNextActionReasons = (
+  id: TaskId,
+) => Promise<NotNextActionReasonsRead>;
 
-export function createReadBlockingReasons(deps: {
+export function createReadNotNextActionReasons(deps: {
   repository: TaskRepository;
   clock: Clock;
   dayBoundary: DayBoundarySetting;
   startPreviewDays: StartPreviewDaysSetting;
-}): ReadBlockingReasons {
+}): ReadNotNextActionReasons {
   return async (id) => {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const previewDays = deps.startPreviewDays.current();
     const graph = analyzeTaskGraph(await deps.repository.readTaskGraph(), {
       today,
-      previewDays,
+      previewDays: deps.startPreviewDays.current(),
     });
     const entry = graph.entry(id);
-    const reasons = entry ? reasonsOf(entry, addDays(today, previewDays)) : [];
+    const reasons = entry ? reasonsOf(entry) : [];
     const tasks = new Map<TaskId, RelatedTask>();
     for (const reason of reasons) {
       const named = [reason.source, ...reason.waitingFor];

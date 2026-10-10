@@ -2,7 +2,14 @@
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
 import type { CompletionEntry } from "../task/completion-history";
-import type { CalendarDate, DependencyMode, Task, TaskId } from "../task/task";
+import type {
+  AncestorRatings,
+  CalendarDate,
+  DependencyMode,
+  Task,
+  TaskId,
+  TaskStatus,
+} from "../task/task";
 import { addDays, compareDays } from "../time/calendar-days";
 import { findDependencyCycles } from "./dependency-cycles";
 
@@ -111,9 +118,9 @@ export interface TaskGraphEntry {
    */
   readonly parkedBy: TaskId | null;
   /**
-   * The nearest done ancestor task (GLOSSARY: 下一步行动): with one, at any
-   * level, the whole branch below it is out of the next actions; `null` when
-   * no ancestor task is done. The task itself does not count.
+   * The nearest done ancestor task (GLOSSARY: 下一步行动, ADR 0017): with
+   * one, at any level, the whole branch below it is out of the next actions;
+   * `null` when no ancestor task is done. The task itself does not count.
    */
   readonly doneAncestor: TaskId | null;
   /**
@@ -128,11 +135,16 @@ export interface TaskGraphEntry {
    */
   readonly effectiveStartFrom: TaskId | null;
   /**
+   * The effective start lets the task in (GLOSSARY: 开始日期): there is none,
+   * or it lies no later than today plus the start preview days.
+   */
+  readonly started: boolean;
+  /**
    * The importance and urgency of each ancestor task, nearest first, whatever
    * its status: what the score inherits (GLOSSARY: 评分, ADR 0019). Empty for
    * a task without one.
    */
-  readonly ancestorRatings: readonly Pick<Task, "importance" | "urgency">[];
+  readonly ancestorRatings: readonly AncestorRatings[];
   readonly nextAction: boolean;
 }
 
@@ -141,6 +153,14 @@ export interface TaskGraph {
   readonly nextActions: readonly TaskGraphEntry[];
   /** What the graph says about a task, `undefined` when it is not one. */
   entry(id: TaskId): TaskGraphEntry | undefined;
+}
+
+/**
+ * Only a task to do or in progress can be a next action (GLOSSARY: 下一步行
+ * 动); one in any other status is not, whatever else holds.
+ */
+export function statusAllowsNextAction(status: TaskStatus): boolean {
+  return status === "todo" || status === "doing";
 }
 
 /** A subtask in these statuses does not hold its parent back. */
@@ -318,6 +338,7 @@ export function analyzeTaskGraph(
     }
     const parkedBy = chain.find((link) => parks(link.task))?.task.id ?? null;
     const parked = parkedBy !== null;
+    // A done ancestor task at any level takes the branch out (ADR 0017).
     const doneAncestor =
       chain.slice(1).find((link) => link.task.status === "done")?.task.id ??
       null;
@@ -336,7 +357,6 @@ export function analyzeTaskGraph(
     const effectiveStart = startLink?.task.start ?? null;
     const started =
       effectiveStart === null || compareDays(effectiveStart, startsBy) <= 0;
-    const status = item.task.status;
     entries.set(item.task.id, {
       task: item.task,
       parentId: item.parentId,
@@ -346,12 +366,13 @@ export function analyzeTaskGraph(
       doneAncestor,
       effectiveStart,
       effectiveStartFrom: startLink?.task.id ?? null,
+      started,
       ancestorRatings: chain.slice(1).map((link) => ({
         importance: link.task.importance,
         urgency: link.task.urgency,
       })),
       nextAction:
-        (status === "todo" || status === "doing") &&
+        statusAllowsNextAction(item.task.status) &&
         blockedBy.length === 0 &&
         !parked &&
         doneAncestor === null &&

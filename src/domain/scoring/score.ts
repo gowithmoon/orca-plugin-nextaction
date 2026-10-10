@@ -2,7 +2,7 @@
 // effective start, importance, urgency and effort (#76, #73 "领域：评分").
 // Pure; the parameters are fixed here and not offered as settings. Days are
 // whole logical days.
-import type { CalendarDate, Rating, Task } from "../task/task";
+import type { AncestorRatings, CalendarDate, Rating, Task } from "../task/task";
 import { compareDays, daysBetween } from "../time/calendar-days";
 
 /** What a task's score is computed from. */
@@ -19,9 +19,6 @@ export interface ScoreInput {
    */
   readonly ancestorRatings: readonly AncestorRatings[];
 }
-
-/** What the score takes from an ancestor task. */
-export type AncestorRatings = Pick<Task, "importance" | "urgency">;
 
 /**
  * 35 without a due day; towards 35 ahead; 100 on it; overdue d days, 100 +

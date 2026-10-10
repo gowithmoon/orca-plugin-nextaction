@@ -6,9 +6,9 @@ import * as React from "react";
 import type { Candidates } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
-import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
+import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
 import type { ReadTask } from "../../application/usecases/read-task";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
@@ -34,9 +34,9 @@ import {
   useTaskActions,
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
-import { BlockingReasonsField } from "./blocking-reasons-field";
 import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
+import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import {
   DateField,
   DependencyDelayField,
@@ -55,7 +55,7 @@ export interface TaskPanelFormDeps {
   /** Values offered for contexts and labels. */
   readCandidates: ReadCandidates;
   /** Why the task is not a next action, for the row of that name (#78). */
-  readBlockingReasons: ReadBlockingReasons;
+  readNotNextActionReasons: ReadNotNextActionReasons;
   /** Switches sequential on or off (#59). */
   setSequential: SetSequential;
   /** Tasks offered to add as dependencies (#57). */
@@ -140,8 +140,8 @@ function Fields(props: {
   /** Whether a note typed but not saved is still written on leaving. */
   saveOnLeave: () => boolean;
   candidates: Candidates;
-  /** Read only, after the status: only shown while something blocks the task. */
-  blockingReasons: React.ReactNode;
+  /** Read only, after the status: only shown while the task is not a next action. */
+  notNextActionReasons: React.ReactNode;
   /** The dependencies list and search to add (#57). */
   dependencies: React.ReactNode;
 }) {
@@ -160,7 +160,7 @@ function Fields(props: {
           onChange={(status) => void actions.changeStatus(status)}
         />
       </Field>
-      {props.blockingReasons}
+      {props.notNextActionReasons}
       <Field label={t("Importance")} labelId={id("importance")}>
         <RatingField
           labelId={id("importance")}
@@ -309,11 +309,11 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         actions={actions}
         saveOnLeave={saveOnLeave}
         candidates={candidates}
-        blockingReasons={
+        notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use
           // case returns none for the rest, so the row stays hidden.
-          <BlockingReasonsField
-            readBlockingReasons={deps.readBlockingReasons}
+          <NotNextActionReasonsField
+            readNotNextActionReasons={deps.readNotNextActionReasons}
             taskId={state.task.id}
             changes={deps.changes}
             notify={notify}
@@ -327,7 +327,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
             labelId={`${idPrefix}-dependencies`}
             taskId={state.task.id}
             dependencies={state.task.dependencies}
-            readBlockingReasons={deps.readBlockingReasons}
+            readNotNextActionReasons={deps.readNotNextActionReasons}
             readDependencyCandidates={deps.readDependencyCandidates}
             changes={deps.changes}
             notify={notify}

@@ -302,11 +302,14 @@ describe("task graph: effective start", () => {
 
   it("the preview days let a start that many days ahead in, and no further", () => {
     const graph = analyze(
-      [task(1, { start: oct(12) }), task(2, { start: oct(13) })],
+      [task(1, { start: oct(12) }), task(2, { start: oct(13) }), task(3)],
       3,
     );
 
-    expect(nextActionIds(graph)).toEqual([1]);
+    expect(nextActionIds(graph)).toEqual([1, 3]);
+    expect(graph.entry(1)?.started).toBe(true);
+    expect(graph.entry(2)?.started).toBe(false);
+    expect(graph.entry(3)?.started).toBe(true);
   });
 });
 

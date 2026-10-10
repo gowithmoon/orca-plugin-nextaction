@@ -4,9 +4,9 @@
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
-  BlockingReasonsRead,
-  ReadBlockingReasons,
-} from "../../application/usecases/read-blocking-reasons";
+  NotNextActionReasonsRead,
+  ReadNotNextActionReasons,
+} from "../../application/usecases/read-not-next-action-reasons";
 import type { TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { describeError } from "../../shared/describe-error";
@@ -14,7 +14,7 @@ import { t } from "../../shared/l10n/l10n";
 import type { Notify } from "../notify";
 import { createLatestRead } from "./latest-read";
 
-const none: BlockingReasonsRead = {
+const none: NotNextActionReasonsRead = {
   reasons: [],
   tasks: new Map(),
   dependencies: [],
@@ -27,20 +27,20 @@ const none: BlockingReasonsRead = {
  * task features are paused the task panel already says so, so nothing is
  * told.
  */
-export function useBlockingReasons(
-  readBlockingReasons: ReadBlockingReasons,
+export function useNotNextActionReasons(
+  readNotNextActionReasons: ReadNotNextActionReasons,
   id: TaskId,
   changes: ChangeSignalSource,
   notify: Notify,
-): BlockingReasonsRead {
-  const [read, setRead] = React.useState<BlockingReasonsRead>(none);
+): NotNextActionReasonsRead {
+  const [read, setRead] = React.useState<NotNextActionReasonsRead>(none);
   const report = React.useRef(notify);
   report.current = notify;
 
   React.useEffect(() => {
     setRead(none);
     const reads = createLatestRead(
-      () => readBlockingReasons(id),
+      () => readNotNextActionReasons(id),
       (outcome) => {
         if (outcome.kind === "loaded") setRead(outcome.data);
         else if (outcome.kind === "failed") {
@@ -60,7 +60,7 @@ export function useBlockingReasons(
       // A read still under way after the panel closed or moved on is ignored.
       reads.cancel();
     };
-  }, [readBlockingReasons, id, changes]);
+  }, [readNotNextActionReasons, id, changes]);
 
   return read;
 }

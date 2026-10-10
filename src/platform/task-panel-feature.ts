@@ -3,9 +3,9 @@ import type { StartPreviewDaysSetting } from "../application/ports/start-preview
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
-import { createReadBlockingReasons } from "../application/usecases/read-blocking-reasons";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
+import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
 import { createReadTask } from "../application/usecases/read-task";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
@@ -53,7 +53,7 @@ export function createTaskPanelFeature(deps: {
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),
-    readBlockingReasons: createReadBlockingReasons({
+    readNotNextActionReasons: createReadNotNextActionReasons({
       repository,
       clock: systemClock,
       dayBoundary: deps.dayBoundary,

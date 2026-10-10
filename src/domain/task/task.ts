@@ -86,6 +86,12 @@ export interface Task {
   readonly anomalies: readonly DataAnomaly[];
 }
 
+/**
+ * What a task's descendants take from it as an ancestor task: its importance
+ * and urgency, which the score inherits (GLOSSARY: 评分, ADR 0019).
+ */
+export type AncestorRatings = Pick<Task, "importance" | "urgency">;
+
 /** What the notes hold for a task, already translated into domain terms. */
 export interface TaskInNotes {
   id: TaskId;
