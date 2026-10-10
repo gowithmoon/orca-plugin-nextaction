@@ -9,6 +9,8 @@ import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
+import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
+import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
@@ -32,6 +34,7 @@ import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createMyDayView } from "../ui/views/my-day/my-day-view";
+import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import type { FeatureModule } from "./bootstrap";
@@ -107,6 +110,8 @@ export function createPanelFeature(deps: {
     clock: systemClock,
     dayBoundary: deps.dayBoundary,
   };
+  // The schedule popup's root (#84) exists only while loaded.
+  let renderSchedulePopup: (node: React.ReactNode) => void = () => {};
   views.register(
     createMyDayView({
       readMyDay: createReadMyDay({
@@ -116,9 +121,19 @@ export function createPanelFeature(deps: {
       readMyDayCandidates: createReadMyDayCandidates(myDayDeps),
       addToMyDay: createAddToMyDay(myDayDeps),
       today: deps.today,
+      now: () => systemClock.now(),
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
+      openSchedulePopup: createSchedulePopup({
+        deps: {
+          scheduleInMyDay: createScheduleInMyDay(myDayDeps),
+          unscheduleInMyDay: createUnscheduleInMyDay(myDayDeps),
+          notify: deps.taskActions.notify,
+        },
+        // Into the load's root; nothing outside a load.
+        render: (node) => renderSchedulePopup(node),
+      }),
     }),
   );
   views.register(
@@ -177,6 +192,14 @@ export function createPanelFeature(deps: {
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
     registry.css("myDayStyle", myDayCss);
+    // Its own root, as the task panel popup's: the view's container query
+    // would hold a fixed window inside the view. Created before the panel,
+    // so it is released after it; then nothing renders into it any more.
+    const schedulePopupRoot = registry.reactRoot("schedulePopup", null);
+    renderSchedulePopup = schedulePopupRoot.render;
+    registry.add(`${pluginName}.schedulePopupOpen`, () => {
+      renderSchedulePopup = () => {};
+    });
     const placement = createPanelPlacement(pluginPanelType(pluginName));
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).

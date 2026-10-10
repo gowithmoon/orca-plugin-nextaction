@@ -12,7 +12,11 @@ import {
 } from "../../domain/task/my-day";
 import { isOverdue } from "../../domain/task/overdue";
 import type { Task } from "../../domain/task/task";
-import { logicalDay, logicalDayRange } from "../../domain/time/logical-day";
+import {
+  type LogicalDayRange,
+  logicalDay,
+  logicalDayRange,
+} from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
@@ -32,6 +36,11 @@ export interface ScheduledMyDayItem extends MyDayItem {
 
 /** Today's My Day. */
 export interface TodaysMyDay {
+  /**
+   * Today's time range it was read by, from the day boundary to the next
+   * one: what the timeline covers (#84).
+   */
+  readonly range: LogicalDayRange;
   /** By start, earliest first. */
   readonly scheduled: readonly ScheduledMyDayItem[];
   /** Highest score first, done ones after the others. */
@@ -88,6 +97,6 @@ export function createReadMyDay(deps: {
       task: entry.task,
       overdue: isOverdue(entry.task, today),
     }));
-    return { scheduled, unscheduled };
+    return { range, scheduled, unscheduled };
   };
 }

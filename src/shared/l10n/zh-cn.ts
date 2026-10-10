@@ -246,6 +246,16 @@ const zhCN: Record<string, string> = {
   "Could not move the task: ${reason}": "无法移动任务：${reason}",
   "Drag onto another task to make it a subtask, or between tasks to move it there":
     "拖到另一个任务上成为它的子任务，或拖到任务之间放在那里",
+  "${start}–${end}": "${start}–${end}",
+  "Everything in My Day is scheduled.": "我的一天中的任务都已排期。",
+  Schedule: "排期",
+  "Start time": "开始时刻",
+  "Length (minutes)": "时长（分钟）",
+  "Now ${times}": "当前 ${times}",
+  "Snaps to 15 minutes, within today": "吸附到 15 分钟，不超出今天",
+  Unschedule: "取消排期",
+  "${text}, ${times}": "${text}，${times}",
+  "Now, ${time}": "现在，${time}",
 };
 
 export default zhCN;

@@ -84,6 +84,95 @@ export function removeToday(
 }
 
 /**
+ * The entries with today's entry scheduled at `schedule`: only that entry
+ * changes, past entries are kept (ADR 0020).
+ */
+export function scheduleToday(
+  entries: MyDayEntries,
+  today: CalendarDate,
+  schedule: MyDaySchedule,
+): MyDayEntries {
+  const todays = entryOn(entries, today);
+  if (!todays || sameSchedule(todays.schedule, schedule)) return entries;
+  return entries.map((entry) =>
+    entry === todays ? { day: entry.day, schedule } : entry,
+  );
+}
+
+/**
+ * The entries with today's entry unscheduled: it stays in My Day (GLOSSARY:
+ * 未排期), past entries are kept (ADR 0020). Not in, or unscheduled already,
+ * the entries are returned as they are, so the caller can tell nothing
+ * changed.
+ */
+export function unscheduleToday(
+  entries: MyDayEntries,
+  today: CalendarDate,
+): MyDayEntries {
+  const todays = entryOn(entries, today);
+  if (!todays?.schedule) return entries;
+  return entries.map((entry) =>
+    entry === todays ? { day: entry.day } : entry,
+  );
+}
+
+function sameSchedule(a: MyDaySchedule | undefined, b: MyDaySchedule): boolean {
+  return (
+    a !== undefined &&
+    a.start.getTime() === b.start.getTime() &&
+    a.end.getTime() === b.end.getTime()
+  );
+}
+
+/** What the user asked for: a start and a length in minutes, not yet snapped. */
+export interface ScheduleRequest {
+  readonly start: Date;
+  readonly minutes: number;
+}
+
+/** Starts and lengths snap to this many minutes. */
+export const scheduleStepMinutes = 15;
+
+const minuteMs = 60_000;
+
+/** `at` snapped to the nearest step of the local clock (ADR 0012). */
+function snapToStep(at: Date): Date {
+  const minutes =
+    Math.round((at.getMinutes() + at.getSeconds() / 60) / scheduleStepMinutes) *
+    scheduleStepMinutes;
+  return new Date(
+    at.getFullYear(),
+    at.getMonth(),
+    at.getDate(),
+    at.getHours(),
+    minutes,
+  );
+}
+
+/**
+ * The schedule `request` makes on the logical day whose range is `day`
+ * (GLOSSARY: 排期).
+ */
+export function normalizeSchedule(
+  request: ScheduleRequest,
+  day: LogicalDayRange,
+): MyDaySchedule {
+  // Within the day, leaving room for the shortest schedule before its end.
+  const start = new Date(
+    Math.min(
+      Math.max(snapToStep(request.start).getTime(), day.start.getTime()),
+      day.end.getTime() - scheduleStepMinutes * minuteMs,
+    ),
+  );
+  const minutes = Math.max(
+    scheduleStepMinutes,
+    Math.round(request.minutes / scheduleStepMinutes) * scheduleStepMinutes,
+  );
+  const end = Math.min(start.getTime() + minutes * minuteMs, day.end.getTime());
+  return { start, end: new Date(end) };
+}
+
+/**
  * Whether `schedule` holds on the logical day whose range is `day`: it lies
  * within it, from the day boundary to the next one. One outside reads as
  * unscheduled, e.g. after the user moved the day boundary (ADR 0020); the

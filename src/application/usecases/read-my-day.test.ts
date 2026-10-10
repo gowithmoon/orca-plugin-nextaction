@@ -98,6 +98,19 @@ describe("read today's My Day", () => {
     expect(read.unscheduled.map((item) => item.task.id)).toEqual([2]);
   });
 
+  it("says the time range of today it read by, from the day boundary to the next one", async () => {
+    const { dayBoundary, readMyDay } = setup();
+    expect((await readMyDay()).range).toEqual({
+      start: at("09T05:00:00"),
+      end: at("10T05:00:00"),
+    });
+    dayBoundary.set({ hours: 6, minutes: 30 });
+    expect((await readMyDay()).range).toEqual({
+      start: at("09T06:30:00"),
+      end: at("10T06:30:00"),
+    });
+  });
+
   it("reads a schedule outside today's range as unscheduled, after the day boundary moved", async () => {
     const { repository, dayBoundary, readMyDay } = setup();
     // Scheduled 5:00–6:00 under the 5:00 boundary; the user then set 6:00.
