@@ -28,6 +28,12 @@ describe("convert to task", () => {
       contexts: [],
       labels: [],
       note: null,
+      // Sequential is off by default (#59).
+      sequential: false,
+      // No dependencies until some are added (#57).
+      dependencies: [],
+      // Every dependency must be met by default (#58).
+      dependencyMode: "all",
       // The block's own creation time, however long ago it was written (#35).
       created: new Date("2026-03-02T08:00:00.000Z"),
       anomalies: [],

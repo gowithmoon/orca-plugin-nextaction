@@ -1,6 +1,11 @@
+import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
+import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
+import { createReadNextActions } from "../application/usecases/read-next-actions";
 import type { CalendarDate } from "../domain/task/task";
+import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
@@ -14,6 +19,8 @@ import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
+import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
+import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -24,7 +31,8 @@ export function pluginPanelType(pluginName: string): string {
 
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
- * style sheet, with the inbox view (#37) and its card actions (#39). `views`
+ * style sheet, with the next action view (#53), the inbox view (#37) and
+ * their card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
  */
@@ -34,6 +42,10 @@ export function createPanelFeature(deps: {
   changes: ChangeSignal;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
+  /** The day boundary, for the logical day the next actions are read on. */
+  dayBoundary: DayBoundarySetting;
+  /** The start preview days, for how far ahead the next actions look. */
+  startPreviewDays: StartPreviewDaysSetting;
   /** The cards' status change, "open in notes" and notices (#39). */
   taskActions: TaskActionsDeps;
   /** The current load's task menu registrations, for a right-click on a card. */
@@ -48,6 +60,25 @@ export function createPanelFeature(deps: {
 }): { feature: FeatureModule; views: PanelViews } {
   const { repository, changes, taskPanel } = deps;
   const views = createPanelViews();
+  // The next action view's filter (#55): in memory only, so it outlives the
+  // plugin panel closing and is gone with the load (cleared on release).
+  const nextActionFilter = createNextActionFilterStore();
+  views.register(
+    createNextActionView({
+      readNextActions: createReadNextActions({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      readCandidates: createReadCandidates({ repository }),
+      filter: nextActionFilter,
+    }),
+  );
   views.register(
     createInboxView({
       readInbox: createReadInbox({ repository }),
@@ -73,6 +104,9 @@ export function createPanelFeature(deps: {
     const { pluginName, registry } = context;
     // Identifiers share one namespace across kinds: the style sheet must not
     // be named like the panel type.
+    // Each load is a new module instance already (plugin-lifecycle-settings);
+    // clearing on release also covers a load → unload → load in one instance.
+    registry.add(`${pluginName}.nextActionFilter`, nextActionFilter.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     const placement = createPanelPlacement(pluginPanelType(pluginName));

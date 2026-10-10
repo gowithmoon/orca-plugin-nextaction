@@ -2,7 +2,12 @@
 // seven-cell ratings, dates and the note. Each change is one write. Verified
 // by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { CalendarDate, Rating, TaskStatus } from "../../domain/task/task";
+import type {
+  CalendarDate,
+  DependencyMode,
+  Rating,
+  TaskStatus,
+} from "../../domain/task/task";
 import { defaultRating, taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
@@ -298,5 +303,64 @@ export function NoteField(props: {
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Sequential (GLOSSARY: 顺序执行): Orca's switch, with what it does beside it.
+ * Each change is one write, undone in Orca.
+ */
+export function SequentialField(props: {
+  labelId: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  const { Switch } = orca.components;
+  const hintId = `${props.labelId}-hint`;
+  return (
+    <div className="nextaction-sequential-field">
+      <Switch
+        role="switch"
+        aria-checked={props.on}
+        aria-labelledby={props.labelId}
+        aria-describedby={hintId}
+        on={props.on}
+        onChange={(on) => {
+          if (on !== props.on) props.onChange(on);
+        }}
+      />
+      <span id={hintId} className="nextaction-sequential-hint">
+        {t("Subtasks one at a time, in note order")}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Dependency mode (GLOSSARY: 依赖模式, #58): Orca's segmented control, all or
+ * any. Choosing the current mode writes nothing; each change is one write,
+ * undone in Orca.
+ */
+export function DependencyModeField(props: {
+  labelId: string;
+  mode: DependencyMode;
+  onChange: (mode: DependencyMode) => void;
+}) {
+  const { Segmented } = orca.components;
+  const options: { value: DependencyMode; label: string }[] = [
+    { value: "all", label: t("All") },
+    { value: "any", label: t("Any") },
+  ];
+  return (
+    <Segmented
+      role="group"
+      aria-labelledby={props.labelId}
+      selected={props.mode}
+      options={options}
+      onChange={(value) => {
+        const mode = options.find((option) => option.value === value)?.value;
+        if (mode !== undefined && mode !== props.mode) props.onChange(mode);
+      }}
+    />
   );
 }

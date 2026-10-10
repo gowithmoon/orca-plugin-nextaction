@@ -83,11 +83,14 @@ function useSelectionPopup(
   inPopup: boolean,
   taskId: TaskId | undefined,
   clear: () => void,
+  select: (taskId: TaskId) => void,
 ) {
   React.useEffect(() => {
     if (!inPopup || taskId === undefined) return;
-    return openPopup(taskId, clear);
-  }, [openPopup, inPopup, taskId, clear]);
+    // Picking another task inside the popup selects it: the popup then
+    // follows the selection, as for a card.
+    return openPopup(taskId, clear, select);
+  }, [openPopup, inPopup, taskId, clear, select]);
 }
 
 /** The panel type's renderer. Each opening starts afresh on the first view. */
@@ -133,11 +136,25 @@ export function createNextActionPanel(
       () => setHeldFromPopup(selected.current),
       [],
     );
+    /**
+     * Another view: the selection ends with the view it was made in. The
+     * selected task was a card of that view's list; carried over, the new
+     * view would keep it as a faded card it never listed, and the side pane
+     * would show a task no card in sight is marked for. Unsaved text in the
+     * task panel is saved as the form goes away.
+     */
+    const showView = (id: string) => {
+      if (id === current?.id) return;
+      setHeldFromPopup(undefined);
+      setSelectedTaskId(undefined);
+      setCurrentId(id);
+    };
     useSelectionPopup(
       openPopup,
       tier !== undefined && tier !== "wide",
       selectedTaskId === heldFromPopup ? undefined : selectedTaskId,
       clearSelection,
+      selectTask,
     );
 
     const context = React.useMemo<PanelContextValue | undefined>(
@@ -173,7 +190,7 @@ export function createNextActionPanel(
             <PanelNavigation
               views={list}
               currentId={current?.id}
-              onSelect={setCurrentId}
+              onSelect={showView}
               onRefresh={onRefresh}
             />
             <div className="nextaction-panel-body">
@@ -190,7 +207,11 @@ export function createNextActionPanel(
                   className="nextaction-panel-side"
                   aria-label={t("Task panel")}
                 >
-                  <SidePane taskId={selectedTaskId} onClose={clearSelection} />
+                  <SidePane
+                    taskId={selectedTaskId}
+                    onClose={clearSelection}
+                    onSelectTask={selectTask}
+                  />
                 </aside>
               )}
             </div>

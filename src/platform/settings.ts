@@ -41,6 +41,18 @@ export const settingsDefinition: SettingsDefinition = {
       type: "time",
     }),
   },
+  // Read through startPreviewDaysFrom: anything but a whole number from 0 to
+  // 14 counts as 0 (infra/settings-start-preview-days.ts).
+  startPreviewDays: {
+    schema: () => ({
+      label: t("Start preview days"),
+      description: t(
+        "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.",
+      ),
+      type: "number",
+      defaultValue: 0,
+    }),
+  },
 };
 
 export type Settings = Record<string, unknown>;

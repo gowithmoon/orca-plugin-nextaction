@@ -5,6 +5,7 @@ import type { CalendarDate } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import { PropType } from "../prop-type";
 import {
+  dependencyModeName,
   type NoteLanguage,
   type PropertyKey,
   propertyName,
@@ -93,7 +94,39 @@ export function encodeTaskChanges(
       value: changes.note,
     });
   }
+  if (changes.sequential !== undefined) {
+    // Always with `type: 4`: without it insertTag tags nothing and says
+    // nothing (next-action-hierarchy-boolean-deps).
+    items.push({
+      name: propertyName("sequential", tag.language),
+      type: PropType.Boolean,
+      value: changes.sequential,
+    });
+  }
+  if (changes.dependencyMode !== undefined) {
+    // A single choice, written as its option name like the status (#58).
+    items.push({
+      name: propertyName("dependencyMode", tag.language),
+      value: dependencyModeName(changes.dependencyMode, tag.language),
+    });
+  }
   return items;
+}
+
+/**
+ * The dependencies value: reference IDs, never block IDs (tag-operations
+ * A2), written with the block reference type as the spikes did. An empty list
+ * removes every dependency and Orca deletes their references (A4).
+ */
+export function encodeDependencies(
+  refIds: readonly number[],
+  tag: Pick<TaskWriteContext, "language">,
+): RefDataItem {
+  return {
+    name: propertyName("dependencies", tag.language),
+    type: PropType.BlockRefs,
+    value: [...refIds],
+  };
 }
 
 /** A date, or `null` to clear it as tag-operations step 06 did. */
@@ -114,6 +147,11 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   context: "contexts",
   label: "labels",
   note: "note",
+  sequential: "sequential",
+  // Checked here like the others, but written apart: references come first
+  // (encodeDependencies, tag-operations A2).
+  dependencies: "dependencies",
+  dependencyMode: "dependencyMode",
 };
 
 /**

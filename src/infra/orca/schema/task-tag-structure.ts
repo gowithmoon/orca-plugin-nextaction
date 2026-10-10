@@ -1,6 +1,8 @@
 // The structure the plugin expects on the task tag (spec #16, ADR 0008).
 import type { BlockProperty } from "../../../orca.d.ts";
 import {
+  dependencyModeKeys,
+  dependencyModeName,
   type NoteLanguage,
   type PropertyKey,
   propertyName,
@@ -25,7 +27,11 @@ const statusColors = {
   done: "#4caf50",
 } as const;
 
-type TypeArgsFor = (language: NoteLanguage) => Record<string, unknown>;
+/** The type arguments, given the tag's language and its name in use. */
+type TypeArgsFor = (
+  language: NoteLanguage,
+  tagName: string,
+) => Record<string, unknown>;
 
 /** In display order; the index is the property's `pos`. */
 const structure: readonly {
@@ -80,16 +86,50 @@ const structure: readonly {
   },
   // Text takes no type arguments (tag-operations spike writes it bare).
   { key: "note", type: PropType.Text },
+  // Unchecked by default; without the default a tagged block holds no value
+  // (next-action-hierarchy-boolean-deps).
+  {
+    key: "sequential",
+    type: PropType.Boolean,
+    typeArgs: () => ({ defaultEnabled: true, default: false }),
+  },
+  // Block references (#57): the values are reference IDs (tag-operations
+  // A2). Orca's own search for a value is scoped to the task tag; the scope
+  // holds the tag's name and Orca follows `renameAlias` (blockrefs-scope).
+  {
+    key: "dependencies",
+    type: PropType.BlockRefs,
+    typeArgs: (_, tagName) => ({ scope: tagName }),
+  },
+  // Single choice, "all" by default (#58). No fixed colors: choices carry
+  // `c: ""` as the plugin adds context and label choices
+  // (multi-choices-created).
+  {
+    key: "dependencyMode",
+    type: PropType.TextChoices,
+    typeArgs: (language) => ({
+      subType: "single",
+      defaultEnabled: true,
+      default: dependencyModeName("all", language),
+      choices: dependencyModeKeys.map((key) => ({
+        n: dependencyModeName(key, language),
+        c: "",
+      })),
+    }),
+  },
 ];
 
-/** Every property definition of a newly created task tag, in `pos` order. */
+/**
+ * Every property definition of a task tag called `tagName`, in `pos` order.
+ */
 export function taskTagDefinitions(
   language: NoteLanguage,
+  tagName: string,
 ): PropertyDefinition[] {
   return structure.map(({ key, type, typeArgs }, pos) => ({
     name: propertyName(key, language),
     type,
     pos,
-    ...(typeArgs ? { typeArgs: typeArgs(language) } : {}),
+    ...(typeArgs ? { typeArgs: typeArgs(language, tagName) } : {}),
   }));
 }

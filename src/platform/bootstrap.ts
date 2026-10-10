@@ -12,6 +12,7 @@ import {
   type SettingsDefinition,
   settingsDefinition,
 } from "./settings";
+import { createLoadStartPreviewDays } from "./start-preview-days";
 import { createStatusIconFeature } from "./status-icon-feature";
 import { createTaskActionsFeature } from "./task-actions-feature";
 import { createTaskChangesFeature } from "./task-changes-feature";
@@ -128,6 +129,7 @@ export function createPlugin(options: {
 export function createNextActionPlugin(): Plugin {
   const taskChanges = createTaskChangesFeature();
   const day = createLoadDayBoundary();
+  const preview = createLoadStartPreviewDays(taskChanges.changes);
   const taskTag = createTaskTagFeature(
     () => taskChanges.changes.changed(),
     day.today,
@@ -138,6 +140,7 @@ export function createNextActionPlugin(): Plugin {
     repository,
     changes: taskChanges.changes,
     today: day.today,
+    dayBoundary: day.dayBoundary,
     taskActions: taskActions.taskActions,
   });
   const taskMenu = createTaskMenuFeature({
@@ -152,6 +155,8 @@ export function createNextActionPlugin(): Plugin {
     repository,
     changes: taskChanges.changes,
     today: day.today,
+    dayBoundary: day.dayBoundary,
+    startPreviewDays: preview.startPreviewDays,
     taskActions: taskActions.taskActions,
     menuItems: taskMenu.items,
     taskPanel: { openPopup: taskPanel.open, formDeps: taskPanel.formDeps },
@@ -168,6 +173,8 @@ export function createNextActionPlugin(): Plugin {
       taskChanges.feature,
       // Before anything reads the day boundary or opens a note.
       day.feature,
+      // After the task change signal it gives on a change of the setting.
+      preview.feature,
       taskActions.feature,
       // Before the task tag feature, so it hears the outcome of startup.
       createStatusIconFeature(taskTag.names),

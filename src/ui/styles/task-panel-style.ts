@@ -318,6 +318,113 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   100% { opacity: 0; }
 }
 
+/* Blocking reasons (#54): read only, one line per kind; task names are links. */
+.nextaction-blocking-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-blocking-reason {
+  overflow-wrap: anywhere;
+  line-height: var(--orca-lineheight-md);
+}
+
+.nextaction-blocking-reason-kind {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-blocking-reason-task {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--orca-color-primary-5);
+  text-align: start;
+  cursor: pointer;
+}
+
+.nextaction-blocking-reason-task:hover {
+  text-decoration: underline;
+}
+
+.nextaction-blocking-reason-task[data-empty] {
+  font-style: italic;
+}
+
+.nextaction-sequential-field {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-sequential-hint {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-dependencies-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-dependencies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-dependency {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  line-height: var(--orca-lineheight-md);
+}
+
+.nextaction-dependency-task {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--orca-color-primary-5);
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+span.nextaction-dependency-task {
+  color: var(--orca-color-text-2);
+  cursor: default;
+}
+
+button.nextaction-dependency-task:hover {
+  text-decoration: underline;
+}
+
+.nextaction-dependency-task[data-empty] {
+  font-style: italic;
+}
+
+.nextaction-dependency[data-stale] .nextaction-dependency-task {
+  text-decoration: line-through;
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-dependency-stale {
+  flex: 0 0 auto;
+  color: var(--orca-color-text-2);
+}
+
 .nextaction-task-panel-footer {
   display: flex;
   justify-content: flex-end;

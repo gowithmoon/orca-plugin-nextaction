@@ -1,9 +1,16 @@
+import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createReadBlockingReasons } from "../application/usecases/read-blocking-reasons";
 import { createReadCandidates } from "../application/usecases/read-candidates";
+import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadTask } from "../application/usecases/read-task";
+import { createSetDependencies } from "../application/usecases/set-dependencies";
+import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
+import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
+import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
@@ -26,6 +33,8 @@ export function createTaskPanelFeature(deps: {
   changes: ChangeSignalSource;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
+  /** The day boundary, for the logical day the task graph is read on. */
+  dayBoundary: DayBoundarySetting;
   /** The plugin panel's status change, "open in notes" and notices (#39). */
   taskActions: TaskActionsDeps;
 }): {
@@ -41,6 +50,15 @@ export function createTaskPanelFeature(deps: {
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),
+    readBlockingReasons: createReadBlockingReasons({
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
+    }),
+    setSequential: createSetSequential({ repository }),
+    readDependencyCandidates: createReadDependencyCandidates({ repository }),
+    setDependencies: createSetDependencies({ repository }),
+    setDependencyMode: createSetDependencyMode({ repository }),
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,
@@ -72,7 +90,8 @@ export function createTaskPanelFeature(deps: {
 
   return {
     feature,
-    open: (taskId, onClose) => current?.(taskId, onClose) ?? (() => {}),
+    open: (taskId, onClose, onSelect) =>
+      current?.(taskId, onClose, onSelect) ?? (() => {}),
     formDeps,
   };
 }

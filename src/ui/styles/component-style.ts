@@ -143,6 +143,69 @@ export const componentCss = `
   font-style: italic;
 }
 
+/* The parent task's text (#55): one faint line above the task's own, cut short. */
+.nextaction-task-card-parent {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+  line-height: var(--orca-lineheight-sm);
+}
+
+.nextaction-task-card-parent > .ti {
+  flex: 0 0 auto;
+}
+
+.nextaction-task-card-parent-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nextaction-task-card-parent[data-empty] .nextaction-task-card-parent-text {
+  font-style: italic;
+}
+
+/* Read by screen readers, not shown. */
+.nextaction-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The next action view's filter bar (#55): three fields side by side while
+ * they fit, wrapping onto more lines when the view narrows; never wider than
+ * the view.
+ */
+.nextaction-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+  margin: 0 0 var(--orca-spacing-md);
+  padding: 0;
+  border: 0;
+}
+
+.nextaction-filter {
+  flex: 1 1 10em;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .nextaction-property-row {
   display: flex;
   flex-wrap: wrap;

@@ -1,5 +1,5 @@
 {
-  "source": "hand-written from docs/spikes (tag-operations, block-properties-json, date-subtype, multi-choices-created); `created` is an ISO string because JSON has no Date, and tests/task-block-fixtures.ts turns it into the Date get-blocks returns; replace with a real export (see the #20 manual checklist). Task block `content` is modelled on the recorded tag block content; no spike recorded a task block's content.",
+  "source": "hand-written from docs/spikes (tag-operations, block-properties-json, date-subtype, multi-choices-created, next-action-hierarchy-boolean-deps; dependency samples follow tag-operations A2/A5: the value holds reference IDs, each a `type: 3` reference to the target); `created` is an ISO string because JSON has no Date, and tests/task-block-fixtures.ts turns it into the Date get-blocks returns; replace with a real export (see the #20 manual checklist). Task block `content` is modelled on the recorded tag block content; no spike recorded a task block's content.",
   "tagBlocks": {
     "zh": {
       "id": 211,
@@ -68,6 +68,12 @@
           "typeArgs": { "subType": "multi", "choices": [] }
         },
         { "name": "备注", "type": 1, "pos": 7 },
+        {
+          "name": "顺序执行",
+          "type": 4,
+          "pos": 8,
+          "typeArgs": { "defaultEnabled": true, "default": false }
+        },
         { "name": "_repr", "type": 0, "pos": null },
         { "name": "_show", "type": 0, "pos": null }
       ],
@@ -137,6 +143,12 @@
           "typeArgs": { "subType": "multi", "choices": [] }
         },
         { "name": "Notes", "type": 1, "pos": 7 },
+        {
+          "name": "Sequential",
+          "type": 4,
+          "pos": 8,
+          "typeArgs": { "defaultEnabled": true, "default": false }
+        },
         { "name": "_repr", "type": 0, "pos": null }
       ],
       "refs": [],
@@ -186,6 +198,12 @@
               "type": 3,
               "value": 6,
               "typeArgs": { "defaultEnabled": true, "default": 4 }
+            },
+            {
+              "name": "顺序执行",
+              "type": 4,
+              "value": false,
+              "typeArgs": { "defaultEnabled": true, "default": false }
             }
           ]
         },
@@ -245,7 +263,8 @@
             { "name": "截止日期", "type": 5, "value": null },
             { "name": "上下文", "type": 6, "value": null },
             { "name": "标记", "type": 6, "value": null },
-            { "name": "备注", "type": 1, "value": null }
+            { "name": "备注", "type": 1, "value": null },
+            { "name": "顺序执行", "type": 4, "value": null }
           ]
         }
       ],
@@ -284,7 +303,8 @@
               "value": "2026-10-06T16:00:00.000Z"
             },
             { "name": "上下文", "type": 6, "value": [] },
-            { "name": "标记", "type": 6, "value": [] }
+            { "name": "标记", "type": 6, "value": [] },
+            { "name": "顺序执行", "type": 4, "value": "yes" }
           ]
         }
       ],
@@ -378,7 +398,8 @@
             { "name": "Start", "type": 5, "value": "2026-10-06T16:00:00.000Z" },
             { "name": "Context", "type": 6, "value": ["@phone", "@home"] },
             { "name": "Label", "type": 6, "value": ["house"] },
-            { "name": "Notes", "type": 1, "value": "after 9am" }
+            { "name": "Notes", "type": 1, "value": "after 9am" },
+            { "name": "Sequential", "type": 4, "value": true }
           ]
         }
       ],
@@ -429,6 +450,120 @@
           "from": 242,
           "to": 201,
           "type": 5,
+          "alias": null,
+          "data": []
+        }
+      ],
+      "backRefs": []
+    },
+    "zhOneDependency": {
+      "id": 260,
+      "created": "2026-10-09T02:00:00.000Z",
+      "parent": 213,
+      "text": "NA依赖Z_createRef #任务,NA验证任务A,收集箱,4\n",
+      "content": [{ "t": "t", "v": "NA依赖Z_createRef" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [261] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 261,
+          "from": 260,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "依赖", "type": 2, "value": [262] },
+            { "name": "状态", "type": 6, "value": "收集箱" },
+            { "name": "重要性", "type": 3, "value": 4 }
+          ]
+        },
+        {
+          "id": 262,
+          "from": 260,
+          "to": 201,
+          "type": 3,
+          "alias": null,
+          "data": []
+        }
+      ],
+      "backRefs": []
+    },
+    "zhMirrorDependency": {
+      "id": 265,
+      "created": "2026-10-09T02:10:00.000Z",
+      "parent": 213,
+      "text": "NA依赖镜像 #任务,NA验证任务A,收集箱,4\n",
+      "content": [{ "t": "t", "v": "NA依赖镜像" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [266] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 266,
+          "from": 265,
+          "to": 211,
+          "type": 2,
+          "alias": "任务",
+          "data": [
+            { "name": "依赖", "type": 2, "value": [267] },
+            { "name": "状态", "type": 6, "value": "收集箱" },
+            { "name": "重要性", "type": 3, "value": 4 }
+          ]
+        },
+        {
+          "id": 267,
+          "from": 265,
+          "to": 242,
+          "type": 3,
+          "alias": null,
+          "data": []
+        }
+      ],
+      "backRefs": []
+    },
+    "enTwoDependencies": {
+      "id": 360,
+      "created": "2026-10-09T02:20:00.000Z",
+      "parent": 213,
+      "text": "Fix the sink #Task,Call the plumber,Buy parts,Inbox,4\n",
+      "content": [{ "t": "t", "v": "Fix the sink" }],
+      "aliases": [],
+      "properties": [
+        { "name": "_tags", "value": [361] },
+        { "name": "_repr", "value": { "type": "text" } }
+      ],
+      "refs": [
+        {
+          "id": 361,
+          "from": 360,
+          "to": 311,
+          "type": 2,
+          "alias": "Task",
+          "data": [
+            { "name": "Status", "type": 6, "value": "Inbox" },
+            { "name": "Importance", "type": 3, "value": 4 },
+            { "name": "Dependencies", "type": 2, "value": [362, 363] },
+            { "name": "Dependency mode", "type": 6, "value": "Any" }
+          ]
+        },
+        {
+          "id": 362,
+          "from": 360,
+          "to": 301,
+          "type": 3,
+          "alias": null,
+          "data": []
+        },
+        {
+          "id": 363,
+          "from": 360,
+          "to": 364,
+          "type": 3,
           "alias": null,
           "data": []
         }

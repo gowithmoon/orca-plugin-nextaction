@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  encodeDependencies,
   encodeTaskChanges,
   InvalidatedPropertyError,
   type TaskWriteContext,
@@ -101,6 +102,109 @@ describe("encodeTaskChanges", () => {
     expect(encodeTaskChanges({ due: null }, zh)).toEqual([
       { name: "截止日期", value: null },
     ]);
+  });
+});
+
+describe("encodeTaskChanges: sequential", () => {
+  // next-action-hierarchy-boolean-deps: a Boolean value without `type: 4`
+  // makes insertTag silently tag nothing, so the type always goes with it.
+  it("writes sequential on and off as Booleans carrying type 4", () => {
+    expect(encodeTaskChanges({ sequential: true }, zh)).toEqual([
+      { name: "顺序执行", type: 4, value: true },
+    ]);
+    expect(encodeTaskChanges({ sequential: false }, zh)).toEqual([
+      { name: "顺序执行", type: 4, value: false },
+    ]);
+  });
+
+  it("writes sequential under the English name Sequential", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeTaskChanges({ sequential: true }, en)).toEqual([
+      { name: "Sequential", type: 4, value: true },
+    ]);
+  });
+
+  it("refuses to write an invalidated sequential", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["sequential"],
+    };
+    expect(() => encodeTaskChanges({ sequential: false }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+});
+
+describe("encodeTaskChanges: dependency mode", () => {
+  // A single choice, written as its option name like the status is.
+  it("writes the dependency mode as its Chinese option name", () => {
+    expect(encodeTaskChanges({ dependencyMode: "any" }, zh)).toEqual([
+      { name: "依赖模式", value: "任一" },
+    ]);
+    expect(encodeTaskChanges({ dependencyMode: "all" }, zh)).toEqual([
+      { name: "依赖模式", value: "全部" },
+    ]);
+  });
+
+  it("writes the dependency mode under English names on an English task tag", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeTaskChanges({ dependencyMode: "any" }, en)).toEqual([
+      { name: "Dependency mode", value: "Any" },
+    ]);
+    expect(encodeTaskChanges({ dependencyMode: "all" }, en)).toEqual([
+      { name: "Dependency mode", value: "All" },
+    ]);
+  });
+
+  it("refuses to write an invalidated dependency mode", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["dependencyMode"],
+    };
+    expect(() => encodeTaskChanges({ dependencyMode: "any" }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+});
+
+describe("encodeDependencies", () => {
+  // tag-operations A4: the value is a list of reference IDs, written with the
+  // block reference type; an empty list clears it.
+  it("writes reference IDs as a block reference value under the Chinese name", () => {
+    expect(encodeDependencies([262, 263], zh)).toEqual({
+      name: "依赖",
+      type: 2,
+      value: [262, 263],
+    });
+  });
+
+  it("writes an empty list to clear every dependency, under the English name", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeDependencies([], en)).toEqual({
+      name: "Dependencies",
+      type: 2,
+      value: [],
+    });
+  });
+});
+
+describe("encodeTaskChanges: dependencies", () => {
+  // Dependencies need references created first (tag-operations A2), so they
+  // are written apart, never as part of the plain values.
+  it("leaves dependencies out of the plain values", () => {
+    expect(encodeTaskChanges({ dependencies: [201], note: "x" }, zh)).toEqual([
+      { name: "备注", value: "x" },
+    ]);
+  });
+
+  it("refuses the whole write when dependencies are invalidated", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["dependencies"],
+    };
+    expect(() =>
+      encodeTaskChanges({ dependencies: [], note: "x" }, tag),
+    ).toThrow(InvalidatedPropertyError);
   });
 });
 

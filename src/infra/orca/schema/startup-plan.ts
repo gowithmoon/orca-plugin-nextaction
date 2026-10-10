@@ -162,16 +162,20 @@ function conflicts(
   return subType !== undefined && existing.typeArgs?.subType !== subType;
 }
 
-/** Plan for a tag block that exists: align it, or refuse a first takeover. */
+/**
+ * Plan for a tag block that exists, to be used under `tagName`: align it, or
+ * refuse a first takeover.
+ */
 function planExisting(
   tagBlock: Pick<Block, "id" | "properties">,
+  tagName: string,
   cache: TaskTagCache | undefined,
   uiLanguage: NoteLanguage,
 ): StartupPlan {
   const byName = new Map(tagBlock.properties.map((p) => [p.name, p]));
   const language = tagLanguage(tagBlock.properties, uiLanguage);
   // Definitions are in `propertyKeys` order (their index is `pos`).
-  const expectedDefinitions = taskTagDefinitions(language);
+  const expectedDefinitions = taskTagDefinitions(language, tagName);
   const conflicting: PropertyKey[] = [];
   const writes: PropertyDefinition[] = [];
   propertyKeys.forEach((key, pos) => {
@@ -216,7 +220,13 @@ export function planStartup(input: StartupInput): StartupPlan {
       : undefined;
   if (tagBlock) {
     if (cache && cachedTag && tagBlock.id !== cachedTag.id) {
-      const plan = planExisting(cachedTag, cache, input.uiLanguage);
+      // The cached tag keeps its name.
+      const plan = planExisting(
+        cachedTag,
+        cache.tagName,
+        cache,
+        input.uiLanguage,
+      );
       if (plan.action.kind === "use") {
         return {
           action: {
@@ -229,11 +239,17 @@ export function planStartup(input: StartupInput): StartupPlan {
         };
       }
     }
-    return planExisting(tagBlock, cache, input.uiLanguage);
+    return planExisting(tagBlock, input.tagName, cache, input.uiLanguage);
   }
   // Recovery: rename the cached tag to the name from the settings.
   if (cache && cachedTag) {
-    const plan = planExisting(cachedTag, cache, input.uiLanguage);
+    // Renamed before the writes, in the same group (run-startup-plan).
+    const plan = planExisting(
+      cachedTag,
+      input.tagName,
+      cache,
+      input.uiLanguage,
+    );
     if (plan.action.kind === "use") {
       return {
         action: {
@@ -248,6 +264,6 @@ export function planStartup(input: StartupInput): StartupPlan {
   }
   return {
     action: { kind: "create", tagName: input.tagName },
-    writes: taskTagDefinitions(input.uiLanguage),
+    writes: taskTagDefinitions(input.uiLanguage, input.tagName),
   };
 }

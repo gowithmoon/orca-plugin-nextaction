@@ -6,8 +6,13 @@ import * as React from "react";
 import type { Candidates } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
+import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
+import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadTask } from "../../application/usecases/read-task";
+import type { SetDependencies } from "../../application/usecases/set-dependencies";
+import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
+import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
@@ -28,12 +33,16 @@ import {
   useTaskActions,
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
+import { BlockingReasonsField } from "./blocking-reasons-field";
 import { ChoicesField } from "./choices-field";
+import { DependenciesField } from "./dependencies-field";
 import {
   DateField,
+  DependencyModeField,
   Field,
   NoteField,
   RatingField,
+  SequentialField,
   StatusField,
 } from "./task-panel-fields";
 
@@ -43,6 +52,16 @@ export interface TaskPanelFormDeps {
   dropTask: DropTask;
   /** Values offered for contexts and labels. */
   readCandidates: ReadCandidates;
+  /** Why the task is blocked, for the blocking reasons row (#54). */
+  readBlockingReasons: ReadBlockingReasons;
+  /** Switches sequential on or off (#59). */
+  setSequential: SetSequential;
+  /** Tasks offered to add as dependencies (#57). */
+  readDependencyCandidates: ReadDependencyCandidates;
+  /** Replaces the task's dependencies (#57). */
+  setDependencies: SetDependencies;
+  /** Chooses how the task's dependencies are met (#58). */
+  setDependencyMode: SetDependencyMode;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -64,6 +83,11 @@ export interface TaskPanelFormProps {
   onClose: () => void;
   /** After "Open in notes" (e.g. a popup closes, as it would cover the block). */
   onOpenedInNotes?: () => void;
+  /**
+   * The user picked another task from inside the form (a task named in the
+   * blocking reasons, #54): the task panel switches to it.
+   */
+  onSelectTask: (taskId: TaskId) => void;
 }
 
 function Header(props: {
@@ -113,6 +137,10 @@ function Fields(props: {
   /** Whether a note typed but not saved is still written on leaving. */
   saveOnLeave: () => boolean;
   candidates: Candidates;
+  /** Read only, after the status: only shown while something blocks the task. */
+  blockingReasons: React.ReactNode;
+  /** The dependencies list and search to add (#57). */
+  dependencies: React.ReactNode;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -129,6 +157,7 @@ function Fields(props: {
           onChange={(status) => void actions.changeStatus(status)}
         />
       </Field>
+      {props.blockingReasons}
       <Field label={t("Importance")} labelId={id("importance")}>
         <RatingField
           labelId={id("importance")}
@@ -190,6 +219,27 @@ function Fields(props: {
           saveOnLeave={props.saveOnLeave}
         />
       </Field>
+      {/* Always shown, whether or not the task has subtasks (#59). */}
+      <Field label={t("Sequential")} labelId={id("sequential")}>
+        <SequentialField
+          labelId={id("sequential")}
+          on={task.sequential}
+          onChange={(sequential) => void actions.setSequential(sequential)}
+        />
+      </Field>
+      <Field label={t("Dependencies")} labelId={id("dependencies")}>
+        {props.dependencies}
+      </Field>
+      {/* Only with two dependencies or more, stale ones included (#58). */}
+      {task.dependencies.length >= 2 && (
+        <Field label={t("Dependency mode")} labelId={id("dependency-mode")}>
+          <DependencyModeField
+            labelId={id("dependency-mode")}
+            mode={task.dependencyMode}
+            onChange={(mode) => void actions.setDependencyMode(mode)}
+          />
+        </Field>
+      )}
     </div>
   );
 }
@@ -238,6 +288,35 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         actions={actions}
         saveOnLeave={saveOnLeave}
         candidates={candidates}
+        blockingReasons={
+          // A done task needs nothing more: what held it back no longer
+          // matters (#54, confirmed 2026-10-10).
+          state.task.status !== "done" && (
+            <BlockingReasonsField
+              readBlockingReasons={deps.readBlockingReasons}
+              taskId={state.task.id}
+              changes={deps.changes}
+              notify={notify}
+              labelId={`${idPrefix}-blocked-by`}
+              onSelectTask={props.onSelectTask}
+            />
+          )
+        }
+        dependencies={
+          <DependenciesField
+            labelId={`${idPrefix}-dependencies`}
+            taskId={state.task.id}
+            dependencies={state.task.dependencies}
+            readBlockingReasons={deps.readBlockingReasons}
+            readDependencyCandidates={deps.readDependencyCandidates}
+            changes={deps.changes}
+            notify={notify}
+            onChange={(dependencies) =>
+              void actions.setDependencies(dependencies)
+            }
+            onSelectTask={props.onSelectTask}
+          />
+        }
       />
     );
   } else if (state.kind === "paused") {

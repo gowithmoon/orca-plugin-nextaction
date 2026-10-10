@@ -9,6 +9,9 @@ const zhCN: Record<string, string> = {
   "Day boundary": "日界线",
   "A day starts at this time. Usually set in the early morning.":
     "一天从这个时刻开始，一般设在凌晨。",
+  "Start preview days": "开始日期预览天数",
+  "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
+    "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
   'The task tag name cannot be empty. It was set back to "${name}".':
     "任务标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':
@@ -102,6 +105,19 @@ const zhCN: Record<string, string> = {
   "Could not open the task in the notes: ${reason}":
     "无法在笔记中打开任务：${reason}",
   "Inbox is clear": "收集箱已清空",
+  "Next actions": "下一步行动",
+  "Could not read the next actions: ${reason}": "无法读取下一步行动：${reason}",
+  "Nothing to do right now": "现在没有可以做的事",
+  "No tasks match the filter": "没有符合筛选的任务",
+  "Clear filter": "清除筛选",
+  Filter: "筛选",
+  "(None)": "（无）",
+  "Any context": "全部上下文",
+  "Any label": "全部标记",
+  "Any importance": "全部重要性",
+  "Parent task:": "父任务：",
+  "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
+    "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
   "New tasks you capture appear here.": "新捕获的任务会出现在这里。",
   "Open task panel": "打开任务属性面板",
   "Task panel": "任务属性面板",
@@ -134,6 +150,40 @@ const zhCN: Record<string, string> = {
   "Changed to ${status}": "已改为${status}",
   "Open a journal or page first: Orca saves changes to tasks through a note panel.":
     "请先打开一个日记或页面：Orca 需要通过笔记面板保存对任务的修改。",
+  "Blocked by": "阻塞原因",
+  Subtasks: "子任务",
+  "${kind}: ": "${kind}：",
+  ", ": "、",
+  "Could not read why the task is blocked: ${reason}":
+    "无法读取阻塞原因：${reason}",
+  Sequential: "顺序执行",
+  "${kind} (from ": "${kind}（来自 ",
+  "${kind} (any): ": "${kind}（任一）：",
+  "${kind} (any, from ": "${kind}（任一，来自 ",
+  "): ": "）：",
+  "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
+  Dependencies: "依赖",
+  "(No longer a task)": "（已不是任务）",
+  Stale: "已失效",
+  "Remove dependency": "移除依赖",
+  "Search tasks": "搜索任务",
+  "Add a dependency": "添加依赖",
+  "Could not read the tasks to depend on: ${reason}":
+    "无法读取可依赖的任务：${reason}",
+  "Dependency mode": "依赖模式",
+  All: "全部",
+  Any: "任一",
+  "Dependency cycle": "循环依赖",
+  "Would make a dependency cycle: it is below this task":
+    "会造成循环依赖：它在这个任务下面",
+  "Would make a dependency cycle: it already waits for this task":
+    "会造成循环依赖：它已经在等待这个任务",
+  "${text} (${reason})": "${text}（${reason}）",
+  "Not added. ${reason}": "未添加。${reason}",
+  "Not added: depending on ${tasks} would make a dependency cycle.":
+    "未添加：依赖 ${tasks} 会造成循环依赖。",
+  "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.":
+    "未打开顺序执行：${waiting} 会等待 ${waitingFor}，而后者已经在等待它，会造成循环依赖。",
 };
 
 export default zhCN;

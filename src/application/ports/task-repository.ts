@@ -1,3 +1,4 @@
+import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
@@ -106,6 +107,14 @@ export interface TaskRepository {
   queryTasks(filter: TaskFilter): Promise<Task[]>;
 
   /**
+   * Every task, done ones included, each with its parent task (its nearest
+   * task ancestor in the block tree, plain blocks in between not counting,
+   * ADR 0003; `null` for none) and its place in the notes (document
+   * preorder). Positions only compare: lower comes first. One read.
+   */
+  readTaskGraph(): Promise<TaskGraphSnapshot>;
+
+  /**
    * The values to offer for contexts and labels, each once per property, in
    * no particular order: the task tag's choices for that property, and the
    * values tasks already hold. An invalidated property has none. Both come
@@ -148,7 +157,9 @@ export interface TaskRepository {
   /**
    * Drops the task (GLOSSARY: 放弃): in one undo, removes the task tag and
    * deletes every plugin block property of the block, so it is a plain block
-   * again. Subtasks are left as they are. A mirror block's ID drops its
+   * again, and removes it from the dependencies of every task that depended
+   * on it, their other dependencies kept (ADR 0016). The block itself is
+   * never deleted. Subtasks are left as they are. A mirror block's ID drops its
    * source block. Fails, writing nothing, when the block is not a task or the
    * write fails.
    */

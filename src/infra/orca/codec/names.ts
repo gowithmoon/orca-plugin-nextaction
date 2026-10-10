@@ -1,6 +1,11 @@
 // The only place, besides t(), where names written into notes appear
 // (ADR 0009). Code uses the English keys; names are converted here.
-import { type TaskStatus, taskStatuses } from "../../../domain/task/task";
+import {
+  type DependencyMode,
+  dependencyModes,
+  type TaskStatus,
+  taskStatuses,
+} from "../../../domain/task/task";
 
 /** The language of names written into notes, fixed when the tag is created. */
 export type NoteLanguage = "zh" | "en";
@@ -14,6 +19,9 @@ export const propertyKeys = [
   "context",
   "label",
   "note",
+  "sequential",
+  "dependencies",
+  "dependencyMode",
 ] as const;
 export type PropertyKey = (typeof propertyKeys)[number];
 
@@ -31,6 +39,9 @@ const propertyNames: NameTable<PropertyKey> = {
   context: { zh: "上下文", en: "Context" },
   label: { zh: "标记", en: "Label" },
   note: { zh: "备注", en: "Notes" },
+  sequential: { zh: "顺序执行", en: "Sequential" },
+  dependencies: { zh: "依赖", en: "Dependencies" },
+  dependencyMode: { zh: "依赖模式", en: "Dependency mode" },
 };
 
 const statusNames: NameTable<TaskStatus> = {
@@ -40,6 +51,14 @@ const statusNames: NameTable<TaskStatus> = {
   waiting: { zh: "等待中", en: "Waiting" },
   someday: { zh: "将来/也许", en: "Someday" },
   done: { zh: "已完成", en: "Done" },
+};
+
+/** The dependency mode options, in option order (#58). */
+export const dependencyModeKeys = dependencyModes;
+
+const dependencyModeNames: NameTable<DependencyMode> = {
+  all: { zh: "全部", en: "All" },
+  any: { zh: "任一", en: "Any" },
 };
 
 /** The task tag name used when the settings hold none (ADR 0002). */
@@ -93,4 +112,16 @@ export function findPropertyKey(name: string) {
 /** Which status option a name in the notes stands for, and in which language. */
 export function findStatusKey(name: string) {
   return findKey(statusNames, statusKeys, name);
+}
+
+export function dependencyModeName(
+  key: DependencyMode,
+  language: NoteLanguage,
+) {
+  return dependencyModeNames[key][language];
+}
+
+/** Which dependency mode option a name in the notes stands for, and in which language. */
+export function findDependencyModeKey(name: string) {
+  return findKey(dependencyModeNames, dependencyModeKeys, name);
 }

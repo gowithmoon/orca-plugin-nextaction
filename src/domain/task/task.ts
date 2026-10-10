@@ -14,6 +14,13 @@ export const taskStatuses = [
 ] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
 
+/**
+ * How several dependencies are met (GLOSSARY: 依赖模式): every one ("all"),
+ * or at least one ("any").
+ */
+export const dependencyModes = ["all", "any"] as const;
+export type DependencyMode = (typeof dependencyModes)[number];
+
 /** Importance or effort: an integer from 1 to 7. */
 export type Rating = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Importance = Rating;
@@ -50,6 +57,22 @@ export interface Task {
   readonly contexts: readonly string[];
   readonly labels: readonly string[];
   readonly note: string | null;
+  /**
+   * Its subtasks are done one after another, in note order (GLOSSARY:
+   * 顺序执行). Off unless the notes hold it switched on.
+   */
+  readonly sequential: boolean;
+  /**
+   * The tasks this one waits for (GLOSSARY: 依赖), by the IDs of their
+   * (source) blocks, in the order the notes hold them. A target that is no
+   * longer a task (a stale dependency) is still listed; the task graph tells.
+   */
+  readonly dependencies: readonly TaskId[];
+  /**
+   * Whether every dependency must be met or one is enough (GLOSSARY:
+   * 依赖模式); "all" unless the notes hold "any".
+   */
+  readonly dependencyMode: DependencyMode;
   /** When the block was created; read-only, it orders the inbox. */
   readonly created: Date;
   readonly anomalies: readonly DataAnomaly[];
@@ -73,6 +96,9 @@ export interface TaskInNotes {
   contexts: readonly string[];
   labels: readonly string[];
   note: string | null;
+  sequential: boolean;
+  dependencies: readonly TaskId[];
+  dependencyMode: DependencyMode;
   created: Date;
 }
 
@@ -112,6 +138,9 @@ export function taskFromNotes(input: TaskInNotes): Task {
     contexts: [...input.contexts],
     labels: [...input.labels],
     note: input.note,
+    sequential: input.sequential,
+    dependencies: [...input.dependencies],
+    dependencyMode: input.dependencyMode,
     created: input.created,
     anomalies,
   };
