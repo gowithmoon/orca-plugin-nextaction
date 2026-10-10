@@ -108,6 +108,12 @@ const zhCN: Record<string, string> = {
   "Next actions": "下一步行动",
   "Could not read the next actions: ${reason}": "无法读取下一步行动：${reason}",
   "Nothing to do right now": "现在没有可以做的事",
+  "All tasks": "全部任务",
+  "Could not read all tasks: ${reason}": "无法读取全部任务：${reason}",
+  "No tasks yet": "还没有任务",
+  "Tasks not done show here as a tree, as they sit in the notes.":
+    "未完成的任务会按笔记中的层级显示在这里。",
+  Blocked: "阻塞",
   "No tasks match the filter": "没有符合筛选的任务",
   "Clear filter": "清除筛选",
   Filter: "筛选",

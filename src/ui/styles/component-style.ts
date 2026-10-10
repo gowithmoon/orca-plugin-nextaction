@@ -265,6 +265,35 @@ export const componentCss = `
   color: var(--orca-color-text-yellow);
 }
 
+/* Blocked (#65): a tag in the danger colour, like "overdue". */
+.nextaction-property-blocked {
+  padding: 0 var(--orca-spacing-xs);
+  border-radius: var(--orca-radius-sm);
+  background-color: color-mix(in srgb, var(--orca-color-dangerous-5) 12%, transparent);
+  color: var(--orca-color-dangerous-5);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+/*
+ * The all tasks view's tree (#65): subtasks under their parent's card,
+ * indented a step per level along a faint guide line. The indent stays
+ * small, so deep trees still fit a narrow panel without scrolling sideways.
+ */
+.nextaction-task-tree li,
+.nextaction-task-tree-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  min-width: 0;
+}
+
+.nextaction-task-tree-children {
+  margin: 0 0 0 var(--orca-spacing-md);
+  padding: 0 0 0 var(--orca-spacing-md);
+  border-left: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  list-style: none;
+}
+
 /* A narrow list: tighter cards, so the text keeps its room. */
 @container nextaction-task-list (max-width: 320px) {
   .nextaction-task-card,

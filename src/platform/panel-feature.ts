@@ -1,6 +1,7 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
@@ -18,6 +19,7 @@ import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
+import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
@@ -31,8 +33,8 @@ export function pluginPanelType(pluginName: string): string {
 
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
- * style sheet, with the next action view (#53), the inbox view (#37) and
- * their card actions (#39). `views`
+ * style sheet, with the next action view (#53), the inbox view (#37), the
+ * all tasks view (#65) and their card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
  */
@@ -82,6 +84,20 @@ export function createPanelFeature(deps: {
   views.register(
     createInboxView({
       readInbox: createReadInbox({ repository }),
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+    }),
+  );
+  views.register(
+    createAllTasksView({
+      readAllTasks: createReadAllTasks({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
