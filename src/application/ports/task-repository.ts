@@ -1,4 +1,5 @@
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
+import type { MovePlacement } from "../../domain/blocking/task-move";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
@@ -177,4 +178,14 @@ export interface TaskRepository {
     now: Date,
     initial?: InitialProperties,
   ): Promise<TaskId>;
+
+  /**
+   * Moves the task's block, with every block below it, to `placement`
+   * relative to the target task's block: its last child block, or just before
+   * or after it (#63). The user undoes it with one undo. A mirror block's ID,
+   * moved or target, stands for its source block. Fails, writing nothing,
+   * when either block is not a task, the target is the moved block or below
+   * it, or the write fails.
+   */
+  moveTask(id: TaskId, target: TaskId, placement: MovePlacement): Promise<void>;
 }

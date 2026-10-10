@@ -8,6 +8,7 @@ import type {
 } from "../task/task";
 import {
   dependencyTargetsThatCycle,
+  moveCycle,
   sequentialCycle,
   targetsThatCycle,
 } from "./dependency-cycles";
@@ -328,6 +329,83 @@ describe("would turning sequential on make a cycle", () => {
   });
 });
 
+describe("would moving a task make a cycle", () => {
+  it("moving a task below a task that depends on it makes a cycle with that task", () => {
+    // 1 depends on 2; 2 as a subtask of 1 would wait for itself.
+    const tasks = [task(1, { dependencies: [2] }), task(2)];
+
+    expect(
+      moveCycle({ tasks }, { id: 2, target: 1, placement: "lastChild" }),
+    ).toEqual({ cycleWith: 1 });
+    // Read after the move, by hand: 2 below 1.
+    const after = [task(1, { dependencies: [2] }), task(2, { parent: 1 })];
+    expect(cycleOf(after, 2)).toBeDefined();
+  });
+
+  it("moving a task below a task it depends on makes a cycle with that task", () => {
+    // 2 depends on 1; as 1's subtask, 1 would wait for 2.
+    const tasks = [task(1), task(2, { dependencies: [1] })];
+
+    expect(
+      moveCycle({ tasks }, { id: 2, target: 1, placement: "lastChild" }),
+    ).toEqual({ cycleWith: 1 });
+    const after = [task(1), task(2, { parent: 1, dependencies: [1] })];
+    expect(cycleOf(after, 1)).toBeDefined();
+  });
+
+  it("under a sequential parent, a place where an earlier subtask would depend on a later one makes a cycle", () => {
+    // 2 depends on 5. Last under the sequential 1, 5 would wait for 2;
+    // before 2, it would not.
+    const tasks = [
+      task(1, { sequential: true }),
+      task(2, { parent: 1, dependencies: [5] }),
+      task(3, { parent: 1 }),
+      task(5),
+    ];
+
+    expect(
+      moveCycle({ tasks }, { id: 5, target: 1, placement: "lastChild" }),
+    ).toEqual({ cycleWith: 2 });
+    expect(
+      moveCycle({ tasks }, { id: 5, target: 3, placement: "after" }),
+    ).toEqual({ cycleWith: 2 });
+    expect(
+      moveCycle({ tasks }, { id: 5, target: 2, placement: "before" }),
+    ).toBeNull();
+  });
+
+  it("a long chain across dependencies, subtasks and sequential order makes a cycle", () => {
+    // 1 depends on 12. Moved after 11 under the sequential 10, 12 waits for
+    // 11, 11 for its subtask 13, and 13 depends on 1.
+    const tasks = [
+      task(1, { dependencies: [12] }),
+      task(10, { sequential: true }),
+      task(11, { parent: 10 }),
+      task(13, { parent: 11, dependencies: [1] }),
+      task(12),
+    ];
+
+    expect(
+      moveCycle({ tasks }, { id: 12, target: 10, placement: "lastChild" }),
+    ).toEqual({ cycleWith: 1 });
+    expect(
+      moveCycle({ tasks }, { id: 12, target: 11, placement: "before" }),
+    ).toBeNull();
+  });
+
+  it("a move that makes no new cycle is not refused, nor one onto the task itself or below it", () => {
+    const tasks = [task(1), task(2, { parent: 1 }), task(3)];
+
+    expect(
+      moveCycle({ tasks }, { id: 3, target: 2, placement: "lastChild" }),
+    ).toBeNull();
+    // Refused by the use case before the cycle check.
+    expect(
+      moveCycle({ tasks }, { id: 1, target: 2, placement: "lastChild" }),
+    ).toBeNull();
+  });
+});
+
 describe("what would make a cycle agrees with what reading finds", () => {
   /** A small pseudo-random task tree with dependencies, the same each run. */
   function randomTasks(seed: number): SnapshotTask[] {
@@ -375,6 +453,63 @@ describe("what would make a cycle agrees with what reading finds", () => {
             targetsThatCycle({ tasks }, item.task.id, targets).length > 0,
           ).toBe(onAnyCycle(after));
           checked += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(1000);
+  });
+
+  it("a move is refused exactly when reading would then find a cycle", () => {
+    const placements = ["lastChild", "before", "after"] as const;
+    /** Subtree of `root` in the tasks given, by parent. */
+    const below = (tasks: SnapshotTask[], id: TaskId, root: TaskId) => {
+      let current: TaskId | null | undefined = id;
+      while (current != null) {
+        if (current === root) return true;
+        const at: TaskId = current;
+        current = tasks.find((item) => item.task.id === at)?.parentId;
+      }
+      return false;
+    };
+    let checked = 0;
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const tasks = randomTasks(seed);
+      if (onAnyCycle(tasks)) continue;
+      for (const moved of tasks) {
+        for (const target of tasks) {
+          if (below(tasks, target.task.id, moved.task.id)) continue;
+          for (const placement of placements) {
+            // The moved snapshot, built here from the rules of block moves:
+            // the moved subtree goes, in its order, just before the target,
+            // or just after the target's subtree.
+            const id = moved.task.id;
+            const sorted = [...tasks].sort((a, b) => a.position - b.position);
+            const subtree = sorted.filter((i) => below(tasks, i.task.id, id));
+            const rest = sorted.filter((i) => !below(tasks, i.task.id, id));
+            const targetAt = rest.indexOf(target);
+            const afterAt =
+              targetAt +
+              1 +
+              rest
+                .slice(targetAt + 1)
+                .findIndex((i) => !below(tasks, i.task.id, target.task.id));
+            const end = afterAt <= targetAt ? rest.length : afterAt;
+            const at = placement === "before" ? targetAt : end;
+            const parentId =
+              placement === "lastChild" ? target.task.id : target.parentId;
+            const after = [
+              ...rest.slice(0, at),
+              ...subtree.map((i) => (i === moved ? { ...i, parentId } : i)),
+              ...rest.slice(at),
+            ].map((i, position) => ({ ...i, position }));
+            expect(
+              moveCycle(
+                { tasks },
+                { id, target: target.task.id, placement },
+              ) !== null,
+            ).toBe(onAnyCycle(after));
+            checked += 1;
+          }
         }
       }
     }

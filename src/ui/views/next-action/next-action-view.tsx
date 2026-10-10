@@ -12,6 +12,7 @@ import type {
   ReadNextActions,
 } from "../../../application/usecases/read-next-actions";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
+import { filterChoosesAny } from "../../../domain/task/task-filter";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskCard } from "../../components/task-card";
@@ -35,10 +36,7 @@ import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import { NextActionFilterBar } from "./next-action-filter-bar";
-import type {
-  FullNextActionFilter,
-  NextActionFilterStore,
-} from "./next-action-filter-store";
+import type { NextActionFilterStore } from "./next-action-filter-store";
 
 export interface NextActionViewDeps {
   readNextActions: ReadNextActions;
@@ -66,17 +64,6 @@ function shownItems(
   selected: TaskId | undefined,
 ): NextActionItem[] {
   return read.items.filter((item) => !item.kept || item.task.id === selected);
-}
-
-/** Something is chosen in some dimension. */
-function isFiltering(filter: FullNextActionFilter): boolean {
-  return (
-    filter.contexts.values.length > 0 ||
-    filter.contexts.none ||
-    filter.labels.values.length > 0 ||
-    filter.labels.none ||
-    filter.importance.length > 0
-  );
 }
 
 function Placeholder() {
@@ -210,7 +197,7 @@ export function createNextActionView(deps: NextActionViewDeps): PanelView {
       deps.filter.subscribe,
       deps.filter.current,
     );
-    const filtering = isFiltering(filter);
+    const filtering = filterChoosesAny(filter);
     const candidates = useCandidates(
       deps.readCandidates,
       deps.changes,

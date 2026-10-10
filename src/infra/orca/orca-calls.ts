@@ -2,7 +2,14 @@
 // Thin Orca side; verified by hand in Orca (docs/ARCHITECTURE.md §5).
 
 import { NoNotePanelError } from "../../application/ports/task-repository";
-import type { APIMsg, ColumnPanel, RowPanel, ViewPanel } from "../../orca.d.ts";
+import type { MovePlacement } from "../../domain/blocking/task-move";
+import type {
+  APIMsg,
+  Block,
+  ColumnPanel,
+  RowPanel,
+  ViewPanel,
+} from "../../orca.d.ts";
 import { describeError } from "../../shared/describe-error";
 import { OrcaError } from "./orca-error";
 
@@ -174,6 +181,33 @@ export async function invokeGroup(write: () => Promise<void>): Promise<void> {
       : new OrcaError(describeError(failure.error));
   }
   if (!ran) throw new OrcaError("invokeGroup did not run the write");
+}
+
+/**
+ * Moves block `id`, with every block below it, to `placement` relative to
+ * block `target`, as one undo step (move-blocks). `moveBlocks` places the
+ * block at the root, without a word, when the target is not in
+ * `orca.state.blocks`, so a target missing there is fetched with `get-block`
+ * and put there first; one already there is left as it is. `autoMatchType`
+ * is not passed, so the block keeps its type. Orca's refusal to move a block
+ * onto itself or below it (`MovingBlockToSelfOrItsDescendant`) comes out as
+ * an `OrcaError`, nothing written.
+ */
+export async function moveBlocks(
+  id: number,
+  target: number,
+  placement: MovePlacement,
+): Promise<void> {
+  if (orca.state.blocks[target] === undefined) {
+    const block = await invokeBackend("get-block", target);
+    if (typeof block !== "object" || block === null || !("id" in block)) {
+      throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
+    }
+    // The only write to this front-end cache (docs/ARCHITECTURE.md §4 移动块),
+    // as Orca's own documentation does after a backend call.
+    orca.state.blocks[target] = block as Block;
+  }
+  await invokeEditorCommand("core.editor.moveBlocks", [id], target, placement);
 }
 
 /** The ID of the block whose alias is `name`, or `undefined` when there is none. */

@@ -183,9 +183,9 @@ export const componentCss = `
 }
 
 /*
- * The next action view's filter bar (#55): three fields side by side while
- * they fit, wrapping onto more lines when the view narrows; never wider than
- * the view.
+ * The filter bars (#55, #69): the fields side by side, sharing the row while
+ * it is short and stopping at a width that reads well when it is long;
+ * wrapping only when the view is really narrow, never wider than it.
  */
 .nextaction-filter-bar {
   display: flex;
@@ -198,12 +198,97 @@ export const componentCss = `
 }
 
 .nextaction-filter {
-  flex: 1 1 10em;
+  flex: 1 1 7em;
   min-width: 0;
-  max-width: 100%;
+  max-width: 12em;
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/*
+ * The all tasks view's toolbar (#69). Its parts, in reading order: the
+ * search box, the view controls (sort, direction, collapse or expand all),
+ * then the filter fields. Laid out by its own width:
+ * - narrow: the search box and the view controls share the first row, the
+ *   four filters fill a 2 × 2 grid below;
+ * - medium: the same two rows;
+ * - wide: one row, the filters after the search box and the view controls
+ *   at the far end, where controls of how a list shows usually sit.
+ * The search box and the filters stop growing at a width that reads well.
+ */
+.nextaction-toolbar {
+  container: nextaction-toolbar / inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+  margin: 0 0 var(--orca-spacing-md);
+}
+
+.nextaction-toolbar > .nextaction-filter-search {
+  flex: 1 1 10em;
+  min-width: 8em;
+  max-width: 22em;
+}
+
+.nextaction-toolbar-view {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+/* Its own row below the others. */
+.nextaction-toolbar > .nextaction-filter-bar {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+@container nextaction-toolbar (max-width: 440px) {
+  .nextaction-toolbar .nextaction-filter {
+    flex: 1 1 40%;
+    max-width: none;
+  }
+}
+
+@container nextaction-toolbar (min-width: 1000px) {
+  .nextaction-toolbar > .nextaction-filter-bar {
+    order: 1;
+    flex: 1 1 28em;
+    max-width: 50em;
+  }
+  .nextaction-toolbar-view {
+    order: 2;
+  }
+}
+
+/* The sort picker (#68): as wide as its longest choice needs. */
+.nextaction-sort {
+  flex: 0 1 9em;
+  min-width: 7em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nextaction-toolbar-button {
+  flex: 0 0 auto;
+}
+
+/* The search box's parts stay inside it. */
+.nextaction-filter-search > *,
+.nextaction-filter-search input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nextaction-search-clear {
+  height: 1.5em;
+  aspect-ratio: 1;
 }
 
 .nextaction-property-row {
@@ -263,6 +348,90 @@ export const componentCss = `
 
 .nextaction-property-anomaly {
   color: var(--orca-color-text-yellow);
+}
+
+/* Blocked (#65): a tag in the danger colour, like "overdue". */
+.nextaction-property-blocked {
+  padding: 0 var(--orca-spacing-xs);
+  border-radius: var(--orca-radius-sm);
+  background-color: color-mix(in srgb, var(--orca-color-dangerous-5) 12%, transparent);
+  color: var(--orca-color-dangerous-5);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+/*
+ * The all tasks view's tree (#65): subtasks under their parent's card,
+ * indented a step per level along a faint guide line. The indent stays
+ * small, so deep trees still fit a narrow panel without scrolling sideways.
+ */
+.nextaction-task-tree li,
+.nextaction-task-tree-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  min-width: 0;
+}
+
+.nextaction-task-tree-children {
+  margin: 0 0 0 var(--orca-spacing-md);
+  padding: 0 0 0 var(--orca-spacing-md);
+  border-left: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  list-style: none;
+}
+
+/*
+ * Collapsing (#67): a node's toggle sits left of its card, and leaves keep
+ * an empty slot of the same width so the cards of a level stay in line.
+ * A collapsed node says under its card how many tasks it hides.
+ */
+.nextaction-task-tree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+}
+
+.nextaction-task-tree-row > :last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nextaction-task-tree-toggle {
+  flex: 0 0 auto;
+  width: 1.25em;
+  height: 1.25em;
+  margin-top: var(--orca-spacing-md);
+}
+
+/*
+ * The all tasks view's done section (#66), below the tree: a quiet title
+ * that toggles it, its cards, then "show earlier".
+ */
+.nextaction-done-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  margin-top: var(--orca-spacing-lg);
+}
+
+.nextaction-done-section-toggle,
+.nextaction-done-section-earlier {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  align-self: flex-start;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nextaction-done-section-toggle:hover,
+.nextaction-done-section-earlier:hover {
+  background-color: var(--orca-color-bg-2);
 }
 
 /* A narrow list: tighter cards, so the text keeps its room. */

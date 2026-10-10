@@ -44,6 +44,11 @@ export interface TaskCardProps {
    * cut short when too long and not clickable on its own; no line without it.
    */
   parentText?: string | null;
+  /**
+   * Marked blocked (#65): held back by a dependency, a sequential parent or
+   * a dependency cycle. The task panel says why.
+   */
+  blocked?: boolean;
 }
 
 /** A click that selected text is not a click on the card. */
@@ -135,6 +140,7 @@ export function TaskCard(props: TaskCardProps) {
     kept,
     keptStatusShown = true,
     parentText,
+    blocked,
   } = props;
   const { ContextMenu } = orca.components;
   const text = shownText(task);
@@ -191,7 +197,12 @@ export function TaskCard(props: TaskCardProps) {
         >
           {text.text}
         </div>
-        <PropertyRow task={task} today={today} kept={kept && keptStatusShown} />
+        <PropertyRow
+          task={task}
+          today={today}
+          kept={kept && keptStatusShown}
+          blocked={blocked}
+        />
       </div>
       {actions && <OpenInNotesButton task={task} actions={actions} />}
     </article>

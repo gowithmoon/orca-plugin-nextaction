@@ -1,6 +1,6 @@
 // The row of a task's properties under its text (#45 "任务卡片的属性行", which
 // changes two rules of #35), in this order: the new status of a task that left
-// the view, an unrecognized status, due (red with "overdue" when overdue),
+// the view, the blocked mark (#65), an unrecognized status, due (red with "overdue" when overdue),
 // contexts, labels, importance, effort. The start date never shows on a card.
 // Importance and effort always show, as an icon and the level's name: faded at
 // the default, importance bold from "high" up, the full wording as tooltip and
@@ -65,8 +65,10 @@ export function PropertyRow(props: {
   today: CalendarDate;
   /** The task has left the view's list: its new status comes first. */
   kept?: boolean;
+  /** Marked blocked (#65), right after a new status. */
+  blocked?: boolean;
 }) {
-  const { task, today, kept } = props;
+  const { task, today, kept, blocked } = props;
   const overdue = isOverdue(task, today);
   const importance = importanceName(task.importance);
   const effort = effortName(task.effort);
@@ -75,6 +77,12 @@ export function PropertyRow(props: {
       {kept && (
         <span className="nextaction-property nextaction-property-kept">
           {t("Changed to ${status}", { status: statusLabel(task.status) })}
+        </span>
+      )}
+      {blocked && (
+        <span className="nextaction-property nextaction-property-blocked">
+          <i className="ti ti-lock" aria-hidden="true" />
+          {t("Blocked")}
         </span>
       )}
       {task.anomalies.map((anomaly) => (

@@ -1,6 +1,8 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createMoveTask } from "../application/usecases/move-task";
+import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
@@ -14,10 +16,16 @@ import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import { componentCss } from "../ui/styles/component-style";
 import { panelCss } from "../ui/styles/panel-style";
+import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
+import { createAllTasksCollapseStore } from "../ui/views/all-tasks/all-tasks-collapse-store";
+import { createAllTasksFilterStore } from "../ui/views/all-tasks/all-tasks-filter-store";
+import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-store";
+import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
+import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
@@ -31,8 +39,8 @@ export function pluginPanelType(pluginName: string): string {
 
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
- * style sheet, with the next action view (#53), the inbox view (#37) and
- * their card actions (#39). `views`
+ * style sheet, with the next action view (#53), the inbox view (#37), the
+ * all tasks view (#65) and their card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
  */
@@ -63,6 +71,16 @@ export function createPanelFeature(deps: {
   // The next action view's filter (#55): in memory only, so it outlives the
   // plugin panel closing and is gone with the load (cleared on release).
   const nextActionFilter = createNextActionFilterStore();
+  // The all tasks view's collapsed nodes (#67): in memory only, likewise.
+  const allTasksCollapse = createAllTasksCollapseStore();
+  // The all tasks view's sort (#68): in memory only, likewise.
+  const allTasksSort = createAllTasksSortStore();
+  // The all tasks view's done section (#66): in memory only, as the filter.
+  const doneSection = createDoneSectionStore();
+  // The all tasks view's filter and search text (#69): in memory only, apart
+  // from the next action view's filter.
+  const allTasksFilter = createAllTasksFilterStore();
+  const readCandidates = createReadCandidates({ repository });
   views.register(
     createNextActionView({
       readNextActions: createReadNextActions({
@@ -75,7 +93,7 @@ export function createPanelFeature(deps: {
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
-      readCandidates: createReadCandidates({ repository }),
+      readCandidates,
       filter: nextActionFilter,
     }),
   );
@@ -86,6 +104,26 @@ export function createPanelFeature(deps: {
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
+    }),
+  );
+  views.register(
+    createAllTasksView({
+      readAllTasks: createReadAllTasks({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      collapse: allTasksCollapse,
+      sort: allTasksSort,
+      doneSection,
+      readCandidates,
+      filter: allTasksFilter,
+      moveTask: createMoveTask({ repository }),
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -107,8 +145,13 @@ export function createPanelFeature(deps: {
     // Each load is a new module instance already (plugin-lifecycle-settings);
     // clearing on release also covers a load → unload → load in one instance.
     registry.add(`${pluginName}.nextActionFilter`, nextActionFilter.clear);
+    registry.add(`${pluginName}.allTasksCollapse`, allTasksCollapse.clear);
+    registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
+    registry.add(`${pluginName}.doneSection`, doneSection.clear);
+    registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
+    registry.css("taskDragStyle", taskDragCss);
     const placement = createPanelPlacement(pluginPanelType(pluginName));
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).

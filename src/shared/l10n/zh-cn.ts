@@ -108,6 +108,24 @@ const zhCN: Record<string, string> = {
   "Next actions": "下一步行动",
   "Could not read the next actions: ${reason}": "无法读取下一步行动：${reason}",
   "Nothing to do right now": "现在没有可以做的事",
+  "All tasks": "全部任务",
+  "Could not read all tasks: ${reason}": "无法读取全部任务：${reason}",
+  "No tasks yet": "还没有任务",
+  "Tasks not done show here as a tree, as they sit in the notes.":
+    "未完成的任务会按笔记中的层级显示在这里。",
+  Blocked: "阻塞",
+  Collapse: "折叠",
+  Expand: "展开",
+  "Collapse all": "全部折叠",
+  "Expand all": "全部展开",
+  Sort: "排序",
+  "Default order": "默认顺序",
+  Ascending: "升序",
+  Descending: "降序",
+  "Due day": "截止日期",
+  "Start day": "开始日期",
+  Score: "评分",
+  "Capture time": "捕获时间",
   "No tasks match the filter": "没有符合筛选的任务",
   "Clear filter": "清除筛选",
   Filter: "筛选",
@@ -115,6 +133,7 @@ const zhCN: Record<string, string> = {
   "Any context": "全部上下文",
   "Any label": "全部标记",
   "Any importance": "全部重要性",
+  "Any status": "全部状态",
   "Parent task:": "父任务：",
   "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
     "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
@@ -167,6 +186,7 @@ const zhCN: Record<string, string> = {
   Stale: "已失效",
   "Remove dependency": "移除依赖",
   "Search tasks": "搜索任务",
+  "Clear search": "清除搜索",
   "Add a dependency": "添加依赖",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
@@ -184,6 +204,16 @@ const zhCN: Record<string, string> = {
     "未添加：依赖 ${tasks} 会造成循环依赖。",
   "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.":
     "未打开顺序执行：${waiting} 会等待 ${waitingFor}，而后者已经在等待它，会造成循环依赖。",
+  "Done · ${count}": "已完成 · ${count}",
+  "Show earlier": "显示更早的",
+  "Not moved: there, ${moved} and ${cycleWith} would wait for each other, making a dependency cycle.":
+    "未移动：移到那里后，${moved} 和 ${cycleWith} 会互相等待，造成循环依赖。",
+  "Not moved: a task cannot go below itself.": "未移动：不能移到自己下面。",
+  "Not moved: only pages can go between pages.":
+    "未移动：只有页面能放在页面之间。",
+  "Could not move the task: ${reason}": "无法移动任务：${reason}",
+  "Drag onto another task to make it a subtask, or between tasks to move it there":
+    "拖到另一个任务上成为它的子任务，或拖到任务之间放在那里",
 };
 
 export default zhCN;

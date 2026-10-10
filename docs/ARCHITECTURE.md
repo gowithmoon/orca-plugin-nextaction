@@ -107,6 +107,7 @@ tests/
 - `invokeGroup` 和编辑器命令都通过**活动面板的编辑器**（`viewState.editor`）执行，没有编辑器的面板写不进去，而且不报错。插件面板里藏着一个 Orca 的块面板渲染器（`ui/panel/hidden-editor.tsx`），插件面板因此能自己写入，撤销也在插件面板里。活动面板没有编辑器时，`infra/orca/orca-calls.ts` 先切到一个有编辑器的面板，写完再切回（ADR 0014，`plugin-panel-writes`）。只经过 `orca-calls` 调用它们，由架构测试检查；不要改用后端接口直接写，那样写入进不了 Orca 的撤销历史。
 - 属性名、类型码（`PropType`）、标签别名只在 `infra/orca` 中出现。
 - 读写块属性中的 JSON 时，必须经过带版本号的编解码函数；遇到无法解析的数据时保留原值并记录警告，禁止静默覆盖。
+- 插件块属性（JSON）里以 ISO 字符串写入的时间，读回时是 `Date`；解码时两种都接受（#72 验收）。
 - 视图按需查询，缓存遵循 ADR 0007：插件写入后、命令后钩子报告相关编辑后、视图获得焦点时，让相关缓存失效。
 
 ### Orca 行为约束（实测）
@@ -131,7 +132,7 @@ tests/
 - 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
 - **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
-- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。
+- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。唯一写入它的地方是移动块之前补上目标块（`move-blocks`）。
 - 任务的父任务和先后位置：取回全部任务后，对不在任务集合中的 `parent` 按层用 `get-blocks` 补取，在内存中沿 `parent` 找最近的任务祖先、按"在父块 `children` 中的序号"路径排先后。1000 个任务约 32 ms。不用 `get-block-tree`（`next-action-hierarchy-boolean-deps`）。
 
 日记与日期（`journal-capture`）：
@@ -146,17 +147,24 @@ tests/
 - `orca.state.panels` 中的对象是实时的，需要保存的值在调用导航 API 之前取出；不要序列化它（含 DOM 元素）。
 - 插件面板中需要让用户复制的文字，显式设置 `user-select: text`。
 
+移动块（`move-blocks`）：
+- `core.editor.moveBlocks` 的目标块必须在 `orca.state.blocks` 中，否则不报错，块被放到根级（父块为空），不再是任务。目标块不在缓存中时，先用 `get-block` 取回并写入缓存，已在缓存中的不覆盖。
+- 不传 `autoMatchType`，否则块会改成目标处的类型（例如变成列表项）。
+- 放在根级块（页面）的前面或后面，被移动的块也成为根级块。
+- 移到自己或自己的后代下面时抛出 `MovingBlockToSelfOrItsDescendant`，什么都不写。
+
 撤销（`tag-operations`）：
 - `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。
 
 界面注入（`status-icon-task-menu`、`official-task-menus`）：
-- 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 DOM 读取块 ID。
+- 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 Orca 的 DOM 读取块 ID。插件自己渲染的 `data-` 属性可以读取。
 - 只有状态图标依赖 Orca 内部 DOM：它是一份只负责显示的注入样式，Orca 改版时最坏的结果是图标不显示，不影响任何操作。依赖内部 DOM 的选择器全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
 - 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件中使用；其他 `ui` 代码仍然只用英文键。
 
 ### 注册与清理
 
 - 所有 `register*`、事件监听、样式注入、定时器、独立的 React 根节点都通过 `platform/registry.ts` 进行。注册表在 `unload` 时按注册的逆序全部释放。代码中禁止出现游离的 `register*` 调用。
+- 例外：React 组件在 effect 中创建、在同一个 effect 的清理函数中释放的定时器和监听（例如拖动时的自动滚动 `requestAnimationFrame`）随组件存亡，不经过注册表。`unload` 前插件面板已经关闭，它们随面板一起释放。注册表管的是比组件活得久的东西。
 - `load` 和 `unload` 必须经得起反复调用：Orca 启用插件时可能在 1 秒内执行 `load → unload → load`；`load` 抛错后，停用时仍会调用 `unload`。注册表要能处理只加载了一半的状态（`plugin-lifecycle-settings`）。
 - 每次 `load` 都是新的模块实例，模块级变量不会跨越停用和启用保留。
 - 注销插件面板类型之前，先关闭所有打开着的插件面板；覆盖打开的，恢复被覆盖的内容（ADR 0011）。只注销不关闭，面板会一直留在界面上。
