@@ -13,6 +13,7 @@ import type {
   TaskRepository,
   ValuesFilter,
 } from "../src/application/ports/task-repository";
+import type { TaskMove } from "../src/domain/blocking/task-move";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
 
@@ -66,6 +67,8 @@ export interface InMemoryTaskRepository extends TaskRepository {
    * `appendTaskToJournal`, or `undefined` when it was not.
    */
   journalOf(id: number): CalendarDate | undefined;
+  /** Every `moveTask` that succeeded, oldest first. */
+  moves(): readonly TaskMove[];
 }
 
 /** When a block was created, unless a test says otherwise. */
@@ -112,6 +115,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     labels: [],
   };
   let writes = 0;
+  const moves: TaskMove[] = [];
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
   /** IDs of new blocks, far from the ones tests pick. */
@@ -200,6 +204,44 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     writeCount: () => writes,
 
     journalOf: (id) => journalDays.get(id),
+
+    moves: () => [...moves],
+
+    async moveTask(id, target, placement) {
+      taskToWrite(id);
+      const targetBlock = taskToWrite(target);
+      if (id === target || isBelow(target, id)) {
+        throw new Error(`block ${target} is block ${id} or below it`);
+      }
+      write(() => {
+        // As Orca moves blocks: the block with every block below it, in
+        // their order, before the target, or after the target's last block.
+        const inMoved = (blockId: number) =>
+          blockId === id || isBelow(blockId, id);
+        const ordered = [...blocks.entries()].sort(
+          ([, a], [, b]) => a.position - b.position,
+        );
+        const moved = ordered.filter(([blockId]) => inMoved(blockId));
+        const rest = ordered.filter(([blockId]) => !inMoved(blockId));
+        const targetAt = rest.findIndex(([blockId]) => blockId === target);
+        let afterTarget = targetAt + 1;
+        while (
+          afterTarget < rest.length &&
+          isBelow((rest[afterTarget] as [number, StoredBlock])[0], target)
+        ) {
+          afterTarget += 1;
+        }
+        const at = placement === "before" ? targetAt : afterTarget;
+        [...rest.slice(0, at), ...moved, ...rest.slice(at)].forEach(
+          ([, block], position) => {
+            block.position = position;
+          },
+        );
+        (blocks.get(id) as StoredBlock).parentId =
+          placement === "lastChild" ? target : targetBlock.parentId;
+        moves.push({ id, target, placement });
+      });
+    },
 
     async getTask(id) {
       return blocks.get(id)?.task ?? null;

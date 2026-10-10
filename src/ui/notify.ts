@@ -79,6 +79,14 @@ function refusedCycleText(cycle: RefusedCycle): string {
           waitingFor: shownText(cycle.waitingFor).text,
         },
       );
+    case "move":
+      return t(
+        "Not moved: there, ${moved} and ${cycleWith} would wait for each other, making a dependency cycle.",
+        {
+          moved: shownText(cycle.moved).text,
+          cycleWith: shownText(cycle.cycleWith).text,
+        },
+      );
   }
 }
 

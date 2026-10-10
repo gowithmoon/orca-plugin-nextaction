@@ -1,6 +1,7 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createMoveTask } from "../application/usecases/move-task";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
@@ -15,6 +16,7 @@ import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import { componentCss } from "../ui/styles/component-style";
 import { panelCss } from "../ui/styles/panel-style";
+import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
@@ -121,6 +123,7 @@ export function createPanelFeature(deps: {
       doneSection,
       readCandidates,
       filter: allTasksFilter,
+      moveTask: createMoveTask({ repository }),
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -148,6 +151,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
+    registry.css("taskDragStyle", taskDragCss);
     const placement = createPanelPlacement(pluginPanelType(pluginName));
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).

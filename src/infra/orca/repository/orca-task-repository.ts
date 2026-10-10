@@ -10,6 +10,7 @@ import {
   type TaskRepository,
 } from "../../../application/ports/task-repository";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
+import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { CompletionHistory } from "../../../domain/task/completion-history";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -37,7 +38,12 @@ import {
 } from "../codec/task-codec";
 import { planConversion } from "../codec/task-conversion";
 import { encodeDependencies, encodeTaskChanges } from "../codec/task-encode";
-import { invokeBackend, invokeEditorCommand, invokeGroup } from "../orca-calls";
+import {
+  invokeBackend,
+  invokeEditorCommand,
+  invokeGroup,
+  moveBlocks,
+} from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
@@ -693,6 +699,22 @@ export function createOrcaTaskRepository(
         throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
       }
       return id;
+    },
+
+    async moveTask(
+      id: TaskId,
+      target: TaskId,
+      placement: MovePlacement,
+    ): Promise<void> {
+      const context = currentTag();
+      // Mirrors resolve to their source blocks, moved and target alike.
+      const block = await taskBlockToWrite(id, context);
+      const targetBlock = await taskBlockToWrite(target, context);
+      // One command, one undo step (move-blocks U1); the moved block's
+      // children go with it.
+      await writeTo(block, () =>
+        moveBlocks(block.id, targetBlock.id, placement),
+      );
     },
 
     queryTasks,

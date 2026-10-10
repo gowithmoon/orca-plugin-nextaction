@@ -8,6 +8,7 @@
 // box narrow the tree to what matches, its ancestor tasks showing where it
 // sits (#69). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   AllTasksNode,
   AllTasksRead,
@@ -26,6 +27,7 @@ import {
   ViewNotice,
 } from "../../components/view-notice";
 import { useCandidates } from "../../hooks/use-candidates";
+import { useMoveTask } from "../../hooks/use-move-task";
 import {
   type TaskActions,
   type TaskActionsDeps,
@@ -48,6 +50,7 @@ import {
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
 import type { DoneSectionStore } from "./done-section-store";
+import { TaskDragArea, TaskDragHandle, TaskDropTarget } from "./task-drag";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -72,6 +75,8 @@ export interface AllTasksViewDeps {
    * from the next action view's (#69).
    */
   filter: AllTasksFilterStore;
+  /** Dragging a card onto another (#70). */
+  moveTask: MoveTask;
 }
 
 /** The node or a node below it is a task not done. */
@@ -209,21 +214,26 @@ function TreeNodes(props: {
                   aria-hidden="true"
                 />
               )}
-              <TaskCard
-                task={node.task}
-                today={cards.today}
-                actions={cards.actions}
-                menuItems={cards.menuItems}
-                menuPlace={cards.menuPlace}
-                onOpen={(open) => cards.selectTask(open.id)}
-                selected={node.task.id === cards.selectedTaskId}
-                // Done or kept: the card's faded "kept" look (#65).
-                kept={node.faded !== null}
-                // Only faded: a done task's status icon already says why, and a
-                // kept one leaves for more reasons than its status.
-                keptStatusShown={false}
-                blocked={node.blocked}
-              />
+              {/* Only tree cards are dragged and dropped on, never the done
+                  section's (#70). */}
+              <TaskDropTarget id={node.task.id}>
+                <TaskDragHandle task={node.task} />
+                <TaskCard
+                  task={node.task}
+                  today={cards.today}
+                  actions={cards.actions}
+                  menuItems={cards.menuItems}
+                  menuPlace={cards.menuPlace}
+                  onOpen={(open) => cards.selectTask(open.id)}
+                  selected={node.task.id === cards.selectedTaskId}
+                  // Done or kept: the card's faded "kept" look (#65).
+                  kept={node.faded !== null}
+                  // Only faded: a done task's status icon already says why, and a
+                  // kept one leaves for more reasons than its status.
+                  keptStatusShown={false}
+                  blocked={node.blocked}
+                />
+              </TaskDropTarget>
             </div>
             {collapsed ? (
               <div className="nextaction-task-tree-hidden">
@@ -314,6 +324,7 @@ function AllTasksContent(props: {
   const { query, today, deps, filtered } = props;
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
@@ -376,10 +387,10 @@ function AllTasksContent(props: {
     );
   }
   return (
-    <>
+    <TaskDragArea onMove={moveTask}>
       {nodes.length > 0 && <TreeNodes top nodes={nodes} cards={cards} />}
       <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
-    </>
+    </TaskDragArea>
   );
 }
 
