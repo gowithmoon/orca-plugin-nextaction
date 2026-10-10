@@ -21,6 +21,8 @@ function kindLabel(reason: BlockingReason): string {
       return t("Sequential");
     case "dependencies":
       return t("Dependencies");
+    case "cycle":
+      return t("Dependency cycle");
   }
 }
 

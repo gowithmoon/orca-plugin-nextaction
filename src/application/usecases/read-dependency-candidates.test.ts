@@ -19,8 +19,25 @@ describe("read dependency candidates", () => {
     });
 
     expect(await readDependencyCandidates(1)).toEqual([
-      { id: 2, text: "Call the plumber" },
-      { id: 4, text: "Clear the cupboard" },
+      { id: 2, text: "Call the plumber", cycle: null },
+      { id: 4, text: "Clear the cupboard", cycle: null },
+    ]);
+  });
+
+  it("marks the candidates that would make a dependency cycle, with why", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, text: "Move house" });
+    repository.addTask({ id: 2, text: "Pack" }, { parentId: 1 });
+    repository.addTask({ id: 3, text: "Book a van", dependencies: [1] });
+    repository.addTask({ id: 4, text: "Tell the bank" });
+    const readDependencyCandidates = createReadDependencyCandidates({
+      repository,
+    });
+
+    expect(await readDependencyCandidates(1)).toEqual([
+      { id: 2, text: "Pack", cycle: "below" },
+      { id: 3, text: "Book a van", cycle: "waits" },
+      { id: 4, text: "Tell the bank", cycle: null },
     ]);
   });
 });
