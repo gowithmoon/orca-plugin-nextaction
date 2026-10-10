@@ -131,7 +131,7 @@ tests/
 - 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
 - **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
-- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。
+- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。唯一写入它的地方是移动块之前补上目标块（`move-blocks`）。
 - 任务的父任务和先后位置：取回全部任务后，对不在任务集合中的 `parent` 按层用 `get-blocks` 补取，在内存中沿 `parent` 找最近的任务祖先、按"在父块 `children` 中的序号"路径排先后。1000 个任务约 32 ms。不用 `get-block-tree`（`next-action-hierarchy-boolean-deps`）。
 
 日记与日期（`journal-capture`）：
@@ -145,6 +145,12 @@ tests/
 - 调用 `nav.changeSizes` 时传入这一行所有面板的宽度。
 - `orca.state.panels` 中的对象是实时的，需要保存的值在调用导航 API 之前取出；不要序列化它（含 DOM 元素）。
 - 插件面板中需要让用户复制的文字，显式设置 `user-select: text`。
+
+移动块（`move-blocks`）：
+- `core.editor.moveBlocks` 的目标块必须在 `orca.state.blocks` 中，否则不报错，块被放到根级（父块为空），不再是任务。目标块不在缓存中时，先用 `get-block` 取回并写入缓存，已在缓存中的不覆盖。
+- 不传 `autoMatchType`，否则块会改成目标处的类型（例如变成列表项）。
+- 放在根级块（页面）的前面或后面，被移动的块也成为根级块。
+- 移到自己或自己的后代下面时抛出 `MovingBlockToSelfOrItsDescendant`，什么都不写。
 
 撤销（`tag-operations`）：
 - `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。

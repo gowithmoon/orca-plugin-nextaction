@@ -23,5 +23,6 @@
 | [orca-popup-container.md](./orca-popup-container.md) | #45 | Orca 弹出层的容器、截断与指针处理（读源码，待实测） | 插件窗口中的日期选择器和下拉菜单 |
 | [next-action-hierarchy-boolean-deps.md](./next-action-hierarchy-boolean-deps.md) | #52 | 块层级与先后顺序的读法和耗时、布尔属性、依赖的反向查找（第五步开工前） | 第五步的任务图、顺序执行、依赖、放弃 |
 | [blockrefs-scope.md](./blockrefs-scope.md) | — | 块引用属性的搜索范围 `typeArgs.scope`，标签改名时的表现（第五步验收补测） | 第五步起的依赖属性 |
+| [move-blocks.md](./move-blocks.md) | #64 | 从插件面板移动块：目标块须在缓存中、撤销、子块、页面块、`autoMatchType`；笔记与插件面板之间的拖拽（第六步开工前） | 第六步的拖拽移动 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。
