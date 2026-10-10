@@ -269,4 +269,35 @@ describe("read next actions", () => {
 
     expect(read.items.map((item) => item.task.id)).toEqual([1]);
   });
+
+  it("ranks a subtask of an important or urgent ancestor task above the same task elsewhere", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "inbox", importance: 7 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "inbox", urgency: 1 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 4 });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([3, 1, 5]);
+  });
+
+  it("ranks a task that started long ago above one that started today", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      start: { year: 2026, month: 10, day: 9 },
+    });
+    repository.addTask({
+      id: 2,
+      status: "todo",
+      start: { year: 2026, month: 9, day: 19 },
+    });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([2, 1]);
+  });
 });

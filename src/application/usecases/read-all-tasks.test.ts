@@ -402,8 +402,8 @@ describe("read all tasks, sorted", () => {
 
   it("by score orders top-level tasks of any status highest first, ties in note order", async () => {
     const { repository, readAllTasks } = setup();
-    // Scores on 2026-10-09: 1 and 5 are 55.75, 2 (due today) 85, 3 (starts
-    // in 20 days) 33.25, 4 (importance 7) 67.75.
+    // Scores on 2026-10-09: 1 and 5 are 54.75, 2 (due today) 77.5, 3 (starts
+    // in 20 days) 36.75, 4 (importance 7) 64.75.
     repository.addTask({ id: 1, status: "todo" });
     repository.addTask({ id: 2, status: "waiting", due: day(10, 9) });
     repository.addTask({ id: 3, status: "inbox", start: day(10, 29) });
@@ -417,6 +417,23 @@ describe("read all tasks, sorted", () => {
     const read = await readAllTasks({ sort: "score" });
 
     expect(shape(read.tree)).toEqual([2, 4, 1, [5, [6]], 3]);
+  });
+
+  it("by score counts urgency and how long ago a task started", async () => {
+    const { repository, readAllTasks } = setup();
+    // Scores on 2026-10-09: 1 is 54.75; 2 (importance 1) 44.75; 4 started
+    // 30 days ago, 60.75; 5 (urgency 7) 62.75. Only top-level tasks are
+    // sorted and they have no ancestor task, so inheritance does not show
+    // here; the score is the next action view's (score.test.ts).
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "todo", importance: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo", start: day(9, 9) });
+    repository.addTask({ id: 5, status: "waiting", urgency: 7 });
+
+    const read = await readAllTasks({ sort: "score" });
+
+    expect(shape(read.tree)).toEqual([5, 4, 1, [2, [3]]]);
   });
 
   it("sorts a faded done top-level task by the same rules", async () => {
@@ -497,8 +514,8 @@ describe("read all tasks, sorted", () => {
 
   it("by score descending orders top-level tasks lowest first, ties still in note order", async () => {
     const { repository, readAllTasks } = setup();
-    // Scores on 2026-10-09, as above: 1 and 5 are 55.75, 2 is 85, 3 is
-    // 33.25, 4 is 67.75.
+    // Scores on 2026-10-09, as above: 1 and 5 are 54.75, 2 is 77.5, 3 is
+    // 36.75, 4 is 64.75.
     repository.addTask({ id: 1, status: "todo" });
     repository.addTask({ id: 2, status: "waiting", due: day(10, 9) });
     repository.addTask({ id: 3, status: "inbox", start: day(10, 29) });

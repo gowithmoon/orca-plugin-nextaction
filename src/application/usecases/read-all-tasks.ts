@@ -410,11 +410,17 @@ export function createReadAllTasks(deps: {
     };
     const narrow = narrowing(options);
     const { tree, matchCount, done } = narrowedTree(context, narrow);
-    const scoreOf = (task: Task) =>
-      score(
-        { task, effectiveStart: graph.entry(task.id)?.effectiveStart ?? null },
+    const scoreOf = (task: Task) => {
+      const entry = graph.entry(task.id);
+      return score(
+        {
+          task,
+          effectiveStart: entry?.effectiveStart ?? null,
+          ancestorRatings: entry?.ancestorRatings ?? [],
+        },
         today,
       );
+    };
     const compare = comparator(
       options.sort ?? "note",
       options.direction ?? "ascending",

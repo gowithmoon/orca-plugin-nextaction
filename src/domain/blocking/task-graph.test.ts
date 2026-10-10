@@ -567,3 +567,25 @@ describe("task graph: sequential blocking", () => {
     expect(nextActionIds(graph)).toEqual([2]);
   });
 });
+
+describe("task graph: ancestor ratings", () => {
+  const rated = (
+    item: SnapshotTask,
+    importance: Task["importance"],
+    urgency: Task["urgency"],
+  ): SnapshotTask => ({ ...item, task: { ...item.task, importance, urgency } });
+
+  it("gives each task its ancestor tasks' importance and urgency, nearest first, whatever their status", () => {
+    const graph = analyze([
+      rated(task(1, { status: "someday" }), 7, 2),
+      rated(task(2, { status: "done", parent: 1 }), 3, 6),
+      rated(task(3, { parent: 2 }), 5, 5),
+    ]);
+
+    expect(graph.entry(3)?.ancestorRatings).toEqual([
+      { importance: 3, urgency: 6 },
+      { importance: 7, urgency: 2 },
+    ]);
+    expect(graph.entry(1)?.ancestorRatings).toEqual([]);
+  });
+});
