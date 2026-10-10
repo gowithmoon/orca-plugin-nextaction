@@ -74,6 +74,7 @@ const zhCN: Record<string, string> = {
   "Due ${date}": "截止 ${date}",
   Overdue: "逾期",
   "Importance: ${level}": "重要性：${level}",
+  "Urgency: ${level}": "紧急度：${level}",
   "Effort: ${level}": "工作量：${level}",
   Sun: "周日",
   Mon: "周一",
@@ -133,6 +134,7 @@ const zhCN: Record<string, string> = {
   "Any context": "全部上下文",
   "Any label": "全部标记",
   "Any importance": "全部重要性",
+  "Any urgency": "全部紧急度",
   "Any status": "全部状态",
   "Parent task:": "父任务：",
   "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
@@ -143,6 +145,7 @@ const zhCN: Record<string, string> = {
   Close: "关闭",
   Status: "状态",
   Importance: "重要性",
+  Urgency: "紧急度",
   Effort: "工作量",
   Start: "开始日期",
   Due: "截止日期",
@@ -169,12 +172,16 @@ const zhCN: Record<string, string> = {
   "Changed to ${status}": "已改为${status}",
   "Open a journal or page first: Orca saves changes to tasks through a note panel.":
     "请先打开一个日记或页面：Orca 需要通过笔记面板保存对任务的修改。",
-  "Blocked by": "阻塞原因",
+  "Why not a next action": "为什么不是下一步行动",
+  "Ancestor task done": "祖先任务已完成",
+  "In a parked subtree": "位于搁置子树",
+  "Not started yet": "还没到开始日期",
+  " starts on ${date}": " 的开始日期是${date}",
   Subtasks: "子任务",
   "${kind}: ": "${kind}：",
   ", ": "、",
-  "Could not read why the task is blocked: ${reason}":
-    "无法读取阻塞原因：${reason}",
+  "Could not read why the task is not a next action: ${reason}":
+    "无法读取为什么不是下一步行动：${reason}",
   Sequential: "顺序执行",
   "${kind} (from ": "${kind}（来自 ",
   "${kind} (any): ": "${kind}（任一）：",
@@ -194,6 +201,14 @@ const zhCN: Record<string, string> = {
   All: "全部",
   Any: "任一",
   "Dependency cycle": "循环依赖",
+  "Dependency delay": "依赖延迟",
+  "days after the dependencies are met": "天（依赖满足之后再等）",
+  "In dependency delay": "依赖延迟中",
+  "let in on ${date} (1 day left), counting from when ":
+    "${date}放行（还剩 1 天），从",
+  "let in on ${date} (${days} days left), counting from when ":
+    "${date}放行（还剩 ${days} 天），从",
+  " was done": "完成起算",
   "Would make a dependency cycle: it is below this task":
     "会造成循环依赖：它在这个任务下面",
   "Would make a dependency cycle: it already waits for this task":

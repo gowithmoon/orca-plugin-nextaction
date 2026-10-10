@@ -82,6 +82,7 @@ export interface AllTasksRead {
  * - `due`: the task's own due day, earliest first, none last.
  * - `start`: the task's own start, earliest first, none last.
  * - `importance`: highest first.
+ * - `urgency`: the task's own urgency, highest first (#74).
  * - `score` (GLOSSARY: 评分): highest first, for a task of any status, from
  *   its effective start (ADR 0015).
  * - `captured`: when the block was created, newest first.
@@ -91,12 +92,13 @@ export type AllTasksSort =
   | "due"
   | "start"
   | "importance"
+  | "urgency"
   | "score"
   | "captured";
 
 /**
  * Which way a sort runs: `ascending` is its own direction (earliest day,
- * highest importance or score, newest capture first), `descending` the
+ * highest importance, urgency or score, newest capture first), `descending` the
  * reverse.
  */
 export type SortDirection = "ascending" | "descending";
@@ -105,8 +107,8 @@ export type SortDirection = "ascending" | "descending";
 export type OpenStatus = Exclude<TaskStatus, "done">;
 
 /**
- * The all tasks view's filter (#69): the next action view's contexts, labels
- * and importance (same rules), and statuses. Within a dimension any choice
+ * The all tasks view's filter (#69): the next action view's contexts, labels,
+ * importance and urgency (same rules), and statuses. Within a dimension any choice
  * is enough ("or"); every dimension given must let the task through ("and").
  */
 export interface AllTasksFilter extends TaskFilter {
@@ -192,6 +194,8 @@ function comparator(
       return (a, b) => byDay(a.task.start, b.task.start, sign);
     case "importance":
       return (a, b) => sign * (b.task.importance - a.task.importance);
+    case "urgency":
+      return (a, b) => sign * (b.task.urgency - a.task.urgency);
     case "score":
       return (a, b) => sign * (scoreOf(b.task) - scoreOf(a.task));
     case "captured":
@@ -410,11 +414,17 @@ export function createReadAllTasks(deps: {
     };
     const narrow = narrowing(options);
     const { tree, matchCount, done } = narrowedTree(context, narrow);
-    const scoreOf = (task: Task) =>
-      score(
-        { task, effectiveStart: graph.entry(task.id)?.effectiveStart ?? null },
+    const scoreOf = (task: Task) => {
+      const entry = graph.entry(task.id);
+      return score(
+        {
+          task,
+          effectiveStart: entry?.effectiveStart ?? null,
+          ancestorRatings: entry?.ancestorRatings ?? [],
+        },
         today,
       );
+    };
     const compare = comparator(
       options.sort ?? "note",
       options.direction ?? "ascending",

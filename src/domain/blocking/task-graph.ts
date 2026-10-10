@@ -2,8 +2,15 @@
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
 import type { CompletionEntry } from "../task/completion-history";
-import type { CalendarDate, DependencyMode, Task, TaskId } from "../task/task";
-import { addDays, compareDays, laterDay } from "../time/calendar-days";
+import type {
+  AncestorRatings,
+  CalendarDate,
+  DependencyMode,
+  Task,
+  TaskId,
+  TaskStatus,
+} from "../task/task";
+import { addDays, compareDays } from "../time/calendar-days";
 import { findDependencyCycles } from "./dependency-cycles";
 
 /** A task with where it sits among the others (ADR 0003). */
@@ -70,6 +77,18 @@ export type BlockingReason =
        * waits for every one listed, and one of them done is enough (#58).
        */
       readonly mode: DependencyMode;
+    })
+  | (BlockingReasonBase & {
+      /**
+       * 依赖延迟 (#77): the source's dependencies are met, but its dependency
+       * delay has not passed. It waits for no task (`waitingFor` is empty),
+       * only for `releasedOn`.
+       */
+      readonly kind: "dependencyDelay";
+      /** The dependency whose completion the delay counts from. */
+      readonly countedFrom: TaskId;
+      /** The first logical day the source is let in: completion + delay. */
+      readonly releasedOn: CalendarDate;
     });
 
 interface BlockingReasonBase {
@@ -94,10 +113,38 @@ export interface TaskGraphEntry {
    */
   readonly parked: boolean;
   /**
+   * The nearest task that parks it (GLOSSARY: 搁置子树): the task itself or
+   * an ancestor task, waiting or someday; `null` when it is not parked.
+   */
+  readonly parkedBy: TaskId | null;
+  /**
+   * The nearest done ancestor task (GLOSSARY: 下一步行动, ADR 0017): with
+   * one, at any level, the whole branch below it is out of the next actions;
+   * `null` when no ancestor task is done. The task itself does not count.
+   */
+  readonly doneAncestor: TaskId | null;
+  /**
    * The latest start among the task and all its ancestor tasks (GLOSSARY:
    * 开始日期, ADR 0015); `null` when none has one.
    */
   readonly effectiveStart: CalendarDate | null;
+  /**
+   * The task whose start the effective start is: the task itself or an
+   * ancestor task, the nearest one when several share that day; `null` when
+   * none has a start.
+   */
+  readonly effectiveStartFrom: TaskId | null;
+  /**
+   * The effective start lets the task in (GLOSSARY: 开始日期): there is none,
+   * or it lies no later than today plus the start preview days.
+   */
+  readonly started: boolean;
+  /**
+   * The importance and urgency of each ancestor task, nearest first, whatever
+   * its status: what the score inherits (GLOSSARY: 评分, ADR 0019). Empty for
+   * a task without one.
+   */
+  readonly ancestorRatings: readonly AncestorRatings[];
   readonly nextAction: boolean;
 }
 
@@ -106,6 +153,14 @@ export interface TaskGraph {
   readonly nextActions: readonly TaskGraphEntry[];
   /** What the graph says about a task, `undefined` when it is not one. */
   entry(id: TaskId): TaskGraphEntry | undefined;
+}
+
+/**
+ * Only a task to do or in progress can be a next action (GLOSSARY: 下一步行
+ * 动); one in any other status is not, whatever else holds.
+ */
+export function statusAllowsNextAction(status: TaskStatus): boolean {
+  return status === "todo" || status === "doing";
 }
 
 /** A subtask in these statuses does not hold its parent back. */
@@ -185,6 +240,46 @@ export function analyzeTaskGraph(
     return item.task.dependencyMode === "any" && someMet ? [] : unmet;
   };
 
+  /**
+   * When `item`'s dependency delay (GLOSSARY: 依赖延迟) lets it in, once its
+   * dependencies are met: the release day and the dependency it counts from,
+   * or `undefined` when nothing holds it. Counts from the latest completion
+   * among the dependencies met in mode "all", from the earliest in mode
+   * "any": the logical day of its last completion record. A met dependency
+   * without one (done outside the plugin, or stale) counts as done long ago:
+   * left out in mode "all", and in mode "any" it lets the task in at once
+   * (ADR 0018).
+   */
+  const delayRelease = (
+    item: SnapshotTask,
+  ): { releasedOn: CalendarDate; countedFrom: TaskId } | undefined => {
+    if (item.task.dependencyDelay <= 0) return undefined;
+    /** Whether `day` replaces `than` as the day the delay counts from. */
+    const replaces =
+      item.task.dependencyMode === "any"
+        ? (day: CalendarDate, than: CalendarDate) => compareDays(day, than) < 0
+        : (day: CalendarDate, than: CalendarDate) => compareDays(day, than) > 0;
+    let from: { day: CalendarDate; id: TaskId } | undefined;
+    for (const target of item.task.dependencies) {
+      const dependency = byId.get(target);
+      // Not met: a record from before it was reopened does not count.
+      if (dependency && dependency.task.status !== "done") continue;
+      const day = dependency?.lastCompletion?.day;
+      if (day === undefined) {
+        if (item.task.dependencyMode === "any") return undefined;
+        continue;
+      }
+      if (from === undefined || replaces(day, from.day)) {
+        from = { day, id: target };
+      }
+    }
+    if (from === undefined) return undefined;
+    return {
+      releasedOn: addDays(from.day, item.task.dependencyDelay),
+      countedFrom: from.id,
+    };
+  };
+
   const cycles = findDependencyCycles(snapshot);
 
   const entries = new Map<TaskId, TaskGraphEntry>();
@@ -208,6 +303,17 @@ export function analyzeTaskGraph(
           waitingFor,
           mode: link.task.dependencyMode,
         });
+        continue;
+      }
+      // Met, but the delay has not passed yet (#77).
+      const release = delayRelease(link);
+      if (release && compareDays(options.today, release.releasedOn) < 0) {
+        blockedBy.push({
+          kind: "dependencyDelay",
+          source: link.task.id,
+          waitingFor: [],
+          ...release,
+        });
       }
     }
     // Sequential blocking of the task or any ancestor task passes down (ADR
@@ -230,24 +336,46 @@ export function analyzeTaskGraph(
         waitingFor: onCycle,
       });
     }
-    const parked = chain.some((link) => parks(link.task));
-    const effectiveStart = chain.reduce<CalendarDate | null>(
-      (latest, link) => laterDay(latest, link.task.start),
-      null,
-    );
+    const parkedBy = chain.find((link) => parks(link.task))?.task.id ?? null;
+    const parked = parkedBy !== null;
+    // A done ancestor task at any level takes the branch out (ADR 0017).
+    const doneAncestor =
+      chain.slice(1).find((link) => link.task.status === "done")?.task.id ??
+      null;
+    // Nearest first, so only a strictly later start replaces it.
+    let startLink: SnapshotTask | undefined;
+    for (const link of chain) {
+      const start = link.task.start;
+      if (start === null) continue;
+      if (
+        !startLink?.task.start ||
+        compareDays(start, startLink.task.start) > 0
+      ) {
+        startLink = link;
+      }
+    }
+    const effectiveStart = startLink?.task.start ?? null;
     const started =
       effectiveStart === null || compareDays(effectiveStart, startsBy) <= 0;
-    const status = item.task.status;
     entries.set(item.task.id, {
       task: item.task,
       parentId: item.parentId,
       blockedBy,
       parked,
+      parkedBy,
+      doneAncestor,
       effectiveStart,
+      effectiveStartFrom: startLink?.task.id ?? null,
+      started,
+      ancestorRatings: chain.slice(1).map((link) => ({
+        importance: link.task.importance,
+        urgency: link.task.urgency,
+      })),
       nextAction:
-        (status === "todo" || status === "doing") &&
+        statusAllowsNextAction(item.task.status) &&
         blockedBy.length === 0 &&
         !parked &&
+        doneAncestor === null &&
         started,
     });
   }

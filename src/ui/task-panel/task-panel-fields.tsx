@@ -364,3 +364,78 @@ export function DependencyModeField(props: {
     />
   );
 }
+
+/**
+ * Whole days typed into the dependency delay field (#77): empty clears it
+ * (`null`), a whole number from 0 up is kept, anything else is refused
+ * (`undefined`).
+ */
+function typedDays(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  return Number(trimmed);
+}
+
+/**
+ * Dependency delay (GLOSSARY: 依赖延迟, #77): whole days, saved on Enter or
+ * when it loses focus, each save one write undone in Orca. Empty clears it;
+ * what is not a whole number from 0 up shows what the notes hold again.
+ */
+export function DependencyDelayField(props: {
+  labelId: string;
+  /** As read; 0 shows as empty. */
+  days: number;
+  onSave: (days: number | null) => void;
+}) {
+  const { Input } = orca.components;
+  const fromNotes = props.days > 0 ? String(props.days) : "";
+  const [draft, setDraft] = React.useState(fromNotes);
+  const focused = React.useRef(false);
+  // The notes changed (e.g. elsewhere): show it, unless the user is typing.
+  React.useEffect(() => {
+    if (!focused.current) setDraft(fromNotes);
+  }, [fromNotes]);
+
+  const save = () => {
+    const days = typedDays(draft);
+    // Not whole days, or no change: show what the notes hold, write nothing.
+    if (days === undefined || (days ?? 0) === props.days) {
+      setDraft(fromNotes);
+      return;
+    }
+    props.onSave(days);
+  };
+
+  return (
+    <div className="nextaction-delay-field">
+      <Input
+        type="number"
+        min={0}
+        step={1}
+        inputMode="numeric"
+        aria-labelledby={props.labelId}
+        placeholder="0"
+        value={draft}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setDraft(e.target.value)
+        }
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          save();
+        }}
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          save();
+        }}
+      />
+      <span className="nextaction-delay-hint">
+        {t("days after the dependencies are met")}
+      </span>
+    </div>
+  );
+}

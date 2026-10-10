@@ -78,6 +78,11 @@ export function importanceName(level: Rating): string {
   }
 }
 
+/** The name of an urgency level (GLOSSARY: 紧急度): the importance's names. */
+export function urgencyName(level: Rating): string {
+  return importanceName(level);
+}
+
 /** The name of an effort level (GLOSSARY: 工作量). */
 export function effortName(level: Rating): string {
   switch (level) {

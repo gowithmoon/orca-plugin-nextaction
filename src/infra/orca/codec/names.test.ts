@@ -17,6 +17,7 @@ const propertyTable = [
   ["context", "上下文", "Context"],
   ["label", "标记", "Label"],
   ["note", "备注", "Notes"],
+  ["urgency", "紧急度", "Urgency"],
 ] as const;
 
 const statusTable = [

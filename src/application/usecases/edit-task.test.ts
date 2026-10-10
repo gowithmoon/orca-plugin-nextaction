@@ -33,6 +33,34 @@ describe("edit task", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("writes the urgency, leaving the importance as it is", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 45, status: "todo", importance: 2, urgency: 4 });
+    const editTask = createEditTask({ repository });
+
+    await editTask(45, { urgency: 7 });
+
+    expect(await repository.getTask(45)).toMatchObject({
+      importance: 2,
+      urgency: 7,
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("sets and clears the dependency delay, one write each", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 42, dependencies: [43] });
+    repository.addTask({ id: 43 });
+    const editTask = createEditTask({ repository });
+
+    await editTask(42, { dependencyDelay: 3 });
+    expect((await repository.getTask(42))?.dependencyDelay).toBe(3);
+
+    await editTask(42, { dependencyDelay: null });
+    expect((await repository.getTask(42))?.dependencyDelay).toBe(0);
+    expect(repository.writeCount()).toBe(2);
+  });
+
   it("clears the start and due dates", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({

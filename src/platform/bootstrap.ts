@@ -141,6 +141,7 @@ export function createNextActionPlugin(): Plugin {
     changes: taskChanges.changes,
     today: day.today,
     dayBoundary: day.dayBoundary,
+    startPreviewDays: preview.startPreviewDays,
     taskActions: taskActions.taskActions,
   });
   const taskMenu = createTaskMenuFeature({

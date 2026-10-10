@@ -1,11 +1,12 @@
 // The next action view's filter bar (#55), under the view's title: contexts
 // and labels, each a multiple choice with "(None)" for a task holding no
-// value, and the seven importance levels. The candidates are the task
-// panel's. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// value, and the seven importance and urgency levels (#74). The candidates
+// are the task panel's. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { Candidates } from "../../../application/ports/task-repository";
 import { t } from "../../../shared/l10n/l10n";
 import {
   ImportanceSelect,
+  UrgencySelect,
   ValuesSelect,
 } from "../../components/filter-selects";
 import { formatContext } from "../../components/format";
@@ -38,6 +39,10 @@ export function NextActionFilterBar(props: {
       <ImportanceSelect
         chosen={filter.importance}
         onChange={(importance) => onChange({ ...filter, importance })}
+      />
+      <UrgencySelect
+        chosen={filter.urgency}
+        onChange={(urgency) => onChange({ ...filter, urgency })}
       />
     </fieldset>
   );

@@ -318,8 +318,8 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   100% { opacity: 0; }
 }
 
-/* Blocking reasons (#54): read only, one line per kind; task names are links. */
-.nextaction-blocking-reasons {
+/* Why not a next action (#54, #78): read only, one line per kind; task names are links. */
+.nextaction-not-next-action-reasons {
   display: flex;
   flex-direction: column;
   gap: var(--orca-spacing-xs);
@@ -328,16 +328,16 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   list-style: none;
 }
 
-.nextaction-blocking-reason {
+.nextaction-not-next-action-reason {
   overflow-wrap: anywhere;
   line-height: var(--orca-lineheight-md);
 }
 
-.nextaction-blocking-reason-kind {
+.nextaction-not-next-action-reason-kind {
   color: var(--orca-color-text-2);
 }
 
-.nextaction-blocking-reason-task {
+.nextaction-not-next-action-reason-task {
   margin: 0;
   padding: 0;
   border: 0;
@@ -348,11 +348,11 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   cursor: pointer;
 }
 
-.nextaction-blocking-reason-task:hover {
+.nextaction-not-next-action-reason-task:hover {
   text-decoration: underline;
 }
 
-.nextaction-blocking-reason-task[data-empty] {
+.nextaction-not-next-action-reason-task[data-empty] {
   font-style: italic;
 }
 
@@ -360,6 +360,22 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-sm);
+}
+
+/* Dependency delay (#77): a short number input, the unit and hint beside it. */
+.nextaction-delay-field {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-delay-field > :first-child {
+  flex: 0 0 6em;
+  min-width: 0;
+}
+
+.nextaction-delay-hint {
+  color: var(--orca-color-text-2);
 }
 
 .nextaction-sequential-hint {

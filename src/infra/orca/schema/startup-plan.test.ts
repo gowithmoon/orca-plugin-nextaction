@@ -77,6 +77,16 @@ const zhDefinitions = [
       ],
     },
   },
+  // A number, 4 by default, like importance and effort (#79).
+  {
+    name: "紧急度",
+    type: 3,
+    pos: 11,
+    typeArgs: { defaultEnabled: true, default: 4 },
+  },
+  // A number with no default (#77): empty reads as 0 days. Written bare,
+  // as numbers were in the tag-operations spike.
+  { name: "依赖延迟", type: 3, pos: 12 },
 ];
 
 const enDefinitions = [
@@ -146,6 +156,13 @@ const enDefinitions = [
       ],
     },
   },
+  {
+    name: "Urgency",
+    type: 3,
+    pos: 11,
+    typeArgs: { defaultEnabled: true, default: 4 },
+  },
+  { name: "Dependency delay", type: 3, pos: 12 },
 ];
 
 /**
@@ -472,6 +489,57 @@ describe("startup plan", () => {
         },
       },
     ]);
+  });
+
+  it("appends the urgency after the existing properties to a tag from before #79", () => {
+    // The interface is English, but the tag's names are Chinese (ADR 0009).
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["紧急度"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [
+        {
+          name: "紧急度",
+          type: 3,
+          pos: 11,
+          typeArgs: { defaultEnabled: true, default: 4 },
+        },
+      ],
+    });
+  });
+
+  it("appends the dependency delay, a number with no default, to a tag from before #77", () => {
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["依赖延迟"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }).writes,
+    ).toEqual([{ name: "依赖延迟", type: 3, pos: 12 }]);
+  });
+
+  it("leaves a dependency delay the user gave a default as it is", () => {
+    const delay = {
+      name: "依赖延迟",
+      type: 3,
+      pos: 12,
+      value: null,
+      typeArgs: { defaultEnabled: true, default: 2 },
+    };
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock([...readBack(without(["依赖延迟"])), delay]),
+        cache: takenOver,
+        uiLanguage: "zh",
+      }).writes,
+    ).toEqual([]);
   });
 
   it("adds a missing dependency mode option and keeps the ones the user recolored", () => {

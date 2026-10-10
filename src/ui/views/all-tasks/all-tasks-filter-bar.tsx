@@ -1,6 +1,6 @@
 // The all tasks view's filter bar (#69): a multiple choice of the five
 // statuses a task not done can have and the next action view's contexts,
-// labels and importance fields; and the search box for the task text, which
+// labels, importance and urgency fields; and the search box for the task text, which
 // sits in the toolbar's first row. The candidates are the task panel's.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
@@ -10,6 +10,7 @@ import type { SelectOption } from "../../../orca.d.ts";
 import { t } from "../../../shared/l10n/l10n";
 import {
   ImportanceSelect,
+  UrgencySelect,
   ValuesSelect,
 } from "../../components/filter-selects";
 import { formatContext } from "../../components/format";
@@ -125,6 +126,10 @@ export function AllTasksFilterBar(props: {
       <ImportanceSelect
         chosen={filter.importance}
         onChange={(importance) => setFilter({ ...filter, importance })}
+      />
+      <UrgencySelect
+        chosen={filter.urgency}
+        onChange={(urgency) => setFilter({ ...filter, urgency })}
       />
     </fieldset>
   );

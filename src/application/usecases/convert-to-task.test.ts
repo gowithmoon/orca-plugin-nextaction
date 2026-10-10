@@ -22,6 +22,8 @@ describe("convert to task", () => {
       text: "Call the plumber",
       status: "inbox",
       importance: 4,
+      // Like importance, 4 by default (#79).
+      urgency: 4,
       effort: 4,
       start: null,
       due: null,
@@ -34,6 +36,8 @@ describe("convert to task", () => {
       dependencies: [],
       // Every dependency must be met by default (#58).
       dependencyMode: "all",
+      // No dependency delay until one is set (#77).
+      dependencyDelay: 0,
       // The block's own creation time, however long ago it was written (#35).
       created: new Date("2026-03-02T08:00:00.000Z"),
       anomalies: [],

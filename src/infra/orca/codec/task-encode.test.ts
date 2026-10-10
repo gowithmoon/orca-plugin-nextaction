@@ -23,6 +23,22 @@ describe("encodeTaskChanges", () => {
     ]);
   });
 
+  it("writes an urgency as a number under the tag's property name", () => {
+    expect(encodeTaskChanges({ urgency: 7 }, zh)).toEqual([
+      { name: "紧急度", value: 7 },
+    ]);
+    expect(
+      encodeTaskChanges({ urgency: 2 }, { language: "en", invalidated: [] }),
+    ).toEqual([{ name: "Urgency", value: 2 }]);
+  });
+
+  it("refuses an urgency write when the urgency is invalidated", () => {
+    const tag: TaskWriteContext = { language: "zh", invalidated: ["urgency"] };
+    expect(() => encodeTaskChanges({ urgency: 6 }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+
   it("writes a due date as local midnight of that day", () => {
     // UTC+8 (pinned in vitest.config.ts): local midnight of 2026-10-20 is
     // 16:00 UTC the day before, as Orca stores a date picked in its own UI
@@ -162,6 +178,38 @@ describe("encodeTaskChanges: dependency mode", () => {
       invalidated: ["dependencyMode"],
     };
     expect(() => encodeTaskChanges({ dependencyMode: "any" }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+});
+
+describe("encodeTaskChanges: dependency delay", () => {
+  // A number, written like importance and effort (#77).
+  it("writes the dependency delay as a number under the Chinese name", () => {
+    expect(encodeTaskChanges({ dependencyDelay: 3 }, zh)).toEqual([
+      { name: "依赖延迟", value: 3 },
+    ]);
+  });
+
+  it("writes the dependency delay under the English name on an English task tag", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeTaskChanges({ dependencyDelay: 2 }, en)).toEqual([
+      { name: "Dependency delay", value: 2 },
+    ]);
+  });
+
+  it("clears the dependency delay with null", () => {
+    expect(encodeTaskChanges({ dependencyDelay: null }, zh)).toEqual([
+      { name: "依赖延迟", value: null },
+    ]);
+  });
+
+  it("refuses to write an invalidated dependency delay", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["dependencyDelay"],
+    };
+    expect(() => encodeTaskChanges({ dependencyDelay: 3 }, tag)).toThrow(
       InvalidatedPropertyError,
     );
   });

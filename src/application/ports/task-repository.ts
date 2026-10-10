@@ -80,11 +80,14 @@ export type ConvertToTaskResult =
 
 /**
  * Properties a quick capture sets on the new task (GLOSSARY: 快速捕获). Those
- * not given take their defaults: importance and effort 4, no dates. Taken from
- * `TaskChanges`, so the two cannot drift; a new task has no date to clear, so
- * the dates are never `null`.
+ * not given take their defaults: importance, urgency and effort 4, no dates.
+ * Taken from `TaskChanges`, so the two cannot drift; a new task has no date to
+ * clear, so the dates are never `null`.
  */
-export type InitialProperties = Pick<TaskChanges, "importance" | "effort"> & {
+export type InitialProperties = Pick<
+  TaskChanges,
+  "importance" | "urgency" | "effort"
+> & {
   readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
 };
 

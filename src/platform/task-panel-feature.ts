@@ -1,10 +1,11 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
+import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
-import { createReadBlockingReasons } from "../application/usecases/read-blocking-reasons";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
+import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
 import { createReadTask } from "../application/usecases/read-task";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
@@ -35,6 +36,8 @@ export function createTaskPanelFeature(deps: {
   today: () => CalendarDate;
   /** The day boundary, for the logical day the task graph is read on. */
   dayBoundary: DayBoundarySetting;
+  /** How far ahead a start lets a task in, for why it is not a next action. */
+  startPreviewDays: StartPreviewDaysSetting;
   /** The plugin panel's status change, "open in notes" and notices (#39). */
   taskActions: TaskActionsDeps;
 }): {
@@ -50,10 +53,11 @@ export function createTaskPanelFeature(deps: {
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),
-    readBlockingReasons: createReadBlockingReasons({
+    readNotNextActionReasons: createReadNotNextActionReasons({
       repository,
       clock: systemClock,
       dayBoundary: deps.dayBoundary,
+      startPreviewDays: deps.startPreviewDays,
     }),
     setSequential: createSetSequential({ repository }),
     readDependencyCandidates: createReadDependencyCandidates({ repository }),

@@ -64,6 +64,12 @@ export function encodeTaskChanges(
       value: changes.importance,
     });
   }
+  if (changes.urgency !== undefined) {
+    items.push({
+      name: propertyName("urgency", tag.language),
+      value: changes.urgency,
+    });
+  }
   if (changes.effort !== undefined) {
     items.push({
       name: propertyName("effort", tag.language),
@@ -110,6 +116,13 @@ export function encodeTaskChanges(
       value: dependencyModeName(changes.dependencyMode, tag.language),
     });
   }
+  if (changes.dependencyDelay !== undefined) {
+    // A number like importance and effort; `null` clears it (#77).
+    items.push({
+      name: propertyName("dependencyDelay", tag.language),
+      value: changes.dependencyDelay,
+    });
+  }
   return items;
 }
 
@@ -152,6 +165,8 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   // (encodeDependencies, tag-operations A2).
   dependencies: "dependencies",
   dependencyMode: "dependencyMode",
+  urgency: "urgency",
+  dependencyDelay: "dependencyDelay",
 };
 
 /**

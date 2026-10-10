@@ -1,12 +1,13 @@
 // The filter fields both filter bars share: contexts and labels, each a
 // multiple choice with "(None)" for a task holding no value, and the seven
-// importance levels (#55, #69). Verified by hand in Orca
+// importance levels and the seven urgency levels (#55, #69, #74). Verified
+// by hand in Orca
 // (docs/ARCHITECTURE.md §5).
-import type { Importance } from "../../domain/task/task";
+import type { Importance, Rating, Urgency } from "../../domain/task/task";
 import type { ValuesChoice } from "../../domain/task/task-filter";
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
-import { importanceName } from "./format";
+import { importanceName, urgencyName } from "./format";
 
 /**
  * The option standing for "no value". A value the notes cannot hold as a
@@ -14,7 +15,7 @@ import { importanceName } from "./format";
  */
 const noneValue = "\u0000none";
 
-const levels: readonly Importance[] = [1, 2, 3, 4, 5, 6, 7];
+const levels: readonly Rating[] = [1, 2, 3, 4, 5, 6, 7];
 
 export function ValuesSelect(props: {
   label: string;
@@ -60,23 +61,27 @@ export function ValuesSelect(props: {
   );
 }
 
-export function ImportanceSelect(props: {
-  chosen: readonly Importance[];
-  onChange: (chosen: Importance[]) => void;
+/** Any of the seven levels of a rating, by their names. */
+function RatingSelect(props: {
+  label: string;
+  placeholder: string;
+  name: (level: Rating) => string;
+  chosen: readonly Rating[];
+  onChange: (chosen: Rating[]) => void;
 }) {
   const { Select } = orca.components;
   const options: SelectOption[] = levels.map((level) => ({
     value: String(level),
-    label: importanceName(level),
+    label: props.name(level),
   }));
   return (
-    <fieldset className="nextaction-filter" aria-label={t("Importance")}>
+    <fieldset className="nextaction-filter" aria-label={props.label}>
       <Select
         selected={props.chosen.map(String)}
         options={options}
         multiSelection={true}
         withClear={true}
-        placeholder={t("Any importance")}
+        placeholder={props.placeholder}
         width="100%"
         alignment="left"
         onChange={(next) =>
@@ -87,5 +92,35 @@ export function ImportanceSelect(props: {
         }
       />
     </fieldset>
+  );
+}
+
+export function ImportanceSelect(props: {
+  chosen: readonly Importance[];
+  onChange: (chosen: Importance[]) => void;
+}) {
+  return (
+    <RatingSelect
+      label={t("Importance")}
+      placeholder={t("Any importance")}
+      name={importanceName}
+      chosen={props.chosen}
+      onChange={props.onChange}
+    />
+  );
+}
+
+export function UrgencySelect(props: {
+  chosen: readonly Urgency[];
+  onChange: (chosen: Urgency[]) => void;
+}) {
+  return (
+    <RatingSelect
+      label={t("Urgency")}
+      placeholder={t("Any urgency")}
+      name={urgencyName}
+      chosen={props.chosen}
+      onChange={props.onChange}
+    />
   );
 }

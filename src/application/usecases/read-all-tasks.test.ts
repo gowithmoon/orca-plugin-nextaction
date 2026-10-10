@@ -204,6 +204,24 @@ describe("read all tasks", () => {
       ]);
     });
 
+    it("keeps the open tasks under a done ancestor task in the tree, unmarked", async () => {
+      // They are out of the next actions for the done ancestor, not blocked.
+      const { repository, readAllTasks } = setup();
+      repository.addTask({ id: 1, status: "done" });
+      repository.addTask({ id: 2, status: "inbox" }, { parentId: 1 });
+      repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+
+      const read = await readAllTasks();
+
+      expect(shape(read.tree)).toEqual([[1, [[2, [3]]]]]);
+      expect(marks(read.tree)).toEqual([
+        [1, false],
+        [2, false],
+        [3, false],
+      ]);
+      expect(doneIds(read)).toEqual([]);
+    });
+
     it("does not mark a task held back only by its subtasks", async () => {
       const { repository, readAllTasks } = setup();
       repository.addTask({ id: 1, status: "doing" });
@@ -354,6 +372,21 @@ describe("read all tasks, sorted", () => {
     expect(shape(read.tree)).toEqual([2, 1, [3, [4, 5]]]);
   });
 
+  it("by urgency orders top-level tasks by their own urgency, highest first, ties in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", urgency: 2 });
+    repository.addTask({ id: 2, status: "waiting", urgency: 6 });
+    repository.addTask({ id: 3, status: "inbox", urgency: 2 });
+    repository.addTask({ id: 4, status: "todo", urgency: 7 }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo", urgency: 1 }, { parentId: 3 });
+    repository.addTask({ id: 6, status: "todo" });
+
+    const read = await readAllTasks({ sort: "urgency" });
+
+    // 3 sorts by its own 2, not its subtask's 7; subtasks keep note order.
+    expect(shape(read.tree)).toEqual([2, 6, 1, [3, [4, 5]]]);
+  });
+
   it("by capture time orders top-level tasks newest first, ties in note order", async () => {
     const { repository, readAllTasks } = setup();
     const at = (iso: string) => new Date(iso);
@@ -384,8 +417,8 @@ describe("read all tasks, sorted", () => {
 
   it("by score orders top-level tasks of any status highest first, ties in note order", async () => {
     const { repository, readAllTasks } = setup();
-    // Scores on 2026-10-09: 1 and 5 are 55.75, 2 (due today) 85, 3 (starts
-    // in 20 days) 33.25, 4 (importance 7) 67.75.
+    // Scores on 2026-10-09: 1 and 5 are 54.75, 2 (due today) 77.5, 3 (starts
+    // in 20 days) 36.75, 4 (importance 7) 64.75.
     repository.addTask({ id: 1, status: "todo" });
     repository.addTask({ id: 2, status: "waiting", due: day(10, 9) });
     repository.addTask({ id: 3, status: "inbox", start: day(10, 29) });
@@ -399,6 +432,23 @@ describe("read all tasks, sorted", () => {
     const read = await readAllTasks({ sort: "score" });
 
     expect(shape(read.tree)).toEqual([2, 4, 1, [5, [6]], 3]);
+  });
+
+  it("by score counts urgency and how long ago a task started", async () => {
+    const { repository, readAllTasks } = setup();
+    // Scores on 2026-10-09: 1 is 54.75; 2 (importance 1) 44.75; 4 started
+    // 30 days ago, 60.75; 5 (urgency 7) 62.75. Only top-level tasks are
+    // sorted and they have no ancestor task, so inheritance does not show
+    // here; the score is the next action view's (score.test.ts).
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "todo", importance: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo", start: day(9, 9) });
+    repository.addTask({ id: 5, status: "waiting", urgency: 7 });
+
+    const read = await readAllTasks({ sort: "score" });
+
+    expect(shape(read.tree)).toEqual([5, 4, 1, [2, [3]]]);
   });
 
   it("sorts a faded done top-level task by the same rules", async () => {
@@ -450,6 +500,23 @@ describe("read all tasks, sorted", () => {
     expect(shape(read.tree)).toEqual([2, 4, 1, 3]);
   });
 
+  it("by urgency descending orders top-level tasks lowest first, ties still in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", urgency: 6 });
+    repository.addTask({ id: 2, status: "todo", urgency: 2 });
+    repository.addTask({ id: 3, status: "inbox", urgency: 6 });
+    repository.addTask({ id: 4, status: "todo", urgency: 2 });
+    repository.addTask({ id: 5, status: "todo", urgency: 7 }, { parentId: 4 });
+    repository.addTask({ id: 6, status: "todo", urgency: 1 }, { parentId: 4 });
+
+    const read = await readAllTasks({
+      sort: "urgency",
+      direction: "descending",
+    });
+
+    expect(shape(read.tree)).toEqual([2, [4, [5, 6]], 1, 3]);
+  });
+
   it("by capture time descending orders top-level tasks oldest first, ties still in note order", async () => {
     const { repository, readAllTasks } = setup();
     const at = (iso: string) => new Date(iso);
@@ -479,8 +546,8 @@ describe("read all tasks, sorted", () => {
 
   it("by score descending orders top-level tasks lowest first, ties still in note order", async () => {
     const { repository, readAllTasks } = setup();
-    // Scores on 2026-10-09, as above: 1 and 5 are 55.75, 2 is 85, 3 is
-    // 33.25, 4 is 67.75.
+    // Scores on 2026-10-09, as above: 1 and 5 are 54.75, 2 is 77.5, 3 is
+    // 36.75, 4 is 64.75.
     repository.addTask({ id: 1, status: "todo" });
     repository.addTask({ id: 2, status: "waiting", due: day(10, 9) });
     repository.addTask({ id: 3, status: "inbox", start: day(10, 29) });
@@ -760,6 +827,25 @@ describe("read all tasks, filtered and searched", () => {
 
     // 3: another context; 4: no label; 6: another importance.
     expect(shape(read.tree)).toEqual([1, 2, 5]);
+  });
+
+  it("by urgency lets through a task at any chosen level, with the other dimensions as well", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, urgency: 7, contexts: ["home"] });
+    repository.addTask({ id: 2, urgency: 2, contexts: ["home"] });
+    repository.addTask({ id: 3, urgency: 7, contexts: ["office"] });
+    repository.addTask({ id: 4, urgency: 1, contexts: ["home"] });
+    repository.addTask({ id: 5, contexts: ["home"] });
+
+    const read = await readAllTasks({
+      filter: {
+        contexts: { values: ["home"], none: false },
+        urgency: [1, 7],
+      },
+    });
+
+    // 2: another level; 3: another context; 5: at the default 4.
+    expect(shape(read.tree)).toEqual([1, 4]);
   });
 
   it("by search text shows the tasks whose text holds every word, whatever the case", async () => {

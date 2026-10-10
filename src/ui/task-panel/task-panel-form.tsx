@@ -6,9 +6,9 @@ import * as React from "react";
 import type { Candidates } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
-import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
+import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
 import type { ReadTask } from "../../application/usecases/read-task";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
@@ -22,6 +22,7 @@ import {
   formatContext,
   importanceName,
   shownText,
+  urgencyName,
 } from "../components/format";
 import { StatusIcon } from "../components/status-icon";
 import { markedStatus } from "../components/status-menu";
@@ -33,11 +34,12 @@ import {
   useTaskActions,
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
-import { BlockingReasonsField } from "./blocking-reasons-field";
 import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
+import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import {
   DateField,
+  DependencyDelayField,
   DependencyModeField,
   Field,
   NoteField,
@@ -52,8 +54,8 @@ export interface TaskPanelFormDeps {
   dropTask: DropTask;
   /** Values offered for contexts and labels. */
   readCandidates: ReadCandidates;
-  /** Why the task is blocked, for the blocking reasons row (#54). */
-  readBlockingReasons: ReadBlockingReasons;
+  /** Why the task is not a next action, for the row of that name (#78). */
+  readNotNextActionReasons: ReadNotNextActionReasons;
   /** Switches sequential on or off (#59). */
   setSequential: SetSequential;
   /** Tasks offered to add as dependencies (#57). */
@@ -85,7 +87,8 @@ export interface TaskPanelFormProps {
   onOpenedInNotes?: () => void;
   /**
    * The user picked another task from inside the form (a task named in the
-   * blocking reasons, #54): the task panel switches to it.
+   * reasons it is not a next action, #54, #78): the task panel switches to
+   * it.
    */
   onSelectTask: (taskId: TaskId) => void;
 }
@@ -137,8 +140,8 @@ function Fields(props: {
   /** Whether a note typed but not saved is still written on leaving. */
   saveOnLeave: () => boolean;
   candidates: Candidates;
-  /** Read only, after the status: only shown while something blocks the task. */
-  blockingReasons: React.ReactNode;
+  /** Read only, after the status: only shown while the task is not a next action. */
+  notNextActionReasons: React.ReactNode;
   /** The dependencies list and search to add (#57). */
   dependencies: React.ReactNode;
 }) {
@@ -157,13 +160,21 @@ function Fields(props: {
           onChange={(status) => void actions.changeStatus(status)}
         />
       </Field>
-      {props.blockingReasons}
+      {props.notNextActionReasons}
       <Field label={t("Importance")} labelId={id("importance")}>
         <RatingField
           labelId={id("importance")}
           value={task.importance}
           name={importanceName}
           onChange={(importance) => void actions.edit({ importance })}
+        />
+      </Field>
+      <Field label={t("Urgency")} labelId={id("urgency")}>
+        <RatingField
+          labelId={id("urgency")}
+          value={task.urgency}
+          name={urgencyName}
+          onChange={(urgency) => void actions.edit({ urgency })}
         />
       </Field>
       <Field label={t("Effort")} labelId={id("effort")}>
@@ -240,6 +251,16 @@ function Fields(props: {
           />
         </Field>
       )}
+      {/* Only with dependencies, stale ones included (#77). */}
+      {task.dependencies.length >= 1 && (
+        <Field label={t("Dependency delay")} labelId={id("dependency-delay")}>
+          <DependencyDelayField
+            labelId={id("dependency-delay")}
+            days={task.dependencyDelay}
+            onSave={(dependencyDelay) => void actions.edit({ dependencyDelay })}
+          />
+        </Field>
+      )}
     </div>
   );
 }
@@ -288,26 +309,25 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         actions={actions}
         saveOnLeave={saveOnLeave}
         candidates={candidates}
-        blockingReasons={
-          // A done task needs nothing more: what held it back no longer
-          // matters (#54, confirmed 2026-10-10).
-          state.task.status !== "done" && (
-            <BlockingReasonsField
-              readBlockingReasons={deps.readBlockingReasons}
-              taskId={state.task.id}
-              changes={deps.changes}
-              notify={notify}
-              labelId={`${idPrefix}-blocked-by`}
-              onSelectTask={props.onSelectTask}
-            />
-          )
+        notNextActionReasons={
+          // Only a task to do or in progress gets reasons (#78); the use
+          // case returns none for the rest, so the row stays hidden.
+          <NotNextActionReasonsField
+            readNotNextActionReasons={deps.readNotNextActionReasons}
+            taskId={state.task.id}
+            changes={deps.changes}
+            notify={notify}
+            labelId={`${idPrefix}-not-next-action`}
+            today={deps.today()}
+            onSelectTask={props.onSelectTask}
+          />
         }
         dependencies={
           <DependenciesField
             labelId={`${idPrefix}-dependencies`}
             taskId={state.task.id}
             dependencies={state.task.dependencies}
-            readBlockingReasons={deps.readBlockingReasons}
+            readNotNextActionReasons={deps.readNotNextActionReasons}
             readDependencyCandidates={deps.readDependencyCandidates}
             changes={deps.changes}
             notify={notify}
