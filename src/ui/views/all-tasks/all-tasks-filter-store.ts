@@ -4,6 +4,7 @@
 // unloading clears them (platform/panel-feature.ts), and they are never
 // written with `plugins.setData`.
 import type { AllTasksFilter } from "../../../application/usecases/read-all-tasks";
+import { filterChoosesAny } from "../../../domain/task/task-filter";
 
 export interface AllTasksFilterState {
   /** Every dimension given, nothing chosen in any. */
@@ -24,14 +25,9 @@ export const noAllTasksFilter: AllTasksFilterState = {
 
 /** Something is chosen in some dimension, or there are words to search. */
 export function isFilteringAllTasks(state: AllTasksFilterState): boolean {
-  const { filter } = state;
   return (
-    filter.statuses.length > 0 ||
-    filter.contexts.values.length > 0 ||
-    filter.contexts.none ||
-    filter.labels.values.length > 0 ||
-    filter.labels.none ||
-    filter.importance.length > 0 ||
+    state.filter.statuses.length > 0 ||
+    filterChoosesAny(state.filter) ||
     state.search.trim() !== ""
   );
 }

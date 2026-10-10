@@ -33,6 +33,19 @@ function choiceLets(
   return choice.values.some((value) => held.includes(value));
 }
 
+function choosesAny(choice: ValuesChoice | undefined): boolean {
+  return choice !== undefined && (choice.values.length > 0 || choice.none);
+}
+
+/** Something is chosen in some dimension: the filter lets fewer through. */
+export function filterChoosesAny(filter: TaskFilter): boolean {
+  return (
+    choosesAny(filter.contexts) ||
+    choosesAny(filter.labels) ||
+    (filter.importance?.length ?? 0) > 0
+  );
+}
+
 export function filterLets(filter: TaskFilter, task: Task): boolean {
   return (
     choiceLets(filter.contexts, task.contexts) &&
