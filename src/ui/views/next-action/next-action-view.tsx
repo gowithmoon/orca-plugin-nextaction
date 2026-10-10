@@ -163,6 +163,10 @@ function NextActionContent(props: {
             onOpen={(open) => selectTask(open.id)}
             selected={task.id === selectedTaskId}
             kept={kept}
+            // Only faded: a task leaves for many reasons besides its status
+            // (a filter, something blocking it), so "Changed to" would
+            // often mislead (#53, confirmed 2026-10-10).
+            keptStatusShown={false}
             parentText={parentText}
           />
         </li>
