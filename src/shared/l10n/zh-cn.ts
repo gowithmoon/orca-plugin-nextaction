@@ -141,6 +141,23 @@ const zhCN: Record<string, string> = {
     "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
   "New tasks you capture appear here.": "新捕获的任务会出现在这里。",
   "Open task panel": "打开任务属性面板",
+  "Add to My Day": "加入我的一天",
+  "Remove from My Day": "移出我的一天",
+  "Added to My Day": "已加入我的一天",
+  "Removed from My Day": "已移出我的一天",
+  "Could not change My Day: this task's My Day entries cannot be read and are kept as they are.":
+    "无法修改我的一天：这个任务的我的一天记录无法读取，已原样保留。",
+  "Could not change My Day: ${reason}": "无法修改我的一天：${reason}",
+  "Could not read My Day: ${reason}": "无法读取我的一天：${reason}",
+  "My Day": "我的一天",
+  Unscheduled: "未排期",
+  Timeline: "时间轴",
+  "Add a task to My Day": "把任务加入我的一天",
+  "Could not read the tasks to add: ${reason}":
+    "无法读取可加入的任务：${reason}",
+  "Nothing in My Day yet": "我的一天还是空的",
+  "Search above to add a task, or choose “Add to My Day” in a task's menu.":
+    "在上方搜索加入任务，或在任务操作菜单中选择“加入我的一天”。",
   "Task panel": "任务属性面板",
   Close: "关闭",
   Status: "状态",
@@ -229,6 +246,16 @@ const zhCN: Record<string, string> = {
   "Could not move the task: ${reason}": "无法移动任务：${reason}",
   "Drag onto another task to make it a subtask, or between tasks to move it there":
     "拖到另一个任务上成为它的子任务，或拖到任务之间放在那里",
+  "${start}–${end}": "${start}–${end}",
+  "Everything in My Day is scheduled.": "我的一天中的任务都已排期。",
+  Schedule: "排期",
+  "Start time": "开始时刻",
+  "Length (minutes)": "时长（分钟）",
+  "Now ${times}": "当前 ${times}",
+  "Snaps to 15 minutes, within today": "吸附到 15 分钟，不超出今天",
+  Unschedule: "取消排期",
+  "${text}, ${times}": "${text}，${times}",
+  "Now, ${time}": "现在，${time}",
 };
 
 export default zhCN;

@@ -90,7 +90,9 @@ export const componentCss = `
   outline-offset: 1px;
 }
 
-.nextaction-task-card-open {
+/* "Open in notes" and a view's own buttons beside it (task-card.tsx \`buttons\`). */
+.nextaction-task-card-open,
+.nextaction-task-card-extra {
   /* One text line high, level with the first line of the text. */
   height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
   aspect-ratio: 1;
@@ -99,7 +101,8 @@ export const componentCss = `
 
 /* Only on hover or focus, unless the pointer cannot hover. */
 @media (hover: hover) {
-  .nextaction-task-card:not(:hover, :focus-within) .nextaction-task-card-open {
+  .nextaction-task-card:not(:hover, :focus-within)
+    :is(.nextaction-task-card-open, .nextaction-task-card-extra) {
     opacity: 0;
   }
 }

@@ -1,20 +1,27 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createMoveTask } from "../application/usecases/move-task";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
+import { createReadMyDay } from "../application/usecases/read-my-day";
+import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
+import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
+import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
+import { myDayScheduleActions } from "../ui/hooks/use-my-day-schedule";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import { componentCss } from "../ui/styles/component-style";
+import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
@@ -27,6 +34,8 @@ import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-st
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
+import { createMyDayView } from "../ui/views/my-day/my-day-view";
+import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import type { FeatureModule } from "./bootstrap";
@@ -39,8 +48,8 @@ export function pluginPanelType(pluginName: string): string {
 
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
- * style sheet, with the next action view (#53), the inbox view (#37), the
- * all tasks view (#65) and their card actions (#39). `views`
+ * style sheet, with the next action view (#53), the My Day view (#83), the
+ * inbox view (#37), the all tasks view (#65) and their card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
  */
@@ -95,6 +104,40 @@ export function createPanelFeature(deps: {
       menuItems: deps.menuItems,
       readCandidates,
       filter: nextActionFilter,
+    }),
+  );
+  const myDayDeps = {
+    repository,
+    clock: systemClock,
+    dayBoundary: deps.dayBoundary,
+  };
+  const scheduleDeps = {
+    scheduleInMyDay: createScheduleInMyDay(myDayDeps),
+    unscheduleInMyDay: createUnscheduleInMyDay(myDayDeps),
+    notify: deps.taskActions.notify,
+  };
+  // The schedule popup's root (#84) exists only while loaded.
+  let renderSchedulePopup: (node: React.ReactNode) => void = () => {};
+  views.register(
+    createMyDayView({
+      readMyDay: createReadMyDay({
+        ...myDayDeps,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      readMyDayCandidates: createReadMyDayCandidates(myDayDeps),
+      addToMyDay: createAddToMyDay(myDayDeps),
+      today: deps.today,
+      now: () => systemClock.now(),
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      openSchedulePopup: createSchedulePopup({
+        deps: scheduleDeps,
+        // Into the load's root; nothing outside a load.
+        render: (node) => renderSchedulePopup(node),
+      }),
+      // Dragging on the timeline (#85) writes as the popup does.
+      scheduleActions: myDayScheduleActions(scheduleDeps),
     }),
   );
   views.register(
@@ -152,6 +195,15 @@ export function createPanelFeature(deps: {
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
+    registry.css("myDayStyle", myDayCss);
+    // Its own root, as the task panel popup's: the view's container query
+    // would hold a fixed window inside the view. Created before the panel,
+    // so it is released after it; then nothing renders into it any more.
+    const schedulePopupRoot = registry.reactRoot("schedulePopup", null);
+    renderSchedulePopup = schedulePopupRoot.render;
+    registry.add(`${pluginName}.schedulePopupOpen`, () => {
+      renderSchedulePopup = () => {};
+    });
     const placement = createPanelPlacement(pluginPanelType(pluginName));
     // Released before the style sheet: open panels are restored or closed
     // first, then the type is unregistered (ADR 0011).

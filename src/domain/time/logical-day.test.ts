@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type DayBoundary, logicalDay } from "./logical-day";
+import {
+  type DayBoundary,
+  logicalDay,
+  logicalDayRange,
+  momentOn,
+} from "./logical-day";
 
 // Runs in UTC+8 (pinned in vitest.config.ts); the times below are local.
 const five: DayBoundary = { hours: 5, minutes: 0 };
@@ -77,5 +82,69 @@ describe("logicalDay", () => {
       month: 12,
       day: 31,
     });
+  });
+});
+
+describe("logicalDayRange", () => {
+  it("runs from that day's boundary to the next day's", () => {
+    expect(logicalDayRange({ year: 2026, month: 10, day: 8 }, five)).toEqual({
+      start: new Date("2026-10-08T05:00:00+08:00"),
+      end: new Date("2026-10-09T05:00:00+08:00"),
+    });
+  });
+
+  it("crosses a month end", () => {
+    expect(logicalDayRange({ year: 2026, month: 10, day: 31 }, five)).toEqual({
+      start: new Date("2026-10-31T05:00:00+08:00"),
+      end: new Date("2026-11-01T05:00:00+08:00"),
+    });
+  });
+
+  it("holds the moments the logical day holds, and no others", () => {
+    const late: DayBoundary = { hours: 23, minutes: 30 };
+    const range = logicalDayRange({ year: 2026, month: 10, day: 8 }, late);
+    expect(range).toEqual({
+      start: new Date("2026-10-08T23:30:00+08:00"),
+      end: new Date("2026-10-09T23:30:00+08:00"),
+    });
+    expect(logicalDay(range.start, late)).toEqual({
+      year: 2026,
+      month: 10,
+      day: 8,
+    });
+    expect(logicalDay(new Date(range.end.getTime() - 1), late)).toEqual({
+      year: 2026,
+      month: 10,
+      day: 8,
+    });
+  });
+});
+
+describe("momentOn", () => {
+  const oct8 = { year: 2026, month: 10, day: 8 };
+
+  it("is that time on the calendar day the logical day starts on, from the boundary on", () => {
+    expect(
+      momentOn(logicalDayRange(oct8, five), { hours: 14, minutes: 30 }),
+    ).toEqual(new Date("2026-10-08T14:30:00+08:00"));
+    expect(
+      momentOn(logicalDayRange(oct8, five), { hours: 5, minutes: 0 }),
+    ).toEqual(new Date("2026-10-08T05:00:00+08:00"));
+  });
+
+  it("is that time on the next calendar day before the boundary: the small hours belong to today", () => {
+    expect(
+      momentOn(logicalDayRange(oct8, five), { hours: 2, minutes: 0 }),
+    ).toEqual(new Date("2026-10-09T02:00:00+08:00"));
+    expect(
+      momentOn(logicalDayRange(oct8, five), { hours: 4, minutes: 59 }),
+    ).toEqual(new Date("2026-10-09T04:59:00+08:00"));
+  });
+
+  it("stays on the same calendar day when the boundary is 0:00", () => {
+    const midnight: DayBoundary = { hours: 0, minutes: 0 };
+    expect(
+      momentOn(logicalDayRange(oct8, midnight), { hours: 0, minutes: 15 }),
+    ).toEqual(new Date("2026-10-08T00:15:00+08:00"));
   });
 });

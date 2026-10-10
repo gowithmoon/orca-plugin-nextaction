@@ -12,6 +12,7 @@ import {
   DependencyCycleError,
   type RefusedCycle,
 } from "../application/usecases/dependency-cycle-error";
+import { MyDayUnreadableError } from "../application/usecases/my-day-unreadable-error";
 import type { TaskId, TaskStatus } from "../domain/task/task";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
@@ -129,4 +130,23 @@ export async function changeStatusReporting(
       t("Could not change the status: ${reason}", { reason }),
     );
   }
+}
+
+/**
+ * Tells the user why adding to or removing from My Day failed, with the
+ * shared paused notice. Shared by the task menu and the My Day view.
+ */
+export function notifyMyDayFailure(notify: Notify, error: unknown): void {
+  if (error instanceof MyDayUnreadableError) {
+    notify(
+      "error",
+      t(
+        "Could not change My Day: this task's My Day entries cannot be read and are kept as they are.",
+      ),
+    );
+    return;
+  }
+  notifyActionFailure(notify, error, (reason) =>
+    t("Could not change My Day: ${reason}", { reason }),
+  );
 }

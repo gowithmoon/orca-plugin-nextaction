@@ -14,7 +14,13 @@ import type {
 import { t } from "../../shared/l10n/l10n";
 import { useTask } from "../hooks/use-task";
 import { createNotify, notifyActionFailure } from "../notify";
-import type { TaskMenuItem, TaskMenuItems, TaskMenuPlace } from "./menu-items";
+import type {
+  ResolvedTaskMenuEntry,
+  ResolvedTaskMenuItem,
+  TaskMenuItem,
+  TaskMenuItems,
+  TaskMenuPlace,
+} from "./menu-items";
 
 export interface TaskMenuDeps {
   items: TaskMenuItems;
@@ -25,6 +31,44 @@ export interface TaskMenuDeps {
   taskTagBlockId: () => number | undefined;
 }
 
+/**
+ * An item worked out when the menu opens (e.g. "Add to My Day" or "Remove
+ * from My Day"): nothing shows until it is resolved, or when it resolves to
+ * nothing. A result arriving after the menu closed is ignored.
+ */
+function ResolvedEntry(props: {
+  item: ResolvedTaskMenuItem;
+  task: Task;
+  close: () => void;
+  place: TaskMenuPlace | undefined;
+}) {
+  const { item, task, close, place } = props;
+  const { MenuText } = orca.components;
+  const [entry, setEntry] = React.useState<ResolvedTaskMenuEntry | null>(null);
+  React.useEffect(() => {
+    let current = true;
+    setEntry(null);
+    // resolve never rejects: the item reports its own errors.
+    void item.resolve(task).then((resolved) => {
+      if (current) setEntry(resolved);
+    });
+    return () => {
+      current = false;
+    };
+  }, [item, task]);
+  if (!entry) return null;
+  return (
+    <MenuText
+      title={entry.label}
+      preIcon={entry.icon}
+      onClick={() => {
+        close();
+        void entry.run(place);
+      }}
+    />
+  );
+}
+
 function itemEntry(
   item: TaskMenuItem,
   task: Task,
@@ -32,6 +76,17 @@ function itemEntry(
   place: TaskMenuPlace | undefined,
 ) {
   const { MenuText } = orca.components;
+  if ("resolve" in item) {
+    return (
+      <ResolvedEntry
+        key={item.id}
+        item={item}
+        task={task}
+        close={close}
+        place={place}
+      />
+    );
+  }
   const current = item.isCurrent?.(task) ?? false;
   return (
     <MenuText

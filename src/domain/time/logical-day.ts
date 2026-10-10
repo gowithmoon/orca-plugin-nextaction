@@ -28,3 +28,56 @@ export function logicalDay(now: Date, boundary: DayBoundary): CalendarDate {
     day: day.getDate(),
   };
 }
+
+/**
+ * The moment within the logical day whose range is `day` that shows `time`
+ * on the clock: on the calendar day it starts on from the day boundary on,
+ * on the next calendar day before it, so the small hours belong to that
+ * logical day (ADR 0005). Local time only (ADR 0012).
+ */
+export function momentOn(
+  day: LogicalDayRange,
+  time: { readonly hours: number; readonly minutes: number },
+): Date {
+  const from = day.start;
+  const sameDay = new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate(),
+    time.hours,
+    time.minutes,
+  );
+  if (sameDay.getTime() >= from.getTime()) return sameDay;
+  return new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate() + 1,
+    time.hours,
+    time.minutes,
+  );
+}
+
+/** The moments a logical day holds: from `start` on, up to but not `end`. */
+export interface LogicalDayRange {
+  readonly start: Date;
+  readonly end: Date;
+}
+
+/**
+ * The time range of the logical day `day`: from its day boundary to the next
+ * day's boundary (GLOSSARY: 日界线). Local time only (ADR 0012).
+ */
+export function logicalDayRange(
+  day: CalendarDate,
+  boundary: DayBoundary,
+): LogicalDayRange {
+  const at = (offset: number) =>
+    new Date(
+      day.year,
+      day.month - 1,
+      day.day + offset,
+      boundary.hours,
+      boundary.minutes,
+    );
+  return { start: at(0), end: at(1) };
+}
