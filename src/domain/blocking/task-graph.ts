@@ -1,7 +1,7 @@
 // The task graph (GLOSSARY: 下一步行动, 阻塞, 搁置子树, 开始日期): which tasks
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
-import type { CalendarDate, Task, TaskId } from "../task/task";
+import type { CalendarDate, DependencyMode, Task, TaskId } from "../task/task";
 import { addDays, compareDays, laterDay } from "../time/calendar-days";
 import { findDependencyCycles } from "./dependency-cycles";
 
@@ -45,8 +45,20 @@ export interface TaskGraphOptions {
  *   the task itself; `waitingFor` are the tasks on the cycle it waits for
  *   directly, in note order.
  */
-export type BlockingReason = {
-  readonly kind: "subtasks" | "sequential" | "dependencies" | "cycle";
+export type BlockingReason =
+  | (BlockingReasonBase & {
+      readonly kind: "subtasks" | "sequential" | "cycle";
+    })
+  | (BlockingReasonBase & {
+      readonly kind: "dependencies";
+      /**
+       * The source's dependency mode (GLOSSARY: 依赖模式): in mode "any" it
+       * waits for every one listed, and one of them done is enough (#58).
+       */
+      readonly mode: DependencyMode;
+    });
+
+interface BlockingReasonBase {
   /**
    * The task the blocking comes from: the task itself, or an ancestor task
    * for blocking passed down (ADR 0015).
@@ -54,7 +66,7 @@ export type BlockingReason = {
   readonly source: TaskId;
   /** The tasks it waits for, in note order. */
   readonly waitingFor: readonly TaskId[];
-};
+}
 
 /** What the graph says about one task. */
 export interface TaskGraphEntry {
@@ -180,6 +192,7 @@ export function analyzeTaskGraph(
           kind: "dependencies",
           source: link.task.id,
           waitingFor,
+          mode: link.task.dependencyMode,
         });
       }
     }

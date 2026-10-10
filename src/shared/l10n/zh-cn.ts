@@ -158,6 +158,8 @@ const zhCN: Record<string, string> = {
     "无法读取阻塞原因：${reason}",
   Sequential: "顺序执行",
   "${kind} (from ": "${kind}（来自 ",
+  "${kind} (any): ": "${kind}（任一）：",
+  "${kind} (any, from ": "${kind}（任一，来自 ",
   "): ": "）：",
   "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
   Dependencies: "依赖",

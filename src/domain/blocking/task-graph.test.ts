@@ -220,7 +220,7 @@ describe("task graph: dependency blocking", () => {
 
     expect(graph.entry(1)?.nextAction).toBe(false);
     expect(graph.entry(1)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 1, waitingFor: [2] },
+      { kind: "dependencies", source: 1, waitingFor: [2], mode: "all" },
     ]);
   });
 
@@ -235,7 +235,7 @@ describe("task graph: dependency blocking", () => {
 
     expect(graph.entry(3)?.nextAction).toBe(false);
     expect(graph.entry(3)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 1, waitingFor: [9] },
+      { kind: "dependencies", source: 1, waitingFor: [9], mode: "all" },
     ]);
   });
 
@@ -256,7 +256,7 @@ describe("task graph: dependency blocking", () => {
     ]);
 
     expect(graph.entry(1)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 1, waitingFor: [2] },
+      { kind: "dependencies", source: 1, waitingFor: [2], mode: "all" },
     ]);
   });
 
@@ -288,7 +288,7 @@ describe("task graph: dependency blocking", () => {
     ]);
 
     expect(graph.entry(1)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 1, waitingFor: [4, 3] },
+      { kind: "dependencies", source: 1, waitingFor: [4, 3], mode: "all" },
     ]);
   });
 
@@ -301,8 +301,8 @@ describe("task graph: dependency blocking", () => {
     ]);
 
     expect(graph.entry(2)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 2, waitingFor: [9] },
-      { kind: "dependencies", source: 1, waitingFor: [8] },
+      { kind: "dependencies", source: 2, waitingFor: [9], mode: "all" },
+      { kind: "dependencies", source: 1, waitingFor: [8], mode: "all" },
     ]);
   });
 
@@ -338,7 +338,7 @@ describe("task graph: dependency mode", () => {
 
     expect(graph.entry(1)?.nextAction).toBe(false);
     expect(graph.entry(1)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 1, waitingFor: [3, 2] },
+      { kind: "dependencies", source: 1, waitingFor: [3, 2], mode: "any" },
     ]);
   });
 
@@ -361,7 +361,7 @@ describe("task graph: dependency mode", () => {
     ]);
 
     expect(graph.entry(1)?.blockedBy).toEqual([
-      { kind: "dependencies", source: 1, waitingFor: [2] },
+      { kind: "dependencies", source: 1, waitingFor: [2], mode: "all" },
     ]);
   });
 

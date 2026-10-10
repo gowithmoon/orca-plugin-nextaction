@@ -26,6 +26,11 @@ function kindLabel(reason: BlockingReason): string {
   }
 }
 
+/** Dependencies in mode "any": waiting for one of them, not all. */
+function anyMode(reason: BlockingReason): boolean {
+  return reason.kind === "dependencies" && reason.mode === "any";
+}
+
 export function BlockingReasonsField(props: {
   readBlockingReasons: ReadBlockingReasons;
   taskId: TaskId;
@@ -71,13 +76,20 @@ export function BlockingReasonsField(props: {
           >
             {reason.source === props.taskId ? (
               <span className="nextaction-blocking-reason-kind">
-                {t("${kind}: ", { kind: kindLabel(reason) })}
+                {anyMode(reason)
+                  ? // One of them done is enough (#58), e.g.
+                    // "Dependencies (any): Book, Pack".
+                    t("${kind} (any): ", { kind: kindLabel(reason) })
+                  : t("${kind}: ", { kind: kindLabel(reason) })}
               </span>
             ) : (
               // Passed down from an ancestor task (ADR 0015), e.g.
-              // "Sequential (from Draft): Outline".
+              // "Sequential (from Draft): Outline",
+              // "Dependencies (any, from Trip): Book".
               <span className="nextaction-blocking-reason-kind">
-                {t("${kind} (from ", { kind: kindLabel(reason) })}
+                {anyMode(reason)
+                  ? t("${kind} (any, from ", { kind: kindLabel(reason) })
+                  : t("${kind} (from ", { kind: kindLabel(reason) })}
                 {taskButton(reason.source)}
                 {t("): ")}
               </span>
