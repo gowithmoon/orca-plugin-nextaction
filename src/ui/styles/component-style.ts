@@ -183,10 +183,9 @@ export const componentCss = `
 }
 
 /*
- * The filter bars (#55, #69): the fields side by side while they fit, narrow
- * enough that the all tasks view's four share a line in the medium tier,
- * wrapping onto more lines only when the view is really narrow; never wider
- * than the view.
+ * The filter bars (#55, #69): the fields side by side, sharing the row while
+ * it is short and stopping at a width that reads well when it is long;
+ * wrapping only when the view is really narrow, never wider than it.
  */
 .nextaction-filter-bar {
   display: flex;
@@ -201,42 +200,75 @@ export const componentCss = `
 .nextaction-filter {
   flex: 1 1 7em;
   min-width: 0;
-  max-width: 100%;
+  max-width: 12em;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
 /*
- * The all tasks view's toolbar: the sort, collapse or expand all and the
- * search box on the first row, the filter bar on the second. A row wraps
- * only when the view is too narrow for it.
+ * The all tasks view's toolbar (#69). Its parts, in reading order: the
+ * search box, the view controls (sort, direction, collapse or expand all),
+ * then the filter fields. Laid out by its own width:
+ * - narrow: the search box and the view controls share the first row, the
+ *   four filters fill a 2 × 2 grid below;
+ * - medium: the same two rows;
+ * - wide: one row, the filters after the search box and the view controls
+ *   at the far end, where controls of how a list shows usually sit.
+ * The search box and the filters stop growing at a width that reads well.
  */
 .nextaction-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--orca-spacing-sm);
-  min-width: 0;
-  margin: 0 0 var(--orca-spacing-md);
-}
-
-.nextaction-toolbar > .nextaction-filter-bar {
-  margin: 0;
-}
-
-.nextaction-toolbar-row {
+  container: nextaction-toolbar / inline-size;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--orca-spacing-sm);
   min-width: 0;
+  margin: 0 0 var(--orca-spacing-md);
+}
+
+.nextaction-toolbar > .nextaction-filter-search {
+  flex: 1 1 10em;
+  min-width: 8em;
+  max-width: 22em;
+}
+
+.nextaction-toolbar-view {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+/* Its own row below the others. */
+.nextaction-toolbar > .nextaction-filter-bar {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+@container nextaction-toolbar (max-width: 440px) {
+  .nextaction-toolbar .nextaction-filter {
+    flex: 1 1 40%;
+    max-width: none;
+  }
+}
+
+@container nextaction-toolbar (min-width: 1000px) {
+  .nextaction-toolbar > .nextaction-filter-bar {
+    order: 1;
+    flex: 1 1 28em;
+    max-width: 50em;
+  }
+  .nextaction-toolbar-view {
+    order: 2;
+  }
 }
 
 /* The sort picker (#68): as wide as its longest choice needs. */
 .nextaction-sort {
-  flex: 0 1 10em;
-  min-width: 0;
-  max-width: 100%;
+  flex: 0 1 9em;
+  min-width: 7em;
   margin: 0;
   padding: 0;
   border: 0;
@@ -246,11 +278,7 @@ export const componentCss = `
   flex: 0 0 auto;
 }
 
-/* The search box takes what the row leaves; its parts stay inside it. */
-.nextaction-toolbar-row > .nextaction-filter-search {
-  flex: 1 1 10em;
-}
-
+/* The search box's parts stay inside it. */
 .nextaction-filter-search > *,
 .nextaction-filter-search input {
   width: 100%;
@@ -373,13 +401,6 @@ export const componentCss = `
   width: 1.25em;
   height: 1.25em;
   margin-top: var(--orca-spacing-md);
-}
-
-.nextaction-task-tree-hidden {
-  margin: 0 0 0 calc(1.25em + var(--orca-spacing-xs));
-  padding: 0 0 0 var(--orca-spacing-lg);
-  color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-xs);
 }
 
 /*

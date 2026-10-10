@@ -76,7 +76,7 @@ export function AllTasksSearchBox(props: {
       </Tooltip>
     );
   return (
-    <div className="nextaction-filter nextaction-filter-search">
+    <div className="nextaction-filter-search">
       <CompositionInput
         aria-label={t("Search tasks")}
         placeholder={t("Search tasks")}

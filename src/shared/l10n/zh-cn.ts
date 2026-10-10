@@ -116,7 +116,6 @@ const zhCN: Record<string, string> = {
   Blocked: "阻塞",
   Collapse: "折叠",
   Expand: "展开",
-  "Hidden tasks: ${count}": "藏起 ${count} 个任务",
   "Collapse all": "全部折叠",
   "Expand all": "全部展开",
   Sort: "排序",

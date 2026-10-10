@@ -119,14 +119,6 @@ function shownNodes(
   return shown;
 }
 
-/** How many tasks sit below the node in the tree: what collapsing it hides. */
-function descendantCount(node: AllTasksNode): number {
-  return node.children.reduce(
-    (count, child) => count + 1 + descendantCount(child),
-    0,
-  );
-}
-
 /** The tasks of the tree that have children: what "collapse all" collapses. */
 function parentIds(nodes: readonly AllTasksNode[]): TaskId[] {
   return nodes.flatMap((node) =>
@@ -251,14 +243,9 @@ function TreeNodes(props: {
                 />
               </TaskDropTarget>
             </div>
-            {collapsed ? (
-              <div className="nextaction-task-tree-hidden">
-                {t("Hidden tasks: ${count}", {
-                  count: String(descendantCount(node)),
-                })}
-              </div>
-            ) : (
-              parent && <TreeNodes nodes={node.children} cards={cards} />
+            {/* Collapsed, the toggle alone says there is more below. */}
+            {parent && !collapsed && (
+              <TreeNodes nodes={node.children} cards={cards} />
             )}
             {/* The bottom gap: after the last top-level task. */}
             {props.top && gaps && node === last && (
@@ -543,19 +530,20 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
           // searching, shows in every tier.
           countInEveryTier={filtering}
         />
-        {/* Two rows: the sort, collapse or expand all and the search; then
-            the filter fields. */}
+        {/* The search box, the controls of how the tree shows (sort,
+            direction, collapse or expand all), then the filter fields; the
+            toolbar's styles lay them out for the width at hand. */}
         <div className="nextaction-toolbar">
-          <div className="nextaction-toolbar-row">
+          <AllTasksSearchBox
+            search={filter.search}
+            onChange={(search) => deps.filter.set({ ...filter, search })}
+          />
+          <div className="nextaction-toolbar-view">
             <AllTasksSortSelect state={sort} onChange={deps.sort.set} />
             <CollapseAllButton
               query={query}
               selectedTaskId={selectedTaskId}
               collapse={deps.collapse}
-            />
-            <AllTasksSearchBox
-              search={filter.search}
-              onChange={(search) => deps.filter.set({ ...filter, search })}
             />
           </div>
           <AllTasksFilterBar
