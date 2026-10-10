@@ -2,6 +2,7 @@
 // Thin Orca side; verified by hand in Orca (docs/ARCHITECTURE.md §5).
 
 import { NoNotePanelError } from "../../application/ports/task-repository";
+import type { MovePlacement } from "../../domain/blocking/task-move";
 import type {
   APIMsg,
   Block,
@@ -195,7 +196,7 @@ export async function invokeGroup(write: () => Promise<void>): Promise<void> {
 export async function moveBlocks(
   id: number,
   target: number,
-  placement: "lastChild" | "before" | "after",
+  placement: MovePlacement,
 ): Promise<void> {
   if (orca.state.blocks[target] === undefined) {
     const block = await invokeBackend("get-block", target);

@@ -251,7 +251,7 @@ export function TaskDropTarget(props: {
  */
 export function TaskDropGap(props: {
   target: TaskId;
-  placement: "before" | "after";
+  placement: Exclude<MovePlacement, "lastChild">;
 }) {
   const drag = React.useContext(DragContext);
   if (!drag) return null;
