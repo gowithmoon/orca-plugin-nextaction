@@ -1,8 +1,8 @@
 // The completion history (GLOSSARY: 完成历史) as stored in the plugin block
 // property `nextaction.completions`: `{ v: 1, entries: [{ at, day }] }`, `at`
 // the completion time as a UTC ISO string, `day` its logical day as
-// `YYYY-MM-DD`, oldest first. The version number is added and checked by the
-// plugin block property codec.
+// `YYYY-MM-DD`, oldest first; `at` reads back from Orca as a `Date`. The
+// version number is added and checked by the plugin block property codec.
 import type {
   CompletionEntry,
   CompletionHistory,
@@ -52,9 +52,13 @@ function parseDay(value: unknown): CalendarDate | undefined {
   return { year, month, day };
 }
 
-/** An ISO time string, or `undefined`. */
+/**
+ * A time, or `undefined`. Written as an ISO string, it reads back from Orca
+ * as a `Date` (#72 acceptance, as for date properties in
+ * plugin-panel-writes); both are taken.
+ */
 function parseTime(value: unknown): Date | undefined {
-  if (typeof value !== "string") return undefined;
+  if (!(typeof value === "string" || value instanceof Date)) return undefined;
   const at = new Date(value);
   return Number.isNaN(at.getTime()) ? undefined : at;
 }
