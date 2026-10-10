@@ -289,14 +289,18 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         saveOnLeave={saveOnLeave}
         candidates={candidates}
         blockingReasons={
-          <BlockingReasonsField
-            readBlockingReasons={deps.readBlockingReasons}
-            taskId={state.task.id}
-            changes={deps.changes}
-            notify={notify}
-            labelId={`${idPrefix}-blocked-by`}
-            onSelectTask={props.onSelectTask}
-          />
+          // A done task needs nothing more: what held it back no longer
+          // matters (#54, confirmed 2026-10-10).
+          state.task.status !== "done" && (
+            <BlockingReasonsField
+              readBlockingReasons={deps.readBlockingReasons}
+              taskId={state.task.id}
+              changes={deps.changes}
+              notify={notify}
+              labelId={`${idPrefix}-blocked-by`}
+              onSelectTask={props.onSelectTask}
+            />
+          )
         }
         dependencies={
           <DependenciesField

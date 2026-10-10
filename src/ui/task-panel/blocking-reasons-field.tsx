@@ -1,7 +1,8 @@
 // The task panel's blocking reasons (#54, GLOSSARY: 阻塞): read only, shown
 // only while something blocks the task, e.g. "Subtasks: Write the
-// introduction, Collect the data". Each task name switches the task panel to
-// that task. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// introduction, Collect the data"; never for a task that is done (the task
+// panel leaves it out). Each task name switches the task panel to that task.
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { BlockingReason } from "../../domain/blocking/task-graph";
 import type { TaskId } from "../../domain/task/task";
