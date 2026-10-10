@@ -2,52 +2,16 @@
 // view, highest score first (#53).
 import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import { rankByScore } from "../../domain/scoring/score";
-import type { Importance, Task, TaskId } from "../../domain/task/task";
+import type { Task, TaskId } from "../../domain/task/task";
+import { filterLets, type TaskFilter } from "../../domain/task/task-filter";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
-/**
- * What one multi-value dimension (contexts, labels) lets through: a task
- * holding any of `values`, or, with `none`, a task holding no value at all.
- */
-export interface ValuesChoice {
-  readonly values: readonly string[];
-  readonly none: boolean;
-}
-
-/**
- * The next action view's filter (#55). Within a dimension any choice is
- * enough ("or"); every dimension given must let the task through ("and").
- */
-export interface NextActionFilter {
-  readonly contexts?: ValuesChoice;
-  readonly labels?: ValuesChoice;
-  /** The importance levels let through. */
-  readonly importance?: readonly Importance[];
-}
-
-function choiceLets(
-  choice: ValuesChoice | undefined,
-  held: readonly string[],
-): boolean {
-  // Nothing chosen: the dimension does not filter.
-  if (!choice || (choice.values.length === 0 && !choice.none)) return true;
-  if (choice.none && held.length === 0) return true;
-  return choice.values.some((value) => held.includes(value));
-}
-
-function filterLets(filter: NextActionFilter, task: Task): boolean {
-  return (
-    choiceLets(filter.contexts, task.contexts) &&
-    choiceLets(filter.labels, task.labels) &&
-    (!filter.importance ||
-      filter.importance.length === 0 ||
-      filter.importance.includes(task.importance))
-  );
-}
+/** The next action view's filter (#55); the rules are shared (task-filter). */
+export type NextActionFilter = TaskFilter;
 
 export interface ReadNextActionsOptions {
   /**

@@ -20,6 +20,7 @@ import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
 import { createAllTasksCollapseStore } from "../ui/views/all-tasks/all-tasks-collapse-store";
+import { createAllTasksFilterStore } from "../ui/views/all-tasks/all-tasks-filter-store";
 import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-store";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
@@ -74,6 +75,10 @@ export function createPanelFeature(deps: {
   const allTasksSort = createAllTasksSortStore();
   // The all tasks view's done section (#66): in memory only, as the filter.
   const doneSection = createDoneSectionStore();
+  // The all tasks view's filter and search text (#69): in memory only, apart
+  // from the next action view's filter.
+  const allTasksFilter = createAllTasksFilterStore();
+  const readCandidates = createReadCandidates({ repository });
   views.register(
     createNextActionView({
       readNextActions: createReadNextActions({
@@ -86,7 +91,7 @@ export function createPanelFeature(deps: {
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
-      readCandidates: createReadCandidates({ repository }),
+      readCandidates,
       filter: nextActionFilter,
     }),
   );
@@ -114,6 +119,8 @@ export function createPanelFeature(deps: {
       collapse: allTasksCollapse,
       sort: allTasksSort,
       doneSection,
+      readCandidates,
+      filter: allTasksFilter,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -138,6 +145,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.allTasksCollapse`, allTasksCollapse.clear);
     registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
     registry.add(`${pluginName}.doneSection`, doneSection.clear);
+    registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     const placement = createPanelPlacement(pluginPanelType(pluginName));

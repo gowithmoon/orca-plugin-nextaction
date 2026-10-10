@@ -3,8 +3,8 @@
 // value, and the seven importance levels. The candidates are the task
 // panel's. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { Candidates } from "../../../application/ports/task-repository";
-import type { ValuesChoice } from "../../../application/usecases/read-next-actions";
 import type { Importance } from "../../../domain/task/task";
+import type { ValuesChoice } from "../../../domain/task/task-filter";
 import type { SelectOption } from "../../../orca.d.ts";
 import { t } from "../../../shared/l10n/l10n";
 import { formatContext, importanceName } from "../../components/format";
@@ -18,7 +18,7 @@ const noneValue = "\u0000none";
 
 const levels: readonly Importance[] = [1, 2, 3, 4, 5, 6, 7];
 
-function ValuesSelect(props: {
+export function ValuesSelect(props: {
   label: string;
   placeholder: string;
   choice: ValuesChoice;
@@ -62,7 +62,7 @@ function ValuesSelect(props: {
   );
 }
 
-function ImportanceSelect(props: {
+export function ImportanceSelect(props: {
   chosen: readonly Importance[];
   onChange: (chosen: Importance[]) => void;
 }) {

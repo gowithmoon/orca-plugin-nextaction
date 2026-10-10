@@ -4,8 +4,9 @@
 // blocked; below it the done section (GLOSSARY: 已完成区, #66), collapsed by
 // default. After the inbox in the navigation, with no count there. It reads
 // when the plugin panel opens and again on every task change signal (ADR
-// 0007). Nodes with children collapse (#67). Verified by hand in Orca
-// (docs/ARCHITECTURE.md §5).
+// 0007). Nodes with children collapse (#67). The filter bar and the search
+// box narrow the tree to what matches, its ancestor tasks showing where it
+// sits (#69). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   AllTasksNode,
@@ -13,6 +14,7 @@ import type {
   DoneSection,
   ReadAllTasks,
 } from "../../../application/usecases/read-all-tasks";
+import type { ReadCandidates } from "../../../application/usecases/read-candidates";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
@@ -23,6 +25,7 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { useCandidates } from "../../hooks/use-candidates";
 import {
   type TaskActions,
   type TaskActionsDeps,
@@ -37,6 +40,11 @@ import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
+import { AllTasksFilterBar } from "./all-tasks-filter-bar";
+import {
+  type AllTasksFilterStore,
+  isFilteringAllTasks,
+} from "./all-tasks-filter-store";
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
 import type { DoneSectionStore } from "./done-section-store";
@@ -57,6 +65,13 @@ export interface AllTasksViewDeps {
   sort: AllTasksSortStore;
   /** The done section's state, kept in the plugin instance's memory (#66). */
   doneSection: DoneSectionStore;
+  /** The filter's contexts and labels to offer: the task panel's (#69). */
+  readCandidates: ReadCandidates;
+  /**
+   * The filter and search text, kept in the plugin instance's memory apart
+   * from the next action view's (#69).
+   */
+  filter: AllTasksFilterStore;
 }
 
 /** The node or a node below it is a task not done. */
@@ -66,8 +81,9 @@ function holdsOpenTask(node: AllTasksNode): boolean {
 
 /**
  * What the tree shows of a read: a task kept for an earlier selection is no
- * longer shown once the selection moves on, and neither are the done
- * ancestor tasks that only showed above it.
+ * longer shown once the selection moves on (only for where matching tasks
+ * below it sit, if any), and neither are the ancestor tasks that only showed
+ * above it.
  */
 function shownNodes(
   nodes: readonly AllTasksNode[],
@@ -75,10 +91,17 @@ function shownNodes(
 ): AllTasksNode[] {
   const shown: AllTasksNode[] = [];
   for (const node of nodes) {
-    if (node.faded === "kept" && node.task.id !== selected) continue;
     const children = shownNodes(node.children, selected);
+    const keptBefore = node.faded === "kept" && node.task.id !== selected;
+    if (keptBefore) {
+      if (children.length > 0)
+        shown.push({ ...node, faded: "ancestor", children });
+      continue;
+    }
     const onlyAboveKept =
-      node.children.length > 0 && children.length === 0 && !holdsOpenTask(node);
+      node.children.length > 0 &&
+      children.length === 0 &&
+      (node.faded === "ancestor" || !holdsOpenTask(node));
     if (onlyAboveKept) continue;
     shown.push({ ...node, children });
   }
@@ -285,8 +308,10 @@ function AllTasksContent(props: {
   query: ViewQuery<AllTasksRead>;
   today: CalendarDate;
   deps: AllTasksViewDeps;
+  /** A filter or search is set: an empty tree says so and offers to clear it. */
+  filtered: boolean;
 }) {
-  const { query, today, deps } = props;
+  const { query, today, deps, filtered } = props;
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
   const menuItems = deps.menuItems();
@@ -322,6 +347,23 @@ function AllTasksContent(props: {
     collapsed,
     toggleCollapsed: deps.collapse.toggle,
   };
+  if (filtered && nodes.length === 0 && done.count === 0) {
+    const { Button } = orca.components;
+    return (
+      <>
+        <ViewNotice
+          icon="ti ti-filter-off"
+          title={t("No tasks match the filter")}
+          action={
+            <Button variant="outline" onClick={deps.filter.clear}>
+              {t("Clear filter")}
+            </Button>
+          }
+        />
+        <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
+      </>
+    );
+  }
   if (nodes.length === 0 && done.count === 0 && !done.hasEarlier) {
     return (
       <ViewNotice
@@ -395,11 +437,15 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
         keep: selected,
         sort: deps.sort.current(),
         showEarlierDone: deps.doneSection.current().showEarlier,
+        filter: deps.filter.current().filter,
+        search: deps.filter.current().search,
       }),
     deps.changes,
   );
-  // A new sort reads again; both live as long as the plugin instance.
+  // A new sort, filter or search text reads again; all live as long as the
+  // plugin instance.
   deps.sort.subscribe(() => query.reload());
+  deps.filter.subscribe(() => query.reload());
   // Showing earlier items reads again; expanding only renders what is read.
   // Both live as long as the plugin instance.
   let showEarlier = deps.doneSection.current().showEarlier;
@@ -416,6 +462,21 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
       deps.sort.subscribe,
       deps.sort.current,
     );
+    const filter = React.useSyncExternalStore(
+      deps.filter.subscribe,
+      deps.filter.current,
+    );
+    const filtering = isFilteringAllTasks(filter);
+    const candidates = useCandidates(
+      deps.readCandidates,
+      deps.changes,
+      deps.taskActions.notify,
+    );
+    const state = useViewQuery(query);
+    // Filtering, the header counts the tasks that match; otherwise nothing:
+    // the number of all tasks would only weigh on the user (#63).
+    const count =
+      filtering && state.kind === "loaded" ? state.data.matchCount : undefined;
     // Before any read the selection may cause: effects run before the
     // change signal's debounced read.
     React.useEffect(() => {
@@ -426,14 +487,29 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
     }, [selectedTaskId]);
     return (
       <>
-        <ViewHeader title={t("All tasks")} />
+        <ViewHeader
+          title={t("All tasks")}
+          count={count}
+          // The navigation shows no count, so it shows here in every tier.
+          countInEveryTier={true}
+        />
         <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
+        <AllTasksFilterBar
+          state={filter}
+          candidates={candidates}
+          onChange={deps.filter.set}
+        />
         <CollapseAllBar
           query={query}
           selectedTaskId={selectedTaskId}
           collapse={deps.collapse}
         />
-        <AllTasksContent query={query} today={deps.today()} deps={deps} />
+        <AllTasksContent
+          query={query}
+          today={deps.today()}
+          deps={deps}
+          filtered={filtering}
+        />
       </>
     );
   }

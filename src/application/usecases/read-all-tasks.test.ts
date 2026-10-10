@@ -621,6 +621,204 @@ describe("read all tasks, the done section", () => {
   });
 });
 
+describe("read all tasks, filtered and searched", () => {
+  it("by status shows only the tasks of the chosen statuses", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "waiting" });
+    repository.addTask({ id: 2, status: "todo" });
+    repository.addTask({ id: 3, status: "someday" });
+    repository.addTask({ id: 4, status: "inbox" });
+
+    const read = await readAllTasks({
+      filter: { statuses: ["waiting", "someday"] },
+    });
+
+    expect(shape(read.tree)).toEqual([1, 3]);
+  });
+
+  it("shows the ancestor tasks of a matching task, those not matching faded as only showing where it sits", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addBlock(2, { parentId: 1 });
+    repository.addTask({ id: 3, status: "waiting" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "waiting" }, { parentId: 4 });
+
+    const read = await readAllTasks({ filter: { statuses: ["waiting"] } });
+
+    expect(shape(read.tree)).toEqual([[1, [[3, [[4, [5]]]]]]]);
+    expect(fades(read.tree)).toEqual([
+      [1, "ancestor"],
+      [3, null],
+      [4, "ancestor"],
+      [5, null],
+    ]);
+  });
+
+  it("by contexts, labels and importance lets through any choice within a dimension, (None) for no value, and needs every dimension", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, contexts: ["home"], labels: ["q4"] });
+    repository.addTask({ id: 2, contexts: [], labels: ["q4"] });
+    repository.addTask({ id: 3, contexts: ["office"], labels: ["q4"] });
+    repository.addTask({ id: 4, contexts: ["home"], labels: [] });
+    repository.addTask({ id: 5, contexts: ["home"], labels: ["q4"] });
+    repository.addTask({ id: 6, contexts: ["home"], importance: 6 });
+
+    const read = await readAllTasks({
+      filter: {
+        contexts: { values: ["home"], none: true },
+        labels: { values: ["q4"], none: false },
+        importance: [4],
+      },
+    });
+
+    // 3: another context; 4: no label; 6: another importance.
+    expect(shape(read.tree)).toEqual([1, 2, 5]);
+  });
+
+  it("by search text shows the tasks whose text holds every word, whatever the case", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, text: "Call the Plumber about the sink" });
+    repository.addTask({ id: 2, text: "Call mum" });
+    repository.addTask({ id: 3, text: "Fix the sink" });
+    repository.addTask({ id: 4, text: "SINK cabinet: call carpenter" });
+
+    const read = await readAllTasks({ search: "  sink   CALL " });
+
+    expect(shape(read.tree)).toEqual([1, 4]);
+  });
+
+  it("counts the matching tasks, not the ancestor tasks shown only for where they sit", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, text: "Move house" });
+    repository.addTask({ id: 2, text: "Pack books" }, { parentId: 1 });
+    repository.addTask({ id: 3, text: "Pack kitchen" }, { parentId: 1 });
+    repository.addTask({ id: 4, text: "Pack" });
+
+    const read = await readAllTasks({ search: "pack" });
+
+    expect(shape(read.tree)).toEqual([[1, [2, 3]], 4]);
+    expect(read.matchCount).toBe(3);
+  });
+
+  it("by status lets no done task in the tree through, a done one showing only above a matching task, others below hidden", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "waiting" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "inbox" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 1 });
+
+    const read = await readAllTasks({ filter: { statuses: ["waiting"] } });
+
+    expect(shape(read.tree)).toEqual([[1, [[2, [3]]]]]);
+    expect(fades(read.tree)).toEqual([
+      [1, "ancestor"],
+      [2, "ancestor"],
+      [3, null],
+    ]);
+    expect(read.matchCount).toBe(1);
+  });
+
+  it("without a status filter lets a done task in the tree through by the other dimensions, still faded as done", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", text: "Trip" });
+    repository.addTask(
+      { id: 2, status: "done", text: "Book trip hotel" },
+      { parentId: 1 },
+    );
+
+    const read = await readAllTasks({ search: "hotel" });
+
+    expect(fades(read.tree)).toEqual([
+      [1, "ancestor"],
+      [2, "done"],
+    ]);
+    expect(read.matchCount).toBe(1);
+  });
+});
+
+describe("read all tasks, the done section filtered and searched", () => {
+  it("ignores the status filter, and lets items through by the other dimensions of their own top-level task", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask(
+      { id: 1, status: "done", contexts: ["home"] },
+      completedOn("2026-10-09"),
+    );
+    repository.addTask(
+      { id: 2, status: "done", contexts: ["office"] },
+      completedOn("2026-10-08"),
+    );
+    // Only a subtask holds the context: the item itself does not.
+    repository.addTask(
+      { id: 3, status: "done", contexts: [] },
+      completedOn("2026-10-07"),
+    );
+    repository.addTask(
+      { id: 4, status: "done", contexts: ["home"] },
+      { parentId: 3, ...completedOn("2026-10-07") },
+    );
+
+    const read = await readAllTasks({
+      filter: {
+        statuses: ["waiting"],
+        contexts: { values: ["home"], none: false },
+      },
+    });
+
+    expect(doneIds(read)).toEqual([1]);
+    expect(read.done.count).toBe(1);
+    expect(read.matchCount).toBe(0);
+  });
+
+  it("searches every item when there is search text, not only the last 30 logical days, and counts them all", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask(
+      { id: 1, status: "done", text: "Renew passport" },
+      completedOn("2026-10-08"),
+    );
+    repository.addTask(
+      { id: 2, status: "done", text: "Passport photos" },
+      completedOn("2025-03-01"),
+    );
+    repository.addTask({ id: 3, status: "done", text: "Old passport" });
+    repository.addTask(
+      { id: 4, status: "done", text: "Visa" },
+      completedOn("2025-03-01"),
+    );
+
+    const read = await readAllTasks({ search: "passport" });
+
+    expect(doneIds(read)).toEqual([1, 2, 3]);
+    expect(read.done.count).toBe(3);
+    expect(read.done.hasEarlier).toBe(false);
+  });
+});
+
+describe("read all tasks filtered, keeping the task being viewed", () => {
+  it("keeps a task no longer matching in its place, faded as kept, its ancestor tasks showing where it sits, and does not count it", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, text: "Trip" });
+    repository.addBlock(2, { parentId: 1 });
+    repository.addTask({ id: 3, text: "Pack" }, { parentId: 2 });
+    repository.addTask({ id: 4, text: "Book hotel" }, { parentId: 3 });
+    repository.addTask({ id: 5, text: "Buy socks" }, { parentId: 3 });
+    repository.addTask({ id: 6, text: "Hotel loyalty card" });
+
+    const read = await readAllTasks({ search: "hotel", keep: 3 });
+
+    expect(shape(read.tree)).toEqual([[1, [[3, [4]]]], 6]);
+    expect(fades(read.tree)).toEqual([
+      [1, "ancestor"],
+      [3, "kept"],
+      [4, null],
+      [6, null],
+    ]);
+    expect(read.matchCount).toBe(2);
+  });
+});
+
 /** The tasks the done section lists, by ID. */
 function doneIds(read: AllTasksRead): TaskId[] {
   return read.done.items.map((task) => task.id);

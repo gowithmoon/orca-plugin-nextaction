@@ -132,6 +132,7 @@ const zhCN: Record<string, string> = {
   "Any context": "全部上下文",
   "Any label": "全部标记",
   "Any importance": "全部重要性",
+  "Any status": "全部状态",
   "Parent task:": "父任务：",
   "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
     "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
