@@ -204,6 +204,24 @@ describe("read all tasks", () => {
       ]);
     });
 
+    it("keeps the open tasks under a done ancestor task in the tree, unmarked", async () => {
+      // They are out of the next actions for the done ancestor, not blocked.
+      const { repository, readAllTasks } = setup();
+      repository.addTask({ id: 1, status: "done" });
+      repository.addTask({ id: 2, status: "inbox" }, { parentId: 1 });
+      repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+
+      const read = await readAllTasks();
+
+      expect(shape(read.tree)).toEqual([[1, [[2, [3]]]]]);
+      expect(marks(read.tree)).toEqual([
+        [1, false],
+        [2, false],
+        [3, false],
+      ]);
+      expect(doneIds(read)).toEqual([]);
+    });
+
     it("does not mark a task held back only by its subtasks", async () => {
       const { repository, readAllTasks } = setup();
       repository.addTask({ id: 1, status: "doing" });

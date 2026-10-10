@@ -112,7 +112,8 @@ describe("task graph: subtask blocking", () => {
   });
 
   it("only direct subtasks count, not deeper descendants", () => {
-    // 2 is done, so 1 is free even though 2 still has an open subtask.
+    // 2 is done, so 1 is free even though 2 still has an open subtask; 3 is
+    // out for its done parent, not blocked.
     const graph = analyze([
       task(1),
       task(2, { status: "done", parent: 1 }),
@@ -120,7 +121,8 @@ describe("task graph: subtask blocking", () => {
     ]);
 
     expect(graph.entry(1)?.blockedBy).toEqual([]);
-    expect(nextActionIds(graph)).toEqual([1, 3]);
+    expect(graph.entry(3)?.blockedBy).toEqual([]);
+    expect(nextActionIds(graph)).toEqual([1]);
   });
 
   it("subtask blocking is not passed down to the blocked task's subtasks", () => {
@@ -155,12 +157,57 @@ describe("task graph: parked subtree", () => {
     expect(graph.entry(1)?.parked).toBe(true);
   });
 
-  it("a parent in the inbox or done does not hold back its subtasks", () => {
-    for (const status of ["inbox", "done"] as const) {
-      const graph = analyze([task(1, { status }), task(2, { parent: 1 })]);
+  it("a parent in the inbox does not hold back its subtasks", () => {
+    const graph = analyze([
+      task(1, { status: "inbox" }),
+      task(2, { parent: 1 }),
+    ]);
 
-      expect(graph.entry(2)?.parked).toBe(false);
-      expect(nextActionIds(graph)).toEqual([2]);
+    expect(graph.entry(2)?.parked).toBe(false);
+    expect(nextActionIds(graph)).toEqual([2]);
+  });
+});
+
+describe("task graph: done ancestor", () => {
+  it("a task whose parent is done is not a next action, naming that parent", () => {
+    const graph = analyze([
+      task(1, { status: "done" }),
+      task(2, { parent: 1 }),
+    ]);
+
+    expect(graph.entry(2)?.nextAction).toBe(false);
+    expect(graph.entry(2)?.doneAncestor).toBe(1);
+    expect(nextActionIds(graph)).toEqual([]);
+  });
+
+  it("a done ancestor task levels up keeps the whole branch out, naming the nearest done one", () => {
+    // 1 (done) { 2 (todo) { 3 (done) { 4 } } }
+    const graph = analyze([
+      task(1, { status: "done" }),
+      task(2, { status: "inbox", parent: 1 }),
+      task(3, { status: "done", parent: 2 }),
+      task(4, { parent: 3 }),
+      task(5, { status: "done" }),
+      task(6, { status: "waiting", parent: 5 }),
+      task(7, { status: "doing", parent: 6 }),
+    ]);
+
+    expect(graph.entry(4)?.doneAncestor).toBe(3);
+    expect(graph.entry(2)?.doneAncestor).toBe(1);
+    expect(graph.entry(7)?.doneAncestor).toBe(5);
+    expect(nextActionIds(graph)).toEqual([]);
+  });
+
+  it("once the ancestor task is no longer done, its descendants go by the other rules again", () => {
+    for (const status of ["todo", "doing", "inbox"] as const) {
+      const graph = analyze([
+        task(1, { status }),
+        task(2, { status: "inbox", parent: 1 }),
+        task(3, { parent: 2 }),
+      ]);
+
+      expect(graph.entry(3)?.doneAncestor).toBeNull();
+      expect(nextActionIds(graph)).toEqual([3]);
     }
   });
 });

@@ -39,6 +39,20 @@ describe("read next actions", () => {
     expect(read.items.map((item) => item.task.id)).toEqual([3, 4, 1]);
   });
 
+  it("does not list the tasks under a done ancestor task, at any level", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addTask({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "doing" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([5]);
+    expect(read.total).toBe(1);
+  });
+
   it("keeps the task given as `keep` after it left the list, by its score, marked as kept", async () => {
     const { repository, readNextActions } = setup();
     repository.addTask({ id: 1, status: "todo", importance: 7 });
