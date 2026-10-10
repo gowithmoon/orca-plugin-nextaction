@@ -322,10 +322,18 @@ export function createOrcaTaskRepository(
     return {
       tasks: tasks.map((task) => {
         const place = places.get(task.id);
+        // The last completion, from the block already read. An unreadable
+        // history reads as none here, without a warning on every read; it is
+        // reported where it is read for writing (readCompletionHistory).
+        const block = blocks.get(task.id);
+        const history = block ? readCompletionHistory(block) : undefined;
+        const lastCompletion =
+          history?.kind === "readable" ? history.history.at(-1) : undefined;
         return {
           task,
           parentId: place?.parentId ?? null,
           position: place?.position ?? Number.MAX_SAFE_INTEGER,
+          ...(lastCompletion && { lastCompletion }),
         };
       }),
     };

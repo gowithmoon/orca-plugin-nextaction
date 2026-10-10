@@ -4,7 +4,12 @@ import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import type { TaskId } from "../../domain/task/task";
-import { type AllTasksNode, createReadAllTasks } from "./read-all-tasks";
+import type { CompletionHistoryRead } from "../ports/task-repository";
+import {
+  type AllTasksNode,
+  type AllTasksRead,
+  createReadAllTasks,
+} from "./read-all-tasks";
 
 /** 2026-10-09 10:00 in UTC+8: the logical day 2026-10-09. */
 const morning = "2026-10-09T10:00:00+08:00";
@@ -292,6 +297,206 @@ describe("read all tasks, keeping the task being viewed", () => {
     expect(shape(read.tree)).toEqual([1]);
   });
 });
+
+/**
+ * A readable completion history with one completion on each logical day
+ * given (`YYYY-MM-DD`), at noon UTC+8 of that day.
+ */
+function completedOn(...days: string[]): {
+  completionHistory: CompletionHistoryRead;
+} {
+  return {
+    completionHistory: {
+      kind: "readable",
+      history: days.map((day) => {
+        const [year, month, date] = day.split("-").map(Number) as [
+          number,
+          number,
+          number,
+        ];
+        return {
+          at: new Date(`${day}T12:00:00+08:00`),
+          day: { year, month, day: date },
+        };
+      }),
+    },
+  };
+}
+
+describe("read all tasks, the done section", () => {
+  it("lists a top-level task done with all its descendant tasks, once for its subtree", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "done" }, completedOn("2026-10-08"));
+    repository.addTask(
+      { id: 3, status: "done" },
+      { parentId: 2, ...completedOn("2026-10-09") },
+    );
+    repository.addTask({ id: 4, status: "done" }, { parentId: 1 });
+
+    const read = await readAllTasks();
+
+    expect(doneIds(read)).toEqual([2]);
+  });
+
+  it("orders the items by their last completion, the most recent first", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-01"));
+    // Completed twice: the later completion counts.
+    repository.addTask(
+      { id: 2, status: "done" },
+      completedOn("2026-09-20", "2026-10-05"),
+    );
+    repository.addTask({ id: 3, status: "done" }, completedOn("2026-10-03"));
+
+    const read = await readAllTasks();
+
+    expect(doneIds(read)).toEqual([2, 3, 1]);
+  });
+
+  it("lists by default only items last completed within the last 30 logical days, today included", async () => {
+    const { repository, readAllTasks } = setup();
+    // Today is the logical day 2026-10-09.
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-09"));
+    // The 30th logical day back from today, counting today.
+    repository.addTask({ id: 2, status: "done" }, completedOn("2026-09-10"));
+    // The 31st.
+    repository.addTask({ id: 3, status: "done" }, completedOn("2026-09-09"));
+    // Completed long ago, then again recently: the last completion counts.
+    repository.addTask(
+      { id: 4, status: "done" },
+      completedOn("2025-01-01", "2026-10-01"),
+    );
+
+    const read = await readAllTasks();
+
+    expect(doneIds(read)).toEqual([1, 4, 2]);
+  });
+
+  it("goes by the logical day of the completion, not its calendar day", async () => {
+    const { repository, readAllTasks } = setup();
+    // 2026-09-10 02:00 in UTC+8, before the 05:00 day boundary: it fell in
+    // the logical day 2026-09-09, the 31st back.
+    repository.addTask(
+      { id: 1, status: "done" },
+      {
+        completionHistory: {
+          kind: "readable",
+          history: [
+            {
+              at: new Date("2026-09-10T02:00:00+08:00"),
+              day: { year: 2026, month: 9, day: 9 },
+            },
+          ],
+        },
+      },
+    );
+
+    const read = await readAllTasks();
+
+    expect(doneIds(read)).toEqual([]);
+  });
+
+  it("lists every item when showing earlier ones, those with no completion recorded last, in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    // Made done in Orca directly: no completion recorded.
+    repository.addTask({ id: 1, status: "done" }, { position: 50 });
+    repository.addTask(
+      { id: 2, status: "done" },
+      { position: 10, ...completedOn("2025-03-01") },
+    );
+    repository.addTask({ id: 3, status: "done" }, { position: 20 });
+    repository.addTask(
+      { id: 4, status: "done" },
+      { position: 40, ...completedOn("2026-10-08") },
+    );
+    // A completion history this plugin cannot read counts as none.
+    repository.addTask(
+      { id: 5, status: "done" },
+      {
+        position: 30,
+        completionHistory: { kind: "unreadable", reason: "version 9" },
+      },
+    );
+
+    const recent = await readAllTasks();
+    const all = await readAllTasks({ showEarlierDone: true });
+
+    expect(doneIds(recent)).toEqual([4]);
+    expect(doneIds(all)).toEqual([4, 2, 3, 5, 1]);
+  });
+
+  it("counts the items listed in the current range, and says whether earlier ones are left out", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-09"));
+    repository.addTask({ id: 2, status: "done" }, completedOn("2026-10-02"));
+    repository.addTask({ id: 3, status: "done" }, completedOn("2026-08-01"));
+    repository.addTask({ id: 4, status: "done" });
+
+    const recent = await readAllTasks();
+    const all = await readAllTasks({ showEarlierDone: true });
+
+    expect(recent.done.count).toBe(2);
+    expect(recent.done.hasEarlier).toBe(true);
+    expect(all.done.count).toBe(4);
+    expect(all.done.hasEarlier).toBe(false);
+  });
+
+  it("has no earlier items when every one falls in the last 30 logical days", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "done" }, completedOn("2026-09-10"));
+
+    const read = await readAllTasks();
+
+    expect(read.done.count).toBe(1);
+    expect(read.done.hasEarlier).toBe(false);
+  });
+
+  it("leaves out the kept task, which stays in its place in the tree, and does not count it", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-09"));
+    repository.addTask({ id: 2, status: "done" }, completedOn("2026-10-08"));
+
+    const read = await readAllTasks({ keep: 1 });
+
+    expect(shape(read.tree)).toEqual([1]);
+    expect(doneIds(read)).toEqual([2]);
+    expect(read.done.count).toBe(1);
+  });
+
+  it("leaves out the done subtree a kept task sits in, its ancestor tasks showing in the tree", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-07"));
+    repository.addTask(
+      { id: 2, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-09") },
+    );
+    repository.addTask({ id: 3, status: "done" }, completedOn("2026-10-08"));
+
+    const read = await readAllTasks({ keep: 2 });
+
+    expect(shape(read.tree)).toEqual([[1, [2]]]);
+    expect(doneIds(read)).toEqual([3]);
+    expect(read.done.count).toBe(1);
+  });
+
+  it("does not count a kept task left out for being earlier as an earlier item", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-09"));
+    repository.addTask({ id: 2, status: "done" });
+
+    const read = await readAllTasks({ keep: 2 });
+
+    expect(doneIds(read)).toEqual([1]);
+    expect(read.done.hasEarlier).toBe(false);
+  });
+});
+
+/** The tasks the done section lists, by ID. */
+function doneIds(read: AllTasksRead): TaskId[] {
+  return read.done.items.map((task) => task.id);
+}
 
 /** Every node in the tree, depth first, with whether it is marked blocked. */
 function marks(nodes: readonly AllTasksNode[]): [TaskId, boolean][] {

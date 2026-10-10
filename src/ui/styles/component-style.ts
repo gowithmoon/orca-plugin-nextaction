@@ -294,6 +294,37 @@ export const componentCss = `
   list-style: none;
 }
 
+/*
+ * The all tasks view's done section (#66), below the tree: a quiet title
+ * that toggles it, its cards, then "show earlier".
+ */
+.nextaction-done-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  margin-top: var(--orca-spacing-lg);
+}
+
+.nextaction-done-section-toggle,
+.nextaction-done-section-earlier {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  align-self: flex-start;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nextaction-done-section-toggle:hover,
+.nextaction-done-section-earlier:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
 /* A narrow list: tighter cards, so the text keeps its room. */
 @container nextaction-task-list (max-width: 320px) {
   .nextaction-task-card,
