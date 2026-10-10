@@ -47,7 +47,7 @@ export const settingsDefinition: SettingsDefinition = {
     schema: () => ({
       label: t("Start preview days"),
       description: t(
-        "Tasks that start within this many days show in the next actions already, after the ones that can start now. A whole number from 0 to 14; 0 shows only tasks that can start today.",
+        "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.",
       ),
       type: "number",
       defaultValue: 0,
