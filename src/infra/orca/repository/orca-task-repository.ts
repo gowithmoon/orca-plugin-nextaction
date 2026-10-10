@@ -340,6 +340,10 @@ export function createOrcaTaskRepository(
           parentId: place?.parentId ?? null,
           position: place?.position ?? Number.MAX_SAFE_INTEGER,
           ...(lastCompletion && { lastCompletion }),
+          // A page has an alias; with no parent block it sits at the top of
+          // the notes, where only pages are tasks (ADR 0013, move-blocks P2).
+          ...(block && block.aliases.length > 0 && { page: true }),
+          ...(block && block.parent == null && { root: true }),
         };
       }),
     };

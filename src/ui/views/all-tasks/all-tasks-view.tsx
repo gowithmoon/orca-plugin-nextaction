@@ -6,7 +6,8 @@
 // when the plugin panel opens and again on every task change signal (ADR
 // 0007). Nodes with children collapse (#67). The filter bar and the search
 // box narrow the tree to what matches, its ancestor tasks showing where it
-// sits (#69). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// sits (#69). A card dragged onto another becomes its subtask (#70), into a
+// gap goes there (#71). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
@@ -50,7 +51,12 @@ import {
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
 import type { DoneSectionStore } from "./done-section-store";
-import { TaskDragArea, TaskDragHandle, TaskDropTarget } from "./task-drag";
+import {
+  TaskDragArea,
+  TaskDragHandle,
+  TaskDropGap,
+  TaskDropTarget,
+} from "./task-drag";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -75,7 +81,7 @@ export interface AllTasksViewDeps {
    * from the next action view's (#69).
    */
   filter: AllTasksFilterStore;
-  /** Dragging a card onto another (#70). */
+  /** Dragging a card onto another (#70) or into a gap (#71). */
   moveTask: MoveTask;
 }
 
@@ -155,6 +161,11 @@ interface TreeCards {
   selectTask: (id: TaskId) => void;
   collapsed: ReadonlySet<TaskId>;
   toggleCollapsed: (id: TaskId) => void;
+  /**
+   * Top-level tasks have gaps to drop in: only in note order, where a place
+   * among them means something (#63).
+   */
+  topLevelGaps: boolean;
 }
 
 /** A node's collapse button. */
@@ -188,6 +199,8 @@ function TreeNodes(props: {
   top?: boolean;
 }) {
   const { cards } = props;
+  const gaps = !props.top || cards.topLevelGaps;
+  const last = props.nodes.at(-1);
   return (
     <ul
       className={
@@ -201,6 +214,9 @@ function TreeNodes(props: {
         const collapsed = parent && cards.collapsed.has(node.task.id);
         return (
           <li key={node.task.id}>
+            {/* Before the card below it; a task the filter hides stays
+                where it is (#71). */}
+            {gaps && <TaskDropGap target={node.task.id} placement="before" />}
             <div className="nextaction-task-tree-row">
               {parent ? (
                 <CollapseButton
@@ -243,6 +259,10 @@ function TreeNodes(props: {
               </div>
             ) : (
               parent && <TreeNodes nodes={node.children} cards={cards} />
+            )}
+            {/* The bottom gap: after the last top-level task. */}
+            {props.top && gaps && node === last && (
+              <TaskDropGap target={node.task.id} placement="after" />
             )}
           </li>
         );
@@ -332,6 +352,10 @@ function AllTasksContent(props: {
     deps.collapse.subscribe,
     deps.collapse.current,
   );
+  const sort = React.useSyncExternalStore(
+    deps.sort.subscribe,
+    deps.sort.current,
+  );
 
   if (state.kind === "loading") return <Placeholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -357,6 +381,7 @@ function AllTasksContent(props: {
     selectTask,
     collapsed,
     toggleCollapsed: deps.collapse.toggle,
+    topLevelGaps: sort === "note",
   };
   if (filtered && nodes.length === 0 && done.count === 0) {
     const { Button } = orca.components;

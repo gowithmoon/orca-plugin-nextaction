@@ -27,6 +27,8 @@ interface StoredBlock {
   notConvertible: NotConvertibleReason | undefined;
   /** Present while the block carries the task tag. */
   task: Task | undefined;
+  /** The block has an alias: it is a page. */
+  page: boolean;
   /**
    * The stored completion history, `undefined` when none is. Kept when the
    * task tag goes, as Orca does (block-properties-json J4).
@@ -46,6 +48,8 @@ export interface BlockSetup {
   position?: number;
   notConvertible?: NotConvertibleReason;
   completionHistory?: CompletionHistoryRead;
+  /** The block has an alias: it is a page. */
+  page?: boolean;
 }
 
 export interface InMemoryTaskRepository extends TaskRepository {
@@ -177,6 +181,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         notConvertible: setup.notConvertible,
         task: undefined,
         completionHistory: setup.completionHistory,
+        page: setup.page ?? false,
       });
     },
 
@@ -190,6 +195,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         notConvertible: undefined,
         task: full,
         completionHistory: setup.completionHistory,
+        page: setup.page ?? false,
       });
     },
 
@@ -334,6 +340,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           parentId: parentTaskOf(id),
           position: block.position,
           ...(lastCompletion && { lastCompletion }),
+          ...(block.page && { page: true }),
+          ...(block.parentId === undefined && { root: true }),
         });
       }
       return { tasks };
@@ -407,6 +415,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           // Properties not given keep the defaults, as Orca fills them.
           task: { ...freshTask(id, text, now), ...initial },
           completionHistory: undefined,
+          page: false,
         });
       });
       return id;

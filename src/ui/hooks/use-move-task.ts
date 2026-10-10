@@ -22,7 +22,12 @@ export function useMoveTask(
           await moveTask(move);
         } catch (error) {
           if (error instanceof MoveRefusedError) {
-            notify("warn", t("Not moved: a task cannot go below itself."));
+            notify(
+              "warn",
+              error.reason === "page-level-only-pages"
+                ? t("Not moved: only pages can go between pages.")
+                : t("Not moved: a task cannot go below itself."),
+            );
             return;
           }
           notifyActionFailure(notify, error, (reason) =>

@@ -207,9 +207,11 @@ const zhCN: Record<string, string> = {
   "Not moved: there, ${moved} and ${cycleWith} would wait for each other, making a dependency cycle.":
     "未移动：移到那里后，${moved} 和 ${cycleWith} 会互相等待，造成循环依赖。",
   "Not moved: a task cannot go below itself.": "未移动：不能移到自己下面。",
+  "Not moved: only pages can go between pages.":
+    "未移动：只有页面能放在页面之间。",
   "Could not move the task: ${reason}": "无法移动任务：${reason}",
-  "Drag onto another task to make it a subtask":
-    "拖到另一个任务上，成为它的子任务",
+  "Drag onto another task to make it a subtask, or between tasks to move it there":
+    "拖到另一个任务上成为它的子任务，或拖到任务之间放在那里",
 };
 
 export default zhCN;

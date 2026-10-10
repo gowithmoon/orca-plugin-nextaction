@@ -1,14 +1,20 @@
-// Dragging a task onto another task's card in the all tasks view (#70): it
-// becomes that task's last subtask. Pointer events with pointer capture, not
+// Dragging a task in the all tasks view: onto another task's card, it becomes
+// that task's last subtask (#70); into the gap above a card, it goes before
+// that card's task, and into the gap below the last top-level task, after it
+// (#71). A gap shows a line while the pointer is over it. Pointer events with
+// pointer capture, not
 // the browser's drag and drop, so Orca's note panels never take a drag from
 // here and a drag from the notes is never taken here (move-blocks 64c).
 // A drag starts from the handle on a card once the pointer has gone a few
 // pixels, so a click and selecting text stay as they are. Letting go
-// anywhere but on a card in the area cancels it. The list scrolls while the
+// anywhere but on a card or a gap in the area cancels it. The list scrolls while the
 // pointer is near its top or bottom edge. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { TaskMove } from "../../../domain/blocking/task-move";
+import type {
+  MovePlacement,
+  TaskMove,
+} from "../../../domain/blocking/task-move";
 import type { Task, TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
@@ -21,16 +27,37 @@ const scrollEdge = 40;
 const scrollStep = 14;
 /** Marks a card's wrapper as a place to drop, holding the task's ID. */
 const dropAttribute = "data-nextaction-drop-task";
+/** Marks a gap as a place to drop, holding the task it goes next to. */
+const gapAttribute = "data-nextaction-drop-gap";
+/** A gap's placement next to its task: "before" or "after". */
+const gapPlacementAttribute = "data-placement";
+
+/** Where a drop would go: next to `target`, as `placement` says. */
+interface DropAt {
+  readonly target: TaskId;
+  readonly placement: MovePlacement;
+}
+
+/** Tells drop places apart: a card, or a gap before or after a task. */
+function dropKey(drop: DropAt): string {
+  return `${drop.placement}:${drop.target}`;
+}
+
+/** The same place, or none for both. */
+function samePlace(a: DropAt | null, b: DropAt | null): boolean {
+  return a === b || (a !== null && b !== null && dropKey(a) === dropKey(b));
+}
 
 interface DragState {
   readonly task: Task;
-  /** The card the pointer is over, if any. */
-  readonly over: TaskId | null;
+  /** The card or gap the pointer is over, if any. */
+  readonly over: DropAt | null;
 }
 
 interface DragArea {
   readonly dragging: TaskId | null;
-  readonly over: TaskId | null;
+  /** The `dropKey` of the card or gap the pointer is over, if any. */
+  readonly over: string | null;
   /** The pointer moved with the handle of `task` pressed. */
   move(task: Task, x: number, y: number): void;
   /** The pointer was let go. */
@@ -54,8 +81,8 @@ function scrollingAncestor(element: HTMLElement): HTMLElement | undefined {
 }
 
 /**
- * The area cards can be dragged and dropped in. A drop on a card calls
- * `onMove` with that card's task as the target; the use case refuses what
+ * The area cards can be dragged and dropped in. A drop on a card or a gap
+ * calls `onMove` with its task as the target; the use case refuses what
  * cannot be done.
  */
 export function TaskDragArea(props: {
@@ -76,15 +103,22 @@ export function TaskDragArea(props: {
     setState(next);
   }, []);
 
-  /** The task of the card under the point, only within this area. */
-  const targetAt = React.useCallback((x: number, y: number) => {
+  /** The card or gap under the point, only within this area. */
+  const targetAt = React.useCallback((x: number, y: number): DropAt | null => {
     const element = document.elementFromPoint(x, y);
     const root = area.current;
     if (!element || !root?.contains(element)) return null;
-    const card = element.closest(`[${dropAttribute}]`);
-    if (!card || !root.contains(card)) return null;
-    const id = Number(card.getAttribute(dropAttribute));
-    return Number.isInteger(id) ? id : null;
+    const place = element.closest(`[${dropAttribute}], [${gapAttribute}]`);
+    if (!place || !root.contains(place)) return null;
+    if (place.hasAttribute(gapAttribute)) {
+      const target = Number(place.getAttribute(gapAttribute));
+      const placement = place.getAttribute(gapPlacementAttribute);
+      if (!Number.isInteger(target)) return null;
+      if (placement !== "before" && placement !== "after") return null;
+      return { target, placement };
+    }
+    const target = Number(place.getAttribute(dropAttribute));
+    return Number.isInteger(target) ? { target, placement: "lastChild" } : null;
   }, []);
 
   const placePreview = React.useCallback(() => {
@@ -98,12 +132,12 @@ export function TaskDragArea(props: {
   const value = React.useMemo<DragArea>(
     () => ({
       dragging: state?.task.id ?? null,
-      over: state?.over ?? null,
+      over: state?.over ? dropKey(state.over) : null,
       move(task, x, y) {
         pointer.current = { x, y };
         const over = targetAt(x, y);
         const drag = current.current;
-        if (!drag || drag.task.id !== task.id || drag.over !== over) {
+        if (!drag || drag.task.id !== task.id || !samePlace(drag.over, over)) {
           update({ task, over });
         }
         placePreview();
@@ -112,13 +146,9 @@ export function TaskDragArea(props: {
         const drag = current.current;
         if (!drag) return;
         update(null);
-        const target = targetAt(x, y);
-        if (target === null) return;
-        onMove.current({
-          id: drag.task.id,
-          target,
-          placement: "lastChild",
-        });
+        const at = targetAt(x, y);
+        if (at === null) return;
+        onMove.current({ id: drag.task.id, ...at });
       },
       cancel() {
         if (current.current) update(null);
@@ -161,7 +191,7 @@ export function TaskDragArea(props: {
         // The cards moved under the pointer.
         const drag = current.current;
         const over = targetAt(x, y);
-        if (drag && drag.over !== over) update({ ...drag, over });
+        if (drag && !samePlace(drag.over, over)) update({ ...drag, over });
       }
       frame = requestAnimationFrame(step);
     };
@@ -171,7 +201,12 @@ export function TaskDragArea(props: {
 
   return (
     <DragContext.Provider value={value}>
-      <div ref={area} className="nextaction-drag-area">
+      <div
+        ref={area}
+        className="nextaction-drag-area"
+        // Gaps take the pointer only while dragging.
+        data-dragging={dragging || undefined}
+      >
         {props.children}
       </div>
       {state && (
@@ -197,12 +232,44 @@ export function TaskDropTarget(props: {
     <div
       {...{ [dropAttribute]: props.id }}
       data-drop-over={
-        (drag?.over === props.id && drag.dragging !== null) || undefined
+        (drag?.over === dropKey({ target: props.id, placement: "lastChild" }) &&
+          drag.dragging !== null) ||
+        undefined
       }
       data-dragging={drag?.dragging === props.id || undefined}
     >
       {props.children}
     </div>
+  );
+}
+
+/**
+ * A gap to drop in, placed by the stylesheet over the space above its list
+ * item ("before" `target`) or below it ("after"). Its list item is
+ * positioned. Takes the pointer only while dragging; shows a line while the
+ * pointer is over it.
+ */
+export function TaskDropGap(props: {
+  target: TaskId;
+  placement: "before" | "after";
+}) {
+  const drag = React.useContext(DragContext);
+  if (!drag) return null;
+  return (
+    <div
+      className="nextaction-drop-gap"
+      aria-hidden="true"
+      {...{
+        [gapAttribute]: props.target,
+        [gapPlacementAttribute]: props.placement,
+      }}
+      data-drop-over={
+        (drag.dragging !== null &&
+          drag.over ===
+            dropKey({ target: props.target, placement: props.placement })) ||
+        undefined
+      }
+    />
   );
 }
 
@@ -227,7 +294,9 @@ export function TaskDragHandle(props: { task: Task }) {
     <span
       className="nextaction-drag-handle"
       aria-hidden="true"
-      title={t("Drag onto another task to make it a subtask")}
+      title={t(
+        "Drag onto another task to make it a subtask, or between tasks to move it there",
+      )}
       data-dragging={drag.dragging === props.task.id || undefined}
       onPointerDown={(event) => {
         if (event.button !== 0) return;

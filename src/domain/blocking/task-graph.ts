@@ -18,6 +18,14 @@ export interface SnapshotTask {
    * when it has none, or the history cannot be read.
    */
   readonly lastCompletion?: CompletionEntry;
+  /** Its block is a page: it has an alias. Absent when it is not. */
+  readonly page?: boolean;
+  /**
+   * Its block has no parent block: a page at the top of the notes. A block
+   * placed before or after it has none either (move-blocks P2). Absent when
+   * it has one.
+   */
+  readonly root?: boolean;
 }
 
 /** Every task, done ones included, as they stand in the notes. */
