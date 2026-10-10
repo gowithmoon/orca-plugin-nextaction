@@ -156,13 +156,14 @@ tests/
 - `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。
 
 界面注入（`status-icon-task-menu`、`official-task-menus`）：
-- 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 DOM 读取块 ID。
+- 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 Orca 的 DOM 读取块 ID。插件自己渲染的 `data-` 属性可以读取。
 - 只有状态图标依赖 Orca 内部 DOM：它是一份只负责显示的注入样式，Orca 改版时最坏的结果是图标不显示，不影响任何操作。依赖内部 DOM 的选择器全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
 - 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件中使用；其他 `ui` 代码仍然只用英文键。
 
 ### 注册与清理
 
 - 所有 `register*`、事件监听、样式注入、定时器、独立的 React 根节点都通过 `platform/registry.ts` 进行。注册表在 `unload` 时按注册的逆序全部释放。代码中禁止出现游离的 `register*` 调用。
+- 例外：React 组件在 effect 中创建、在同一个 effect 的清理函数中释放的定时器和监听（例如拖动时的自动滚动 `requestAnimationFrame`）随组件存亡，不经过注册表。`unload` 前插件面板已经关闭，它们随面板一起释放。注册表管的是比组件活得久的东西。
 - `load` 和 `unload` 必须经得起反复调用：Orca 启用插件时可能在 1 秒内执行 `load → unload → load`；`load` 抛错后，停用时仍会调用 `unload`。注册表要能处理只加载了一半的状态（`plugin-lifecycle-settings`）。
 - 每次 `load` 都是新的模块实例，模块级变量不会跨越停用和启用保留。
 - 注销插件面板类型之前，先关闭所有打开着的插件面板；覆盖打开的，恢复被覆盖的内容（ADR 0011）。只注销不关闭，面板会一直留在界面上。
