@@ -98,6 +98,57 @@ describe("read today's My Day", () => {
     expect(read.unscheduled.map((item) => item.task.id)).toEqual([2]);
   });
 
+  it("gives every task its place in the unscheduled order, the scheduled ones too", async () => {
+    const { repository, readMyDay } = setup();
+    const schedule = { start: at("09T14:00:00"), end: at("09T15:00:00") };
+    repository.addTask(
+      { id: 1, status: "todo", importance: 2 },
+      myDay({ day: oct9 }),
+    );
+    repository.addTask(
+      { id: 2, status: "todo", importance: 7 },
+      myDay({ day: oct9, schedule }),
+    );
+    repository.addTask(
+      { id: 3, status: "done", importance: 7 },
+      myDay({ day: oct9 }),
+    );
+    repository.addTask(
+      { id: 4, status: "todo" },
+      myDay({ day: oct9, schedule }),
+    );
+
+    const read = await readMyDay();
+
+    expect(
+      [...read.scheduled, ...read.unscheduled]
+        .map((item) => [item.task.id, item.unscheduledOrder])
+        .sort(([a], [b]) => Number(a) - Number(b)),
+    ).toEqual([
+      [1, 2],
+      [2, 0],
+      [3, 3],
+      [4, 1],
+    ]);
+  });
+
+  it("lists the scheduled starting at the same time in the unscheduled order", async () => {
+    const { repository, readMyDay } = setup();
+    const schedule = { start: at("09T14:00:00"), end: at("09T15:00:00") };
+    repository.addTask(
+      { id: 1, status: "todo", importance: 2 },
+      myDay({ day: oct9, schedule }),
+    );
+    repository.addTask(
+      { id: 2, status: "todo", importance: 7 },
+      myDay({ day: oct9, schedule }),
+    );
+
+    const read = await readMyDay();
+
+    expect(read.scheduled.map((item) => item.task.id)).toEqual([2, 1]);
+  });
+
   it("says the time range of today it read by, from the day boundary to the next one", async () => {
     const { dayBoundary, readMyDay } = setup();
     expect((await readMyDay()).range).toEqual({

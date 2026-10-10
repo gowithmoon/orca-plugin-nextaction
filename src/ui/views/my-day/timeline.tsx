@@ -25,6 +25,7 @@ import { StatusButton } from "../../components/task-card";
 import type { TaskActions } from "../../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { TaskMenu } from "../../task-menu/task-menu";
+import { TimelinePreview, useDragSource } from "./my-day-drag";
 import {
   hourTicks,
   scheduleBox,
@@ -84,6 +85,15 @@ export function TimelineCard(props: {
   const compact = box.height < compactBelowPx;
   const text = shownText(task);
   const times = formatTimeRange(item.schedule);
+  // The body moves it, the bottom edge changes its length (#85); done
+  // cards too, as the timeline records the day.
+  const drag = useDragSource((target) => ({
+    kind: target.closest(".nextaction-timeline-card-resize")
+      ? "resize"
+      : "move",
+    task,
+    schedule: item.schedule,
+  }));
   const style = {
     top: `${box.top}px`,
     height: `${box.height}px`,
@@ -93,6 +103,7 @@ export function TimelineCard(props: {
 
   const article = (onContextMenu?: (event: React.MouseEvent) => void) => (
     <article
+      {...drag}
       className="nextaction-timeline-card"
       style={style}
       data-nextaction-timeline-card={task.id}
@@ -247,6 +258,8 @@ export function Timeline(props: {
               card={card}
             />
           ))}
+          {/* Renders by itself while dragging; the cards stay as they are. */}
+          <TimelinePreview range={range} />
           {nowShown && (
             <div
               className="nextaction-timeline-now"

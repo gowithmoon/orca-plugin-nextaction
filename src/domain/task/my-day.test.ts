@@ -3,6 +3,7 @@ import { type DayBoundary, logicalDayRange } from "../time/logical-day";
 import {
   addToday,
   type MyDayEntry,
+  moveSchedule,
   normalizeSchedule,
   removeToday,
   scheduleToday,
@@ -263,5 +264,33 @@ describe("normalizing a schedule", () => {
     expect(
       normalizeSchedule({ start: at("09T05:30:00"), minutes: 60 }, day),
     ).toEqual({ start: at("09T04:45:00"), end: at("09T05:00:00") });
+  });
+});
+
+describe("moving a schedule", () => {
+  const oct8 = { year: 2026, month: 10, day: 8 };
+  const day = logicalDayRange(oct8, five);
+  const at = (time: string) => new Date(`2026-10-${time}+08:00`);
+  const ninetyMinutes = { start: at("08T09:00:00"), end: at("08T10:30:00") };
+
+  it("starts it at the new time, snapped to 15 minutes, keeping its length", () => {
+    expect(moveSchedule(ninetyMinutes, at("08T14:07:00"), day)).toEqual({
+      start: at("08T14:00:00"),
+      end: at("08T15:30:00"),
+    });
+  });
+
+  it("ends at the next day boundary at the latest, starting earlier to keep its length", () => {
+    expect(moveSchedule(ninetyMinutes, at("09T04:30:00"), day)).toEqual({
+      start: at("09T03:30:00"),
+      end: at("09T05:00:00"),
+    });
+  });
+
+  it("starts at today's day boundary at the earliest, keeping its length", () => {
+    expect(moveSchedule(ninetyMinutes, at("08T03:00:00"), day)).toEqual({
+      start: at("08T05:00:00"),
+      end: at("08T06:30:00"),
+    });
   });
 });

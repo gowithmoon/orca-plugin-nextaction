@@ -173,6 +173,28 @@ export function normalizeSchedule(
 }
 
 /**
+ * `schedule` moved to start at `start` on the logical day whose range is
+ * `day`, keeping its length (GLOSSARY: 排期; dragging a card on the
+ * timeline, #85): the start snaps as `normalizeSchedule` does.
+ */
+export function moveSchedule(
+  schedule: MyDaySchedule,
+  start: Date,
+  day: LogicalDayRange,
+): MyDaySchedule {
+  const minutes =
+    (schedule.end.getTime() - schedule.start.getTime()) / minuteMs;
+  // Near the next day boundary it starts earlier rather than getting
+  // shorter; `normalizeSchedule` still holds it within the day.
+  const latest = day.end.getTime() - minutes * minuteMs;
+  const snapped = snapToStep(start).getTime();
+  return normalizeSchedule(
+    { start: new Date(Math.min(snapped, latest)), minutes },
+    day,
+  );
+}
+
+/**
  * Whether `schedule` holds on the logical day whose range is `day`: it lies
  * within it, from the day boundary to the next one. One outside reads as
  * unscheduled, e.g. after the user moved the day boundary (ADR 0020); the

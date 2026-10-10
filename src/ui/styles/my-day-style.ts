@@ -231,6 +231,98 @@ export const myDayCss = `
   height: 4px;
 }
 
+/*
+ * Dragging (#85, my-day-drag.tsx). The chip and the preview take no pointer,
+ * so what lies under it is the place to drop.
+ */
+.nextaction-my-day-layout {
+  position: relative;
+}
+
+.nextaction-timeline-card-resize {
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.nextaction-my-day-layout[data-dragging] {
+  user-select: none;
+  cursor: grabbing;
+}
+
+.nextaction-my-day-layout[data-dragging="resize"] {
+  cursor: ns-resize;
+}
+
+.nextaction-my-day-layout[data-dragging] * {
+  cursor: inherit;
+}
+
+/* The card being dragged stays where it is, faded. */
+/* Over a done card's own fading (same weight, later). */
+.nextaction-my-day-layout [data-nextaction-drag-source] {
+  opacity: 0.4;
+}
+
+/* A timeline card would be unscheduled here. */
+.nextaction-my-day-unscheduled[data-drop-over] {
+  outline: 2px dashed var(--orca-color-primary-5);
+  outline-offset: 4px;
+  border-radius: var(--orca-radius-md);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 6%, transparent);
+}
+
+/* Where it would go, snapped, with its times. */
+.nextaction-timeline-preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
+  padding: 1px var(--orca-spacing-sm);
+  border: 2px dashed var(--orca-color-primary-5);
+  border-radius: var(--orca-radius-sm);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 18%, var(--orca-color-bg-1));
+  color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-xs);
+  line-height: var(--orca-lineheight-sm);
+  pointer-events: none;
+}
+
+.nextaction-timeline-preview-times {
+  font-weight: var(--orca-fontweight-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-timeline-preview-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The dragged task under the pointer, off the timeline; placed by transform. */
+.nextaction-my-day-drag-chip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  max-width: 240px;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--orca-fontsize-sm);
+  color: var(--orca-color-text-1);
+  background-color: var(--orca-color-bg-1);
+  border: var(--orca-border-box);
+  border-radius: var(--orca-radius-sm);
+  box-shadow: var(--orca-shadow-popup);
+  pointer-events: none;
+}
+
 /* The current time: a line across the track, with a dot at its start. */
 .nextaction-timeline-now {
   position: absolute;

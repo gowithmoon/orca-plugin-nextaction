@@ -11,7 +11,7 @@ import {
   todayEntry,
 } from "../../domain/task/my-day";
 import { isOverdue } from "../../domain/task/overdue";
-import type { Task } from "../../domain/task/task";
+import type { Task, TaskId } from "../../domain/task/task";
 import {
   type LogicalDayRange,
   logicalDay,
@@ -27,6 +27,12 @@ export interface MyDayItem {
   readonly task: Task;
   /** Still not done after its due day (GLOSSARY: 截止日期). */
   readonly overdue: boolean;
+  /**
+   * Its place in the unscheduled area's order among all of today's tasks,
+   * scheduled ones too, from 0: where it would go once unscheduled, so a
+   * drop on the unscheduled area shows it there at once (#85).
+   */
+  readonly unscheduledOrder: number;
 }
 
 /** A scheduled task in today's My Day. */
@@ -69,34 +75,38 @@ export function createReadMyDay(deps: {
       previewDays: deps.startPreviewDays.current(),
     });
     const inToday: TaskGraphEntry[] = [];
-    const scheduled: ScheduledMyDayItem[] = [];
+    const schedules = new Map<TaskId, MyDaySchedule>();
     for (const item of snapshot.tasks) {
       if (item.myDay?.kind !== "readable") continue;
       const todays = todayEntry(item.myDay.entries, now, boundary);
       if (!todays) continue;
+      const entry = graph.entry(item.task.id);
+      if (!entry) continue;
+      inToday.push(entry);
       // One outside today's range reads as unscheduled (ADR 0020).
       if (todays.schedule && scheduleWithin(todays.schedule, range)) {
-        scheduled.push({
-          task: item.task,
-          overdue: isOverdue(item.task, today),
-          schedule: todays.schedule,
-        });
-        continue;
+        schedules.set(item.task.id, todays.schedule);
       }
-      const entry = graph.entry(item.task.id);
-      if (entry) inToday.push(entry);
+    }
+    const ranked = rankByScore(inToday, today);
+    const ordered = [
+      ...ranked.filter((entry) => entry.task.status !== "done"),
+      ...ranked.filter((entry) => entry.task.status === "done"),
+    ].map((entry, unscheduledOrder) => ({
+      task: entry.task,
+      overdue: isOverdue(entry.task, today),
+      unscheduledOrder,
+    }));
+    const scheduled: ScheduledMyDayItem[] = [];
+    const unscheduled: MyDayItem[] = [];
+    for (const item of ordered) {
+      const schedule = schedules.get(item.task.id);
+      if (schedule) scheduled.push({ ...item, schedule });
+      else unscheduled.push(item);
     }
     scheduled.sort(
       (a, b) => a.schedule.start.getTime() - b.schedule.start.getTime(),
     );
-    const ranked = rankByScore(inToday, today);
-    const unscheduled = [
-      ...ranked.filter((entry) => entry.task.status !== "done"),
-      ...ranked.filter((entry) => entry.task.status === "done"),
-    ].map((entry) => ({
-      task: entry.task,
-      overdue: isOverdue(entry.task, today),
-    }));
     return { range, scheduled, unscheduled };
   };
 }

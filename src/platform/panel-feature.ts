@@ -14,6 +14,7 @@ import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-m
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal } from "../shared/change-signal";
+import { myDayScheduleActions } from "../ui/hooks/use-my-day-schedule";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
@@ -110,6 +111,11 @@ export function createPanelFeature(deps: {
     clock: systemClock,
     dayBoundary: deps.dayBoundary,
   };
+  const scheduleDeps = {
+    scheduleInMyDay: createScheduleInMyDay(myDayDeps),
+    unscheduleInMyDay: createUnscheduleInMyDay(myDayDeps),
+    notify: deps.taskActions.notify,
+  };
   // The schedule popup's root (#84) exists only while loaded.
   let renderSchedulePopup: (node: React.ReactNode) => void = () => {};
   views.register(
@@ -126,14 +132,12 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       openSchedulePopup: createSchedulePopup({
-        deps: {
-          scheduleInMyDay: createScheduleInMyDay(myDayDeps),
-          unscheduleInMyDay: createUnscheduleInMyDay(myDayDeps),
-          notify: deps.taskActions.notify,
-        },
+        deps: scheduleDeps,
         // Into the load's root; nothing outside a load.
         render: (node) => renderSchedulePopup(node),
       }),
+      // Dragging on the timeline (#85) writes as the popup does.
+      scheduleActions: myDayScheduleActions(scheduleDeps),
     }),
   );
   views.register(

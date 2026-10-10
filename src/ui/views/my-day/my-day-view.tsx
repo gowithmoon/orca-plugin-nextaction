@@ -35,6 +35,7 @@ import {
 } from "../../components/view-notice";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
 import { useMyDayCandidates } from "../../hooks/use-my-day-candidates";
+import type { MyDayScheduleActions } from "../../hooks/use-my-day-schedule";
 import { useNow } from "../../hooks/use-now";
 import {
   type TaskActionsDeps,
@@ -49,6 +50,16 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
+import {
+  createMyDayDrag,
+  DragChip,
+  DragWatch,
+  type MyDayDrag,
+  MyDayDragProvider,
+  type MyDayDragSetup,
+  useDragSource,
+} from "./my-day-drag";
+import { useOptimisticMyDay } from "./optimistic-my-day";
 import type { OpenSchedulePopup } from "./schedule-popup";
 import { ScheduleButton, Timeline, type TimelineCardActions } from "./timeline";
 
@@ -68,6 +79,8 @@ export interface MyDayViewDeps {
   menuItems: () => TaskMenuItems | undefined;
   /** Opens the schedule popup (#84). */
   openSchedulePopup: OpenSchedulePopup;
+  /** The writes a drop makes (#85), reporting their failures. */
+  scheduleActions: MyDayScheduleActions;
 }
 
 /** A card's task and, on the timeline, its schedule: what the popup opens on. */
@@ -171,7 +184,7 @@ function UnscheduledList(props: {
   return (
     <ul className="nextaction-task-list">
       {items.map((item) => (
-        <li key={item.task.id}>
+        <UnscheduledItem key={item.task.id} item={item}>
           <TaskCard
             task={item.task}
             today={today}
@@ -182,9 +195,23 @@ function UnscheduledList(props: {
             selected={item.task.id === selectedTaskId}
             buttons={<ScheduleButton onClick={() => onSchedule(item)} />}
           />
-        </li>
+        </UnscheduledItem>
       ))}
     </ul>
+  );
+}
+
+/** An unscheduled card, to drag onto the timeline (#85). */
+function UnscheduledItem(props: {
+  item: MyDayItem;
+  children: React.ReactNode;
+}) {
+  const { task } = props.item;
+  const drag = useDragSource(() => ({ kind: "add", task }));
+  return (
+    <li className="nextaction-my-day-unscheduled-item" {...drag}>
+      {props.children}
+    </li>
   );
 }
 
@@ -229,9 +256,27 @@ function MyDayAreas(props: {
   deps: MyDayViewDeps;
 }) {
   const { query, today, deps } = props;
-  const state = useViewQuery(query);
+  // What a drop wrote shows at once, until a read after it arrives (#85).
+  const { shown: state, commit } = useOptimisticMyDay(
+    query,
+    useViewQuery(query),
+    deps.scheduleActions,
+  );
   const read = state.kind === "loaded" ? state.data : undefined;
   const range = read?.range;
+  const root = React.useRef<HTMLDivElement>(null);
+  // The drag lives as long as the areas; it reads these when it needs them.
+  const setup = React.useRef<MyDayDragSetup>({
+    root: null,
+    range: undefined,
+    commit,
+  });
+  setup.current = { root: root.current, range, commit };
+  const drag = React.useRef<MyDayDrag>();
+  drag.current ??= createMyDayDrag(() => ({
+    ...setup.current,
+    root: root.current,
+  }));
   const onSchedule = React.useCallback(
     (item: ScheduleTarget) => {
       if (!range) return;
@@ -271,7 +316,30 @@ function MyDayAreas(props: {
   }
 
   return (
-    <div className="nextaction-my-day-layout">
+    <MyDayDragProvider value={drag.current}>
+      <div className="nextaction-my-day-layout" ref={root}>
+        <MyDaySections
+          unscheduled={unscheduled}
+          timeline={
+            read && (
+              <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
+            )
+          }
+        />
+        <DragChip />
+        <DragWatch root={root} />
+      </div>
+    </MyDayDragProvider>
+  );
+}
+
+/** The two areas, side by side or one above the other (my-day-style.ts). */
+function MyDaySections(props: {
+  unscheduled: React.ReactNode;
+  timeline: React.ReactNode;
+}) {
+  return (
+    <>
       {/* Also where dragging a card unschedules it (#85). */}
       <section
         className="nextaction-my-day-unscheduled"
@@ -279,18 +347,16 @@ function MyDayAreas(props: {
         data-nextaction-my-day-drop="unscheduled"
       >
         <h3 className="nextaction-my-day-section-title">{t("Unscheduled")}</h3>
-        {unscheduled}
+        {props.unscheduled}
       </section>
       <section
         className="nextaction-my-day-timeline"
         aria-label={t("Timeline")}
       >
         <h3 className="nextaction-my-day-section-title">{t("Timeline")}</h3>
-        {read && (
-          <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
-        )}
+        {props.timeline}
       </section>
-    </div>
+    </>
   );
 }
 
