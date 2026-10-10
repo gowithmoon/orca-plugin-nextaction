@@ -513,10 +513,19 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
     // the number of all tasks would only weigh on the user (#63).
     const count =
       filtering && state.kind === "loaded" ? state.data.matchCount : undefined;
+    // The selection the latest read kept. The read the query starts with
+    // keeps none: the effect subscribing to it runs before this one.
+    const readFor = React.useRef<TaskId | undefined>(undefined);
     // Before any read the selection may cause: effects run before the
-    // change signal's debounced read.
+    // change signal's debounced read. A new selection reads again, so a task
+    // kept for the earlier one shows in the done section, and counts there,
+    // at once; until that read ends, `shownNodes` leaves it out of the tree.
     React.useEffect(() => {
       selected = selectedTaskId;
+      if (readFor.current !== selectedTaskId) {
+        readFor.current = selectedTaskId;
+        query.reload();
+      }
       return () => {
         selected = undefined;
       };
