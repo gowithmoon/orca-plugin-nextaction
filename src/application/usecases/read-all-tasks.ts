@@ -75,8 +75,9 @@ export interface AllTasksRead {
 }
 
 /**
- * How the top-level nodes are ordered; subtasks always keep note order. The
- * direction is fixed, and ties keep note order.
+ * How the top-level nodes are ordered; subtasks always keep note order. Each
+ * runs in the direction below unless reversed (`SortDirection`), and ties
+ * keep note order.
  * - `note`: note order.
  * - `due`: the task's own due day, earliest first, none last.
  * - `start`: the task's own start, earliest first, none last.
@@ -92,6 +93,13 @@ export type AllTasksSort =
   | "importance"
   | "score"
   | "captured";
+
+/**
+ * Which way a sort runs: `ascending` is its own direction (earliest day,
+ * highest importance or score, newest capture first), `descending` the
+ * reverse.
+ */
+export type SortDirection = "ascending" | "descending";
 
 /** A status a task not done can have: the ones the status filter offers. */
 export type OpenStatus = Exclude<TaskStatus, "done">;
@@ -109,6 +117,12 @@ export interface AllTasksFilter extends TaskFilter {
 export interface ReadAllTasksOptions {
   /** Defaults to `note`. */
   readonly sort?: AllTasksSort;
+  /**
+   * `descending` reverses the sort's own direction (see `AllTasksSort`); a
+   * task without the day sorted by still comes last, and ties still keep
+   * note order. Ignored for `note`. Defaults to `ascending`.
+   */
+  readonly direction?: SortDirection;
   /** Only the tasks it lets through are shown; none: every one. */
   readonly filter?: AllTasksFilter;
   /**
@@ -146,33 +160,43 @@ function marksBlocked(entry: TaskGraphEntry | undefined): boolean {
   return entry.blockedBy.some((reason) => reason.kind !== "subtasks");
 }
 
-/** The earlier day first; none last. */
-function byDay(a: CalendarDate | null, b: CalendarDate | null): number {
+/** The earlier day first (`sign` -1: the later); none last either way. */
+function byDay(
+  a: CalendarDate | null,
+  b: CalendarDate | null,
+  sign: number,
+): number {
   if (a === null || b === null)
     return (a === null ? 1 : 0) - (b === null ? 1 : 0);
-  return compareDays(a, b);
+  return sign * compareDays(a, b);
 }
 
 type NodeOrder = (a: AllTasksNode, b: AllTasksNode) => number;
 
-/** How top-level nodes compare for `sort`; `null` for note order. */
+/**
+ * How top-level nodes compare for `sort` run `direction`; `null` for note
+ * order. Only the comparison flips, so ties still compare equal.
+ */
 function comparator(
   sort: AllTasksSort,
+  direction: SortDirection,
   scoreOf: (task: Task) => number,
 ): NodeOrder | null {
+  const sign = direction === "descending" ? -1 : 1;
   switch (sort) {
     case "note":
       return null;
     case "due":
-      return (a, b) => byDay(a.task.due, b.task.due);
+      return (a, b) => byDay(a.task.due, b.task.due, sign);
     case "start":
-      return (a, b) => byDay(a.task.start, b.task.start);
+      return (a, b) => byDay(a.task.start, b.task.start, sign);
     case "importance":
-      return (a, b) => b.task.importance - a.task.importance;
+      return (a, b) => sign * (b.task.importance - a.task.importance);
     case "score":
-      return (a, b) => scoreOf(b.task) - scoreOf(a.task);
+      return (a, b) => sign * (scoreOf(b.task) - scoreOf(a.task));
     case "captured":
-      return (a, b) => b.task.created.getTime() - a.task.created.getTime();
+      return (a, b) =>
+        sign * (b.task.created.getTime() - a.task.created.getTime());
   }
 }
 
@@ -391,7 +415,11 @@ export function createReadAllTasks(deps: {
         { task, effectiveStart: graph.entry(task.id)?.effectiveStart ?? null },
         today,
       );
-    const compare = comparator(options.sort ?? "note", scoreOf);
+    const compare = comparator(
+      options.sort ?? "note",
+      options.direction ?? "ascending",
+      scoreOf,
+    );
     // Stable: ties keep note order.
     if (compare) tree.sort(compare);
     // Showing earlier items or searching lifts the done section's range.

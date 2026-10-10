@@ -121,6 +121,8 @@ const zhCN: Record<string, string> = {
   "Expand all": "全部展开",
   Sort: "排序",
   "Default order": "默认顺序",
+  Ascending: "升序",
+  Descending: "降序",
   "Due day": "截止日期",
   "Start day": "开始日期",
   Score: "评分",

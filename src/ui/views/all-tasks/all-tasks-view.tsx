@@ -352,7 +352,7 @@ function AllTasksContent(props: {
     deps.collapse.subscribe,
     deps.collapse.current,
   );
-  const sort = React.useSyncExternalStore(
+  const { sort } = React.useSyncExternalStore(
     deps.sort.subscribe,
     deps.sort.current,
   );
@@ -474,7 +474,8 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
     () =>
       deps.readAllTasks({
         keep: selected,
-        sort: deps.sort.current(),
+        sort: deps.sort.current().sort,
+        direction: deps.sort.current().direction,
         showEarlierDone: deps.doneSection.current().showEarlier,
         filter: deps.filter.current().filter,
         search: deps.filter.current().search,
@@ -546,7 +547,7 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
             the filter fields. */}
         <div className="nextaction-toolbar">
           <div className="nextaction-toolbar-row">
-            <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
+            <AllTasksSortSelect state={sort} onChange={deps.sort.set} />
             <CollapseAllButton
               query={query}
               selectedTaskId={selectedTaskId}
