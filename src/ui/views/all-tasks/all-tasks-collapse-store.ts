@@ -4,6 +4,7 @@
 // (platform/panel-feature.ts), and they are never written with
 // `plugins.setData`. A collapsed task no longer in the tree has no effect.
 import type { TaskId } from "../../../domain/task/task";
+import { createMemoryStore } from "../../components/memory-store";
 
 export interface AllTasksCollapseStore {
   /** The collapsed tasks; a new set after every change. */
@@ -19,31 +20,22 @@ export interface AllTasksCollapseStore {
 }
 
 export function createAllTasksCollapseStore(): AllTasksCollapseStore {
-  let collapsed: ReadonlySet<TaskId> = new Set();
-  const listeners = new Set<() => void>();
-  const set = (next: ReadonlySet<TaskId>) => {
-    collapsed = next;
-    for (const listener of [...listeners]) listener();
-  };
+  const store = createMemoryStore<ReadonlySet<TaskId>>(new Set());
   return {
-    current: () => collapsed,
+    current: store.current,
     toggle(id) {
-      const next = new Set(collapsed);
+      const next = new Set(store.current());
       if (!next.delete(id)) next.add(id);
-      set(next);
+      store.set(next);
     },
     collapse(ids) {
+      const collapsed = store.current();
       if (ids.every((id) => collapsed.has(id))) return;
-      set(new Set([...collapsed, ...ids]));
+      store.set(new Set([...collapsed, ...ids]));
     },
     clear() {
-      if (collapsed.size > 0) set(new Set());
+      if (store.current().size > 0) store.set(new Set());
     },
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+    subscribe: store.subscribe,
   };
 }

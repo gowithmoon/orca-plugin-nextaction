@@ -3,6 +3,7 @@
 // it; unloading clears it (platform/panel-feature.ts), and it is never written
 // with `plugins.setData`.
 import type { NextActionFilter } from "../../../application/usecases/read-next-actions";
+import { createMemoryStore } from "../../components/memory-store";
 
 /** Every dimension given, nothing chosen in any. */
 export type FullNextActionFilter = Required<NextActionFilter>;
@@ -23,22 +24,6 @@ export interface NextActionFilterStore {
 }
 
 export function createNextActionFilterStore(): NextActionFilterStore {
-  let filter = noFilter;
-  const listeners = new Set<() => void>();
-  const set = (next: FullNextActionFilter) => {
-    if (next === filter) return;
-    filter = next;
-    for (const listener of [...listeners]) listener();
-  };
-  return {
-    current: () => filter,
-    set,
-    clear: () => set(noFilter),
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
+  const store = createMemoryStore(noFilter);
+  return { ...store, clear: () => store.set(noFilter) };
 }

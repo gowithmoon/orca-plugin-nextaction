@@ -3,6 +3,7 @@
 // plugin instance's memory: switching views and closing the plugin panel keep
 // it; unloading clears it (platform/panel-feature.ts), and it is never written
 // with `plugins.setData`.
+import { createMemoryStore } from "../../components/memory-store";
 
 export interface DoneSectionState {
   /** Expanded; collapsed by default, rendering nothing of its items. */
@@ -23,27 +24,9 @@ export interface DoneSectionStore {
 }
 
 export function createDoneSectionStore(): DoneSectionStore {
-  let state = initial;
-  const listeners = new Set<() => void>();
-  const set = (next: DoneSectionState) => {
-    if (
-      next.expanded === state.expanded &&
-      next.showEarlier === state.showEarlier
-    ) {
-      return;
-    }
-    state = next;
-    for (const listener of [...listeners]) listener();
-  };
-  return {
-    current: () => state,
-    set,
-    clear: () => set(initial),
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
+  const store = createMemoryStore(
+    initial,
+    (a, b) => a.expanded === b.expanded && a.showEarlier === b.showEarlier,
+  );
+  return { ...store, clear: () => store.set(initial) };
 }

@@ -5,6 +5,7 @@
 // written with `plugins.setData`.
 import type { AllTasksFilter } from "../../../application/usecases/read-all-tasks";
 import { filterChoosesAny } from "../../../domain/task/task-filter";
+import { createMemoryStore } from "../../components/memory-store";
 
 export interface AllTasksFilterState {
   /** Every dimension given, nothing chosen in any. */
@@ -42,22 +43,6 @@ export interface AllTasksFilterStore {
 }
 
 export function createAllTasksFilterStore(): AllTasksFilterStore {
-  let state = noAllTasksFilter;
-  const listeners = new Set<() => void>();
-  const set = (next: AllTasksFilterState) => {
-    if (next === state) return;
-    state = next;
-    for (const listener of [...listeners]) listener();
-  };
-  return {
-    current: () => state,
-    set,
-    clear: () => set(noAllTasksFilter),
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
+  const store = createMemoryStore(noAllTasksFilter);
+  return { ...store, clear: () => store.set(noAllTasksFilter) };
 }
