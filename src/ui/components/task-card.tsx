@@ -30,9 +30,15 @@ export interface TaskCardProps {
   selected?: boolean;
   /**
    * The task has left the view's list but stays while it is selected (#42):
-   * faded (not struck through, #45) and saying its new status.
+   * faded (not struck through, #45) and, unless `keptStatusShown` is false,
+   * saying its new status.
    */
   kept?: boolean;
+  /**
+   * A kept task says its new status ("Changed to …"); `false` only fades it
+   * (the next action view, #53). Defaults to `true`.
+   */
+  keptStatusShown?: boolean;
   /**
    * The text of the task's parent task (#55), one line above its own,
    * cut short when too long and not clickable on its own; no line without it.
@@ -127,6 +133,7 @@ export function TaskCard(props: TaskCardProps) {
     menuPlace,
     selected,
     kept,
+    keptStatusShown = true,
     parentText,
   } = props;
   const { ContextMenu } = orca.components;
@@ -184,7 +191,7 @@ export function TaskCard(props: TaskCardProps) {
         >
           {text.text}
         </div>
-        <PropertyRow task={task} today={today} kept={kept} />
+        <PropertyRow task={task} today={today} kept={kept && keptStatusShown} />
       </div>
       {actions && <OpenInNotesButton task={task} actions={actions} />}
     </article>

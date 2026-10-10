@@ -1,7 +1,8 @@
 // The task panel's blocking reasons (#54, GLOSSARY: 阻塞): read only, shown
 // only while something blocks the task, e.g. "Subtasks: Write the
-// introduction, Collect the data". Each task name switches the task panel to
-// that task. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// introduction, Collect the data"; never for a task that is done (the task
+// panel leaves it out). Each task name switches the task panel to that task.
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { BlockingReason } from "../../domain/blocking/task-graph";
 import type { TaskId } from "../../domain/task/task";
@@ -24,6 +25,11 @@ function kindLabel(reason: BlockingReason): string {
     case "cycle":
       return t("Dependency cycle");
   }
+}
+
+/** Dependencies in mode "any": waiting for one of them, not all. */
+function anyMode(reason: BlockingReason): boolean {
+  return reason.kind === "dependencies" && reason.mode === "any";
 }
 
 export function BlockingReasonsField(props: {
@@ -71,13 +77,20 @@ export function BlockingReasonsField(props: {
           >
             {reason.source === props.taskId ? (
               <span className="nextaction-blocking-reason-kind">
-                {t("${kind}: ", { kind: kindLabel(reason) })}
+                {anyMode(reason)
+                  ? // One of them done is enough (#58), e.g.
+                    // "Dependencies (any): Book, Pack".
+                    t("${kind} (any): ", { kind: kindLabel(reason) })
+                  : t("${kind}: ", { kind: kindLabel(reason) })}
               </span>
             ) : (
               // Passed down from an ancestor task (ADR 0015), e.g.
-              // "Sequential (from Draft): Outline".
+              // "Sequential (from Draft): Outline",
+              // "Dependencies (any, from Trip): Book".
               <span className="nextaction-blocking-reason-kind">
-                {t("${kind} (from ", { kind: kindLabel(reason) })}
+                {anyMode(reason)
+                  ? t("${kind} (any, from ", { kind: kindLabel(reason) })
+                  : t("${kind} (from ", { kind: kindLabel(reason) })}
                 {taskButton(reason.source)}
                 {t("): ")}
               </span>

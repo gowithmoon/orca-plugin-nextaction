@@ -10,8 +10,8 @@ const zhCN: Record<string, string> = {
   "A day starts at this time. Usually set in the early morning.":
     "一天从这个时刻开始，一般设在凌晨。",
   "Start preview days": "开始日期预览天数",
-  "Tasks that start within this many days show in the next actions already, after the ones that can start now. A whole number from 0 to 14; 0 shows only tasks that can start today.":
-    "开始日期在这么多天之内的任务会提前出现在下一步行动里，排在已经可以开始的任务之后。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
+  "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
+    "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
   'The task tag name cannot be empty. It was set back to "${name}".':
     "任务标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':
@@ -158,6 +158,8 @@ const zhCN: Record<string, string> = {
     "无法读取阻塞原因：${reason}",
   Sequential: "顺序执行",
   "${kind} (from ": "${kind}（来自 ",
+  "${kind} (any): ": "${kind}（任一）：",
+  "${kind} (any, from ": "${kind}（任一，来自 ",
   "): ": "）：",
   "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
   Dependencies: "依赖",
