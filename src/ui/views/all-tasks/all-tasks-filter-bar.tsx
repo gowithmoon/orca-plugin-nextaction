@@ -7,12 +7,12 @@ import type { Candidates } from "../../../application/ports/task-repository";
 import type { OpenStatus } from "../../../application/usecases/read-all-tasks";
 import type { SelectOption } from "../../../orca.d.ts";
 import { t } from "../../../shared/l10n/l10n";
-import { formatContext } from "../../components/format";
-import { statusLabel } from "../../components/status-label";
 import {
   ImportanceSelect,
   ValuesSelect,
-} from "../next-action/next-action-filter-bar";
+} from "../../components/filter-selects";
+import { formatContext } from "../../components/format";
+import { statusLabel } from "../../components/status-label";
 import type { AllTasksFilterState } from "./all-tasks-filter-store";
 
 const openStatuses: readonly OpenStatus[] = [
