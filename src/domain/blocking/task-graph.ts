@@ -70,6 +70,18 @@ export type BlockingReason =
        * waits for every one listed, and one of them done is enough (#58).
        */
       readonly mode: DependencyMode;
+    })
+  | (BlockingReasonBase & {
+      /**
+       * 依赖延迟 (#77): the source's dependencies are met, but its dependency
+       * delay has not passed. It waits for no task (`waitingFor` is empty),
+       * only for `releasedOn`.
+       */
+      readonly kind: "dependencyDelay";
+      /** The dependency whose completion the delay counts from. */
+      readonly countedFrom: TaskId;
+      /** The first logical day the source is let in: completion + delay. */
+      readonly releasedOn: CalendarDate;
     });
 
 interface BlockingReasonBase {
@@ -185,6 +197,46 @@ export function analyzeTaskGraph(
     return item.task.dependencyMode === "any" && someMet ? [] : unmet;
   };
 
+  /**
+   * When `item`'s dependency delay (GLOSSARY: 依赖延迟) lets it in, once its
+   * dependencies are met: the release day and the dependency it counts from,
+   * or `undefined` when nothing holds it. Counts from the latest completion
+   * among the dependencies met in mode "all", from the earliest in mode
+   * "any": the logical day of its last completion record. A met dependency
+   * without one (done outside the plugin, or stale) counts as done long ago:
+   * left out in mode "all", and in mode "any" it lets the task in at once
+   * (ADR 0017).
+   */
+  const delayRelease = (
+    item: SnapshotTask,
+  ): { releasedOn: CalendarDate; countedFrom: TaskId } | undefined => {
+    if (item.task.dependencyDelay <= 0) return undefined;
+    /** Whether `day` replaces `than` as the day the delay counts from. */
+    const replaces =
+      item.task.dependencyMode === "any"
+        ? (day: CalendarDate, than: CalendarDate) => compareDays(day, than) < 0
+        : (day: CalendarDate, than: CalendarDate) => compareDays(day, than) > 0;
+    let from: { day: CalendarDate; id: TaskId } | undefined;
+    for (const target of item.task.dependencies) {
+      const dependency = byId.get(target);
+      // Not met: a record from before it was reopened does not count.
+      if (dependency && dependency.task.status !== "done") continue;
+      const day = dependency?.lastCompletion?.day;
+      if (day === undefined) {
+        if (item.task.dependencyMode === "any") return undefined;
+        continue;
+      }
+      if (from === undefined || replaces(day, from.day)) {
+        from = { day, id: target };
+      }
+    }
+    if (from === undefined) return undefined;
+    return {
+      releasedOn: addDays(from.day, item.task.dependencyDelay),
+      countedFrom: from.id,
+    };
+  };
+
   const cycles = findDependencyCycles(snapshot);
 
   const entries = new Map<TaskId, TaskGraphEntry>();
@@ -207,6 +259,17 @@ export function analyzeTaskGraph(
           source: link.task.id,
           waitingFor,
           mode: link.task.dependencyMode,
+        });
+        continue;
+      }
+      // Met, but the delay has not passed yet (#77).
+      const release = delayRelease(link);
+      if (release && compareDays(options.today, release.releasedOn) < 0) {
+        blockedBy.push({
+          kind: "dependencyDelay",
+          source: link.task.id,
+          waitingFor: [],
+          ...release,
         });
       }
     }

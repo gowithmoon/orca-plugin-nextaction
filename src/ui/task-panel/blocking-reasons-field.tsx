@@ -5,10 +5,11 @@
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
 import type { BlockingReason } from "../../domain/blocking/task-graph";
-import type { TaskId } from "../../domain/task/task";
+import type { CalendarDate, TaskId } from "../../domain/task/task";
+import { daysBetween } from "../../domain/time/calendar-days";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
-import { shownText } from "../components/format";
+import { formatDate, shownText } from "../components/format";
 import { useBlockingReasons } from "../hooks/use-blocking-reasons";
 import type { Notify } from "../notify";
 import { Field } from "./task-panel-fields";
@@ -24,7 +25,25 @@ function kindLabel(reason: BlockingReason): string {
       return t("Dependencies");
     case "cycle":
       return t("Dependency cycle");
+    case "dependencyDelay":
+      return t("In dependency delay");
   }
+}
+
+/**
+ * When a dependency delay lets the task in and how many days are left, e.g.
+ * "let in on 10/11 Sun (2 days left), counting from when ", worked out from
+ * `today` (#77). The release day is always after today while it blocks.
+ */
+function releaseText(releasedOn: CalendarDate, today: CalendarDate): string {
+  const date = formatDate(releasedOn, today);
+  const days = daysBetween(today, releasedOn);
+  return days === 1
+    ? t("let in on ${date} (1 day left), counting from when ", { date })
+    : t("let in on ${date} (${days} days left), counting from when ", {
+        date,
+        days: String(days),
+      });
 }
 
 /** Dependencies in mode "any": waiting for one of them, not all. */
@@ -38,6 +57,8 @@ export function BlockingReasonsField(props: {
   changes: ChangeSignalSource;
   notify: Notify;
   labelId: string;
+  /** The current logical day, for the days a dependency delay has left. */
+  today: CalendarDate;
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
 }) {
@@ -93,6 +114,15 @@ export function BlockingReasonsField(props: {
                   : t("${kind} (from ", { kind: kindLabel(reason) })}
                 {taskButton(reason.source)}
                 {t("): ")}
+              </span>
+            )}
+            {reason.kind === "dependencyDelay" && (
+              // e.g. "In dependency delay: let in on 10/11 Sun (2
+              // days left), counting from when Paint the wall was done".
+              <span>
+                {releaseText(reason.releasedOn, props.today)}
+                {taskButton(reason.countedFrom)}
+                {t(" was done")}
               </span>
             )}
             {reason.waitingFor.map((id, index) => {

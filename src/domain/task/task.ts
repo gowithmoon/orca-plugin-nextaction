@@ -73,6 +73,11 @@ export interface Task {
    * 依赖模式); "all" unless the notes hold "any".
    */
   readonly dependencyMode: DependencyMode;
+  /**
+   * How many logical days after its dependencies are met the task is let in
+   * (GLOSSARY: 依赖延迟): a whole number of days, 0 for none.
+   */
+  readonly dependencyDelay: number;
   /** When the block was created; read-only, it orders the inbox. */
   readonly created: Date;
   readonly anomalies: readonly DataAnomaly[];
@@ -99,6 +104,8 @@ export interface TaskInNotes {
   sequential: boolean;
   dependencies: readonly TaskId[];
   dependencyMode: DependencyMode;
+  /** A number, or `null` when the notes hold none. */
+  dependencyDelay: number | null;
   created: Date;
 }
 
@@ -111,6 +118,15 @@ export const defaultRating: Rating = 4;
  */
 export function hasStatusAnomaly(task: Pick<Task, "anomalies">): boolean {
   return task.anomalies.some((anomaly) => anomaly.property === "status");
+}
+
+/**
+ * A dependency delay as whole days: one that is empty, negative or not a
+ * whole number reads as 0 (#77), so data spoilt by hand never holds a task
+ * back.
+ */
+function delayDays(value: number | null): number {
+  return value !== null && Number.isInteger(value) && value > 0 ? value : 0;
 }
 
 function isRating(value: number | null): value is Rating {
@@ -141,6 +157,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     sequential: input.sequential,
     dependencies: [...input.dependencies],
     dependencyMode: input.dependencyMode,
+    dependencyDelay: delayDays(input.dependencyDelay),
     created: input.created,
     anomalies,
   };

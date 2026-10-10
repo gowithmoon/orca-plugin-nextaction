@@ -167,6 +167,38 @@ describe("encodeTaskChanges: dependency mode", () => {
   });
 });
 
+describe("encodeTaskChanges: dependency delay", () => {
+  // A number, written like importance and effort (#77).
+  it("writes the dependency delay as a number under the Chinese name", () => {
+    expect(encodeTaskChanges({ dependencyDelay: 3 }, zh)).toEqual([
+      { name: "依赖延迟", value: 3 },
+    ]);
+  });
+
+  it("writes the dependency delay under the English name on an English task tag", () => {
+    const en: TaskWriteContext = { language: "en", invalidated: [] };
+    expect(encodeTaskChanges({ dependencyDelay: 2 }, en)).toEqual([
+      { name: "Dependency delay", value: 2 },
+    ]);
+  });
+
+  it("clears the dependency delay with null", () => {
+    expect(encodeTaskChanges({ dependencyDelay: null }, zh)).toEqual([
+      { name: "依赖延迟", value: null },
+    ]);
+  });
+
+  it("refuses to write an invalidated dependency delay", () => {
+    const tag: TaskWriteContext = {
+      language: "zh",
+      invalidated: ["dependencyDelay"],
+    };
+    expect(() => encodeTaskChanges({ dependencyDelay: 3 }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+});
+
 describe("encodeDependencies", () => {
   // tag-operations A4: the value is a list of reference IDs, written with the
   // block reference type; an empty list clears it.

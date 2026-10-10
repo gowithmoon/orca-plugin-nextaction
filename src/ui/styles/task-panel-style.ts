@@ -362,6 +362,22 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   gap: var(--orca-spacing-sm);
 }
 
+/* Dependency delay (#77): a short number input, the unit and hint beside it. */
+.nextaction-delay-field {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-delay-field > :first-child {
+  flex: 0 0 6em;
+  min-width: 0;
+}
+
+.nextaction-delay-hint {
+  color: var(--orca-color-text-2);
+}
+
 .nextaction-sequential-hint {
   color: var(--orca-color-text-2);
 }

@@ -194,6 +194,14 @@ const zhCN: Record<string, string> = {
   All: "全部",
   Any: "任一",
   "Dependency cycle": "循环依赖",
+  "Dependency delay": "依赖延迟",
+  "days after the dependencies are met": "天（依赖满足之后再等）",
+  "In dependency delay": "依赖延迟中",
+  "let in on ${date} (1 day left), counting from when ":
+    "${date}放行（还剩 1 天），从",
+  "let in on ${date} (${days} days left), counting from when ":
+    "${date}放行（还剩 ${days} 天），从",
+  " was done": "完成起算",
   "Would make a dependency cycle: it is below this task":
     "会造成循环依赖：它在这个任务下面",
   "Would make a dependency cycle: it already waits for this task":

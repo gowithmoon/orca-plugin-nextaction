@@ -43,6 +43,7 @@ function task(
     sequential: setup.sequential ?? false,
     dependencies: setup.dependencies ?? [],
     dependencyMode: setup.dependencyMode ?? "all",
+    dependencyDelay: 0,
     anomalies: [],
   };
   return {

@@ -77,6 +77,9 @@ const zhDefinitions = [
       ],
     },
   },
+  // A number with no default (#77): empty reads as 0 days. Written bare,
+  // as numbers were in the tag-operations spike.
+  { name: "依赖延迟", type: 3, pos: 11 },
 ];
 
 const enDefinitions = [
@@ -146,6 +149,7 @@ const enDefinitions = [
       ],
     },
   },
+  { name: "Dependency delay", type: 3, pos: 11 },
 ];
 
 /**
@@ -472,6 +476,35 @@ describe("startup plan", () => {
         },
       },
     ]);
+  });
+
+  it("appends the dependency delay, a number with no default, to a tag from before #77", () => {
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["依赖延迟"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }).writes,
+    ).toEqual([{ name: "依赖延迟", type: 3, pos: 11 }]);
+  });
+
+  it("leaves a dependency delay the user gave a default as it is", () => {
+    const delay = {
+      name: "依赖延迟",
+      type: 3,
+      pos: 11,
+      value: null,
+      typeArgs: { defaultEnabled: true, default: 2 },
+    };
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock([...readBack(without(["依赖延迟"])), delay]),
+        cache: takenOver,
+        uiLanguage: "zh",
+      }).writes,
+    ).toEqual([]);
   });
 
   it("adds a missing dependency mode option and keeps the ones the user recolored", () => {

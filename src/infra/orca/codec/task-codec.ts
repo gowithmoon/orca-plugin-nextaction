@@ -142,6 +142,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       sequential: booleanValue(values.get("sequential")),
       dependencies: dependencyTargets(block, values.get("dependencies")),
       dependencyMode: dependencyModeValue(values.get("dependencyMode")),
+      dependencyDelay: numberValue(values.get("dependencyDelay")),
       created: createdValue(block.id, block.created),
     }),
   };
