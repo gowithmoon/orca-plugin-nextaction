@@ -3,7 +3,8 @@
 // tasks held back by a dependency, a sequential parent or a cycle marked
 // blocked. After the inbox in the navigation, with no count there. It reads
 // when the plugin panel opens and again on every task change signal (ADR
-// 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// 0007). Nodes with children collapse (#67). Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   AllTasksNode,
@@ -33,6 +34,7 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
+import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -44,6 +46,8 @@ export interface AllTasksViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
+  /** The collapsed nodes, kept in the plugin instance's memory (#67). */
+  collapse: AllTasksCollapseStore;
 }
 
 /** The node or a node below it is a task not done. */
@@ -72,6 +76,21 @@ function shownNodes(
   return shown;
 }
 
+/** How many tasks sit below the node in the tree: what collapsing it hides. */
+function descendantCount(node: AllTasksNode): number {
+  return node.children.reduce(
+    (count, child) => count + 1 + descendantCount(child),
+    0,
+  );
+}
+
+/** The tasks of the tree that have children: what "collapse all" collapses. */
+function parentIds(nodes: readonly AllTasksNode[]): TaskId[] {
+  return nodes.flatMap((node) =>
+    node.children.length > 0 ? [node.task.id, ...parentIds(node.children)] : [],
+  );
+}
+
 function Placeholder() {
   const { Skeleton } = orca.components;
   return (
@@ -97,6 +116,32 @@ interface TreeCards {
   menuPlace: TaskMenuPlace;
   selectedTaskId: TaskId | undefined;
   selectTask: (id: TaskId) => void;
+  collapsed: ReadonlySet<TaskId>;
+  toggleCollapsed: (id: TaskId) => void;
+}
+
+/** A node's collapse button. */
+function CollapseButton(props: { collapsed: boolean; onToggle: () => void }) {
+  const { Tooltip } = orca.components;
+  const label = props.collapsed ? t("Expand") : t("Collapse");
+  return (
+    <Tooltip text={label}>
+      <button
+        type="button"
+        className="nextaction-task-card-button nextaction-task-tree-toggle"
+        aria-expanded={!props.collapsed}
+        aria-label={label}
+        onClick={props.onToggle}
+      >
+        <i
+          className={
+            props.collapsed ? "ti ti-chevron-right" : "ti ti-chevron-down"
+          }
+          aria-hidden="true"
+        />
+      </button>
+    </Tooltip>
+  );
 }
 
 function TreeNodes(props: {
@@ -114,28 +159,52 @@ function TreeNodes(props: {
           : "nextaction-task-tree-children"
       }
     >
-      {props.nodes.map((node) => (
-        <li key={node.task.id}>
-          <TaskCard
-            task={node.task}
-            today={cards.today}
-            actions={cards.actions}
-            menuItems={cards.menuItems}
-            menuPlace={cards.menuPlace}
-            onOpen={(open) => cards.selectTask(open.id)}
-            selected={node.task.id === cards.selectedTaskId}
-            // Done or kept: the card's faded "kept" look (#65).
-            kept={node.faded !== null}
-            // Only faded: a done task's status icon already says why, and a
-            // kept one leaves for more reasons than its status.
-            keptStatusShown={false}
-            blocked={node.blocked}
-          />
-          {node.children.length > 0 && (
-            <TreeNodes nodes={node.children} cards={cards} />
-          )}
-        </li>
-      ))}
+      {props.nodes.map((node) => {
+        const parent = node.children.length > 0;
+        const collapsed = parent && cards.collapsed.has(node.task.id);
+        return (
+          <li key={node.task.id}>
+            <div className="nextaction-task-tree-row">
+              {parent ? (
+                <CollapseButton
+                  collapsed={collapsed}
+                  onToggle={() => cards.toggleCollapsed(node.task.id)}
+                />
+              ) : (
+                // Keeps the cards of a level in line, toggle or not.
+                <span
+                  className="nextaction-task-tree-toggle"
+                  aria-hidden="true"
+                />
+              )}
+              <TaskCard
+                task={node.task}
+                today={cards.today}
+                actions={cards.actions}
+                menuItems={cards.menuItems}
+                menuPlace={cards.menuPlace}
+                onOpen={(open) => cards.selectTask(open.id)}
+                selected={node.task.id === cards.selectedTaskId}
+                // Done or kept: the card's faded "kept" look (#65).
+                kept={node.faded !== null}
+                // Only faded: a done task's status icon already says why, and a
+                // kept one leaves for more reasons than its status.
+                keptStatusShown={false}
+                blocked={node.blocked}
+              />
+            </div>
+            {collapsed ? (
+              <div className="nextaction-task-tree-hidden">
+                {t("Hidden tasks: ${count}", {
+                  count: String(descendantCount(node)),
+                })}
+              </div>
+            ) : (
+              parent && <TreeNodes nodes={node.children} cards={cards} />
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -151,6 +220,10 @@ function AllTasksContent(props: {
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const collapsed = React.useSyncExternalStore(
+    deps.collapse.subscribe,
+    deps.collapse.current,
+  );
 
   if (state.kind === "loading") return <Placeholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -188,8 +261,48 @@ function AllTasksContent(props: {
         menuPlace,
         selectedTaskId,
         selectTask,
+        collapsed,
+        toggleCollapsed: deps.collapse.toggle,
       }}
     />
+  );
+}
+
+/** "Collapse all" and "expand all", once the tree has a node to collapse. */
+function CollapseAllBar(props: {
+  query: ViewQuery<AllTasksRead>;
+  selectedTaskId: TaskId | undefined;
+  collapse: AllTasksCollapseStore;
+}) {
+  const { Button } = orca.components;
+  const state = useViewQuery(props.query);
+  const collapsed = React.useSyncExternalStore(
+    props.collapse.subscribe,
+    props.collapse.current,
+  );
+  if (state.kind !== "loaded") return null;
+  const ids = parentIds(shownNodes(state.data.tree, props.selectedTaskId));
+  if (ids.length === 0) return null;
+  return (
+    <div className="nextaction-tree-bar">
+      <Button
+        variant="plain"
+        disabled={ids.every((id) => collapsed.has(id))}
+        onClick={() => props.collapse.collapse(ids)}
+      >
+        <i className="ti ti-fold" aria-hidden="true" />
+        {t("Collapse all")}
+      </Button>
+      <Button
+        variant="plain"
+        // Records of tasks no longer in the tree count for nothing.
+        disabled={!ids.some((id) => collapsed.has(id))}
+        onClick={props.collapse.clear}
+      >
+        <i className="ti ti-fold-down" aria-hidden="true" />
+        {t("Expand all")}
+      </Button>
+    </div>
   );
 }
 
@@ -221,6 +334,11 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("All tasks")} />
+        <CollapseAllBar
+          query={query}
+          selectedTaskId={selectedTaskId}
+          collapse={deps.collapse}
+        />
         <AllTasksContent query={query} today={deps.today()} deps={deps} />
       </>
     );

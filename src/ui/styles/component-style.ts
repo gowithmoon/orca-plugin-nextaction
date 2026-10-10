@@ -294,6 +294,45 @@ export const componentCss = `
   list-style: none;
 }
 
+/*
+ * Collapsing (#67): a node's toggle sits left of its card, and leaves keep
+ * an empty slot of the same width so the cards of a level stay in line.
+ * A collapsed node says under its card how many tasks it hides.
+ */
+.nextaction-task-tree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+}
+
+.nextaction-task-tree-row > :last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nextaction-task-tree-toggle {
+  flex: 0 0 auto;
+  width: 1.25em;
+  height: 1.25em;
+  margin-top: var(--orca-spacing-md);
+}
+
+.nextaction-task-tree-hidden {
+  margin: 0 0 0 calc(1.25em + var(--orca-spacing-xs));
+  padding: 0 0 0 var(--orca-spacing-lg);
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+}
+
+/* "Collapse all" and "expand all" (#67), above the tree. */
+.nextaction-tree-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-sm);
+  margin: 0 0 var(--orca-spacing-md);
+}
+
 /* A narrow list: tighter cards, so the text keeps its room. */
 @container nextaction-task-list (max-width: 320px) {
   .nextaction-task-card,

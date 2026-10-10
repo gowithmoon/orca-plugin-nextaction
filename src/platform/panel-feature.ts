@@ -19,6 +19,7 @@ import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
+import { createAllTasksCollapseStore } from "../ui/views/all-tasks/all-tasks-collapse-store";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
@@ -65,6 +66,8 @@ export function createPanelFeature(deps: {
   // The next action view's filter (#55): in memory only, so it outlives the
   // plugin panel closing and is gone with the load (cleared on release).
   const nextActionFilter = createNextActionFilterStore();
+  // The all tasks view's collapsed nodes (#67): in memory only, likewise.
+  const allTasksCollapse = createAllTasksCollapseStore();
   views.register(
     createNextActionView({
       readNextActions: createReadNextActions({
@@ -102,6 +105,7 @@ export function createPanelFeature(deps: {
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
+      collapse: allTasksCollapse,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -123,6 +127,7 @@ export function createPanelFeature(deps: {
     // Each load is a new module instance already (plugin-lifecycle-settings);
     // clearing on release also covers a load → unload → load in one instance.
     registry.add(`${pluginName}.nextActionFilter`, nextActionFilter.clear);
+    registry.add(`${pluginName}.allTasksCollapse`, allTasksCollapse.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     const placement = createPanelPlacement(pluginPanelType(pluginName));
