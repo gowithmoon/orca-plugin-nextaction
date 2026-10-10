@@ -8,9 +8,14 @@ import {
   type ChangeStatus,
   CompletionHistoryUnreadableError,
 } from "../application/usecases/change-status";
+import {
+  DependencyCycleError,
+  type RefusedCycle,
+} from "../application/usecases/dependency-cycle-error";
 import type { TaskId, TaskStatus } from "../domain/task/task";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
+import { shownText } from "./components/format";
 
 export type Notify = (
   type: "info" | "success" | "warn" | "error",
@@ -40,6 +45,8 @@ export function notifyFailure(
 ): void {
   if (error instanceof TaskFeaturesPausedError) {
     notify("warn", messages.paused);
+  } else if (error instanceof DependencyCycleError) {
+    notify("warn", refusedCycleText(error.cycle));
   } else if (error instanceof NoNotePanelError) {
     notify(
       "warn",
@@ -49,6 +56,29 @@ export function notifyFailure(
     );
   } else {
     notify("error", messages.failed(describeError(error)));
+  }
+}
+
+/** Why a write was refused for making a dependency cycle (#60). */
+function refusedCycleText(cycle: RefusedCycle): string {
+  switch (cycle.kind) {
+    case "dependencies":
+      return t(
+        "Not added: depending on ${tasks} would make a dependency cycle.",
+        {
+          tasks: cycle.targets
+            .map((task) => shownText(task).text)
+            .join(t(", ")),
+        },
+      );
+    case "sequential":
+      return t(
+        "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.",
+        {
+          waiting: shownText(cycle.waiting).text,
+          waitingFor: shownText(cycle.waitingFor).text,
+        },
+      );
   }
 }
 

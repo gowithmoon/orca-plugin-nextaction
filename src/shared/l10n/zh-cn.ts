@@ -171,6 +171,17 @@ const zhCN: Record<string, string> = {
   "Dependency mode": "依赖模式",
   All: "全部",
   Any: "任一",
+  "Dependency cycle": "循环依赖",
+  "Would make a dependency cycle: it is below this task":
+    "会造成循环依赖：它在这个任务下面",
+  "Would make a dependency cycle: it already waits for this task":
+    "会造成循环依赖：它已经在等待这个任务",
+  "${text} (${reason})": "${text}（${reason}）",
+  "Not added. ${reason}": "未添加。${reason}",
+  "Not added: depending on ${tasks} would make a dependency cycle.":
+    "未添加：依赖 ${tasks} 会造成循环依赖。",
+  "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.":
+    "未打开顺序执行：${waiting} 会等待 ${waitingFor}，而后者已经在等待它，会造成循环依赖。",
 };
 
 export default zhCN;

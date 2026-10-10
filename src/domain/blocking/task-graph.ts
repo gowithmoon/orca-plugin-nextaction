@@ -3,6 +3,7 @@
 // the notes. Pure; `today` is the current logical day, computed by the caller.
 import type { CalendarDate, Task, TaskId } from "../task/task";
 import { addDays, compareDays, laterDay } from "../time/calendar-days";
+import { findDependencyCycles } from "./dependency-cycles";
 
 /** A task with where it sits among the others (ADR 0003). */
 export interface SnapshotTask {
@@ -40,9 +41,12 @@ export interface TaskGraphOptions {
  *   subtasks neither done nor someday. `source` is the sibling held back:
  *   the task itself, or an ancestor task for blocking passed down (ADR
  *   0015); `waitingFor` are its earlier siblings.
+ * - `cycle` (循环依赖): the task is on a dependency cycle (#60). `source` is
+ *   the task itself; `waitingFor` are the tasks on the cycle it waits for
+ *   directly, in note order.
  */
 export type BlockingReason = {
-  readonly kind: "subtasks" | "sequential" | "dependencies";
+  readonly kind: "subtasks" | "sequential" | "dependencies" | "cycle";
   /**
    * The task the blocking comes from: the task itself, or an ancestor task
    * for blocking passed down (ADR 0015).
@@ -155,6 +159,8 @@ export function analyzeTaskGraph(
     return item.task.dependencyMode === "any" && someMet ? [] : unmet;
   };
 
+  const cycles = findDependencyCycles(snapshot);
+
   const entries = new Map<TaskId, TaskGraphEntry>();
   for (const item of ordered) {
     const blockedBy: BlockingReason[] = [];
@@ -188,6 +194,14 @@ export function analyzeTaskGraph(
           waitingFor,
         });
       }
+    }
+    const onCycle = cycles.get(item.task.id);
+    if (onCycle) {
+      blockedBy.push({
+        kind: "cycle",
+        source: item.task.id,
+        waitingFor: onCycle,
+      });
     }
     const parked = chain.some((link) => parks(link.task));
     const effectiveStart = chain.reduce<CalendarDate | null>(

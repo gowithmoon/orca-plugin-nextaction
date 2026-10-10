@@ -3,7 +3,10 @@
 // added by searching their text. Every add or remove is one write, so one
 // undo. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
-import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
+import type {
+  DependencyCandidate,
+  ReadDependencyCandidates,
+} from "../../application/usecases/read-dependency-candidates";
 import type { TaskId } from "../../domain/task/task";
 import type { SelectOption } from "../../orca.d.ts";
 import type { ChangeSignalSource } from "../../shared/change-signal";
@@ -13,6 +16,22 @@ import { usePopupLayer } from "../components/popup-layer";
 import { useBlockingReasons } from "../hooks/use-blocking-reasons";
 import { useDependencyCandidates } from "../hooks/use-dependency-candidates";
 import type { Notify } from "../notify";
+
+/**
+ * Why a candidate cannot be picked, shown after its text; `null` when it can
+ * (#60). Orca's `Select` documents no disabled option, so the candidate stays
+ * listed with the reason, last, and picking it writes nothing.
+ */
+function cycleText(candidate: DependencyCandidate): string | null {
+  switch (candidate.cycle) {
+    case null:
+      return null;
+    case "below":
+      return t("Would make a dependency cycle: it is below this task");
+    case "waits":
+      return t("Would make a dependency cycle: it already waits for this task");
+  }
+}
 
 export function DependenciesField(props: {
   labelId: string;
@@ -45,13 +64,29 @@ export function DependenciesField(props: {
     props.notify,
   );
   const current = props.dependencies;
-  const options: SelectOption[] = candidates
-    .filter((candidate) => !current.includes(candidate.id))
-    .map((candidate) => ({
-      value: String(candidate.id),
-      label: shownText(candidate).text,
-    }))
-    .sort((a, b) => (a.label ?? "").localeCompare(b.label ?? ""));
+  const offered = candidates.filter(
+    (candidate) => !current.includes(candidate.id),
+  );
+  // Candidates that would make a cycle go last, each saying why.
+  const options: SelectOption[] = offered
+    .map((candidate) => {
+      const text = shownText(candidate).text;
+      const reason = cycleText(candidate);
+      return {
+        text,
+        cycles: reason !== null,
+        option: {
+          value: String(candidate.id),
+          label:
+            reason === null ? text : t("${text} (${reason})", { text, reason }),
+        },
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(a.cycles) - Number(b.cycles) || a.text.localeCompare(b.text),
+    )
+    .map((entry) => entry.option);
 
   return (
     <div className="nextaction-dependencies-field">
@@ -117,9 +152,15 @@ export function DependenciesField(props: {
         menuContainer={popupLayer}
         onChange={(selected) => {
           const picked = Number(selected[0]);
-          if (Number.isInteger(picked) && !current.includes(picked)) {
-            props.onChange([...current, picked]);
+          if (!Number.isInteger(picked) || current.includes(picked)) return;
+          const candidate = offered.find((offer) => offer.id === picked);
+          const reason = candidate ? cycleText(candidate) : null;
+          if (reason !== null) {
+            // Not added; the use case would refuse it as well.
+            props.notify("warn", t("Not added. ${reason}", { reason }));
+            return;
           }
+          props.onChange([...current, picked]);
         }}
       />
     </div>

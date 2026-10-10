@@ -1,7 +1,11 @@
 // Use case: the tasks the task panel offers to add as dependencies (#57,
 // GLOSSARY: 依赖): every task not done, other than the task itself, with its
-// text for searching. Marking the ones that would make a dependency cycle
-// comes with cycle detection (#60).
+// text for searching, and whether depending on it would make a dependency
+// cycle (#60).
+import {
+  type DependencyCycleReason,
+  dependencyTargetsThatCycle,
+} from "../../domain/blocking/dependency-cycles";
 import type { TaskId } from "../../domain/task/task";
 import type { TaskRepository } from "../ports/task-repository";
 
@@ -10,6 +14,11 @@ export interface DependencyCandidate {
   readonly id: TaskId;
   /** As the notes hold it; may be empty. */
   readonly text: string;
+  /**
+   * Why depending on it would make a dependency cycle, so it cannot be
+   * picked; `null` when it would not.
+   */
+  readonly cycle: DependencyCycleReason | null;
 }
 
 /**
@@ -23,8 +32,16 @@ export type ReadDependencyCandidates = (
 export function createReadDependencyCandidates(deps: {
   repository: TaskRepository;
 }): ReadDependencyCandidates {
-  return async (id) =>
-    (await deps.repository.queryTasks({}))
+  return async (id) => {
+    const snapshot = await deps.repository.readTaskGraph();
+    const cycles = dependencyTargetsThatCycle(snapshot, id);
+    return snapshot.tasks
+      .map((item) => item.task)
       .filter((task) => task.id !== id && task.status !== "done")
-      .map((task) => ({ id: task.id, text: task.text }));
+      .map((task) => ({
+        id: task.id,
+        text: task.text,
+        cycle: cycles.get(task.id) ?? null,
+      }));
+  };
 }
