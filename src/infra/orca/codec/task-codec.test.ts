@@ -42,6 +42,7 @@ describe("decodeTask", () => {
       text: "NA验证任务A",
       status: "todo",
       importance: 6,
+      urgency: 5,
       effort: 4,
       start: null,
       due: { year: 2026, month: 10, day: 20 },
@@ -62,6 +63,7 @@ describe("decodeTask", () => {
       text: "Call the plumber",
       status: "waiting",
       importance: 2,
+      urgency: 3,
       effort: 5,
       start: { year: 2026, month: 10, day: 7 },
       due: null,
@@ -83,6 +85,7 @@ describe("decodeTask", () => {
       text: "NA验证任务B",
       status: "inbox",
       importance: 4,
+      urgency: 4,
       effort: 4,
       start: null,
       due: null,
@@ -103,6 +106,7 @@ describe("decodeTask", () => {
       text: "NA清空测试",
       status: "inbox",
       importance: 4,
+      urgency: 4,
       effort: 4,
       start: null,
       due: null,
@@ -176,6 +180,20 @@ describe("decodeTask", () => {
     const task = decodedTask(blocks.zhOutOfRangeLow);
     expect(task.importance).toBe(4); // 0 in the notes
     expect(task.effort).toBe(4); // -2 in the notes
+  });
+
+  it("reads the urgency under its Chinese and its English name", () => {
+    expect(decodedTask(blocks.zhFilled).urgency).toBe(5);
+    expect(decodedTask(blocks.enFilled, enTag).urgency).toBe(3);
+  });
+
+  it.each([
+    ["missing", blocks.zhDefaultsOnly],
+    ["empty", blocks.zhCleared],
+    ["not an integer (2.5)", blocks.zhAbnormal],
+    ["above 7 (8)", blocks.zhOutOfRangeLow],
+  ])("reads an urgency that is %s as 4", (_, block) => {
+    expect(decodedTask(block).urgency).toBe(4);
   });
 
   it("reads dates as the local calendar day, dropping any time of day", () => {
@@ -519,6 +537,7 @@ describe("decodeTask with values of the wrong kind", () => {
       text: "NA验证任务B",
       status: "inbox",
       importance: 4,
+      urgency: 4,
       effort: 4,
       start: null,
       due: null,

@@ -22,6 +22,7 @@ export const propertyKeys = [
   "sequential",
   "dependencies",
   "dependencyMode",
+  "urgency",
 ] as const;
 export type PropertyKey = (typeof propertyKeys)[number];
 
@@ -42,6 +43,7 @@ const propertyNames: NameTable<PropertyKey> = {
   sequential: { zh: "顺序执行", en: "Sequential" },
   dependencies: { zh: "依赖", en: "Dependencies" },
   dependencyMode: { zh: "依赖模式", en: "Dependency mode" },
+  urgency: { zh: "紧急度", en: "Urgency" },
 };
 
 const statusNames: NameTable<TaskStatus> = {

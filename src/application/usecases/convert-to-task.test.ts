@@ -22,6 +22,8 @@ describe("convert to task", () => {
       text: "Call the plumber",
       status: "inbox",
       importance: 4,
+      // Like importance, 4 by default (#79).
+      urgency: 4,
       effort: 4,
       start: null,
       due: null,

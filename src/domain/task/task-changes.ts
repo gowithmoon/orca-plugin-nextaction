@@ -5,6 +5,7 @@ import type {
   Importance,
   TaskId,
   TaskStatus,
+  Urgency,
 } from "./task";
 
 /**
@@ -14,6 +15,7 @@ import type {
 export interface TaskChanges {
   readonly status?: TaskStatus;
   readonly importance?: Importance;
+  readonly urgency?: Urgency;
   readonly effort?: Effort;
   readonly start?: CalendarDate | null;
   readonly due?: CalendarDate | null;

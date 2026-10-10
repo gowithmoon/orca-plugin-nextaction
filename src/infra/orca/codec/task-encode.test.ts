@@ -23,6 +23,22 @@ describe("encodeTaskChanges", () => {
     ]);
   });
 
+  it("writes an urgency as a number under the tag's property name", () => {
+    expect(encodeTaskChanges({ urgency: 7 }, zh)).toEqual([
+      { name: "紧急度", value: 7 },
+    ]);
+    expect(
+      encodeTaskChanges({ urgency: 2 }, { language: "en", invalidated: [] }),
+    ).toEqual([{ name: "Urgency", value: 2 }]);
+  });
+
+  it("refuses an urgency write when the urgency is invalidated", () => {
+    const tag: TaskWriteContext = { language: "zh", invalidated: ["urgency"] };
+    expect(() => encodeTaskChanges({ urgency: 6 }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+  });
+
   it("writes a due date as local midnight of that day", () => {
     // UTC+8 (pinned in vitest.config.ts): local midnight of 2026-10-20 is
     // 16:00 UTC the day before, as Orca stores a date picked in its own UI

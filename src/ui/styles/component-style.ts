@@ -336,7 +336,10 @@ export const componentCss = `
   font-weight: var(--orca-fontweight-lg);
 }
 
-/* Importance and effort: faded at the default level, importance bold from "high" up. */
+/*
+ * Importance, urgency and effort: faded at the default level, importance and
+ * urgency bold from "high" up.
+ */
 .nextaction-property-rating[data-default] {
   opacity: 0.7;
 }

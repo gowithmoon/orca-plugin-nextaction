@@ -117,6 +117,13 @@ const structure: readonly {
       })),
     }),
   },
+  // Like importance and effort (#79); appended, as the schema only grows
+  // (ADR 0008).
+  {
+    key: "urgency",
+    type: PropType.Number,
+    typeArgs: () => ({ defaultEnabled: true, default: 4 }),
+  },
 ];
 
 /**

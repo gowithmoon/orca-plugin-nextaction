@@ -77,6 +77,13 @@ const zhDefinitions = [
       ],
     },
   },
+  // A number, 4 by default, like importance and effort (#79).
+  {
+    name: "紧急度",
+    type: 3,
+    pos: 11,
+    typeArgs: { defaultEnabled: true, default: 4 },
+  },
 ];
 
 const enDefinitions = [
@@ -145,6 +152,12 @@ const enDefinitions = [
         { n: "Any", c: "" },
       ],
     },
+  },
+  {
+    name: "Urgency",
+    type: 3,
+    pos: 11,
+    typeArgs: { defaultEnabled: true, default: 4 },
   },
 ];
 
@@ -472,6 +485,28 @@ describe("startup plan", () => {
         },
       },
     ]);
+  });
+
+  it("appends the urgency after the existing properties to a tag from before #79", () => {
+    // The interface is English, but the tag's names are Chinese (ADR 0009).
+    expect(
+      planStartup({
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(without(["紧急度"]))),
+        cache: takenOver,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [
+        {
+          name: "紧急度",
+          type: 3,
+          pos: 11,
+          typeArgs: { defaultEnabled: true, default: 4 },
+        },
+      ],
+    });
   });
 
   it("adds a missing dependency mode option and keeps the ones the user recolored", () => {

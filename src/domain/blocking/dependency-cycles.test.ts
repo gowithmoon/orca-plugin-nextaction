@@ -34,6 +34,7 @@ function task(
     created: new Date("2026-01-01T00:00:00Z"),
     status: setup.status ?? "todo",
     importance: 4,
+    urgency: 4,
     effort: 4,
     start: null,
     due: null,

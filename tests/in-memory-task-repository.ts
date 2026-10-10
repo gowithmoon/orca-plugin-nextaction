@@ -86,6 +86,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     created,
     status: "inbox",
     importance: 4,
+    urgency: 4,
     effort: 4,
     start: null,
     due: null,
