@@ -293,6 +293,134 @@ describe("read all tasks, keeping the task being viewed", () => {
   });
 });
 
+describe("read all tasks, sorted", () => {
+  const day = (month: number, d: number) => ({ year: 2026, month, day: d });
+
+  it("by due day orders top-level tasks earliest first, those without one last, subtasks kept in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "todo", due: day(10, 20) });
+    repository.addTask({ id: 3, status: "todo", due: day(10, 12) });
+    repository.addTask(
+      { id: 4, status: "todo", due: day(10, 30) },
+      { parentId: 3 },
+    );
+    repository.addTask(
+      { id: 5, status: "todo", due: day(10, 1) },
+      { parentId: 3 },
+    );
+
+    const read = await readAllTasks({ sort: "due" });
+
+    expect(shape(read.tree)).toEqual([[3, [4, 5]], 2, 1]);
+  });
+
+  it("by start day orders top-level tasks by their own start, earliest first, those without one last", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "todo", start: day(10, 20) });
+    repository.addTask({ id: 3, status: "someday", start: day(10, 12) });
+    repository.addTask(
+      { id: 4, status: "todo", start: day(10, 1) },
+      { parentId: 1 },
+    );
+
+    const read = await readAllTasks({ sort: "start" });
+
+    expect(shape(read.tree)).toEqual([3, 2, [1, [4]]]);
+  });
+
+  it("by importance orders top-level tasks highest first, ties in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", importance: 2 });
+    repository.addTask({ id: 2, status: "todo", importance: 6 });
+    repository.addTask({ id: 3, status: "inbox", importance: 2 });
+    repository.addTask(
+      { id: 4, status: "todo", importance: 7 },
+      { parentId: 3 },
+    );
+    repository.addTask(
+      { id: 5, status: "todo", importance: 1 },
+      { parentId: 3 },
+    );
+
+    const read = await readAllTasks({ sort: "importance" });
+
+    expect(shape(read.tree)).toEqual([2, 1, [3, [4, 5]]]);
+  });
+
+  it("by capture time orders top-level tasks newest first, ties in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    const at = (iso: string) => new Date(iso);
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      created: at("2026-10-01T09:00:00Z"),
+    });
+    repository.addTask({
+      id: 2,
+      status: "waiting",
+      created: at("2026-10-05T09:00:00Z"),
+    });
+    repository.addTask({
+      id: 3,
+      status: "todo",
+      created: at("2026-10-01T09:00:00Z"),
+    });
+    repository.addTask(
+      { id: 4, status: "todo", created: at("2026-10-08T09:00:00Z") },
+      { parentId: 3 },
+    );
+
+    const read = await readAllTasks({ sort: "captured" });
+
+    expect(shape(read.tree)).toEqual([2, 1, [3, [4]]]);
+  });
+
+  it("by score orders top-level tasks of any status highest first, ties in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    // Scores on 2026-10-09: 1 and 5 are 55.75, 2 (due today) 85, 3 (starts
+    // in 20 days) 33.25, 4 (importance 7) 67.75.
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "waiting", due: day(10, 9) });
+    repository.addTask({ id: 3, status: "inbox", start: day(10, 29) });
+    repository.addTask({ id: 4, status: "someday", importance: 7 });
+    repository.addTask({ id: 5, status: "todo" });
+    repository.addTask(
+      { id: 6, status: "todo", due: day(10, 9) },
+      { parentId: 5 },
+    );
+
+    const read = await readAllTasks({ sort: "score" });
+
+    expect(shape(read.tree)).toEqual([2, 4, 1, [5, [6]], 3]);
+  });
+
+  it("sorts a faded done top-level task by the same rules", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", due: day(10, 20) });
+    repository.addTask({ id: 2, status: "done", due: day(10, 12) });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+
+    const read = await readAllTasks({ sort: "due" });
+
+    expect(fades(read.tree)).toEqual([
+      [2, "done"],
+      [3, null],
+      [1, null],
+    ]);
+  });
+
+  it("keeps note order by default", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", importance: 1 });
+    repository.addTask({ id: 2, status: "todo", due: day(10, 9) });
+
+    expect(shape((await readAllTasks()).tree)).toEqual([1, 2]);
+    expect(shape((await readAllTasks({ sort: "note" })).tree)).toEqual([1, 2]);
+  });
+});
+
 /** Every node in the tree, depth first, with whether it is marked blocked. */
 function marks(nodes: readonly AllTasksNode[]): [TaskId, boolean][] {
   return nodes.flatMap((node) => [

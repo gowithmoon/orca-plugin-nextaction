@@ -114,6 +114,12 @@ const zhCN: Record<string, string> = {
   "Tasks not done show here as a tree, as they sit in the notes.":
     "未完成的任务会按笔记中的层级显示在这里。",
   Blocked: "阻塞",
+  Sort: "排序",
+  "Note order": "笔记顺序",
+  "Due day": "截止日期",
+  "Start day": "开始日期",
+  Score: "评分",
+  "Capture time": "捕获时间",
   "No tasks match the filter": "没有符合筛选的任务",
   "Clear filter": "清除筛选",
   Filter: "筛选",

@@ -197,6 +197,16 @@ export const componentCss = `
   border: 0;
 }
 
+/* The all tasks view's sort picker (#68): as wide as a filter field. */
+.nextaction-sort {
+  width: 12em;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 var(--orca-spacing-md);
+  padding: 0;
+  border: 0;
+}
+
 .nextaction-filter {
   flex: 1 1 10em;
   min-width: 0;

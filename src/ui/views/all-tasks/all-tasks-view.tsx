@@ -33,6 +33,8 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
+import { AllTasksSortSelect } from "./all-tasks-sort-select";
+import type { AllTasksSortStore } from "./all-tasks-sort-store";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -44,6 +46,8 @@ export interface AllTasksViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
+  /** The sort, kept in the plugin instance's memory (#68). */
+  sort: AllTasksSortStore;
 }
 
 /** The node or a node below it is a task not done. */
@@ -204,12 +208,18 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
    */
   let selected: TaskId | undefined;
   const query = createViewQuery(
-    () => deps.readAllTasks({ keep: selected }),
+    () => deps.readAllTasks({ keep: selected, sort: deps.sort.current() }),
     deps.changes,
   );
+  // A new sort reads again; both live as long as the plugin instance.
+  deps.sort.subscribe(() => query.reload());
 
   function AllTasksView() {
     const { selectedTaskId } = usePanel();
+    const sort = React.useSyncExternalStore(
+      deps.sort.subscribe,
+      deps.sort.current,
+    );
     // Before any read the selection may cause: effects run before the
     // change signal's debounced read.
     React.useEffect(() => {
@@ -221,6 +231,7 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("All tasks")} />
+        <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
         <AllTasksContent query={query} today={deps.today()} deps={deps} />
       </>
     );
