@@ -1,7 +1,7 @@
-// Matching a task against the contexts, labels and importance chosen in a
-// view's filter (#55), shared by the next action view and the all tasks view
+// Matching a task against the contexts, labels, importance and urgency (#74)
+// chosen in a view's filter (#55), shared by the next action view and the all tasks view
 // (#69) so the two never drift apart. Pure.
-import type { Importance, Task } from "./task";
+import type { Importance, Rating, Task, Urgency } from "./task";
 
 /**
  * What one multi-value dimension (contexts, labels) lets through: a task
@@ -13,7 +13,7 @@ export interface ValuesChoice {
 }
 
 /**
- * Contexts, labels and importance as chosen. Within a dimension any choice is
+ * Contexts, labels, importance and urgency as chosen. Within a dimension any choice is
  * enough ("or"); every dimension given must let the task through ("and").
  */
 export interface TaskFilter {
@@ -21,6 +21,8 @@ export interface TaskFilter {
   readonly labels?: ValuesChoice;
   /** The importance levels let through. */
   readonly importance?: readonly Importance[];
+  /** The urgency levels let through: the task's own, not inherited. */
+  readonly urgency?: readonly Urgency[];
 }
 
 function choiceLets(
@@ -33,6 +35,14 @@ function choiceLets(
   return choice.values.some((value) => held.includes(value));
 }
 
+function levelLets(
+  chosen: readonly Rating[] | undefined,
+  level: Rating,
+): boolean {
+  // Nothing chosen: the dimension does not filter.
+  return !chosen || chosen.length === 0 || chosen.includes(level);
+}
+
 function choosesAny(choice: ValuesChoice | undefined): boolean {
   return choice !== undefined && (choice.values.length > 0 || choice.none);
 }
@@ -42,7 +52,8 @@ export function filterChoosesAny(filter: TaskFilter): boolean {
   return (
     choosesAny(filter.contexts) ||
     choosesAny(filter.labels) ||
-    (filter.importance?.length ?? 0) > 0
+    (filter.importance?.length ?? 0) > 0 ||
+    (filter.urgency?.length ?? 0) > 0
   );
 }
 
@@ -50,8 +61,7 @@ export function filterLets(filter: TaskFilter, task: Task): boolean {
   return (
     choiceLets(filter.contexts, task.contexts) &&
     choiceLets(filter.labels, task.labels) &&
-    (!filter.importance ||
-      filter.importance.length === 0 ||
-      filter.importance.includes(task.importance))
+    levelLets(filter.importance, task.importance) &&
+    levelLets(filter.urgency, task.urgency)
   );
 }

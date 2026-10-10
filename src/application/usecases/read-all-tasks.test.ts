@@ -372,6 +372,21 @@ describe("read all tasks, sorted", () => {
     expect(shape(read.tree)).toEqual([2, 1, [3, [4, 5]]]);
   });
 
+  it("by urgency orders top-level tasks by their own urgency, highest first, ties in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", urgency: 2 });
+    repository.addTask({ id: 2, status: "waiting", urgency: 6 });
+    repository.addTask({ id: 3, status: "inbox", urgency: 2 });
+    repository.addTask({ id: 4, status: "todo", urgency: 7 }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo", urgency: 1 }, { parentId: 3 });
+    repository.addTask({ id: 6, status: "todo" });
+
+    const read = await readAllTasks({ sort: "urgency" });
+
+    // 3 sorts by its own 2, not its subtask's 7; subtasks keep note order.
+    expect(shape(read.tree)).toEqual([2, 6, 1, [3, [4, 5]]]);
+  });
+
   it("by capture time orders top-level tasks newest first, ties in note order", async () => {
     const { repository, readAllTasks } = setup();
     const at = (iso: string) => new Date(iso);
@@ -466,6 +481,23 @@ describe("read all tasks, sorted", () => {
     });
 
     expect(shape(read.tree)).toEqual([2, 4, 1, 3]);
+  });
+
+  it("by urgency descending orders top-level tasks lowest first, ties still in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", urgency: 6 });
+    repository.addTask({ id: 2, status: "todo", urgency: 2 });
+    repository.addTask({ id: 3, status: "inbox", urgency: 6 });
+    repository.addTask({ id: 4, status: "todo", urgency: 2 });
+    repository.addTask({ id: 5, status: "todo", urgency: 7 }, { parentId: 4 });
+    repository.addTask({ id: 6, status: "todo", urgency: 1 }, { parentId: 4 });
+
+    const read = await readAllTasks({
+      sort: "urgency",
+      direction: "descending",
+    });
+
+    expect(shape(read.tree)).toEqual([2, [4, [5, 6]], 1, 3]);
   });
 
   it("by capture time descending orders top-level tasks oldest first, ties still in note order", async () => {
@@ -778,6 +810,25 @@ describe("read all tasks, filtered and searched", () => {
 
     // 3: another context; 4: no label; 6: another importance.
     expect(shape(read.tree)).toEqual([1, 2, 5]);
+  });
+
+  it("by urgency lets through a task at any chosen level, with the other dimensions as well", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, urgency: 7, contexts: ["home"] });
+    repository.addTask({ id: 2, urgency: 2, contexts: ["home"] });
+    repository.addTask({ id: 3, urgency: 7, contexts: ["office"] });
+    repository.addTask({ id: 4, urgency: 1, contexts: ["home"] });
+    repository.addTask({ id: 5, contexts: ["home"] });
+
+    const read = await readAllTasks({
+      filter: {
+        contexts: { values: ["home"], none: false },
+        urgency: [1, 7],
+      },
+    });
+
+    // 2: another level; 3: another context; 5: at the default 4.
+    expect(shape(read.tree)).toEqual([1, 4]);
   });
 
   it("by search text shows the tasks whose text holds every word, whatever the case", async () => {

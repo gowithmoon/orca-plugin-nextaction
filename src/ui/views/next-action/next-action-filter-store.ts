@@ -12,6 +12,7 @@ export const noFilter: FullNextActionFilter = {
   contexts: { values: [], none: false },
   labels: { values: [], none: false },
   importance: [],
+  urgency: [],
 };
 
 export interface NextActionFilterStore {
