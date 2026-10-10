@@ -190,6 +190,12 @@ const zhCN: Record<string, string> = {
     "未添加：依赖 ${tasks} 会造成循环依赖。",
   "Sequential not switched on: ${waiting} would wait for ${waitingFor}, which already waits for it, making a dependency cycle.":
     "未打开顺序执行：${waiting} 会等待 ${waitingFor}，而后者已经在等待它，会造成循环依赖。",
+  "Not moved: there, ${moved} and ${cycleWith} would wait for each other, making a dependency cycle.":
+    "未移动：移到那里后，${moved} 和 ${cycleWith} 会互相等待，造成循环依赖。",
+  "Not moved: a task cannot go below itself.": "未移动：不能移到自己下面。",
+  "Could not move the task: ${reason}": "无法移动任务：${reason}",
+  "Drag onto another task to make it a subtask":
+    "拖到另一个任务上，成为它的子任务",
 };
 
 export default zhCN;

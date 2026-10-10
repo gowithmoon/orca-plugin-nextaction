@@ -5,6 +5,7 @@
 // when the plugin panel opens and again on every task change signal (ADR
 // 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   AllTasksNode,
   AllTasksRead,
@@ -20,6 +21,7 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { useMoveTask } from "../../hooks/use-move-task";
 import {
   type TaskActions,
   type TaskActionsDeps,
@@ -33,6 +35,7 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
+import { TaskDragArea, TaskDragHandle, TaskDropTarget } from "./task-drag";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -44,6 +47,8 @@ export interface AllTasksViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
+  /** Dragging a card onto another (#70). */
+  moveTask: MoveTask;
 }
 
 /** The node or a node below it is a task not done. */
@@ -116,21 +121,24 @@ function TreeNodes(props: {
     >
       {props.nodes.map((node) => (
         <li key={node.task.id}>
-          <TaskCard
-            task={node.task}
-            today={cards.today}
-            actions={cards.actions}
-            menuItems={cards.menuItems}
-            menuPlace={cards.menuPlace}
-            onOpen={(open) => cards.selectTask(open.id)}
-            selected={node.task.id === cards.selectedTaskId}
-            // Done or kept: the card's faded "kept" look (#65).
-            kept={node.faded !== null}
-            // Only faded: a done task's status icon already says why, and a
-            // kept one leaves for more reasons than its status.
-            keptStatusShown={false}
-            blocked={node.blocked}
-          />
+          <TaskDropTarget id={node.task.id}>
+            <TaskDragHandle task={node.task} />
+            <TaskCard
+              task={node.task}
+              today={cards.today}
+              actions={cards.actions}
+              menuItems={cards.menuItems}
+              menuPlace={cards.menuPlace}
+              onOpen={(open) => cards.selectTask(open.id)}
+              selected={node.task.id === cards.selectedTaskId}
+              // Done or kept: the card's faded "kept" look (#65).
+              kept={node.faded !== null}
+              // Only faded: a done task's status icon already says why, and a
+              // kept one leaves for more reasons than its status.
+              keptStatusShown={false}
+              blocked={node.blocked}
+            />
+          </TaskDropTarget>
           {node.children.length > 0 && (
             <TreeNodes nodes={node.children} cards={cards} />
           )}
@@ -148,6 +156,7 @@ function AllTasksContent(props: {
   const { query, today, deps } = props;
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
@@ -178,18 +187,20 @@ function AllTasksContent(props: {
     );
   }
   return (
-    <TreeNodes
-      top
-      nodes={nodes}
-      cards={{
-        today,
-        actions,
-        menuItems,
-        menuPlace,
-        selectedTaskId,
-        selectTask,
-      }}
-    />
+    <TaskDragArea onMove={moveTask}>
+      <TreeNodes
+        top
+        nodes={nodes}
+        cards={{
+          today,
+          actions,
+          menuItems,
+          menuPlace,
+          selectedTaskId,
+          selectTask,
+        }}
+      />
+    </TaskDragArea>
   );
 }
 

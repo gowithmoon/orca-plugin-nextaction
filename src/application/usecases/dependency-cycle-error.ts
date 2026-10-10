@@ -1,5 +1,6 @@
 // The write would make a dependency cycle (GLOSSARY: 循环依赖, #60), so it
-// was refused: thrown by setting dependencies and by switching sequential on.
+// was refused: thrown by setting dependencies, by switching sequential on and
+// by moving a task (#70).
 import type { TaskId } from "../../domain/task/task";
 
 /** A task the refusal names, with its text for the notice. */
@@ -22,6 +23,15 @@ export type RefusedCycle =
       readonly kind: "sequential";
       readonly waiting: CycleTask;
       readonly waitingFor: CycleTask;
+    }
+  /**
+   * Moving `moved` (with every task below it) would put it on a dependency
+   * cycle with `cycleWith` (#70).
+   */
+  | {
+      readonly kind: "move";
+      readonly moved: CycleTask;
+      readonly cycleWith: CycleTask;
     };
 
 /** Nothing was written; `ui` tells the user why. */

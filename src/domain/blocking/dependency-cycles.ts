@@ -13,6 +13,7 @@
 // refuses and what reading shows agree. Pure.
 import type { TaskId } from "../task/task";
 import type { SnapshotTask, TaskGraphSnapshot } from "./task-graph";
+import { isSelfOrBelow, movedSnapshot, type TaskMove } from "./task-move";
 
 /** The tasks of a snapshot, with who sits below whom. */
 interface Structure {
@@ -309,4 +310,57 @@ export function sequentialCycle(
     if (!earliest.has(own)) earliest.set(own, later.task.id);
   }
   return null;
+}
+
+/** The task that a move would put on a dependency cycle with the moved one. */
+export interface MoveCycle {
+  readonly cycleWith: TaskId;
+}
+
+/**
+ * Whether moving a task (with every task below it) would make a dependency
+ * cycle: a task not on a cycle before is on one after the move. Moving out
+ * of a cycle that already stands, or within it, is not refused. `cycleWith`
+ * names the task the moved ones would wait for each other with: the first
+ * one in note order on that cycle outside the moved subtree, or, when the
+ * cycle stays inside it (a new ancestor task depends on a task being moved
+ * below it), that ancestor task, the nearest first. `null` when no cycle
+ * would be made, and when the move cannot be made at all (a task not in the
+ * snapshot, or a target that is the moved task or below it).
+ */
+export function moveCycle(
+  snapshot: TaskGraphSnapshot,
+  move: TaskMove,
+): MoveCycle | null {
+  const after = movedSnapshot(snapshot, move);
+  if (!after) return null;
+  const before = findDependencyCycles(snapshot);
+  const afterStructure = structureOf(after.tasks);
+  const graph = waitsForGraph(afterStructure);
+  const component = components(afterStructure, graph);
+  const onCycleAfter = findDependencyCycles(after);
+  const made = afterStructure.ordered.find(
+    (item) => onCycleAfter.has(item.task.id) && !before.has(item.task.id),
+  );
+  if (!made) return null;
+  const cycle = component.get(made.task.id);
+  const members = afterStructure.ordered.filter(
+    (item) => component.get(item.task.id) === cycle,
+  );
+  const below = (id: TaskId) => isSelfOrBelow(snapshot, id, move.id);
+  const position = (id: TaskId) =>
+    snapshot.tasks.find((item) => item.task.id === id)?.position ?? 0;
+  const outside = members
+    .map((item) => item.task.id)
+    .filter((id) => !below(id))
+    .sort((a, b) => position(a) - position(b));
+  if (outside[0] !== undefined) return { cycleWith: outside[0] };
+  const moved = afterStructure.byId.get(move.id) as SnapshotTask;
+  const memberIds = new Set(members.map((item) => item.task.id));
+  for (const ancestor of selfAndAncestors(afterStructure, moved).slice(1)) {
+    if (ancestor.task.dependencies.some((id) => memberIds.has(id))) {
+      return { cycleWith: ancestor.task.id };
+    }
+  }
+  return { cycleWith: move.id };
 }
