@@ -136,6 +136,19 @@ export function createNextActionPanel(
       () => setHeldFromPopup(selected.current),
       [],
     );
+    /**
+     * Another view: the selection ends with the view it was made in. The
+     * selected task was a card of that view's list; carried over, the new
+     * view would keep it as a faded card it never listed, and the side pane
+     * would show a task no card in sight is marked for. Unsaved text in the
+     * task panel is saved as the form goes away.
+     */
+    const showView = (id: string) => {
+      if (id === current?.id) return;
+      setHeldFromPopup(undefined);
+      setSelectedTaskId(undefined);
+      setCurrentId(id);
+    };
     useSelectionPopup(
       openPopup,
       tier !== undefined && tier !== "wide",
@@ -177,7 +190,7 @@ export function createNextActionPanel(
             <PanelNavigation
               views={list}
               currentId={current?.id}
-              onSelect={setCurrentId}
+              onSelect={showView}
               onRefresh={onRefresh}
             />
             <div className="nextaction-panel-body">
