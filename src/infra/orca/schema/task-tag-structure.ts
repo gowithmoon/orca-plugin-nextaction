@@ -124,6 +124,9 @@ const structure: readonly {
     type: PropType.Number,
     typeArgs: () => ({ defaultEnabled: true, default: 4 }),
   },
+  // Whole days, no default (#77): empty reads as 0. Written bare, as numbers
+  // were in the tag-operations spike.
+  { key: "dependencyDelay", type: PropType.Number },
 ];
 
 /**

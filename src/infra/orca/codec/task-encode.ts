@@ -116,6 +116,13 @@ export function encodeTaskChanges(
       value: dependencyModeName(changes.dependencyMode, tag.language),
     });
   }
+  if (changes.dependencyDelay !== undefined) {
+    // A number like importance and effort; `null` clears it (#77).
+    items.push({
+      name: propertyName("dependencyDelay", tag.language),
+      value: changes.dependencyDelay,
+    });
+  }
   return items;
 }
 
@@ -159,6 +166,7 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   dependencies: "dependencies",
   dependencyMode: "dependencyMode",
   urgency: "urgency",
+  dependencyDelay: "dependencyDelay",
 };
 
 /**

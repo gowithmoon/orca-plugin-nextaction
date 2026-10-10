@@ -96,6 +96,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     sequential: false,
     dependencies: [],
     dependencyMode: "all",
+    dependencyDelay: 0,
     anomalies: [],
   };
 }
@@ -296,7 +297,12 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
             }
           }
         }
-        block.task = { ...block.task, ...changes };
+        const { dependencyDelay, ...rest } = changes;
+        block.task = { ...block.task, ...rest };
+        // A cleared dependency delay reads back as 0, as decoding does.
+        if (dependencyDelay !== undefined) {
+          block.task = { ...block.task, dependencyDelay: dependencyDelay ?? 0 };
+        }
         // A status written is one of the plugin's: it reads back without the
         // anomaly an empty or unknown one had, as decoding does.
         if (changes.status !== undefined) {

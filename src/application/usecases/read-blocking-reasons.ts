@@ -11,7 +11,10 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
-/** A task a reason names: the one it comes from, or one it waits for. */
+/**
+ * A task a reason names: the one it comes from, one it waits for, or the one
+ * a dependency delay counts from.
+ */
 export interface RelatedTask {
   readonly id: TaskId;
   /** As the notes hold it; may be empty. */
@@ -21,7 +24,10 @@ export interface RelatedTask {
 export interface BlockingReasonsRead {
   /** Empty when nothing blocks the task, or it is not a task. */
   readonly reasons: readonly BlockingReason[];
-  /** Every task the reasons name (sources and waited-for tasks), by ID. */
+  /**
+   * Every task the reasons name (sources, waited-for tasks and the tasks a
+   * dependency delay counts from), by ID.
+   */
   readonly tasks: ReadonlyMap<TaskId, RelatedTask>;
   /**
    * The task's own dependencies (GLOSSARY: 依赖), in the order the notes
@@ -59,7 +65,10 @@ export function createReadBlockingReasons(deps: {
     const reasons = graph.entry(id)?.blockedBy ?? [];
     const tasks = new Map<TaskId, RelatedTask>();
     for (const reason of reasons) {
-      for (const related of [reason.source, ...reason.waitingFor]) {
+      const named = [reason.source, ...reason.waitingFor];
+      // A dependency delay names the dependency it counts from (#77).
+      if (reason.kind === "dependencyDelay") named.push(reason.countedFrom);
+      for (const related of named) {
         const entry = graph.entry(related);
         if (entry) tasks.set(related, { id: related, text: entry.task.text });
       }

@@ -30,4 +30,9 @@ export interface TaskChanges {
   readonly dependencies?: readonly TaskId[];
   /** Whether every dependency must be met or one is enough (GLOSSARY: 依赖模式). */
   readonly dependencyMode?: DependencyMode;
+  /**
+   * How many logical days after the dependencies are met the task is let in
+   * (GLOSSARY: 依赖延迟); `null` clears it, which reads as 0.
+   */
+  readonly dependencyDelay?: number | null;
 }

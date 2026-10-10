@@ -47,6 +47,20 @@ describe("edit task", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("sets and clears the dependency delay, one write each", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 42, dependencies: [43] });
+    repository.addTask({ id: 43 });
+    const editTask = createEditTask({ repository });
+
+    await editTask(42, { dependencyDelay: 3 });
+    expect((await repository.getTask(42))?.dependencyDelay).toBe(3);
+
+    await editTask(42, { dependencyDelay: null });
+    expect((await repository.getTask(42))?.dependencyDelay).toBe(0);
+    expect(repository.writeCount()).toBe(2);
+  });
+
   it("clears the start and due dates", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({

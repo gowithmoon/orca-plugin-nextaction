@@ -23,6 +23,9 @@ function task(
     sequential?: boolean;
     dependencies?: TaskId[];
     dependencyMode?: DependencyMode;
+    dependencyDelay?: number;
+    /** The logical day of its last completion; none when absent. */
+    completedOn?: CalendarDate;
     /** Its place in the notes; defaults to its ID. */
     position?: number;
   } = {},
@@ -43,12 +46,26 @@ function task(
     sequential: setup.sequential ?? false,
     dependencies: setup.dependencies ?? [],
     dependencyMode: setup.dependencyMode ?? "all",
+    dependencyDelay: setup.dependencyDelay ?? 0,
     anomalies: [],
   };
   return {
     task: full,
     parentId: setup.parent ?? null,
     position: setup.position ?? id,
+    ...(setup.completedOn && {
+      lastCompletion: {
+        at: new Date(
+          Date.UTC(
+            setup.completedOn.year,
+            setup.completedOn.month - 1,
+            setup.completedOn.day,
+            10,
+          ),
+        ),
+        day: setup.completedOn,
+      },
+    }),
   };
 }
 
@@ -422,6 +439,212 @@ describe("task graph: dependency mode", () => {
     ]);
 
     expect(graph.entry(2)?.nextAction).toBe(true);
+  });
+});
+
+describe("task graph: dependency delay", () => {
+  // today is 2026-10-09.
+  const day = (d: number): CalendarDate => ({ year: 2026, month: 10, day: d });
+
+  it("in mode all, the delay counts from the latest completion", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2, 3], dependencyDelay: 3 }),
+      task(2, { status: "done", completedOn: day(5) }),
+      task(3, { status: "done", completedOn: day(7) }),
+    ]);
+
+    expect(graph.entry(1)?.nextAction).toBe(false);
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      {
+        kind: "dependencyDelay",
+        source: 1,
+        waitingFor: [],
+        countedFrom: 3,
+        releasedOn: day(10),
+      },
+    ]);
+  });
+
+  it("is let in on its release day, not the day before", () => {
+    // Done on the 6th with a delay of 3: released on the 9th, today.
+    const onTheDay = analyze([
+      task(1, { dependencies: [2], dependencyDelay: 3 }),
+      task(2, { status: "done", completedOn: day(6) }),
+    ]);
+    // Done on the 7th: released on the 10th, tomorrow.
+    const dayBefore = analyze([
+      task(1, { dependencies: [2], dependencyDelay: 3 }),
+      task(2, { status: "done", completedOn: day(7) }),
+    ]);
+
+    expect(onTheDay.entry(1)?.nextAction).toBe(true);
+    expect(dayBefore.entry(1)?.nextAction).toBe(false);
+  });
+
+  it("a delay of 0 is the same as none: done today, let in today", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2], dependencyDelay: 0 }),
+      task(2, { status: "done", completedOn: day(9) }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("while dependencies are unmet, the reason is the dependencies, not the delay", () => {
+    const graph = analyze([
+      task(1, { dependencies: [2, 3], dependencyDelay: 3 }),
+      task(2, { status: "done", completedOn: day(8) }),
+      task(3),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [3], mode: "all" },
+    ]);
+  });
+
+  it("in mode all, done dependencies without a record and stale ones are left out of the latest", () => {
+    // 3 was set to done in Orca itself; 7 is not in the snapshot.
+    const graph = analyze([
+      task(1, { dependencies: [2, 3, 7], dependencyDelay: 2 }),
+      task(2, { status: "done", completedOn: day(8) }),
+      task(3, { status: "done" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      {
+        kind: "dependencyDelay",
+        source: 1,
+        waitingFor: [],
+        countedFrom: 2,
+        releasedOn: day(10),
+      },
+    ]);
+  });
+
+  it("in mode all, when no met dependency has a record, the task is let in at once", () => {
+    const graph = analyze([
+      task(1, { dependencies: [3, 7], dependencyDelay: 5 }),
+      task(3, { status: "done" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("passes down from ancestor tasks, one reason per delayed link, nearest first", () => {
+    const graph = analyze([
+      task(1, { status: "inbox", dependencies: [8], dependencyDelay: 5 }),
+      task(2, { parent: 1, dependencies: [9], dependencyDelay: 2 }),
+      task(3, { parent: 2 }),
+      task(8, { status: "done", completedOn: day(6) }),
+      task(9, { status: "done", completedOn: day(8) }),
+    ]);
+
+    expect(graph.entry(3)?.nextAction).toBe(false);
+    expect(graph.entry(3)?.blockedBy).toEqual([
+      {
+        kind: "dependencyDelay",
+        source: 2,
+        waitingFor: [],
+        countedFrom: 9,
+        releasedOn: day(10),
+      },
+      {
+        kind: "dependencyDelay",
+        source: 1,
+        waitingFor: [],
+        countedFrom: 8,
+        releasedOn: day(11),
+      },
+    ]);
+  });
+
+  it("does not change what is a dependency cycle", () => {
+    // 1 and 2 wait for each other; the delay plays no part.
+    const graph = analyze([
+      task(1, { dependencies: [2], dependencyDelay: 3 }),
+      task(2, { dependencies: [1] }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toContainEqual({
+      kind: "cycle",
+      source: 1,
+      waitingFor: [2],
+    });
+    expect(
+      graph.entry(1)?.blockedBy.some((r) => r.kind === "dependencyDelay"),
+    ).toBe(false);
+  });
+
+  it("in mode any, the delay counts from the earliest completion", () => {
+    const graph = analyze([
+      task(1, {
+        dependencies: [2, 3, 4],
+        dependencyMode: "any",
+        dependencyDelay: 3,
+      }),
+      task(2, { status: "done", completedOn: day(7) }),
+      task(3, { status: "done", completedOn: day(5) }),
+      task(4),
+    ]);
+
+    // From the 5th, released on the 8th: already let in.
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("in mode any, a done dependency without a completion record lets the task in at once", () => {
+    // 3 was set to done in Orca itself: no record (GLOSSARY: 完成历史).
+    const graph = analyze([
+      task(1, {
+        dependencies: [2, 3],
+        dependencyMode: "any",
+        dependencyDelay: 3,
+      }),
+      task(2, { status: "done", completedOn: day(8) }),
+      task(3, { status: "done" }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+    expect(graph.entry(1)?.nextAction).toBe(true);
+  });
+
+  it("in mode any, a stale dependency lets the task in at once", () => {
+    // 7 is not in the snapshot: deleted, dropped or untagged.
+    const graph = analyze([
+      task(1, {
+        dependencies: [2, 7],
+        dependencyMode: "any",
+        dependencyDelay: 3,
+      }),
+      task(2, { status: "done", completedOn: day(8) }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([]);
+  });
+
+  it("in mode any, a dependency reopened since its last completion does not count", () => {
+    // 3 was done on the 1st, then set back to do: only 2 is met.
+    const graph = analyze([
+      task(1, {
+        dependencies: [2, 3],
+        dependencyMode: "any",
+        dependencyDelay: 3,
+      }),
+      task(2, { status: "done", completedOn: day(8) }),
+      task(3, { status: "todo", completedOn: day(1) }),
+    ]);
+
+    expect(graph.entry(1)?.blockedBy).toEqual([
+      {
+        kind: "dependencyDelay",
+        source: 1,
+        waitingFor: [],
+        countedFrom: 2,
+        releasedOn: day(11),
+      },
+    ]);
   });
 });
 

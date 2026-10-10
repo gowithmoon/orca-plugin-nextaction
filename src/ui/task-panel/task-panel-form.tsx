@@ -39,6 +39,7 @@ import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
 import {
   DateField,
+  DependencyDelayField,
   DependencyModeField,
   Field,
   NoteField,
@@ -249,6 +250,16 @@ function Fields(props: {
           />
         </Field>
       )}
+      {/* Only with dependencies, stale ones included (#77). */}
+      {task.dependencies.length >= 1 && (
+        <Field label={t("Dependency delay")} labelId={id("dependency-delay")}>
+          <DependencyDelayField
+            labelId={id("dependency-delay")}
+            days={task.dependencyDelay}
+            onSave={(dependencyDelay) => void actions.edit({ dependencyDelay })}
+          />
+        </Field>
+      )}
     </div>
   );
 }
@@ -307,6 +318,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
               changes={deps.changes}
               notify={notify}
               labelId={`${idPrefix}-blocked-by`}
+              today={deps.today()}
               onSelectTask={props.onSelectTask}
             />
           )

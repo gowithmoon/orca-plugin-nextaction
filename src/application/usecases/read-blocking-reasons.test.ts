@@ -40,6 +40,46 @@ describe("read blocking reasons", () => {
     expect(read.tasks.get(3)).toEqual({ id: 3, text: "Collect the data" });
   });
 
+  it("returns a dependency delay with its release day and the text of the task it counts from", async () => {
+    const { repository, readBlockingReasons } = setup();
+    // Today is the logical day 2026-10-09.
+    repository.addTask({
+      id: 1,
+      text: "Hang the lamp",
+      status: "todo",
+      dependencies: [2],
+      dependencyDelay: 3,
+    });
+    repository.addTask(
+      { id: 2, text: "Paint the wall", status: "done" },
+      {
+        completionHistory: {
+          kind: "readable",
+          history: [
+            {
+              at: new Date("2026-10-08T12:00:00+08:00"),
+              day: { year: 2026, month: 10, day: 8 },
+            },
+          ],
+        },
+      },
+    );
+
+    const read = await readBlockingReasons(1);
+
+    expect(read.reasons).toEqual([
+      {
+        kind: "dependencyDelay",
+        source: 1,
+        waitingFor: [],
+        countedFrom: 2,
+        releasedOn: { year: 2026, month: 10, day: 11 },
+      },
+    ]);
+    expect(read.tasks.get(1)).toEqual({ id: 1, text: "Hang the lamp" });
+    expect(read.tasks.get(2)).toEqual({ id: 2, text: "Paint the wall" });
+  });
+
   it("returns no reasons for a task nothing blocks", async () => {
     const { repository, readBlockingReasons } = setup();
     repository.addTask({ id: 1 });
