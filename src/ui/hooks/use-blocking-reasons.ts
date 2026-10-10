@@ -1,5 +1,5 @@
-// Why a task is blocked, kept in step with the notes for the task panel's
-// blocking reasons row (#54): read when the panel shows a task and again on
+// Why a task is not a next action, kept in step with the notes for the task
+// panel's row of that name (#54, #78): read when the panel shows a task and again on
 // every task change signal (ADR 0007). Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -21,7 +21,7 @@ const none: BlockingReasonsRead = {
 };
 
 /**
- * The blocking reasons of task `id`, none until the first read ends. A new
+ * Why task `id` is not a next action, none until the first read ends. A new
  * read keeps what is shown until it ends; only the latest read counts. A
  * failed read is told once per failure and leaves the last reasons; while
  * task features are paused the task panel already says so, so nothing is
@@ -46,7 +46,7 @@ export function useBlockingReasons(
         else if (outcome.kind === "failed") {
           report.current(
             "error",
-            t("Could not read why the task is blocked: ${reason}", {
+            t("Could not read why the task is not a next action: ${reason}", {
               reason: describeError(outcome.error),
             }),
           );

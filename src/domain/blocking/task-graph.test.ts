@@ -169,6 +169,21 @@ describe("task graph: parked subtree", () => {
     }
   });
 
+  it("names the nearest task that parks it", () => {
+    // 1 (someday) { 2 (waiting) { 3 (done) { 4 } } }
+    const graph = analyze([
+      task(1, { status: "someday" }),
+      task(2, { status: "waiting", parent: 1 }),
+      task(3, { status: "done", parent: 2 }),
+      task(4, { parent: 3 }),
+      task(5),
+    ]);
+
+    expect(graph.entry(4)?.parkedBy).toBe(2);
+    expect(graph.entry(2)?.parkedBy).toBe(2);
+    expect(graph.entry(5)?.parkedBy).toBeNull();
+  });
+
   it("a task that is waiting or someday is parked itself", () => {
     const graph = analyze([task(1, { status: "someday" })]);
 
@@ -244,10 +259,26 @@ describe("task graph: effective start", () => {
     expect(graph.entry(2)?.effectiveStart).toEqual(oct(20));
   });
 
+  it("names the task whose start it is, the nearest one on a tie", () => {
+    const graph = analyze([
+      task(1, { start: oct(20) }),
+      task(2, { parent: 1, start: oct(5) }),
+      task(3, { parent: 2, start: oct(12) }),
+      task(4, { start: oct(15) }),
+      task(5, { parent: 4, start: oct(15) }),
+      task(6, { parent: 4 }),
+    ]);
+
+    expect(graph.entry(3)?.effectiveStartFrom).toBe(1);
+    expect(graph.entry(5)?.effectiveStartFrom).toBe(5);
+    expect(graph.entry(6)?.effectiveStartFrom).toBe(4);
+  });
+
   it("is empty when neither the task nor any ancestor task has a start", () => {
     const graph = analyze([task(1), task(2, { parent: 1 })]);
 
     expect(graph.entry(2)?.effectiveStart).toBeNull();
+    expect(graph.entry(2)?.effectiveStartFrom).toBeNull();
   });
 
   it("a task can be a next action on its effective start day, not before", () => {

@@ -1,9 +1,13 @@
-// The task panel's blocking reasons (#54, GLOSSARY: 阻塞): read only, shown
-// only while something blocks the task, e.g. "Subtasks: Write the
-// introduction, Collect the data"; never for a task that is done (the task
-// panel leaves it out). Each task name switches the task panel to that task.
-// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import type { ReadBlockingReasons } from "../../application/usecases/read-blocking-reasons";
+// The task panel's "why not a next action" row (#54, #78, GLOSSARY: 下一步
+// 行动): read only, shown only while a task to do or in progress is not a
+// next action, e.g. "Subtasks: Write the introduction, Collect the data" or
+// "Not started yet: Trip starts on 10/20 Tue"; the use case gives no reasons
+// otherwise. Each task name switches the task panel to that task. Verified by
+// hand in Orca (docs/ARCHITECTURE.md §5).
+import type {
+  NotNextActionReason,
+  ReadBlockingReasons,
+} from "../../application/usecases/read-blocking-reasons";
 import type { BlockingReason } from "../../domain/blocking/task-graph";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { daysBetween } from "../../domain/time/calendar-days";
@@ -14,9 +18,15 @@ import { useBlockingReasons } from "../hooks/use-blocking-reasons";
 import type { Notify } from "../notify";
 import { Field } from "./task-panel-fields";
 
-/** What a reason of this kind is called before the tasks it waits for. */
-function kindLabel(reason: BlockingReason): string {
+/** What a reason of this kind is called before the tasks it names. */
+function kindLabel(reason: NotNextActionReason): string {
   switch (reason.kind) {
+    case "doneAncestor":
+      return t("Ancestor task done");
+    case "parked":
+      return t("In a parked subtree");
+    case "notStarted":
+      return t("Not started yet");
     case "subtasks":
       return t("Subtasks");
     case "sequential":
@@ -46,8 +56,22 @@ function releaseText(releasedOn: CalendarDate, today: CalendarDate): string {
       });
 }
 
+/**
+ * A reason that is not blocking (#78): its source is the task it names, so
+ * it reads "Kind: Source …", never "Kind (from Source): …".
+ */
+function namesSource(
+  reason: NotNextActionReason,
+): reason is Exclude<NotNextActionReason, BlockingReason> {
+  return (
+    reason.kind === "doneAncestor" ||
+    reason.kind === "parked" ||
+    reason.kind === "notStarted"
+  );
+}
+
 /** Dependencies in mode "any": waiting for one of them, not all. */
-function anyMode(reason: BlockingReason): boolean {
+function anyMode(reason: NotNextActionReason): boolean {
   return reason.kind === "dependencies" && reason.mode === "any";
 }
 
@@ -57,7 +81,10 @@ export function BlockingReasonsField(props: {
   changes: ChangeSignalSource;
   notify: Notify;
   labelId: string;
-  /** The current logical day, for the days a dependency delay has left. */
+  /**
+   * The current logical day, for the days a dependency delay has left and
+   * how dates read.
+   */
   today: CalendarDate;
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
@@ -86,7 +113,7 @@ export function BlockingReasonsField(props: {
     );
   };
   return (
-    <Field label={t("Blocked by")} labelId={props.labelId}>
+    <Field label={t("Why not a next action")} labelId={props.labelId}>
       <ul
         className="nextaction-blocking-reasons"
         aria-labelledby={props.labelId}
@@ -96,7 +123,21 @@ export function BlockingReasonsField(props: {
             key={`${reason.kind}-${reason.source}`}
             className="nextaction-blocking-reason"
           >
-            {reason.source === props.taskId ? (
+            {namesSource(reason) ? (
+              // Not blocking (#78), e.g. "Ancestor task done: Move house",
+              // "In a parked subtree: Find a teacher", "Not started yet:
+              // Trip starts on 10/20 Tue" (the task itself or an ancestor).
+              <>
+                <span className="nextaction-blocking-reason-kind">
+                  {t("${kind}: ", { kind: kindLabel(reason) })}
+                </span>
+                {taskButton(reason.source)}
+                {reason.kind === "notStarted" &&
+                  t(" starts on ${date}", {
+                    date: formatDate(reason.startsOn, props.today),
+                  })}
+              </>
+            ) : reason.source === props.taskId ? (
               <span className="nextaction-blocking-reason-kind">
                 {anyMode(reason)
                   ? // One of them done is enough (#58), e.g.

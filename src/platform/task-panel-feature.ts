@@ -1,4 +1,5 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
+import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
@@ -35,6 +36,8 @@ export function createTaskPanelFeature(deps: {
   today: () => CalendarDate;
   /** The day boundary, for the logical day the task graph is read on. */
   dayBoundary: DayBoundarySetting;
+  /** How far ahead a start lets a task in, for why it is not a next action. */
+  startPreviewDays: StartPreviewDaysSetting;
   /** The plugin panel's status change, "open in notes" and notices (#39). */
   taskActions: TaskActionsDeps;
 }): {
@@ -54,6 +57,7 @@ export function createTaskPanelFeature(deps: {
       repository,
       clock: systemClock,
       dayBoundary: deps.dayBoundary,
+      startPreviewDays: deps.startPreviewDays,
     }),
     setSequential: createSetSequential({ repository }),
     readDependencyCandidates: createReadDependencyCandidates({ repository }),

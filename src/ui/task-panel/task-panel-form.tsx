@@ -54,7 +54,7 @@ export interface TaskPanelFormDeps {
   dropTask: DropTask;
   /** Values offered for contexts and labels. */
   readCandidates: ReadCandidates;
-  /** Why the task is blocked, for the blocking reasons row (#54). */
+  /** Why the task is not a next action, for the row of that name (#78). */
   readBlockingReasons: ReadBlockingReasons;
   /** Switches sequential on or off (#59). */
   setSequential: SetSequential;
@@ -87,7 +87,8 @@ export interface TaskPanelFormProps {
   onOpenedInNotes?: () => void;
   /**
    * The user picked another task from inside the form (a task named in the
-   * blocking reasons, #54): the task panel switches to it.
+   * reasons it is not a next action, #54, #78): the task panel switches to
+   * it.
    */
   onSelectTask: (taskId: TaskId) => void;
 }
@@ -309,19 +310,17 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         saveOnLeave={saveOnLeave}
         candidates={candidates}
         blockingReasons={
-          // A done task needs nothing more: what held it back no longer
-          // matters (#54, confirmed 2026-10-10).
-          state.task.status !== "done" && (
-            <BlockingReasonsField
-              readBlockingReasons={deps.readBlockingReasons}
-              taskId={state.task.id}
-              changes={deps.changes}
-              notify={notify}
-              labelId={`${idPrefix}-blocked-by`}
-              today={deps.today()}
-              onSelectTask={props.onSelectTask}
-            />
-          )
+          // Only a task to do or in progress gets reasons (#78); the use
+          // case returns none for the rest, so the row stays hidden.
+          <BlockingReasonsField
+            readBlockingReasons={deps.readBlockingReasons}
+            taskId={state.task.id}
+            changes={deps.changes}
+            notify={notify}
+            labelId={`${idPrefix}-not-next-action`}
+            today={deps.today()}
+            onSelectTask={props.onSelectTask}
+          />
         }
         dependencies={
           <DependenciesField

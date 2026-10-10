@@ -3,7 +3,7 @@
 // the notes. Pure; `today` is the current logical day, computed by the caller.
 import type { CompletionEntry } from "../task/completion-history";
 import type { CalendarDate, DependencyMode, Task, TaskId } from "../task/task";
-import { addDays, compareDays, laterDay } from "../time/calendar-days";
+import { addDays, compareDays } from "../time/calendar-days";
 import { findDependencyCycles } from "./dependency-cycles";
 
 /** A task with where it sits among the others (ADR 0003). */
@@ -106,6 +106,11 @@ export interface TaskGraphEntry {
    */
   readonly parked: boolean;
   /**
+   * The nearest task that parks it (GLOSSARY: 搁置子树): the task itself or
+   * an ancestor task, waiting or someday; `null` when it is not parked.
+   */
+  readonly parkedBy: TaskId | null;
+  /**
    * The nearest done ancestor task (GLOSSARY: 下一步行动): with one, at any
    * level, the whole branch below it is out of the next actions; `null` when
    * no ancestor task is done. The task itself does not count.
@@ -116,6 +121,12 @@ export interface TaskGraphEntry {
    * 开始日期, ADR 0015); `null` when none has one.
    */
   readonly effectiveStart: CalendarDate | null;
+  /**
+   * The task whose start the effective start is: the task itself or an
+   * ancestor task, the nearest one when several share that day; `null` when
+   * none has a start.
+   */
+  readonly effectiveStartFrom: TaskId | null;
   /**
    * The importance and urgency of each ancestor task, nearest first, whatever
    * its status: what the score inherits (GLOSSARY: 评分, ADR 0019). Empty for
@@ -305,14 +316,24 @@ export function analyzeTaskGraph(
         waitingFor: onCycle,
       });
     }
-    const parked = chain.some((link) => parks(link.task));
+    const parkedBy = chain.find((link) => parks(link.task))?.task.id ?? null;
+    const parked = parkedBy !== null;
     const doneAncestor =
       chain.slice(1).find((link) => link.task.status === "done")?.task.id ??
       null;
-    const effectiveStart = chain.reduce<CalendarDate | null>(
-      (latest, link) => laterDay(latest, link.task.start),
-      null,
-    );
+    // Nearest first, so only a strictly later start replaces it.
+    let startLink: SnapshotTask | undefined;
+    for (const link of chain) {
+      const start = link.task.start;
+      if (start === null) continue;
+      if (
+        !startLink?.task.start ||
+        compareDays(start, startLink.task.start) > 0
+      ) {
+        startLink = link;
+      }
+    }
+    const effectiveStart = startLink?.task.start ?? null;
     const started =
       effectiveStart === null || compareDays(effectiveStart, startsBy) <= 0;
     const status = item.task.status;
@@ -321,8 +342,10 @@ export function analyzeTaskGraph(
       parentId: item.parentId,
       blockedBy,
       parked,
+      parkedBy,
       doneAncestor,
       effectiveStart,
+      effectiveStartFrom: startLink?.task.id ?? null,
       ancestorRatings: chain.slice(1).map((link) => ({
         importance: link.task.importance,
         urgency: link.task.urgency,

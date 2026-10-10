@@ -172,12 +172,16 @@ const zhCN: Record<string, string> = {
   "Changed to ${status}": "已改为${status}",
   "Open a journal or page first: Orca saves changes to tasks through a note panel.":
     "请先打开一个日记或页面：Orca 需要通过笔记面板保存对任务的修改。",
-  "Blocked by": "阻塞原因",
+  "Why not a next action": "为什么不是下一步行动",
+  "Ancestor task done": "祖先任务已完成",
+  "In a parked subtree": "位于搁置子树",
+  "Not started yet": "还没到开始日期",
+  " starts on ${date}": " 的开始日期是${date}",
   Subtasks: "子任务",
   "${kind}: ": "${kind}：",
   ", ": "、",
-  "Could not read why the task is blocked: ${reason}":
-    "无法读取阻塞原因：${reason}",
+  "Could not read why the task is not a next action: ${reason}":
+    "无法读取为什么不是下一步行动：${reason}",
   Sequential: "顺序执行",
   "${kind} (from ": "${kind}（来自 ",
   "${kind} (any): ": "${kind}（任一）：",
