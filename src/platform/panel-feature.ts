@@ -13,8 +13,7 @@ import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-da
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
-import type { ChangeSignal } from "../shared/change-signal";
-import { myDayScheduleActions } from "../ui/hooks/use-my-day-schedule";
+import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
@@ -34,6 +33,7 @@ import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-st
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
+import { createMyDayScheduleActions } from "../ui/views/my-day/my-day-schedule-actions";
 import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
@@ -61,6 +61,8 @@ export function createPanelFeature(deps: {
   today: () => CalendarDate;
   /** The day boundary, for the logical day the next actions are read on. */
   dayBoundary: DayBoundarySetting;
+  /** A change of the day boundary setting, for the My Day view (#81). */
+  dayBoundaryChanges: ChangeSignalSource;
   /** The start preview days, for how far ahead the next actions look. */
   startPreviewDays: StartPreviewDaysSetting;
   /** The cards' status change, "open in notes" and notices (#39). */
@@ -129,6 +131,7 @@ export function createPanelFeature(deps: {
       today: deps.today,
       now: () => systemClock.now(),
       changes,
+      dayBoundaryChanges: deps.dayBoundaryChanges,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       openSchedulePopup: createSchedulePopup({
@@ -137,7 +140,7 @@ export function createPanelFeature(deps: {
         render: (node) => renderSchedulePopup(node),
       }),
       // Dragging on the timeline (#85) writes as the popup does.
-      scheduleActions: myDayScheduleActions(scheduleDeps),
+      scheduleActions: createMyDayScheduleActions(scheduleDeps),
     }),
   );
   views.register(

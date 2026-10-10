@@ -10,7 +10,6 @@ import type {
   MyDaySchedule,
 } from "../../../domain/task/my-day";
 import { compareDays } from "../../../domain/time/calendar-days";
-import { formatDay, parseDay, parseTime } from "./completion-history-codec";
 import {
   type BlockWithProperties,
   type PluginPropertyWrite,
@@ -18,6 +17,7 @@ import {
   pluginPropertyPrefix,
   readPluginProperty,
 } from "./plugin-block-property-codec";
+import { formatDay, parseDay, parseTime } from "./stored-values";
 
 /** The plugin block property key (without the `nextaction.` prefix). */
 const key = "myday";

@@ -1,13 +1,14 @@
 // Scheduling and unscheduling in today's My Day (GLOSSARY: 排期, #84), for
-// the schedule popup (and dragging on the timeline, #85). Each call is one
-// write and one undo. A failure is told to the user; success says nothing,
+// the schedule popup and dragging on the timeline (#85). Not a hook: created
+// once with the use cases `platform` injects, as `createNotify` (docs/
+// ARCHITECTURE.md §4 React). Each call is one write and one undo. A failure is told to the user; success says nothing,
 // the card moving is the answer. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
-import type { ScheduleInMyDay } from "../../application/usecases/schedule-in-my-day";
-import type { UnscheduleInMyDay } from "../../application/usecases/unschedule-in-my-day";
-import type { ScheduleRequest } from "../../domain/task/my-day";
-import type { TaskId } from "../../domain/task/task";
-import { type Notify, notifyMyDayFailure } from "../notify";
+import type { ScheduleInMyDay } from "../../../application/usecases/schedule-in-my-day";
+import type { UnscheduleInMyDay } from "../../../application/usecases/unschedule-in-my-day";
+import type { ScheduleRequest } from "../../../domain/task/my-day";
+import type { TaskId } from "../../../domain/task/task";
+import { type Notify, notifyMyDayFailure } from "../../notify";
 
 export interface MyDayScheduleDeps {
   scheduleInMyDay: ScheduleInMyDay;
@@ -26,7 +27,7 @@ export interface MyDayScheduleActions {
 }
 
 /** The writes, reporting their failures. */
-export function myDayScheduleActions(
+export function createMyDayScheduleActions(
   deps: MyDayScheduleDeps,
 ): MyDayScheduleActions {
   const reporting = async (write: () => Promise<unknown>) => {

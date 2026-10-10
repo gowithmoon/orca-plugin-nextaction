@@ -9,9 +9,11 @@
 import * as React from "react";
 import {
   type MyDaySchedule,
+  newScheduleStart,
   scheduleStepMinutes,
 } from "../../../domain/task/my-day";
 import type { Task } from "../../../domain/task/task";
+import { minuteMs } from "../../../domain/time/durations";
 import {
   type LogicalDayRange,
   momentOn,
@@ -21,10 +23,10 @@ import { formatTimeRange, shownText } from "../../components/format";
 import { PopupLayer } from "../../components/popup-layer";
 import { useFocusInside } from "../../hooks/use-focus-inside";
 import {
+  createMyDayScheduleActions,
   type MyDayScheduleActions,
   type MyDayScheduleDeps,
-  myDayScheduleActions,
-} from "../../hooks/use-my-day-schedule";
+} from "./my-day-schedule-actions";
 
 /** The length a new schedule gets (#81: 60 minutes, not a setting). */
 export const defaultScheduleMinutes = 60;
@@ -42,8 +44,6 @@ export interface SchedulePopupArgs {
 
 /** Opens the schedule popup, replacing one already open. */
 export type OpenSchedulePopup = (args: SchedulePopupArgs) => void;
-
-const minuteMs = 60_000;
 
 /** "HH:MM" for a native time input. */
 function timeValue(at: Date): string {
@@ -63,19 +63,6 @@ function parseTime(
   return { hours, minutes };
 }
 
-/**
- * Where a new schedule starts: the next quarter hour from now when now is
- * today, otherwise the day boundary.
- */
-function newStart(range: LogicalDayRange, now: Date): Date {
-  const inside =
-    now.getTime() >= range.start.getTime() &&
-    now.getTime() < range.end.getTime();
-  if (!inside) return range.start;
-  const step = scheduleStepMinutes * minuteMs;
-  return new Date(Math.ceil(now.getTime() / step) * step);
-}
-
 function SchedulePopup(props: {
   args: SchedulePopupArgs;
   actions: MyDayScheduleActions;
@@ -86,7 +73,7 @@ function SchedulePopup(props: {
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const [start, setStart] = React.useState(() =>
-    timeValue(args.schedule?.start ?? newStart(args.range, args.now)),
+    timeValue(args.schedule?.start ?? newScheduleStart(args.range, args.now)),
   );
   const [minutes, setMinutes] = React.useState(() =>
     String(
@@ -242,7 +229,7 @@ export function createSchedulePopup(options: {
   deps: MyDayScheduleDeps;
   render: (node: React.ReactNode) => void;
 }): OpenSchedulePopup {
-  const actions = myDayScheduleActions(options.deps);
+  const actions = createMyDayScheduleActions(options.deps);
   let shown = 0;
   return (args) => {
     shown += 1;

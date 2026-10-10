@@ -96,9 +96,12 @@ describe("add to My Day", () => {
       { myDay: { kind: "unreadable", reason: "unknown version 2" } },
     );
 
-    await expect(createAddToMyDay(deps(repository))(5)).rejects.toThrow(
-      MyDayUnreadableError,
-    );
+    const refused = createAddToMyDay(deps(repository))(5);
+    await expect(refused).rejects.toThrow(MyDayUnreadableError);
+    // Why, for the user's notice (#81).
+    await expect(refused).rejects.toMatchObject({
+      reason: "unknown version 2",
+    });
     expect(repository.writeCount()).toBe(0);
     expect(await repository.readMyDay(5)).toEqual({
       kind: "unreadable",

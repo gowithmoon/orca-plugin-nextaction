@@ -27,9 +27,7 @@ export function createUnscheduleInMyDay(deps: {
   return async (id) => {
     const read = await deps.repository.readMyDay(id);
     if (read.kind === "unreadable") {
-      throw new MyDayUnreadableError(
-        `the My Day entries of task ${id} cannot be read (${read.reason})`,
-      );
+      throw new MyDayUnreadableError(id, read.reason);
     }
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const entries = unscheduleToday(read.entries, today);

@@ -3,12 +3,12 @@
 // shared with dragging (#85), which turns a pointer's pixel back into a
 // moment and leaves the snapping to the domain (`normalizeSchedule`). Not
 // test-driven (#81 Testing Decisions); verified by hand in Orca.
+import { minuteMs } from "../../../domain/time/durations";
 import type { LogicalDayRange } from "../../../domain/time/logical-day";
 
 /** Pixels per hour; no zoom (#81). */
 export const hourHeightPx = 48;
 
-const minuteMs = 60_000;
 const hourMs = 60 * minuteMs;
 const pxPerMs = hourHeightPx / hourMs;
 

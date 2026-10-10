@@ -141,7 +141,8 @@ export function notifyMyDayFailure(notify: Notify, error: unknown): void {
     notify(
       "error",
       t(
-        "Could not change My Day: this task's My Day entries cannot be read and are kept as they are.",
+        "Could not change My Day: this task's My Day entries cannot be read (${reason}) and are kept as they are.",
+        { reason: error.reason },
       ),
     );
     return;

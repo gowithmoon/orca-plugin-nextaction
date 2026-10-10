@@ -163,7 +163,7 @@ export const myDayCss = `
   gap: var(--orca-spacing-xs);
   flex: 1 1 auto;
   min-height: 0;
-  padding: 2px var(--orca-spacing-xs) 0 var(--orca-spacing-sm);
+  padding: calc(var(--orca-spacing-xs) / 2) var(--orca-spacing-xs) 0 var(--orca-spacing-sm);
 }
 
 .nextaction-timeline-card[data-compact] .nextaction-timeline-card-body {
@@ -282,7 +282,8 @@ export const myDayCss = `
   box-sizing: border-box;
   min-height: 0;
   overflow: hidden;
-  padding: 1px var(--orca-spacing-sm);
+  /* As the card body, less the 1px its dashed border is wider by. */
+  padding: calc(var(--orca-spacing-xs) / 2 - 1px) var(--orca-spacing-sm);
   border: 2px dashed var(--orca-color-primary-5);
   border-radius: var(--orca-radius-sm);
   background-color: color-mix(in srgb, var(--orca-color-primary-5) 18%, var(--orca-color-bg-1));
@@ -361,7 +362,7 @@ export const myDayCss = `
 .nextaction-schedule-popup-heading {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: calc(var(--orca-spacing-xs) / 2);
   flex: 1 1 auto;
   min-width: 0;
 }

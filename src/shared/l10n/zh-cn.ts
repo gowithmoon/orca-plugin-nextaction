@@ -145,8 +145,8 @@ const zhCN: Record<string, string> = {
   "Remove from My Day": "移出我的一天",
   "Added to My Day": "已加入我的一天",
   "Removed from My Day": "已移出我的一天",
-  "Could not change My Day: this task's My Day entries cannot be read and are kept as they are.":
-    "无法修改我的一天：这个任务的我的一天记录无法读取，已原样保留。",
+  "Could not change My Day: this task's My Day entries cannot be read (${reason}) and are kept as they are.":
+    "无法修改我的一天：这个任务的我的一天记录无法读取（${reason}），已原样保留。",
   "Could not change My Day: ${reason}": "无法修改我的一天：${reason}",
   "Could not read My Day: ${reason}": "无法读取我的一天：${reason}",
   "My Day": "我的一天",

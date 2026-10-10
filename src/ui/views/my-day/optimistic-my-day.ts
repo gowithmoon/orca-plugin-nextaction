@@ -14,11 +14,10 @@ import type {
 } from "../../../application/usecases/read-my-day";
 import type { MyDaySchedule } from "../../../domain/task/my-day";
 import type { TaskId } from "../../../domain/task/task";
-import type { MyDayScheduleActions } from "../../hooks/use-my-day-schedule";
+import { minuteMs } from "../../../domain/time/durations";
 import type { ViewQuery, ViewQueryState } from "../../hooks/use-view-query";
 import type { MyDayDrop } from "./my-day-drag";
-
-const minuteMs = 60_000;
+import type { MyDayScheduleActions } from "./my-day-schedule-actions";
 
 /** A drop laid over the read: its schedule, or `null` for unscheduled. */
 interface PendingDrop {

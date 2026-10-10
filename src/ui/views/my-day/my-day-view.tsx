@@ -35,7 +35,6 @@ import {
 } from "../../components/view-notice";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
 import { useMyDayCandidates } from "../../hooks/use-my-day-candidates";
-import type { MyDayScheduleActions } from "../../hooks/use-my-day-schedule";
 import { useNow } from "../../hooks/use-now";
 import {
   type TaskActionsDeps,
@@ -59,6 +58,7 @@ import {
   type MyDayDragSetup,
   useDragSource,
 } from "./my-day-drag";
+import type { MyDayScheduleActions } from "./my-day-schedule-actions";
 import { useOptimisticMyDay } from "./optimistic-my-day";
 import type { OpenSchedulePopup } from "./schedule-popup";
 import { ScheduleButton, Timeline, type TimelineCardActions } from "./timeline";
@@ -73,6 +73,11 @@ export interface MyDayViewDeps {
   now: () => Date;
   /** Tasks may have changed: My Day and the candidates are read again. */
   changes: ChangeSignalSource;
+  /**
+   * The day boundary setting changed: today's range, and with it the
+   * timeline and what reads as unscheduled, is read again (#81).
+   */
+  dayBoundaryChanges: ChangeSignalSource;
   /** The cards' status menu, "open in notes" and notices. */
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
@@ -360,9 +365,22 @@ function MyDaySections(props: {
   );
 }
 
-/** A day's key, so the content starts over on a new day. */
-function dayKey(day: CalendarDate): string {
-  return `${day.year}-${day.month}-${day.day}`;
+/**
+ * The content's key, so it starts over on a new day or after the day
+ * boundary setting changed (which may leave the logical day as it is).
+ */
+function contentKey(day: CalendarDate, boundaryChanges: number): string {
+  return `${day.year}-${day.month}-${day.day}#${boundaryChanges}`;
+}
+
+/** How many times the day boundary setting changed while the view showed. */
+function useBoundaryChanges(changes: ChangeSignalSource): number {
+  const [count, setCount] = React.useState(0);
+  React.useEffect(
+    () => changes.subscribe(() => setCount((shown) => shown + 1)),
+    [changes],
+  );
+  return count;
 }
 
 /**
@@ -373,15 +391,16 @@ export function createMyDayView(deps: MyDayViewDeps): PanelView {
   const query = createViewQuery(() => deps.readMyDay(), deps.changes);
 
   function MyDayView() {
-    const today = useToday(deps.today);
+    const today = useToday(deps.today, deps.dayBoundaryChanges);
+    const boundaryChanges = useBoundaryChanges(deps.dayBoundaryChanges);
     return (
       <div className="nextaction-my-day">
         <ViewHeader title={t("My Day")} />
-        {/* A new day mounts the content afresh: the query and the
-            candidates read again, for the new day, and the timeline scrolls
-            to the current time again. */}
+        {/* A new day, or a new day boundary, mounts the content afresh:
+            the query and the candidates read again, for today's range, and
+            the timeline scrolls to the current time again. */}
         <MyDayAreas
-          key={dayKey(today)}
+          key={contentKey(today, boundaryChanges)}
           query={query}
           today={today}
           deps={deps}

@@ -4,6 +4,7 @@ import {
   addToday,
   type MyDayEntry,
   moveSchedule,
+  newScheduleStart,
   normalizeSchedule,
   removeToday,
   scheduleToday,
@@ -292,5 +293,38 @@ describe("moving a schedule", () => {
       start: at("08T05:00:00"),
       end: at("08T06:30:00"),
     });
+  });
+});
+
+describe("a new schedule's start", () => {
+  const oct8 = { year: 2026, month: 10, day: 8 };
+  const day = logicalDayRange(oct8, five);
+  const at = (time: string) => new Date(`2026-10-${time}+08:00`);
+
+  it("is the next quarter hour on the local clock after now", () => {
+    expect(newScheduleStart(day, at("08T09:07:30"))).toEqual(at("08T09:15:00"));
+    expect(newScheduleStart(day, at("09T01:46:00"))).toEqual(at("09T02:00:00"));
+  });
+
+  it("is now itself when now is on a quarter hour", () => {
+    expect(newScheduleStart(day, at("08T09:15:00"))).toEqual(at("08T09:15:00"));
+  });
+
+  it("is the day boundary when now is not within the day", () => {
+    expect(newScheduleStart(day, at("08T04:59:00"))).toEqual(at("08T05:00:00"));
+    expect(newScheduleStart(day, at("09T05:00:00"))).toEqual(at("08T05:00:00"));
+  });
+
+  it("snaps by the local clock where the zone's offset is not a whole quarter hour", () => {
+    // Asia/Shanghai (pinned in vitest.config.ts) kept local mean time,
+    // UTC+8:05:43, in 1900: a quarter hour of the epoch is not one locally.
+    const jan1 = { year: 1900, month: 1, day: 1 };
+    expect(new Date(1900, 0, 1).getTimezoneOffset()).not.toBe(-480);
+    expect(
+      newScheduleStart(
+        logicalDayRange(jan1, five),
+        new Date(1900, 0, 1, 10, 7),
+      ),
+    ).toEqual(new Date(1900, 0, 1, 10, 15));
   });
 });

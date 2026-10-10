@@ -2,6 +2,7 @@
 // time and the day boundary are passed in; today is worked out by
 // `domain/time`.
 import { compareDays } from "../time/calendar-days";
+import { minuteMs } from "../time/durations";
 import {
   type DayBoundary,
   type LogicalDayRange,
@@ -133,8 +134,6 @@ export interface ScheduleRequest {
 /** Starts and lengths snap to this many minutes. */
 export const scheduleStepMinutes = 15;
 
-const minuteMs = 60_000;
-
 /** `at` snapped to the nearest step of the local clock (ADR 0012). */
 function snapToStep(at: Date): Date {
   const minutes =
@@ -146,6 +145,27 @@ function snapToStep(at: Date): Date {
     at.getDate(),
     at.getHours(),
     minutes,
+  );
+}
+
+/**
+ * Where a new schedule starts on the logical day whose range is `day`
+ * (GLOSSARY: 排期): the next quarter hour on the local clock from `now`
+ * (ADR 0012), `now` itself when it is on one; the day boundary when `now`
+ * is not within that day.
+ */
+export function newScheduleStart(day: LogicalDayRange, now: Date): Date {
+  const inside =
+    now.getTime() >= day.start.getTime() && now.getTime() < day.end.getTime();
+  if (!inside) return day.start;
+  const minutes =
+    now.getMinutes() + now.getSeconds() / 60 + now.getMilliseconds() / minuteMs;
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    now.getHours(),
+    Math.ceil(minutes / scheduleStepMinutes) * scheduleStepMinutes,
   );
 }
 

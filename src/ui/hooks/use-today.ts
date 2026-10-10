@@ -5,16 +5,21 @@
 import * as React from "react";
 import type { CalendarDate } from "../../domain/task/task";
 import { compareDays } from "../../domain/time/calendar-days";
+import type { ChangeSignalSource } from "../../shared/change-signal";
 
 /** How often the day is checked. */
 const checkEveryMs = 60_000;
 
 /**
  * The current logical day by `today`, re-rendering when it changes: past the
- * day boundary, or after the day boundary setting moved it. The same object
+ * day boundary, or after the day boundary setting moved it (at once on a
+ * signal of `boundaryChanges`, otherwise at the next check). The same object
  * is returned while the day stays, so effects depending on it do not rerun.
  */
-export function useToday(today: () => CalendarDate): CalendarDate {
+export function useToday(
+  today: () => CalendarDate,
+  boundaryChanges?: ChangeSignalSource,
+): CalendarDate {
   const [day, setDay] = React.useState(today);
   React.useEffect(() => {
     const check = () =>
@@ -24,7 +29,11 @@ export function useToday(today: () => CalendarDate): CalendarDate {
       });
     check();
     const timer = setInterval(check, checkEveryMs);
-    return () => clearInterval(timer);
-  }, [today]);
+    const stopChanges = boundaryChanges?.subscribe(check);
+    return () => {
+      clearInterval(timer);
+      stopChanges?.();
+    };
+  }, [today, boundaryChanges]);
   return day;
 }

@@ -26,6 +26,7 @@ import {
   normalizeSchedule,
 } from "../../../domain/task/my-day";
 import type { Task } from "../../../domain/task/task";
+import { minuteMs } from "../../../domain/time/durations";
 import type { LogicalDayRange } from "../../../domain/time/logical-day";
 import { formatTimeRange, shownText } from "../../components/format";
 import { defaultScheduleMinutes } from "./schedule-popup";
@@ -37,7 +38,6 @@ const dragThreshold = 4;
 const scrollEdge = 40;
 /** The most it scrolls per frame, right at the edge. */
 const scrollStep = 14;
-const minuteMs = 60_000;
 
 /** Marks the two places to drop: "timeline" and "unscheduled" (#84). */
 const dropAttribute = "data-nextaction-my-day-drop";

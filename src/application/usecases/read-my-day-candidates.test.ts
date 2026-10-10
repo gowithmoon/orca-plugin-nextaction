@@ -35,4 +35,22 @@ describe("read My Day candidates", () => {
       { id: 4, text: "Clear the cupboard" },
     ]);
   });
+
+  it("leaves out a task whose My Day entries cannot be read: it cannot be added", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, text: "Write the report", status: "todo" });
+    repository.addTask(
+      { id: 2, text: "Call the plumber", status: "todo" },
+      { myDay: { kind: "unreadable", reason: "unknown version 9" } },
+    );
+    const readMyDayCandidates = createReadMyDayCandidates({
+      repository,
+      clock: createFixedClock(night),
+      dayBoundary: createFixedDayBoundary(),
+    });
+
+    expect(await readMyDayCandidates()).toEqual([
+      { id: 1, text: "Write the report" },
+    ]);
+  });
 });
