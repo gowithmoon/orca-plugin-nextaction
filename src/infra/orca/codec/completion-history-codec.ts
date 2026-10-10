@@ -31,7 +31,7 @@ export type StoredCompletionHistory =
 const dayPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** A `YYYY-MM-DD` string naming a day that exists, or `undefined`. */
-function parseDay(value: unknown): CalendarDate | undefined {
+export function parseDay(value: unknown): CalendarDate | undefined {
   if (typeof value !== "string") return undefined;
   const match = dayPattern.exec(value);
   if (!match) return undefined;
@@ -57,7 +57,7 @@ function parseDay(value: unknown): CalendarDate | undefined {
  * as a `Date` (#72 acceptance, as for date properties in
  * plugin-panel-writes); both are taken.
  */
-function parseTime(value: unknown): Date | undefined {
+export function parseTime(value: unknown): Date | undefined {
   if (!(typeof value === "string" || value instanceof Date)) return undefined;
   const at = new Date(value);
   return Number.isNaN(at.getTime()) ? undefined : at;
@@ -101,7 +101,7 @@ export function readCompletionHistory(
 const pad = (value: number, width: number) =>
   String(value).padStart(width, "0");
 
-const formatDay = (day: CalendarDate) =>
+export const formatDay = (day: CalendarDate) =>
   `${pad(day.year, 4)}-${pad(day.month, 2)}-${pad(day.day, 2)}`;
 
 /**

@@ -1,6 +1,7 @@
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
 import type { CompletionHistory } from "../../domain/task/completion-history";
+import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
 
@@ -97,7 +98,8 @@ export type InitialProperties = Pick<
  *
  * Step 2 built this port: reading (#20), querying (#21), writing properties
  * and plugin block properties (#22). Step 3 adds converting (#27), dropping
- * (#31), quick capture and the completion history (#32).
+ * (#31), quick capture and the completion history (#32). Step 7 adds the My
+ * Day entries (#82).
  */
 export interface TaskRepository {
   /**
@@ -147,6 +149,22 @@ export interface TaskRepository {
    * empty history, even if it still holds one.
    */
   readCompletionHistory(id: TaskId): Promise<CompletionHistoryRead>;
+
+  /**
+   * The My Day entries of a task, every logical day's (GLOSSARY: 我的一天记录).
+   * A block that is not a task reads as no entries, even if it still holds
+   * some. A mirror block's ID reads its source block.
+   */
+  readMyDay(id: TaskId): Promise<MyDayRead>;
+
+  /**
+   * Replaces the task's My Day entries with `entries`, past ones included as
+   * given (ADR 0020); none writes an empty list, the property kept. The user
+   * undoes it with one undo. Fails, writing nothing, when the block is not a
+   * task, its entries read as unreadable, or the write fails. A mirror
+   * block's ID writes to its source block.
+   */
+  writeMyDay(id: TaskId, entries: MyDayEntries): Promise<void>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

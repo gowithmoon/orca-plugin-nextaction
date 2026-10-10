@@ -14,6 +14,7 @@ import type {
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import type { MyDayRead } from "../src/domain/task/my-day";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
 
@@ -34,6 +35,11 @@ interface StoredBlock {
    * task tag goes, as Orca does (block-properties-json J4).
    */
   completionHistory: CompletionHistoryRead | undefined;
+  /**
+   * The stored My Day entries, `undefined` when none are. Kept when the task
+   * tag goes, as the completion history is.
+   */
+  myDay: MyDayRead | undefined;
 }
 
 export interface BlockSetup {
@@ -48,6 +54,7 @@ export interface BlockSetup {
   position?: number;
   notConvertible?: NotConvertibleReason;
   completionHistory?: CompletionHistoryRead;
+  myDay?: MyDayRead;
   /** The block has an alias: it is a page. */
   page?: boolean;
 }
@@ -145,6 +152,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     return block as StoredBlock & { task: Task };
   };
 
+  /** My Day entries this plugin cannot read are never overwritten. */
+  const refuseUnreadableMyDay = (block: StoredBlock, id: TaskId) => {
+    const current = block.myDay;
+    if (current?.kind === "unreadable") {
+      throw new Error(
+        `the My Day entries of block ${id} hold a value this plugin cannot read (${current.reason})`,
+      );
+    }
+  };
+
   /** A completion history this plugin cannot read is never overwritten. */
   const refuseUnreadable = (block: StoredBlock, id: TaskId) => {
     const current = block.completionHistory;
@@ -183,6 +200,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         notConvertible: setup.notConvertible,
         task: undefined,
         completionHistory: setup.completionHistory,
+        myDay: setup.myDay,
         page: setup.page ?? false,
       });
     },
@@ -197,6 +215,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         notConvertible: undefined,
         task: full,
         completionHistory: setup.completionHistory,
+        myDay: setup.myDay,
         page: setup.page ?? false,
       });
     },
@@ -347,6 +366,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           parentId: parentTaskOf(id),
           position: block.position,
           ...(lastCompletion && { lastCompletion }),
+          ...(block.myDay && { myDay: block.myDay }),
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),
         });
@@ -372,6 +392,21 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return block.completionHistory ?? empty;
     },
 
+    async readMyDay(id) {
+      const block = blocks.get(id);
+      const empty: MyDayRead = { kind: "readable", entries: [] };
+      if (!block?.task) return empty;
+      return block.myDay ?? empty;
+    },
+
+    async writeMyDay(id, entries) {
+      const block = taskToWrite(id);
+      refuseUnreadableMyDay(block, id);
+      write(() => {
+        block.myDay = { kind: "readable", entries: [...entries] };
+      });
+    },
+
     async convertToTask(id): Promise<ConvertToTaskResult> {
       const block = blocks.get(id);
       if (!block) throw new Error(`no block ${id}`);
@@ -381,6 +416,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       if (block.task) return { kind: "already-task", id };
       write(() => {
         block.completionHistory = undefined;
+        block.myDay = undefined;
         block.task = freshTask(id, block.text, block.created);
       });
       return { kind: "converted", id };
@@ -390,6 +426,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const block: StoredBlock = taskToWrite(id);
       write(() => {
         block.completionHistory = undefined;
+        block.myDay = undefined;
         block.task = undefined;
         // In the same undo, no dependency is left pointing at it (ADR 0016).
         for (const other of blocks.values()) {
@@ -422,6 +459,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           // Properties not given keep the defaults, as Orca fills them.
           task: { ...freshTask(id, text, now), ...initial },
           completionHistory: undefined,
+          myDay: undefined,
           page: false,
         });
       });

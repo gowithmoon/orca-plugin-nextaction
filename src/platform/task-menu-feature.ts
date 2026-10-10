@@ -1,8 +1,11 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createDropTask } from "../application/usecases/drop-task";
+import { createReadMyDayStatus } from "../application/usecases/read-my-day-status";
 import { createReadTask } from "../application/usecases/read-task";
+import { createRemoveFromMyDay } from "../application/usecases/remove-from-my-day";
 import type { TaskId } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
@@ -10,6 +13,7 @@ import {
   createTaskMenuItems,
   type TaskMenuItems,
 } from "../ui/task-menu/menu-items";
+import { registerMyDayMenuItem } from "../ui/task-menu/my-day-menu-item";
 import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
@@ -43,6 +47,17 @@ export function createTaskMenuFeature(deps: {
         dayBoundary: deps.dayBoundary,
       }),
       dropTask: createDropTask({ repository }),
+      pluginName,
+    });
+    const myDayDeps = {
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
+    };
+    registerMyDayMenuItem(items, {
+      readMyDayStatus: createReadMyDayStatus(myDayDeps),
+      addToMyDay: createAddToMyDay(myDayDeps),
+      removeFromMyDay: createRemoveFromMyDay(myDayDeps),
       pluginName,
     });
     registerTaskPanelMenuItem(items, deps.openTaskPanel);
