@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { DayBoundary } from "../time/logical-day";
-import { addToday, type MyDayEntry, removeToday, todayEntry } from "./my-day";
+import { type DayBoundary, logicalDayRange } from "../time/logical-day";
+import {
+  addToday,
+  type MyDayEntry,
+  removeToday,
+  scheduleWithin,
+  todayEntry,
+} from "./my-day";
 
 // Runs in UTC+8 (pinned in vitest.config.ts); the times below are local.
 const five: DayBoundary = { hours: 5, minutes: 0 };
@@ -98,5 +104,37 @@ describe("removing a task from today's My Day", () => {
   it("leaves the entries as they are when the task is not in today's My Day", () => {
     const entries = [oct1, oct7Scheduled];
     expect(removeToday(entries, today)).toBe(entries);
+  });
+});
+
+describe("whether a schedule holds on today", () => {
+  const oct8 = { year: 2026, month: 10, day: 8 };
+  const at = (time: string) => new Date(`2026-10-${time}+08:00`);
+
+  it("holds when it lies within today's range", () => {
+    const schedule = { start: at("08T14:00:00"), end: at("08T15:00:00") };
+    expect(scheduleWithin(schedule, logicalDayRange(oct8, five))).toBe(true);
+  });
+
+  it("holds from the day boundary to the next one, both ends included", () => {
+    const schedule = { start: at("08T05:00:00"), end: at("09T05:00:00") };
+    expect(scheduleWithin(schedule, logicalDayRange(oct8, five))).toBe(true);
+  });
+
+  it("does not hold once the day boundary moved past its start", () => {
+    // Scheduled 5:00–6:00 under a 5:00 boundary; the user then set 6:00.
+    const schedule = { start: at("08T05:00:00"), end: at("08T06:00:00") };
+    const six: DayBoundary = { hours: 6, minutes: 0 };
+    expect(scheduleWithin(schedule, logicalDayRange(oct8, six))).toBe(false);
+  });
+
+  it("does not hold when it runs past the next day boundary", () => {
+    const schedule = { start: at("09T04:00:00"), end: at("09T05:30:00") };
+    expect(scheduleWithin(schedule, logicalDayRange(oct8, five))).toBe(false);
+  });
+
+  it("does not hold on another day", () => {
+    const schedule = { start: at("07T14:00:00"), end: at("07T15:00:00") };
+    expect(scheduleWithin(schedule, logicalDayRange(oct8, five))).toBe(false);
   });
 });

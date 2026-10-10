@@ -6,12 +6,16 @@ import type {
   AddToMyDay,
   MyDayChangeResult,
 } from "../../application/usecases/add-to-my-day";
-import { MyDayUnreadableError } from "../../application/usecases/my-day-unreadable-error";
 import type { ReadMyDayStatus } from "../../application/usecases/read-my-day-status";
 import type { RemoveFromMyDay } from "../../application/usecases/remove-from-my-day";
 import type { TaskId } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { createNotify, type Notify, notifyActionFailure } from "../notify";
+import {
+  createNotify,
+  type Notify,
+  notifyActionFailure,
+  notifyMyDayFailure,
+} from "../notify";
 import { taskMenuGroups } from "./builtin-items";
 import type { TaskMenuItems } from "./menu-items";
 
@@ -28,18 +32,7 @@ async function changeReporting(
     await change(id);
     notify("success", done);
   } catch (error) {
-    if (error instanceof MyDayUnreadableError) {
-      notify(
-        "error",
-        t(
-          "Could not change My Day: this task's My Day entries cannot be read and are kept as they are.",
-        ),
-      );
-      return;
-    }
-    notifyActionFailure(notify, error, (reason) =>
-      t("Could not change My Day: ${reason}", { reason }),
-    );
+    notifyMyDayFailure(notify, error);
   }
 }
 

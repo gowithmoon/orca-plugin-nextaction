@@ -2,7 +2,11 @@
 // time and the day boundary are passed in; today is worked out by
 // `domain/time`.
 import { compareDays } from "../time/calendar-days";
-import { type DayBoundary, logicalDay } from "../time/logical-day";
+import {
+  type DayBoundary,
+  type LogicalDayRange,
+  logicalDay,
+} from "../time/logical-day";
 import type { CalendarDate } from "./task";
 
 /** When the task is to be done that day: absolute times, `end` after `start`. */
@@ -77,4 +81,20 @@ export function removeToday(
   return entryOn(entries, today)
     ? entries.filter((entry) => compareDays(entry.day, today) !== 0)
     : entries;
+}
+
+/**
+ * Whether `schedule` holds on the logical day whose range is `day`: it lies
+ * within it, from the day boundary to the next one. One outside reads as
+ * unscheduled, e.g. after the user moved the day boundary (ADR 0020); the
+ * notes are not rewritten.
+ */
+export function scheduleWithin(
+  schedule: MyDaySchedule,
+  day: LogicalDayRange,
+): boolean {
+  return (
+    schedule.start.getTime() >= day.start.getTime() &&
+    schedule.end.getTime() <= day.end.getTime()
+  );
 }

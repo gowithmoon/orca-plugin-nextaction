@@ -28,3 +28,28 @@ export function logicalDay(now: Date, boundary: DayBoundary): CalendarDate {
     day: day.getDate(),
   };
 }
+
+/** The moments a logical day holds: from `start` on, up to but not `end`. */
+export interface LogicalDayRange {
+  readonly start: Date;
+  readonly end: Date;
+}
+
+/**
+ * The time range of the logical day `day`: from its day boundary to the next
+ * day's boundary (GLOSSARY: 日界线). Local time only (ADR 0012).
+ */
+export function logicalDayRange(
+  day: CalendarDate,
+  boundary: DayBoundary,
+): LogicalDayRange {
+  const at = (offset: number) =>
+    new Date(
+      day.year,
+      day.month - 1,
+      day.day + offset,
+      boundary.hours,
+      boundary.minutes,
+    );
+  return { start: at(0), end: at(1) };
+}
