@@ -183,9 +183,10 @@ export const componentCss = `
 }
 
 /*
- * The next action view's filter bar (#55): three fields side by side while
- * they fit, wrapping onto more lines when the view narrows; never wider than
- * the view.
+ * The filter bars (#55, #69): the fields side by side while they fit, narrow
+ * enough that the all tasks view's four share a line in the medium tier,
+ * wrapping onto more lines only when the view is really narrow; never wider
+ * than the view.
  */
 .nextaction-filter-bar {
   display: flex;
@@ -197,23 +198,69 @@ export const componentCss = `
   border: 0;
 }
 
-/* The all tasks view's sort picker (#68): as wide as a filter field. */
-.nextaction-sort {
-  width: 12em;
-  min-width: 0;
-  max-width: 100%;
-  margin: 0 0 var(--orca-spacing-md);
-  padding: 0;
-  border: 0;
-}
-
 .nextaction-filter {
-  flex: 1 1 10em;
+  flex: 1 1 7em;
   min-width: 0;
   max-width: 100%;
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/*
+ * The all tasks view's toolbar: the sort, collapse or expand all and the
+ * search box on the first row, the filter bar on the second. A row wraps
+ * only when the view is too narrow for it.
+ */
+.nextaction-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+  margin: 0 0 var(--orca-spacing-md);
+}
+
+.nextaction-toolbar > .nextaction-filter-bar {
+  margin: 0;
+}
+
+.nextaction-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+}
+
+/* The sort picker (#68): as wide as its longest choice needs. */
+.nextaction-sort {
+  flex: 0 1 10em;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nextaction-toolbar-button {
+  flex: 0 0 auto;
+}
+
+/* The search box takes what the row leaves; its parts stay inside it. */
+.nextaction-toolbar-row > .nextaction-filter-search {
+  flex: 1 1 10em;
+}
+
+.nextaction-filter-search > *,
+.nextaction-filter-search input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nextaction-search-clear {
+  height: 1.5em;
+  aspect-ratio: 1;
 }
 
 .nextaction-property-row {
@@ -333,14 +380,6 @@ export const componentCss = `
   padding: 0 0 0 var(--orca-spacing-lg);
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-xs);
-}
-
-/* "Collapse all" and "expand all" (#67), above the tree. */
-.nextaction-tree-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--orca-spacing-sm);
-  margin: 0 0 var(--orca-spacing-md);
 }
 
 /*

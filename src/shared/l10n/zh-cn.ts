@@ -185,6 +185,7 @@ const zhCN: Record<string, string> = {
   Stale: "已失效",
   "Remove dependency": "移除依赖",
   "Search tasks": "搜索任务",
+  "Clear search": "清除搜索",
   "Add a dependency": "添加依赖",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",

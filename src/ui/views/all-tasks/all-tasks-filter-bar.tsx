@@ -1,7 +1,8 @@
-// The all tasks view's filter bar (#69): the next action view's contexts,
-// labels and importance fields, a multiple choice of the five statuses a
-// task not done can have, and a search box for the task text. The candidates
-// are the task panel's. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// The all tasks view's filter bar (#69): a multiple choice of the five
+// statuses a task not done can have and the next action view's contexts,
+// labels and importance fields; and the search box for the task text, which
+// sits in the toolbar's first row. The candidates are the task panel's.
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { Candidates } from "../../../application/ports/task-repository";
 import type { OpenStatus } from "../../../application/usecases/read-all-tasks";
@@ -53,23 +54,38 @@ function StatusSelect(props: {
   );
 }
 
-function SearchBox(props: {
+export function AllTasksSearchBox(props: {
   search: string;
   onChange: (search: string) => void;
 }) {
   // Handles IME composition: a word being composed is not searched for yet.
-  const { CompositionInput } = orca.components;
+  // It calls onChange itself once composing ends, so the value is read from
+  // the target, as everywhere else it is used.
+  const { CompositionInput, Tooltip } = orca.components;
+  const clear =
+    props.search === "" ? undefined : (
+      <Tooltip text={t("Clear search")}>
+        <button
+          type="button"
+          className="nextaction-task-card-button nextaction-search-clear"
+          aria-label={t("Clear search")}
+          onClick={() => props.onChange("")}
+        >
+          <i className="ti ti-x" aria-hidden="true" />
+        </button>
+      </Tooltip>
+    );
   return (
     <div className="nextaction-filter nextaction-filter-search">
       <CompositionInput
-        type="search"
         aria-label={t("Search tasks")}
         placeholder={t("Search tasks")}
         value={props.search}
-        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-          props.onChange(event.currentTarget.value)
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          props.onChange(e.target.value)
         }
         pre={<i className="ti ti-search" aria-hidden="true" />}
+        post={clear}
       />
     </div>
   );
@@ -86,10 +102,6 @@ export function AllTasksFilterBar(props: {
     onChange({ ...state, filter: next });
   return (
     <fieldset className="nextaction-filter-bar" aria-label={t("Filter")}>
-      <SearchBox
-        search={state.search}
-        onChange={(search) => onChange({ ...state, search })}
-      />
       <StatusSelect
         chosen={filter.statuses}
         onChange={(statuses) => setFilter({ ...filter, statuses })}

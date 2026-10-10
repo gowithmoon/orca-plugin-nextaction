@@ -43,7 +43,7 @@ import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
-import { AllTasksFilterBar } from "./all-tasks-filter-bar";
+import { AllTasksFilterBar, AllTasksSearchBox } from "./all-tasks-filter-bar";
 import {
   type AllTasksFilterStore,
   isFilteringAllTasks,
@@ -419,13 +419,17 @@ function AllTasksContent(props: {
   );
 }
 
-/** "Collapse all" and "expand all", once the tree has a node to collapse. */
-function CollapseAllBar(props: {
+/**
+ * One button for "collapse all" and "expand all", once the tree has a node
+ * to collapse: while any of them is expanded it collapses them all,
+ * otherwise it expands them all.
+ */
+function CollapseAllButton(props: {
   query: ViewQuery<AllTasksRead>;
   selectedTaskId: TaskId | undefined;
   collapse: AllTasksCollapseStore;
 }) {
-  const { Button } = orca.components;
+  const { Button, Tooltip } = orca.components;
   const state = useViewQuery(props.query);
   const collapsed = React.useSyncExternalStore(
     props.collapse.subscribe,
@@ -434,26 +438,25 @@ function CollapseAllBar(props: {
   if (state.kind !== "loaded") return null;
   const ids = parentIds(shownNodes(state.data.tree, props.selectedTaskId));
   if (ids.length === 0) return null;
+  // Records of tasks no longer in the tree count for nothing.
+  const anyExpanded = ids.some((id) => !collapsed.has(id));
+  const label = anyExpanded ? t("Collapse all") : t("Expand all");
   return (
-    <div className="nextaction-tree-bar">
+    <Tooltip text={label}>
       <Button
         variant="plain"
-        disabled={ids.every((id) => collapsed.has(id))}
-        onClick={() => props.collapse.collapse(ids)}
+        className="nextaction-toolbar-button"
+        aria-label={label}
+        onClick={() =>
+          anyExpanded ? props.collapse.collapse(ids) : props.collapse.clear()
+        }
       >
-        <i className="ti ti-fold" aria-hidden="true" />
-        {t("Collapse all")}
+        <i
+          className={anyExpanded ? "ti ti-fold" : "ti ti-fold-down"}
+          aria-hidden="true"
+        />
       </Button>
-      <Button
-        variant="plain"
-        // Records of tasks no longer in the tree count for nothing.
-        disabled={!ids.some((id) => collapsed.has(id))}
-        onClick={props.collapse.clear}
-      >
-        <i className="ti ti-fold-down" aria-hidden="true" />
-        {t("Expand all")}
-      </Button>
-    </div>
+    </Tooltip>
   );
 }
 
@@ -539,17 +542,27 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
           // searching, shows in every tier.
           countInEveryTier={filtering}
         />
-        <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
-        <AllTasksFilterBar
-          state={filter}
-          candidates={candidates}
-          onChange={deps.filter.set}
-        />
-        <CollapseAllBar
-          query={query}
-          selectedTaskId={selectedTaskId}
-          collapse={deps.collapse}
-        />
+        {/* Two rows: the sort, collapse or expand all and the search; then
+            the filter fields. */}
+        <div className="nextaction-toolbar">
+          <div className="nextaction-toolbar-row">
+            <AllTasksSortSelect sort={sort} onChange={deps.sort.set} />
+            <CollapseAllButton
+              query={query}
+              selectedTaskId={selectedTaskId}
+              collapse={deps.collapse}
+            />
+            <AllTasksSearchBox
+              search={filter.search}
+              onChange={(search) => deps.filter.set({ ...filter, search })}
+            />
+          </div>
+          <AllTasksFilterBar
+            state={filter}
+            candidates={candidates}
+            onChange={deps.filter.set}
+          />
+        </div>
         <AllTasksContent
           query={query}
           today={deps.today()}
