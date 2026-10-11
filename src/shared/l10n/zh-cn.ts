@@ -325,6 +325,12 @@ const zhCN: Record<string, string> = {
   "the last ${weekday}": "最后一个${weekday}",
   "day ${day}": "${day} 日",
   "the last day": "最后一天",
+  "the last weekday": "最后一个工作日",
+  "Review on days": "回顾于",
+  "None chosen: a whole interval after the last review.":
+    "不选的话，从上次回顾起满一个周期再回顾。",
+  "Months without that day are skipped. To review every month, choose the last day.":
+    "某个月没有这一天的话，那个月就不回顾。想每个月都回顾，请选“最后一天”。",
   "${every} on ${days}": "${every} ${days}",
   "${every} on ${placement}": "${every} ${placement}",
   On: "重复于",

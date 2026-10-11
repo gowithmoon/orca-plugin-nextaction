@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import {
   createInMemoryTaskRepository,
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
+import { createReadReview } from "./read-review";
 import { ReviewUnreadableError } from "./review-unreadable-error";
 import { createSetReviewPlan } from "./set-review-plan";
 
@@ -70,5 +72,36 @@ describe("set a task's review plan", () => {
       }),
     ).rejects.toEqual(new ReviewUnreadableError("unknown version 2"));
     expect(repository.writeCount()).toBe(0);
+  });
+
+  it("set on a Monday to every Thursday, the task is due for review that Thursday", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, status: "todo" });
+    const at = (time: string) => ({
+      repository,
+      clock: createFixedClock(time),
+      dayBoundary: createFixedDayBoundary(),
+    });
+    // Monday October 12, 2026.
+    await createSetReviewPlan(at("2026-10-12T09:00:00+08:00"))(1, {
+      interval: {
+        every: 1,
+        unit: "week",
+        placement: { kind: "daysOfWeek", days: [4] },
+      },
+      reviewOn: null,
+    });
+    const dueOn = async (time: string) =>
+      (
+        await createReadReview({
+          ...at(time),
+          startPreviewDays: createFixedStartPreviewDays(),
+        })()
+      ).steps.dueForReview.items.map((item) => item.task.id);
+
+    // Wednesday: not yet. Thursday: due, a week before an interval without
+    // a placement would be.
+    expect(await dueOn("2026-10-14T09:00:00+08:00")).toEqual([]);
+    expect(await dueOn("2026-10-15T09:00:00+08:00")).toEqual([1]);
   });
 });

@@ -418,12 +418,9 @@ export function nextOccurrence(
         kind: "dayOfMonth",
         day: from.day,
       };
-      return firstAfter(from, (step) => {
-        const months = from.month - 1 + step * period.interval;
-        const year = from.year + Math.floor(months / 12);
-        const month = (months % 12) + 1;
-        return dayInMonth(year, month, placement);
-      });
+      return nextInMonths(from, period.interval, (year, month) =>
+        dayInMonth(year, month, placement),
+      );
     }
     case "year": {
       const { month, day } = period.placement ?? from;
@@ -457,8 +454,27 @@ function firstAfter(
   throw new Error("no next occurrence within 400 years");
 }
 
+/**
+ * The first day strictly after `from` among the days `daysIn` gives for the
+ * month `from` falls in, and for each month `interval` months on; a month
+ * `daysIn` gives none for is skipped. Shared with the review interval's
+ * placement (GLOSSARY: 回顾周期, #105).
+ */
+export function nextInMonths(
+  from: CalendarDate,
+  interval: number,
+  daysIn: (year: number, month: number) => readonly CalendarDate[],
+): CalendarDate {
+  return firstAfter(from, (step) => {
+    const months = from.month - 1 + step * interval;
+    const year = from.year + Math.floor(months / 12);
+    const month = (months % 12) + 1;
+    return daysIn(year, month);
+  });
+}
+
 /** The placement's day in a month, or none when the month does not have it. */
-function dayInMonth(
+export function dayInMonth(
   year: number,
   month: number,
   placement: MonthPlacement,
