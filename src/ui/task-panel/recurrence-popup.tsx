@@ -1,16 +1,17 @@
 // The recurrence rule popup (GLOSSARY: 重复规则, #95): every N days / weeks /
 // months / years, and the recurrence basis (按日程 / 按完成). Saving writes the
 // rule in one undo; the task's dates are not touched. A task with a rule can
-// have it removed here. The end condition (never / on a day / after N times,
-// #89) says when completing this occurrence would be the last. Placements,
-// pausing and the preview come with later tickets of step 8. In Orca's ModalOverlay with the shared
+// have it removed here. Each unit offers its placement, and the next
+// occurrence is previewed before saving (#88). The end condition (never / on
+// a day / after N times, #89) ends the recurrence once the next occurrence
+// would fall outside it. In Orca's ModalOverlay with the shared
 // window look, rendered into its own React root, as the schedule popup.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { PreviewNextOccurrence } from "../../application/usecases/preview-next-occurrence";
 import type { SetRecurrence } from "../../application/usecases/set-recurrence";
 import {
   countEnd,
-  isLastOccurrence,
   type RecurrenceBasis,
   type RecurrenceEnd,
   type RecurrenceRule,
@@ -20,18 +21,25 @@ import {
 } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { shownText } from "../components/format";
+import { formatDate, shownText } from "../components/format";
 import { PopupLayer } from "../components/popup-layer";
 import { basisName, unitName } from "../components/recurrence-text";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import { type Notify, notifyActionFailure } from "../notify";
+import {
+  periodOf,
+  placementDraftOf,
+  RecurrencePlacementField,
+} from "./recurrence-placement-field";
 import { DateField } from "./task-panel-fields";
 
 export interface RecurrencePopupDeps {
   setRecurrence: SetRecurrence;
-  notify: Notify;
-  /** The current logical day: the end day's picker, whether this is the last occurrence. */
+  /** The next occurrence of the rule being edited, for the preview (#88). */
+  previewNextOccurrence: PreviewNextOccurrence;
+  /** The current logical day, for showing dates and the end day's picker. */
   today: () => CalendarDate;
+  notify: Notify;
 }
 
 /** The end conditions the popup offers (#89). */
@@ -80,7 +88,6 @@ function RecurrencePopup(props: {
   const [basis, setBasis] = React.useState<RecurrenceBasis>(
     current?.basis ?? "schedule",
   );
-  const today = React.useMemo(() => deps.today(), [deps]);
   const [endKind, setEndKind] = React.useState<EndKind>(
     current?.end?.kind ?? "none",
   );
@@ -90,12 +97,16 @@ function RecurrencePopup(props: {
   const [endTotal, setEndTotal] = React.useState(
     current?.end?.kind === "count" ? String(current.end.total) : "",
   );
+  const [placement, setPlacement] = React.useState(() =>
+    placementDraftOf(current?.period, task.due ?? task.start ?? deps.today()),
+  );
   const [busy, setBusy] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
   const restoreFocus = React.useRef(true);
   useFocusInside(input, restoreFocus);
 
   const typed = typedInterval(interval);
+  const today = deps.today();
   // The end condition as chosen; `undefined` while it is incomplete (no day
   // picked, or no whole number from 1 up typed).
   const end: RecurrenceEnd | null | undefined = (() => {
@@ -114,15 +125,16 @@ function RecurrencePopup(props: {
     typed === undefined || end === undefined
       ? undefined
       : {
-          period: { interval: typed, unit },
+          period: periodOf(typed, unit, placement),
           basis,
           ...(end && { end }),
         };
-  // Completing it today would end the recurrence (#89).
-  const last = draft !== undefined && isLastOccurrence(draft, task, today);
   // An unreadable rule cannot be overwritten (the repository refuses); the
   // popup says so instead of offering a save that would fail.
   const unreadable = task.recurrence.kind === "unreadable";
+  // `null`: completing it today would be the last occurrence (#89).
+  const preview =
+    draft && !unreadable ? deps.previewNextOccurrence(draft, task) : undefined;
 
   const write = async (rule: RecurrenceRule | null) => {
     if (busy) return;
@@ -235,6 +247,12 @@ function RecurrencePopup(props: {
                 />
               </div>
             </div>
+            <RecurrencePlacementField
+              labelId={id("placement")}
+              unit={unit}
+              draft={placement}
+              onChange={setPlacement}
+            />
             <div className="nextaction-recurrence-popup-field">
               <span
                 className="nextaction-recurrence-popup-label"
@@ -316,14 +334,28 @@ function RecurrencePopup(props: {
                     )}
                 </div>
               )}
-              {last && (
-                <div className="nextaction-recurrence-popup-hint">
-                  {t(
-                    "This is the last occurrence: once it is done, the task stays done and the rule is removed.",
-                  )}
-                </div>
-              )}
             </div>
+            {preview !== undefined && (
+              <div
+                className="nextaction-recurrence-popup-preview"
+                aria-live="polite"
+              >
+                {preview === null
+                  ? t(
+                      "This is the last occurrence: once it is done, the task stays done and the rule is removed.",
+                    )
+                  : t("Done today, next: ${date}", {
+                      date: formatDate(preview, today),
+                    })}
+              </div>
+            )}
+            {task.due !== null && task.start === null && (
+              <div className="nextaction-recurrence-popup-hint">
+                {t(
+                  "Once done, it shows again right away. To have it show only when due, set a start date.",
+                )}
+              </div>
+            )}
           </div>
           <footer className="nextaction-recurrence-popup-footer">
             {task.recurrence.kind === "rule" && (
