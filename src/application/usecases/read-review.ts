@@ -44,7 +44,7 @@ export interface DueForReviewItem extends ReviewItem {
   readonly dueOn: CalendarDate;
 }
 
-export interface ReviewRead {
+export interface ReadReviewResult {
   /** Each step's list, by step. */
   readonly steps: {
     /**
@@ -56,7 +56,9 @@ export interface ReviewRead {
 }
 
 /** Reads the review. Errors are thrown as they are. */
-export type ReadReview = (options?: ReadReviewOptions) => Promise<ReviewRead>;
+export type ReadReview = (
+  options?: ReadReviewOptions,
+) => Promise<ReadReviewResult>;
 
 export function createReadReview(deps: {
   repository: TaskRepository;
