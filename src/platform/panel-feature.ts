@@ -2,6 +2,10 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createAddToMyDay } from "../application/usecases/add-to-my-day";
+import {
+  createCanMarkReviewed,
+  createMarkReviewed,
+} from "../application/usecases/mark-reviewed";
 import { createMoveTask } from "../application/usecases/move-task";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
@@ -9,6 +13,7 @@ import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
+import { createReadReview } from "../application/usecases/read-review";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
@@ -24,6 +29,7 @@ import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
+import type { OpenReviewPopup } from "../ui/task-panel/review-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
@@ -38,6 +44,8 @@ import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
+import { createReviewPageStore } from "../ui/views/review/review-page-store";
+import { createReviewView } from "../ui/views/review/review-view";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -49,7 +57,8 @@ export function pluginPanelType(pluginName: string): string {
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
  * style sheet, with the next action view (#53), the My Day view (#83), the
- * inbox view (#37), the all tasks view (#65) and their card actions (#39). `views`
+ * inbox view (#37), the all tasks view (#65), the review view (#98) and their
+ * card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
  */
@@ -74,6 +83,8 @@ export function createPanelFeature(deps: {
    * the wide tier and in the popup otherwise.
    */
   taskPanel: { openPopup: OpenTaskPanelPopup; formDeps: TaskPanelFormDeps };
+  /** The review popup (#103), for the review view's "Change review interval". */
+  openReviewPopup: OpenReviewPopup;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
 }): { feature: FeatureModule; views: PanelViews } {
@@ -91,6 +102,8 @@ export function createPanelFeature(deps: {
   // The all tasks view's filter and search text (#69): in memory only, apart
   // from the next action view's filter.
   const allTasksFilter = createAllTasksFilterStore();
+  // The review view's page (#98): in memory only, likewise.
+  const reviewPage = createReviewPageStore();
   const readCandidates = createReadCandidates({ repository });
   views.register(
     createNextActionView({
@@ -172,6 +185,19 @@ export function createPanelFeature(deps: {
       moveTask: createMoveTask({ repository }),
     }),
   );
+  views.register(
+    createReviewView({
+      readReview: createReadReview(myDayDeps),
+      markReviewed: createMarkReviewed(myDayDeps),
+      canMarkReviewed: createCanMarkReviewed(),
+      openReviewPopup: deps.openReviewPopup,
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      page: reviewPage,
+    }),
+  );
   // Created once, so the panel's renderer keeps the same component.
   const refresh = () => changes.now();
   const panelRenderer = createNextActionPanel({
@@ -195,6 +221,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
     registry.add(`${pluginName}.doneSection`, doneSection.clear);
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
+    registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);

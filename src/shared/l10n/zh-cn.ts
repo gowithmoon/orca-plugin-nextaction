@@ -390,6 +390,15 @@ const zhCN: Record<string, string> = {
   "Could not mark reviewed: ${reason}": "无法标记已回顾：${reason}",
   "Could not save the review: its review plan cannot be read (${reason}) and is kept as it is.":
     "无法保存回顾设置：回顾计划读取失败（${reason}），没有改动。",
+  "No tasks due for review": "没有需要回顾的任务",
+  "${count} tasks due for review": "${count} 个任务需要回顾",
+  "Only tasks due for review": "只看需要回顾的任务",
+  "Could not read the review: ${reason}": "无法读取回顾：${reason}",
+  "Tasks with a review interval or a review-on day show here once their day comes.":
+    "设了回顾周期或指定回顾日的任务，到了日子会出现在这里。",
+  "Change review interval": "修改回顾周期",
+  Back: "返回",
+  "Tasks due for review": "需要回顾的任务",
 };
 
 export default zhCN;

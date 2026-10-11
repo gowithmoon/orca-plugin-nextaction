@@ -187,4 +187,29 @@ export const panelCss = `
   font-size: var(--orca-fontsize-md);
   font-variant-numeric: tabular-nums;
 }
+
+/* The review view (#98): the start page's status and entries, and the
+   "Back" above a page's title. */
+.nextaction-review-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--orca-spacing-md);
+}
+
+.nextaction-review-start-status {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-md);
+}
+
+.nextaction-review-entries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-review-back {
+  margin-bottom: var(--orca-spacing-sm);
+  margin-left: calc(var(--orca-spacing-sm) * -1);
+}
 `;
