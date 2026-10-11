@@ -354,7 +354,117 @@ describe("read review", () => {
     });
   });
 
+  describe("look back", () => {
+    /** An entry of the completion history at `at` (local, UTC+8). */
+    const recorded = (at: string, kind?: "skip") => ({
+      at: new Date(`${at}+08:00`),
+      day: october(Number(at.slice(8, 10))),
+      ...(kind && { kind }),
+    });
+    const history = (...entries: ReturnType<typeof recorded>[]) => ({
+      completionHistory: { kind: "readable" as const, history: entries },
+    });
+    const myDay = (...days: number[]) => ({
+      myDay: {
+        kind: "readable" as const,
+        entries: days.map((day) => ({ day: october(day) })),
+      },
+    });
+
+    it("lists the completions and skips since the last full review, the latest first", async () => {
+      const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
+      repository.addTask(
+        { id: 1, status: "done" },
+        history(recorded("2026-10-08T10:00:00"), recorded("2026-10-12T10:00:00")),
+      );
+      repository.addTask(
+        { id: 2, status: "todo" },
+        history(
+          recorded("2026-10-10T10:00:00", "skip"),
+          recorded("2026-10-13T10:00:00"),
+        ),
+      );
+
+      const { lookBack } = (await readReview()).steps;
+
+      expect(
+        lookBack.entries.map((item) => [item.task.id, item.kind]),
+      ).toEqual([
+        [2, "completion"],
+        [1, "completion"],
+        [2, "skip"],
+      ]);
+    });
+
+    it("lists the tasks planned but not done since the last full review", async () => {
+      const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
+      repository.addTask({ id: 1, status: "todo" }, myDay(10));
+      // Before the last full review's logical day.
+      repository.addTask({ id: 2, status: "todo" }, myDay(8));
+      repository.addTask({ id: 3, status: "done" }, myDay(11));
+
+      const { lookBack } = (await readReview()).steps;
+
+      expect(ids(lookBack.items)).toEqual([1]);
+      expect(lookBack.total).toBe(1);
+    });
+
+    it("starts 7 days ago when no full review was completed", async () => {
+      const { repository, readReview } = setup(null);
+      // Seven days ago is October 7, 09:00.
+      repository.addTask(
+        { id: 1, status: "done" },
+        history(recorded("2026-10-07T08:00:00")),
+      );
+      repository.addTask(
+        { id: 2, status: "done" },
+        history(recorded("2026-10-07T10:00:00")),
+      );
+
+      const { lookBack } = (await readReview()).steps;
+
+      expect(lookBack.entries.map((item) => item.task.id)).toEqual([2]);
+    });
+
+    it("skips a completion history it cannot read", async () => {
+      const { repository, readReview } = setup(null);
+      repository.addTask(
+        { id: 1, status: "done" },
+        { completionHistory: { kind: "unreadable", reason: "unknown version 2" } },
+      );
+
+      const { lookBack } = (await readReview()).steps;
+
+      expect(lookBack.entries).toEqual([]);
+    });
+  });
+
   describe("summary", () => {
+    it("counts the completions in look back", async () => {
+      const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
+      repository.addTask(
+        { id: 1, status: "todo" },
+        {
+          completionHistory: {
+            kind: "readable",
+            history: [
+              // Before the last full review.
+              { at: new Date("2026-10-09T10:00:00+08:00"), day: october(9) },
+              { at: new Date("2026-10-10T10:00:00+08:00"), day: october(10) },
+              {
+                at: new Date("2026-10-11T10:00:00+08:00"),
+                day: october(11),
+                kind: "skip",
+              },
+              { at: new Date("2026-10-12T10:00:00+08:00"), day: october(12) },
+            ],
+          },
+        },
+      );
+
+      expect((await readReview()).summary.completedInLookBack).toBe(2);
+    });
+
     it("counts the tasks left in the inbox, the overdue tasks and the tasks due for review", async () => {
       const { repository, readReview } = setup();
       repository.addTask({ id: 1, status: "inbox" });

@@ -375,6 +375,11 @@ export function createOrcaTaskRepository(
           position: place?.position ?? Number.MAX_SAFE_INTEGER,
           ...(lastCompletion && { lastCompletion }),
           ...(lastSkip && { lastSkip }),
+          // The whole history, for the review's look back (#102).
+          ...(history?.kind === "readable" &&
+            history.history.length > 0 && {
+              completionHistory: history.history,
+            }),
           ...(myDay && { myDay }),
           // A page has an alias; with no parent block it sits at the top of
           // the notes, where only pages are tasks (ADR 0013, move-blocks P2).

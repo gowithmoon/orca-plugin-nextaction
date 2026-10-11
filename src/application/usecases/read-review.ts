@@ -8,6 +8,11 @@ import {
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
 import { isDueSoon } from "../../domain/review/due-steps";
+import {
+  type LookBackEntry,
+  lookBack,
+  lookBackStart,
+} from "../../domain/review/look-back";
 import { isDueForReview, reviewDueDay } from "../../domain/review/review";
 import { rankByScore } from "../../domain/scoring/score";
 import { isOverdue } from "../../domain/task/overdue";
@@ -97,6 +102,20 @@ export interface DatedReviewItem extends ReviewItem {
   readonly dueOn: CalendarDate;
 }
 
+/**
+ * Look back (GLOSSARY: 回看过去), since the last full review was completed,
+ * or 7 days ago without one. Its list (`items`, `total`) is the tasks
+ * planned but not done: in My Day on a day from the start's logical day to
+ * yesterday, and still not done since; in note order, kept ones included.
+ */
+export interface LookBackStepRead extends ReviewStepRead {
+  /**
+   * Every completion and skip since the start, one each, the latest first.
+   * A history that cannot be read lists none.
+   */
+  readonly entries: readonly LookBackEntry<Task>[];
+}
+
 /** A task in the list of tasks due for review. */
 export interface DueForReviewItem extends ReviewItem {
   /**
@@ -121,6 +140,11 @@ export interface ReadReviewResult {
     readonly waiting: ReviewStepRead;
     /** The someday tasks (GLOSSARY: 将来/也许), the highest score first. */
     readonly someday: ReviewStepRead;
+    /**
+     * Look back (GLOSSARY: 回看过去), since the last full review was
+     * completed, or 7 days ago without one.
+     */
+    readonly lookBack: LookBackStepRead;
     /** The overdue tasks (GLOSSARY: 截止日期), the earliest due date first. */
     readonly overdue: ReviewStepRead<DatedReviewItem>;
     /**
@@ -136,6 +160,8 @@ export interface ReadReviewResult {
   };
   /** The summary's numbers: how the system stands now. */
   readonly summary: {
+    /** The completions in look back (skips not counted). */
+    readonly completedInLookBack: number;
     /** The tasks left in the inbox. */
     readonly inbox: number;
     /** The overdue tasks. */
@@ -266,6 +292,26 @@ export function createReadReview(deps: {
       .filter((task) => task.status === "inbox" || keptInInbox.has(task.id))
       .sort(byCapture);
     const inboxTotal = inbox.filter((task) => task.status === "inbox").length;
+    const looked = lookBack(
+      tasks.map((item) => ({
+        task: item.task,
+        history: item.completionHistory ?? [],
+        // Unreadable entries are none here, as for My Day's candidates.
+        myDay: item.myDay?.kind === "readable" ? item.myDay.entries : [],
+      })),
+      {
+        start: lookBackStart(lastFullReviewAt, deps.clock.now()),
+        today,
+        boundary,
+      },
+    );
+    // Kept ones (done since, through the status menu) stay in their place.
+    const notDone = new Set(looked.plannedNotDone.map((task) => task.id));
+    const keptInLookBack = keptIn("lookBack");
+    const plannedNotDone = tasks
+      .map((item) => item.task)
+      .filter((task) => notDone.has(task.id) || keptInLookBack.has(task.id))
+      .map((task) => ({ task, kept: !notDone.has(task.id) }));
     return {
       steps: {
         inbox: {
@@ -278,11 +324,19 @@ export function createReadReview(deps: {
         nextActions: byScore("nextActions", (entry) => entry.nextAction),
         waiting: byScore("waiting", (entry) => entry.task.status === "waiting"),
         someday: byScore("someday", (entry) => entry.task.status === "someday"),
+        lookBack: {
+          entries: looked.entries,
+          items: plannedNotDone,
+          total: notDone.size,
+        },
         overdue: byDue("overdue", (task) => isOverdue(task, today)),
         dueSoon: byDue("dueSoon", (task) => isDueSoon(task, today)),
         dueForReview: { items, total },
       },
       summary: {
+        completedInLookBack: looked.entries.filter(
+          (entry) => entry.kind === "completion",
+        ).length,
         inbox: inboxTotal,
         overdue: tasks.filter(({ task }) => isOverdue(task, today)).length,
         dueForReview: total,

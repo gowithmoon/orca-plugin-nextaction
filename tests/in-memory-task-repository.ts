@@ -423,6 +423,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           position: block.position,
           ...(lastCompletion && { lastCompletion }),
           ...(lastSkip && { lastSkip }),
+          ...(stored?.kind === "readable" &&
+            stored.history.length > 0 && {
+              completionHistory: stored.history,
+            }),
           ...(block.myDay && { myDay: block.myDay }),
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),

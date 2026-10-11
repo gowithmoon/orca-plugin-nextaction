@@ -21,6 +21,7 @@ function setup(lastFullReviewAt: string | null) {
   };
   return {
     repository,
+    clock,
     readReview: createReadReview(deps),
     completeFullReview: createCompleteFullReview(deps),
   };
@@ -46,6 +47,34 @@ describe("complete full review", () => {
     await completeFullReview();
 
     expect((await readReview()).lastFullReview?.daysAgo).toBe(0);
+  });
+
+  it("moves look back's start to now: what was completed before no longer shows", async () => {
+    const { repository, readReview, completeFullReview, clock } = setup(
+      "2026-10-07T20:00:00+08:00",
+    );
+    repository.addTask(
+      { id: 1, status: "done" },
+      {
+        completionHistory: {
+          kind: "readable",
+          history: [
+            {
+              at: new Date("2026-10-13T10:00:00+08:00"),
+              day: { year: 2026, month: 10, day: 13 },
+            },
+          ],
+        },
+      },
+    );
+    expect((await readReview()).summary.completedInLookBack).toBe(1);
+
+    await completeFullReview();
+    clock.set("2026-10-14T10:00:00+08:00");
+    const read = await readReview();
+
+    expect(read.steps.lookBack.entries).toEqual([]);
+    expect(read.summary.completedInLookBack).toBe(0);
   });
 
   it("writes nothing to the tasks", async () => {
