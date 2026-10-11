@@ -17,6 +17,8 @@
 
 窗口旁边放一个铺满遮罩的空层 `.nextaction-popup-layer`（`ui/components/popup-layer.tsx`），通过 React context 交给窗口内的 `DateField` 和 `ChoicesField`，作为 `DatePicker`、`Select` 的 `menuContainer`。平时它不接收指针（`:where()` 写法不占权重），弹出层打开时 Orca 的 `no-pointer` 让它接住指针，点在弹出层外只关闭弹出层，与 Orca 自己的行为一致。插件面板的侧栏里没有这个层，`menuContainer` 为空，沿用 Orca 的默认摆放。
 
+后来又犯过一次：回顾弹窗（#97 验收）里选"每月"再选几号，日期下拉被窗口截断。原因是重复规则里的单选控件直接用了 Orca 的 `Select`，没传 `menuContainer`，每个调用处都得记着传层，容易漏。现在 `ui/components/popup-controls.tsx` 包装了 `Select`、`DatePicker`，默认用 `usePopupLayer()` 作 `menuContainer`（显式传入的仍然优先），`ui` 只用这两个包装；`tests/architecture.test.ts` 的规则"takes Select or DatePicker from orca.components"禁止在 `ui` 中直接从 `orca.components` 取它们。
+
 ## 待在 Orca 中确认
 
 - 两个窗口中的开始日期、截止日期选择器完整显示、可点选；窗口靠下的字段向上展开

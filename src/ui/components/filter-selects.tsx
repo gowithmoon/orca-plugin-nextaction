@@ -8,6 +8,7 @@ import type { ValuesChoice } from "../../domain/task/task-filter";
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { importanceName, urgencyName } from "./format";
+import { Select } from "./popup-controls";
 
 /**
  * The option standing for "no value". A value the notes cannot hold as a
@@ -27,7 +28,6 @@ export function ValuesSelect(props: {
   display: (value: string) => string;
   onChange: (choice: ValuesChoice) => void;
 }) {
-  const { Select } = orca.components;
   const { choice, display } = props;
   const options: SelectOption[] = [
     { value: noneValue, label: t("(None)") },
@@ -69,7 +69,6 @@ function RatingSelect(props: {
   chosen: readonly Rating[];
   onChange: (chosen: Rating[]) => void;
 }) {
-  const { Select } = orca.components;
   const options: SelectOption[] = levels.map((level) => ({
     value: String(level),
     label: props.name(level),

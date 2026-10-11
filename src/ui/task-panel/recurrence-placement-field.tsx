@@ -13,6 +13,7 @@ import {
 } from "../../domain/recurrence/recurrence";
 import type { CalendarDate } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { Select } from "../components/popup-controls";
 import {
   dayOfWeekName,
   monthName,
@@ -195,7 +196,6 @@ export function Choice<V extends string | number>(props: {
   label: (value: V) => string;
   onChange: (value: V) => void;
 }) {
-  const { Select } = orca.components;
   return (
     <fieldset
       className="nextaction-recurrence-popup-choice"

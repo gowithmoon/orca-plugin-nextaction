@@ -28,6 +28,7 @@ import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
+import { Select } from "../../components/popup-controls";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
@@ -113,7 +114,6 @@ function candidateOptions(
  */
 function AddSearch(props: { deps: MyDayViewDeps }) {
   const { deps } = props;
-  const { Select } = orca.components;
   const candidates = useMyDayCandidates(
     deps.readMyDayCandidates,
     deps.changes,

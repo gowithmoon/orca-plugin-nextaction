@@ -28,6 +28,7 @@ import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { formatClock, formatDate, shownText } from "../../components/format";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
+import { DatePicker } from "../../components/popup-controls";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
@@ -137,7 +138,7 @@ function RescheduleButton(props: {
   onChoose: (due: CalendarDate | null) => void;
 }) {
   const { task, today, onChoose } = props;
-  const { ContextMenu, DatePicker, MenuText, Tooltip } = orca.components;
+  const { ContextMenu, MenuText, Tooltip } = orca.components;
   const [picking, setPicking] = React.useState(false);
   // A wrapper element anchors the picker: whether Orca's components forward
   // a ref is unknown.

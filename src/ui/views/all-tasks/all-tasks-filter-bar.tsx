@@ -14,6 +14,7 @@ import {
   ValuesSelect,
 } from "../../components/filter-selects";
 import { formatContext } from "../../components/format";
+import { Select } from "../../components/popup-controls";
 import { statusLabel } from "../../components/status-label";
 import type { AllTasksFilterState } from "./all-tasks-filter-store";
 
@@ -29,7 +30,6 @@ function StatusSelect(props: {
   chosen: readonly OpenStatus[];
   onChange: (chosen: OpenStatus[]) => void;
 }) {
-  const { Select } = orca.components;
   const options: SelectOption[] = openStatuses.map((status) => ({
     value: status,
     label: statusLabel(status),
