@@ -131,6 +131,7 @@ tests/
 - 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
 - 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
+- 一个 `invokeGroup` 里写多个块（各自 `setRefData`、`setProperties`），一次撤销全部还原，写入顺序不影响结果（`multi-block-undo`）。重复任务进入下一次时，父任务和被重置的后代任务就这样一次写入。
 - **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
 - `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。唯一写入它的地方是移动块之前补上目标块（`move-blocks`）。
 - 任务的父任务和先后位置：取回全部任务后，对不在任务集合中的 `parent` 按层用 `get-blocks` 补取，在内存中沿 `parent` 找最近的任务祖先、按"在父块 `children` 中的序号"路径排先后。1000 个任务约 32 ms。不用 `get-block-tree`（`next-action-hierarchy-boolean-deps`）。
