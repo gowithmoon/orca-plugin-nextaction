@@ -1,8 +1,9 @@
 // The recurrence rule popup (GLOSSARY: 重复规则, #95): every N days / weeks /
 // months / years, and the recurrence basis (按日程 / 按完成). Saving writes the
 // rule in one undo; the task's dates are not touched. A task with a rule can
-// have it removed here. Each unit offers its placement, and the next
-// occurrence is previewed before saving (#88). In Orca's ModalOverlay with the shared
+// have it removed or paused here; resuming a done task advances it (#92).
+// Each unit offers its placement, and the next occurrence is previewed
+// before saving (#88). In Orca's ModalOverlay with the shared
 // window look, rendered into its own React root, as the schedule popup.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -54,7 +55,8 @@ function RecurrencePopup(props: {
   onClose: () => void;
 }) {
   const { task, deps, onClose } = props;
-  const { Button, Input, ModalOverlay, Segmented, Tooltip } = orca.components;
+  const { Button, Input, ModalOverlay, Segmented, Switch, Tooltip } =
+    orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const current =
@@ -71,6 +73,8 @@ function RecurrencePopup(props: {
   const [placement, setPlacement] = React.useState(() =>
     placementDraftOf(current?.period, task.due ?? task.start ?? deps.today()),
   );
+  // Paused (GLOSSARY: 暂停重复, #92): saved with the rule.
+  const [paused, setPaused] = React.useState(current?.paused === true);
   const [busy, setBusy] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
   const restoreFocus = React.useRef(true);
@@ -81,7 +85,11 @@ function RecurrencePopup(props: {
   const draft: RecurrenceRule | undefined =
     typed === undefined
       ? undefined
-      : { period: periodOf(typed, unit, placement), basis };
+      : {
+          period: periodOf(typed, unit, placement),
+          basis,
+          ...(paused && { paused: true }),
+        };
   // An unreadable rule cannot be overwritten (the repository refuses); the
   // popup says so instead of offering a save that would fail.
   const unreadable = task.recurrence.kind === "unreadable";
@@ -90,7 +98,17 @@ function RecurrencePopup(props: {
     if (busy) return;
     setBusy(true);
     try {
-      await deps.setRecurrence(task.id, rule);
+      const result = await deps.setRecurrence(task.id, rule);
+      // Resuming a done task advanced it (#92): its icon shows todo again, so
+      // the next occurrence is told, as after completing it.
+      if (result.kind === "advanced") {
+        deps.notify(
+          "success",
+          t("Next: ${date}", {
+            date: formatDate(result.next, result.resumedOn),
+          }),
+        );
+      }
       onClose();
     } catch (error) {
       // The popup stays, with what was chosen.
@@ -231,6 +249,41 @@ function RecurrencePopup(props: {
                   : t("From the day it is done.")}
               </div>
             </div>
+            {/* Pause (GLOSSARY: 暂停重复, #92): only for a rule already set. */}
+            {task.recurrence.kind === "rule" && (
+              <div className="nextaction-recurrence-popup-field">
+                <span
+                  className="nextaction-recurrence-popup-label"
+                  id={id("paused")}
+                >
+                  {t("Pause")}
+                </span>
+                <div className="nextaction-recurrence-popup-pause">
+                  <Switch
+                    role="switch"
+                    aria-checked={paused}
+                    aria-labelledby={id("paused")}
+                    aria-describedby={id("paused-hint")}
+                    on={paused}
+                    onChange={(on) => setPaused(on)}
+                  />
+                  <span
+                    className="nextaction-recurrence-popup-hint"
+                    id={id("paused-hint")}
+                  >
+                    {paused
+                      ? task.status === "done" && current?.paused
+                        ? t(
+                            "The rule is kept but does not apply. Turning this off moves the done task to its next occurrence.",
+                          )
+                        : t(
+                            "The rule is kept but does not apply: done, the task stays done.",
+                          )
+                      : t("Keep the rule but stop it applying for a while.")}
+                  </span>
+                </div>
+              </div>
+            )}
             {draft && !unreadable && (
               <div
                 className="nextaction-recurrence-popup-preview"

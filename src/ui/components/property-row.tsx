@@ -109,17 +109,26 @@ export function PropertyRow(props: {
           {anomalyText(anomaly)}
         </span>
       ))}
-      {/* A recurring task (#95): an icon, the rule on hover. */}
+      {/* A recurring task (#95): an icon, the rule on hover; another icon,
+          fainter, while paused (#92). */}
       {task.recurrence.kind === "rule" && (
         <Tooltip text={ruleText(task.recurrence.rule)}>
           <span
             className="nextaction-property nextaction-property-recurrence"
+            data-paused={task.recurrence.rule.paused || undefined}
             role="img"
             aria-label={t("Repeats: ${rule}", {
               rule: ruleText(task.recurrence.rule),
             })}
           >
-            <i className="ti ti-repeat" aria-hidden="true" />
+            <i
+              className={
+                task.recurrence.rule.paused
+                  ? "ti ti-repeat-off"
+                  : "ti ti-repeat"
+              }
+              aria-hidden="true"
+            />
           </span>
         </Tooltip>
       )}

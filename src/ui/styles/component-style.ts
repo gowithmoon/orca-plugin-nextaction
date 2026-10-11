@@ -398,6 +398,11 @@ export const componentCss = `
   color: var(--orca-color-text-2);
 }
 
+/* Paused (#92): the crossed-out icon, fainter. */
+.nextaction-property-recurrence[data-paused] {
+  opacity: 0.55;
+}
+
 /* A recurring task stuck in done (#93): a warning, like an unknown status. */
 .nextaction-property-stuck-done {
   color: var(--orca-color-text-yellow);

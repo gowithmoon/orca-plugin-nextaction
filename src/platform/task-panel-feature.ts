@@ -71,7 +71,11 @@ export function createTaskPanelFeature(deps: {
     setDependencyMode: createSetDependencyMode({ repository }),
     openRecurrencePopup: createRecurrencePopup({
       deps: {
-        setRecurrence: createSetRecurrence({ repository }),
+        setRecurrence: createSetRecurrence({
+          repository,
+          clock: systemClock,
+          dayBoundary: deps.dayBoundary,
+        }),
         previewNextOccurrence: createPreviewNextOccurrence({
           clock: systemClock,
           dayBoundary: deps.dayBoundary,

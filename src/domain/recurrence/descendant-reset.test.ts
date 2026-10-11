@@ -75,6 +75,22 @@ describe("resetting the descendant tasks of an advanced recurring task", () => {
     ).toEqual(resets([{ id: 3, changes: { status: "todo" } }]));
   });
 
+  it("a done descendant task whose rule is paused is left as it is too (#92)", () => {
+    const paused = {
+      kind: "rule",
+      rule: {
+        period: { interval: 1, unit: "day" },
+        basis: "schedule",
+        paused: true,
+      },
+    } as const;
+    expect(
+      planDescendantResets(weeklyCleaning, next, [
+        below(2, 1, { recurrence: paused, due: day(2026, 10, 11) }),
+      ]),
+    ).toEqual(resets([]));
+  });
+
   it("a done descendant task whose rule cannot be read stops the reset: whether it has a rule of its own is unknown", () => {
     expect(
       planDescendantResets(weeklyCleaning, next, [
