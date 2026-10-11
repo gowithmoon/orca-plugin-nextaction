@@ -6,6 +6,10 @@ import * as React from "react";
 import type { Candidates } from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
+import type {
+  CanMarkReviewed,
+  MarkReviewed,
+} from "../../application/usecases/mark-reviewed";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
@@ -13,6 +17,7 @@ import type { ReadTask } from "../../application/usecases/read-task";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
+import type { SetReviewPlan } from "../../application/usecases/set-review-plan";
 import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isNotAdvanced } from "../../domain/recurrence/recurrence";
 import { isOverdue } from "../../domain/task/overdue";
@@ -41,6 +46,7 @@ import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
+import { ReviewField } from "./review-field";
 import {
   DateField,
   DependencyDelayField,
@@ -74,6 +80,12 @@ export interface TaskPanelFormDeps {
   openRecurrencePopup: OpenRecurrencePopup;
   /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
   repairNotAdvanced: RepairNotAdvanced;
+  /** Sets the review interval and review-on day (#103). */
+  setReviewPlan: SetReviewPlan;
+  /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
+  markReviewed: MarkReviewed;
+  /** Whether "Mark reviewed" shows for the task. */
+  canMarkReviewed: CanMarkReviewed;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -156,6 +168,8 @@ function Fields(props: {
   dependencies: React.ReactNode;
   /** Opens the recurrence rule popup (#95). */
   onOpenRecurrence: () => void;
+  /** Whether "Mark reviewed" shows (#103). */
+  canMarkReviewed: boolean;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -222,6 +236,16 @@ function Fields(props: {
           labelId={id("recurrence")}
           recurrence={task.recurrence}
           onOpen={props.onOpenRecurrence}
+        />
+      </Field>
+      <Field label={t("Review")} labelId={id("review")}>
+        <ReviewField
+          labelId={id("review")}
+          review={task.review}
+          today={today}
+          canMark={props.canMarkReviewed}
+          onSet={(setting) => void actions.setReviewPlan(setting)}
+          onMark={() => void actions.markReviewed()}
         />
       </Field>
       <Field label={t("Context")} labelId={id("contexts")}>
@@ -332,6 +356,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         saveOnLeave={saveOnLeave}
         candidates={candidates}
         onOpenRecurrence={() => deps.openRecurrencePopup(state.task)}
+        canMarkReviewed={deps.canMarkReviewed(state.task)}
         notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use
           // case returns none for the rest, so the row stays hidden.

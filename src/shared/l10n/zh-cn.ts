@@ -364,6 +364,22 @@ const zhCN: Record<string, string> = {
   "Could not skip: its completion history cannot be read and is kept as it is.":
     "无法跳过：完成历史读取失败，没有做任何改动。",
   "Could not skip: ${reason}": "无法跳过：${reason}",
+  Review: "回顾",
+  None: "不设",
+  "Review on": "指定回顾日",
+  "Next review: ${date}": "下次回顾：${date}",
+  "No review": "不回顾",
+  "Last reviewed: ${date}": "上次回顾：${date}",
+  "Mark reviewed": "标记已回顾",
+  "Marked reviewed": "已标记回顾",
+  "Not marked reviewed: the task is done.": "没有标记：任务已完成。",
+  "Not marked reviewed: the task has no review interval or review-on day.":
+    "没有标记：这个任务没有设回顾周期，也没有指定回顾日。",
+  "Could not mark reviewed: its review plan cannot be read (${reason}) and is kept as it is.":
+    "无法标记已回顾：回顾计划读取失败（${reason}），没有改动。",
+  "Could not mark reviewed: ${reason}": "无法标记已回顾：${reason}",
+  "Could not save the review: its review plan cannot be read (${reason}) and is kept as it is.":
+    "无法保存回顾设置：回顾计划读取失败（${reason}），没有改动。",
 };
 
 export default zhCN;

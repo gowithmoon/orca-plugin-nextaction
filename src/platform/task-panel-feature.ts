@@ -3,6 +3,10 @@ import type { StartPreviewDaysSetting } from "../application/ports/start-preview
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import {
+  createCanMarkReviewed,
+  createMarkReviewed,
+} from "../application/usecases/mark-reviewed";
 import { createPreviewNextOccurrence } from "../application/usecases/preview-next-occurrence";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
@@ -12,6 +16,7 @@ import { createRepairNotAdvanced } from "../application/usecases/repair-not-adva
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
 import { createSetRecurrence } from "../application/usecases/set-recurrence";
+import { createSetReviewPlan } from "../application/usecases/set-review-plan";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
@@ -91,6 +96,17 @@ export function createTaskPanelFeature(deps: {
       clock: systemClock,
       dayBoundary: deps.dayBoundary,
     }),
+    setReviewPlan: createSetReviewPlan({
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
+    }),
+    markReviewed: createMarkReviewed({
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
+    }),
+    canMarkReviewed: createCanMarkReviewed(),
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,

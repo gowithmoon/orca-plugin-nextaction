@@ -10,8 +10,10 @@ import {
   DependencyCycleError,
   type RefusedCycle,
 } from "../application/usecases/dependency-cycle-error";
+import { NotMarkableError } from "../application/usecases/mark-reviewed";
 import { MyDayUnreadableError } from "../application/usecases/my-day-unreadable-error";
 import { RecurrenceUnreadableError } from "../application/usecases/recurrence-unreadable-error";
+import { ReviewUnreadableError } from "../application/usecases/review-unreadable-error";
 import type { CalendarDate, TaskId, TaskStatus } from "../domain/task/task";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
@@ -183,6 +185,62 @@ export async function changeStatusReporting(
         t("Could not change the status: ${reason}", { reason }),
     });
   }
+}
+
+/**
+ * Tells the user why marking a task reviewed failed: it cannot be marked
+ * (the notes changed since the menu was shown), its review plan cannot be
+ * read, or as `notifyActionFailure` does. Shared by the task menu and the
+ * task panel.
+ */
+export function notifyMarkReviewedFailure(
+  notify: Notify,
+  error: unknown,
+): void {
+  if (error instanceof NotMarkableError) {
+    notify(
+      "warn",
+      error.reason === "done"
+        ? t("Not marked reviewed: the task is done.")
+        : t(
+            "Not marked reviewed: the task has no review interval or review-on day.",
+          ),
+    );
+    return;
+  }
+  if (error instanceof ReviewUnreadableError) {
+    notify(
+      "error",
+      t(
+        "Could not mark reviewed: its review plan cannot be read (${reason}) and is kept as it is.",
+        { reason: error.reason },
+      ),
+    );
+    return;
+  }
+  notifyActionFailure(notify, error, (reason) =>
+    t("Could not mark reviewed: ${reason}", { reason }),
+  );
+}
+
+/**
+ * Tells the user why setting a review plan failed: it cannot be read, or as
+ * `notifyActionFailure` does.
+ */
+export function notifySetReviewFailure(notify: Notify, error: unknown): void {
+  if (error instanceof ReviewUnreadableError) {
+    notify(
+      "error",
+      t(
+        "Could not save the review: its review plan cannot be read (${reason}) and is kept as it is.",
+        { reason: error.reason },
+      ),
+    );
+    return;
+  }
+  notifyActionFailure(notify, error, (reason) =>
+    t("Could not save the change: ${reason}", { reason }),
+  );
 }
 
 /**

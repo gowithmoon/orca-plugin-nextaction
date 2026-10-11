@@ -5,10 +5,13 @@
 import * as React from "react";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
+import type { MarkReviewed } from "../../application/usecases/mark-reviewed";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
+import type { SetReviewPlan } from "../../application/usecases/set-review-plan";
 import type { SetSequential } from "../../application/usecases/set-sequential";
+import type { ReviewSetting } from "../../domain/review/review";
 import type {
   DependencyMode,
   TaskId,
@@ -19,6 +22,8 @@ import {
   changeStatusReporting,
   notifyActionFailure,
   notifyAdvanced,
+  notifyMarkReviewedFailure,
+  notifySetReviewFailure,
 } from "../notify";
 import type { TaskActionsDeps } from "./use-task-actions";
 
@@ -32,6 +37,10 @@ export interface TaskPanelWrites {
   setDependencyMode: SetDependencyMode;
   /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
   repairNotAdvanced: RepairNotAdvanced;
+  /** Sets the review interval and review-on day (#103). */
+  setReviewPlan: SetReviewPlan;
+  /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
+  markReviewed: MarkReviewed;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -54,6 +63,8 @@ export function useTaskPanelActions(
   setDependencies(dependencies: readonly TaskId[]): Promise<boolean>;
   setDependencyMode(mode: DependencyMode): Promise<boolean>;
   repairNotAdvanced(): Promise<boolean>;
+  setReviewPlan(setting: ReviewSetting): Promise<boolean>;
+  markReviewed(): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -118,6 +129,27 @@ export function useTaskPanelActions(
           },
           (reason) => t("Could not advance the task: ${reason}", { reason }),
         ),
+      async setReviewPlan(setting) {
+        try {
+          await writes.setReviewPlan(id, setting);
+          return true;
+        } catch (error) {
+          notifySetReviewFailure(notify, error);
+          failed.current();
+          return false;
+        }
+      },
+      async markReviewed() {
+        try {
+          await writes.markReviewed(id);
+          notify("success", t("Marked reviewed"));
+          return true;
+        } catch (error) {
+          notifyMarkReviewedFailure(notify, error);
+          failed.current();
+          return false;
+        }
+      },
     };
   }, [writes, id]);
 }

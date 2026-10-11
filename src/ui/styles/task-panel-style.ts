@@ -528,6 +528,40 @@ button.nextaction-dependency-task:hover {
   color: var(--orca-color-dangerous-5);
 }
 
+/* Review (#103): the interval and review-on day edited in place, the next and
+   last reviewed days and "Mark reviewed" below them. */
+.nextaction-review-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+}
+
+.nextaction-review-field[data-unreadable] {
+  color: var(--orca-color-dangerous-5);
+}
+
+.nextaction-review-interval,
+.nextaction-review-on,
+.nextaction-review-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-review-interval > input,
+.nextaction-review-interval > :nth-child(2) {
+  flex: 0 0 5em;
+  min-width: 0;
+}
+
+.nextaction-review-every,
+.nextaction-review-on-label,
+.nextaction-review-status {
+  color: var(--orca-color-text-2);
+}
+
 /* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
 .nextaction-recurrence-popup {
   --nextaction-window-width: 26rem;
