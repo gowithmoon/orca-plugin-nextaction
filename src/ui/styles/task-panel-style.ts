@@ -528,38 +528,28 @@ button.nextaction-dependency-task:hover {
   color: var(--orca-color-dangerous-5);
 }
 
-/* Review (#103): the interval and review-on day edited in place, the next and
-   last reviewed days and "Mark reviewed" below them. */
+/* Review (#103): the plan's summary as a button reading like a field, as
+   Repeat's; "Mark reviewed" as an icon beside it. */
 .nextaction-review-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--orca-spacing-sm);
-  min-width: 0;
+  gap: var(--orca-spacing-xs);
 }
 
-.nextaction-review-field[data-unreadable] {
-  color: var(--orca-color-dangerous-5);
+.nextaction-review-field > :not(.nextaction-recurrence-button) {
+  flex: 0 0 auto;
 }
 
-.nextaction-review-interval,
-.nextaction-review-on,
-.nextaction-review-status {
+/* The review popup (review-popup.tsx), in the recurrence popup's look: the
+   "every" and the number (shown only with a unit), then the units with
+   "none" first. The number is picked by place, as the recurrence popup's. */
+.nextaction-review-popup-interval {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--orca-spacing-sm);
 }
 
-.nextaction-review-interval > input,
-.nextaction-review-interval > :nth-child(2) {
-  flex: 0 0 5em;
-  min-width: 0;
-}
-
-.nextaction-review-every,
-.nextaction-review-on-label,
-.nextaction-review-status {
-  color: var(--orca-color-text-2);
+.nextaction-review-popup-interval > :nth-child(2):not(:last-child) {
+  width: 5rem;
 }
 
 /* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
