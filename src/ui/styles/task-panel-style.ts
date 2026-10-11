@@ -356,8 +356,8 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   font-style: italic;
 }
 
-/* A recurring task stuck in done (#93): a warning line with its fix. */
-.nextaction-stuck-done {
+/* A recurring task not advanced (GLOSSARY: 未自动重复, #93): a warning line with its fix. */
+.nextaction-not-advanced {
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-sm);
@@ -367,7 +367,7 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   color: var(--orca-color-text-yellow);
 }
 
-.nextaction-stuck-done-text {
+.nextaction-not-advanced-text {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;

@@ -3,7 +3,8 @@ import {
   countEnd,
   countsFrom,
   isLastOccurrence,
-  isStuckDone,
+  isNotAdvanced,
+  isResume,
   nextOccurrence,
   planAdvance,
   planRepair,
@@ -11,6 +12,7 @@ import {
   planSkip,
   type RecurrenceRule,
   recurs,
+  skippable,
 } from "./recurrence";
 
 const day = (year: number, month: number, date: number) => ({
@@ -448,7 +450,6 @@ describe("end conditions", () => {
       completion,
     );
     expect(plan).toMatchObject({
-      last: false,
       next: day(2026, 10, 19),
       changes: { status: "todo", due: day(2026, 10, 19) },
       recurrence: weeklyEnding({ kind: "count", total: 5, remaining: 2 }),
@@ -463,7 +464,6 @@ describe("end conditions", () => {
       completion,
     );
     expect(plan).toEqual({
-      last: true,
       changes: { status: "done" },
       history: [completion],
       next: null,
@@ -478,7 +478,7 @@ describe("end conditions", () => {
       [],
       completion,
     );
-    expect(plan).toMatchObject({ last: false, next: day(2026, 10, 19) });
+    expect(plan).toMatchObject({ next: day(2026, 10, 19) });
     // The end day is not used up: the rule is not rewritten.
     expect(plan).not.toHaveProperty("recurrence");
   });
@@ -540,14 +540,13 @@ describe("end conditions", () => {
       completion,
     );
     expect(plan).toMatchObject({
-      last: true,
       changes: { status: "done" },
       recurrence: null,
     });
   });
 });
 
-describe("a recurring task stuck in done", () => {
+describe("a recurring task not advanced (未自动重复)", () => {
   const rule = {
     period: { interval: 1, unit: "week" },
     basis: "schedule",
@@ -555,19 +554,19 @@ describe("a recurring task stuck in done", () => {
 
   it("is a done task with a rule", () => {
     expect(
-      isStuckDone({ status: "done", recurrence: { kind: "rule", rule } }),
+      isNotAdvanced({ status: "done", recurrence: { kind: "rule", rule } }),
     ).toBe(true);
   });
 
   it("is not a done task without a rule", () => {
-    expect(isStuckDone({ status: "done", recurrence: { kind: "none" } })).toBe(
-      false,
-    );
+    expect(
+      isNotAdvanced({ status: "done", recurrence: { kind: "none" } }),
+    ).toBe(false);
   });
 
   it("is not a done task whose rule cannot be read", () => {
     expect(
-      isStuckDone({
+      isNotAdvanced({
         status: "done",
         recurrence: { kind: "unreadable", reason: "unknown version 2" },
       }),
@@ -577,14 +576,14 @@ describe("a recurring task stuck in done", () => {
   it.each(["inbox", "todo", "doing", "waiting", "someday"] as const)(
     "is not a %s task with a rule",
     (status) => {
-      expect(isStuckDone({ status, recurrence: { kind: "rule", rule } })).toBe(
-        false,
-      );
+      expect(
+        isNotAdvanced({ status, recurrence: { kind: "rule", rule } }),
+      ).toBe(false);
     },
   );
 });
 
-describe("advancing a recurring task stuck in done (repairing it)", () => {
+describe("advancing a recurring task not advanced (repairing it)", () => {
   // Repaired on Wednesday October 14; Orca had it marked done earlier.
   const repair = {
     at: new Date("2026-10-14T01:00:00.000Z"),
@@ -645,8 +644,8 @@ describe("pausing and resuming the rule (#92)", () => {
     expect(recurs(paused)).toBe(false);
   });
 
-  it("a done task whose rule is paused is not stuck in done: it is done like a plain task", () => {
-    expect(isStuckDone({ status: "done", recurrence: paused })).toBe(false);
+  it("a done task whose rule is paused is not a task not advanced: it is done like a plain task", () => {
+    expect(isNotAdvanced({ status: "done", recurrence: paused })).toBe(false);
   });
 
   // Resumed on Wednesday October 14, back from a trip.
@@ -671,7 +670,6 @@ describe("pausing and resuming the rule (#92)", () => {
       resume,
     );
     expect(plan).toEqual({
-      last: false,
       changes: { status: "todo", due: day(2026, 9, 23) },
       next: day(2026, 9, 23),
     });
@@ -749,7 +747,6 @@ describe("skipping an occurrence (#91)", () => {
         skip,
       );
       expect(plan).toMatchObject({
-        last: false,
         next: day(2026, 10, 19),
         changes: {
           status: "todo",
@@ -800,5 +797,87 @@ describe("skipping an occurrence (#91)", () => {
       skip,
     );
     expect(plan.next).toEqual(day(2026, 9, 23));
+  });
+});
+
+describe("whether an occurrence can be skipped (#91)", () => {
+  const weekly = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+  // Skipped on Wednesday October 14; due Monday October 12.
+  const today = day(2026, 10, 14);
+  const due = day(2026, 10, 12);
+
+  it.each(["inbox", "todo", "doing", "waiting", "someday"] as const)(
+    "a %s recurring task can be skipped, with its rule",
+    (status) => {
+      expect(
+        skippable(
+          {
+            status,
+            start: null,
+            due,
+            recurrence: { kind: "rule", rule: weekly },
+          },
+          today,
+        ),
+      ).toEqual({ kind: "skippable", rule: weekly });
+    },
+  );
+
+  it.each([
+    ["without a rule", "todo", { kind: "none" }, "not-recurring"],
+    [
+      "whose rule cannot be read",
+      "todo",
+      { kind: "unreadable", reason: "unknown version 2" },
+      "not-recurring",
+    ],
+    [
+      "whose rule is paused",
+      "todo",
+      { kind: "rule", rule: { ...weekly, paused: true } },
+      "paused",
+    ],
+    ["that is done", "done", { kind: "rule", rule: weekly }, "done"],
+    [
+      "on its last occurrence",
+      "todo",
+      {
+        kind: "rule",
+        rule: { ...weekly, end: { kind: "count", total: 5, remaining: 1 } },
+      },
+      "last",
+    ],
+  ] as const)(
+    "a task %s cannot be skipped",
+    (_, status, recurrence, reason) => {
+      expect(
+        skippable({ status, start: null, due, recurrence }, today),
+      ).toEqual({ kind: "refused", reason });
+    },
+  );
+});
+
+describe("whether writing a rule resumes it (#92)", () => {
+  const weekly = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+  const paused = { kind: "rule", rule: { ...weekly, paused: true } } as const;
+
+  it("writing a rule that applies over a done task's paused rule resumes it", () => {
+    expect(isResume({ status: "done", recurrence: paused }, weekly)).toBe(true);
+  });
+
+  it.each([
+    ["the task is not done", "todo", paused, weekly],
+    ["its rule is not paused", "done", { kind: "rule", rule: weekly }, weekly],
+    ["it has no rule", "done", { kind: "none" }, weekly],
+    ["the rule written is still paused", "done", paused, paused.rule],
+    ["the rule is removed", "done", paused, null],
+  ] as const)("is no resume when %s", (_, status, recurrence, rule) => {
+    expect(isResume({ status, recurrence }, rule)).toBe(false);
   });
 });

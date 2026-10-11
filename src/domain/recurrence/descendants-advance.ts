@@ -1,10 +1,10 @@
-// Resetting the descendant tasks of a recurring task as it advances
+// Advancing the descendant tasks of a recurring task with it
 // (GLOSSARY: 安排下一次). Pure.
 import type { CalendarDate, Task, TaskId } from "../task/task";
 import type { TaskChanges } from "../task/task-changes";
 import { addDays, daysBetween } from "../time/calendar-days";
 
-/** A task of the task graph, as resetting needs it. */
+/** A task of the task graph, as advancing them needs it. */
 export interface DescendantCandidate {
   readonly task: Pick<Task, "id" | "status" | "start" | "due" | "recurrence">;
   /** Its nearest task ancestor (ADR 0003), `null` for none. */
@@ -12,18 +12,21 @@ export interface DescendantCandidate {
 }
 
 /** A descendant task to write, with what to write. */
-export interface DescendantReset {
+export interface DescendantAdvance {
   readonly id: TaskId;
   readonly changes: TaskChanges;
 }
 
 /**
- * What resetting the descendant tasks plans. `unreadable`: a done
+ * What advancing the descendant tasks plans. `unreadable`: a done
  * descendant task's rule cannot be read, so whether it keeps to a rule of
  * its own is unknown; nothing is to be written.
  */
-export type DescendantResetPlan =
-  | { readonly kind: "resets"; readonly resets: readonly DescendantReset[] }
+export type DescendantAdvancePlan =
+  | {
+      readonly kind: "advances";
+      readonly advances: readonly DescendantAdvance[];
+    }
   | {
       readonly kind: "unreadable";
       readonly id: TaskId;
@@ -31,18 +34,18 @@ export type DescendantResetPlan =
     };
 
 /**
- * The descendant tasks to reset as task `advanced` advances to `next`
+ * The descendant tasks to advance as task `advanced` advances to `next`
  * (GLOSSARY: 安排下一次), at any depth, in the order of `graph`: each done
  * one without a rule of its own (a paused one is still its own) goes back
  * to todo, its dates moved by as many days as the task moved. Those not
  * done, and those with a rule, are left as they are. No completion is
  * recorded for them.
  */
-export function planDescendantResets(
+export function planDescendantAdvances(
   advanced: Pick<Task, "id" | "start" | "due">,
   next: CalendarDate,
   graph: readonly DescendantCandidate[],
-): DescendantResetPlan {
+): DescendantAdvancePlan {
   // The days the task moved by: from its due date, else its start date. A
   // task without dates moved nothing (the next occurrence is written as its
   // start), so its descendants' dates stay as they are.
@@ -60,7 +63,7 @@ export function planDescendantResets(
       };
     }
   }
-  const resets = done
+  const advances = done
     .filter((task) => task.recurrence.kind === "none")
     .map((task) => {
       const changes: TaskChanges = {
@@ -72,7 +75,7 @@ export function planDescendantResets(
       };
       return { id: task.id, changes };
     });
-  return { kind: "resets", resets };
+  return { kind: "advances", advances };
 }
 
 /** Every descendant task of `id`, at any depth, in the order of `graph`. */

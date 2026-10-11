@@ -613,8 +613,10 @@ export function createOrcaTaskRepository(
       }
       if (plans.length === 0) return;
       try {
-        // One group for every task, so one undo (docs/spikes/multi-block-undo,
-        // 待实测). The task advanced comes first, as `writes` is ordered.
+        // One group for every task, so one undo, from a note panel or the
+        // plugin panel alike; the order of the blocks does not matter
+        // (docs/spikes/multi-block-undo, M1–M3). The task advanced comes
+        // first, as `writes` is ordered.
         await invokeGroup(async () => {
           for (const plan of plans) await plan.run();
         });

@@ -6,11 +6,9 @@ import {
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
 import { taskStatuses } from "../../domain/task/task";
-import {
-  CompletionHistoryUnreadableError,
-  createChangeStatus,
-  RecurrenceUnreadableError,
-} from "./change-status";
+import { createChangeStatus } from "./change-status";
+import { CompletionHistoryUnreadableError } from "./completion-history-unreadable-error";
+import { RecurrenceUnreadableError } from "./recurrence-unreadable-error";
 
 /** The completion recorded at the clock of `deps`. */
 const nineOClockOct8 = {
@@ -452,7 +450,7 @@ describe("change status: the descendant tasks of a recurring task", () => {
   } as const;
   const due = { year: 2026, month: 10, day: 5 };
 
-  it("completing a recurring task resets its done descendant tasks in the same write", async () => {
+  it("completing a recurring task brings its done descendant tasks back to todo in the same write", async () => {
     const repository = createInMemoryTaskRepository();
     // 每周大扫除 > 拖地 (done), 擦窗 (doing), and below a plain block 倒垃圾 (done).
     repository.addTask({ id: 70, status: "todo", due, recurrence: weekly });
@@ -473,7 +471,7 @@ describe("change status: the descendant tasks of a recurring task", () => {
     });
     expect((await repository.getTask(72))?.status).toBe("doing");
     expect((await repository.getTask(74))?.status).toBe("todo");
-    // No completion is recorded for a reset descendant task.
+    // No completion is recorded for a descendant task brought back to todo.
     expect(await repository.readCompletionHistory(71)).toEqual({
       kind: "readable",
       history: [],

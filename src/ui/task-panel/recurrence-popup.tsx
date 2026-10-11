@@ -26,7 +26,7 @@ import { formatDate, shownText } from "../components/format";
 import { PopupLayer } from "../components/popup-layer";
 import { basisName, unitName } from "../components/recurrence-text";
 import { useFocusInside } from "../hooks/use-focus-inside";
-import { type Notify, notifyActionFailure } from "../notify";
+import { type Notify, notifyActionFailure, notifyAdvanced } from "../notify";
 import {
   periodOf,
   placementDraftOf,
@@ -149,15 +149,13 @@ function RecurrencePopup(props: {
       // Resuming a done task advanced it (#92): its icon shows todo again, so
       // the next occurrence is told, as after completing it.
       if (result.kind === "advanced") {
-        deps.notify(
-          "success",
-          t("Next: ${date}", {
-            date: formatDate(result.next, result.resumedOn),
-          }),
-        );
+        notifyAdvanced(deps.notify, {
+          next: result.next,
+          on: result.resumedOn,
+        });
       } else if (result.kind === "ended") {
         // Resumed on its last occurrence (#89): it stays done, the rule removed.
-        deps.notify("success", t("Recurrence ended"));
+        notifyAdvanced(deps.notify, { next: null });
       }
       onClose();
     } catch (error) {
