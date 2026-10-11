@@ -27,6 +27,42 @@ export const componentCss = `
   padding: var(--orca-spacing-md) var(--orca-spacing-lg);
 }
 
+/*
+ * The loading placeholder's bars (ui/components/loading-placeholder.tsx):
+ * tinted from the text colour, so they suit a dark theme too; Orca's
+ * Skeleton paints a fixed light grey.
+ */
+.nextaction-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-skeleton-title,
+.nextaction-skeleton-text {
+  height: var(--orca-height-skeleton, 1rem);
+  border-radius: var(--orca-radius-md);
+  background-color: color-mix(in srgb, var(--orca-color-text-2) 15%, transparent);
+  animation: nextaction-breathe 1s ease-in-out alternate infinite;
+}
+
+.nextaction-skeleton-title {
+  width: 40%;
+}
+
+@keyframes nextaction-breathe {
+  to {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nextaction-skeleton-title,
+  .nextaction-skeleton-text {
+    animation: none;
+  }
+}
+
 .nextaction-task-card {
   display: flex;
   align-items: flex-start;

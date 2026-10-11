@@ -24,6 +24,7 @@ import {
   shownText,
   urgencyName,
 } from "../components/format";
+import { TaskPlaceholder } from "../components/loading-placeholder";
 import { StatusIcon } from "../components/status-icon";
 import { markedStatus } from "../components/status-menu";
 import { FailedNotice, PausedNotice } from "../components/view-notice";
@@ -352,11 +353,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
       />
     );
   } else {
-    body = (
-      <div role="status" aria-label={t("Loading the task")}>
-        <orca.components.Skeleton />
-      </div>
-    );
+    body = <TaskPlaceholder />;
   }
 
   return (

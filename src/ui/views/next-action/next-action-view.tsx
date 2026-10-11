@@ -15,6 +15,7 @@ import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import { filterChoosesAny } from "../../../domain/task/task-filter";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
+import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
@@ -66,23 +67,6 @@ function shownItems(
   return read.items.filter((item) => !item.kept || item.task.id === selected);
 }
 
-function Placeholder() {
-  const { Skeleton } = orca.components;
-  return (
-    <div
-      className="nextaction-task-list"
-      role="status"
-      aria-label={t("Loading tasks")}
-    >
-      {[0, 1, 2].map((key) => (
-        <div key={key} className="nextaction-task-card-placeholder">
-          <Skeleton />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function NextActionContent(props: {
   query: ViewQuery<NextActionsRead>;
   today: CalendarDate;
@@ -98,7 +82,7 @@ function NextActionContent(props: {
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
 
-  if (state.kind === "loading") return <Placeholder />;
+  if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
   if (state.kind === "failed") {
     return (

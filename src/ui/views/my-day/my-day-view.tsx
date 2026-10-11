@@ -27,6 +27,7 @@ import type { SelectOption } from "../../../orca.d.ts";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
+import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
@@ -91,23 +92,6 @@ export interface MyDayViewDeps {
 
 /** A card's task and, on the timeline, its schedule: what the popup opens on. */
 type ScheduleTarget = MyDayItem & { readonly schedule?: MyDaySchedule };
-
-function Placeholder() {
-  const { Skeleton } = orca.components;
-  return (
-    <div
-      className="nextaction-task-list"
-      role="status"
-      aria-label={t("Loading tasks")}
-    >
-      {[0, 1, 2].map((key) => (
-        <div key={key} className="nextaction-task-card-placeholder">
-          <Skeleton />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /** The candidates as the search offers them, by text. */
 function candidateOptions(
@@ -300,7 +284,7 @@ function MyDayAreas(props: {
 
   let search: React.ReactNode;
   let unscheduled: React.ReactNode;
-  if (state.kind === "loading") unscheduled = <Placeholder />;
+  if (state.kind === "loading") unscheduled = <TaskListPlaceholder />;
   else if (state.kind === "paused") unscheduled = <PausedNotice />;
   else if (state.kind === "failed") {
     unscheduled = (
