@@ -1,6 +1,7 @@
 // Use case: change a task's status from the task menu (GLOSSARY: 状态), and
 // record a completion when the task enters done (GLOSSARY: 完成历史).
 
+import { planDescendantResets } from "../../domain/recurrence/descendant-reset";
 import { planAdvance } from "../../domain/recurrence/recurrence";
 import {
   historyAfterStatusChange,
@@ -101,21 +102,46 @@ export function createChangeStatus(deps: {
     };
     if (task.recurrence.kind === "rule") {
       // A recurring task advances (GLOSSARY: 进入下一次): status, dates,
-      // history and the rule (one occurrence used up, or removed on the last)
-      // in one write, so one undo.
+      // history, the rule (one occurrence used up, #89) and its done
+      // descendant tasks back to todo (#90), in one write, so one undo.
       const plan = planAdvance(
         task.recurrence.rule,
         task,
         read.history,
         completion,
       );
-      await deps.repository.updateTask(
-        id,
-        plan.changes,
-        plan.history,
-        plan.recurrence,
-      );
-      if (plan.next === null) return { kind: "ended" };
+      if (plan.next === null) {
+        // The last occurrence (#89): the task stays done and its rule is
+        // removed; it does not advance, so its descendants are left as they
+        // are.
+        await deps.repository.updateTasks([
+          {
+            id,
+            changes: plan.changes,
+            completionHistory: plan.history,
+            recurrence: null,
+          },
+        ]);
+        return { kind: "ended" };
+      }
+      const graph = await deps.repository.readTaskGraph();
+      const descendants = planDescendantResets(task, plan.next, graph.tasks);
+      if (descendants.kind === "unreadable") {
+        throw new RecurrenceUnreadableError(
+          `descendant task ${descendants.id}: ${descendants.reason}`,
+        );
+      }
+      await deps.repository.updateTasks([
+        {
+          id,
+          changes: plan.changes,
+          completionHistory: plan.history,
+          ...(plan.recurrence !== undefined && {
+            recurrence: plan.recurrence,
+          }),
+        },
+        ...descendants.resets,
+      ]);
       return {
         kind: "advanced",
         next: plan.next,

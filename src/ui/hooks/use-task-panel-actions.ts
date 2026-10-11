@@ -3,6 +3,7 @@
 // same notices as the task menu. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { AdvanceStuckDone } from "../../application/usecases/advance-stuck-done";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
@@ -14,6 +15,7 @@ import type {
   TaskStatus,
 } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { formatDate } from "../components/format";
 import { changeStatusReporting, notifyActionFailure } from "../notify";
 import type { TaskActionsDeps } from "./use-task-actions";
 
@@ -25,6 +27,8 @@ export interface TaskPanelWrites {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /** Advances a recurring task stuck in done (#93). */
+  advanceStuckDone: AdvanceStuckDone;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -46,6 +50,7 @@ export function useTaskPanelActions(
   setSequential(sequential: boolean): Promise<boolean>;
   setDependencies(dependencies: readonly TaskId[]): Promise<boolean>;
   setDependencyMode(mode: DependencyMode): Promise<boolean>;
+  advanceStuckDone(): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -95,6 +100,25 @@ export function useTaskPanelActions(
         run(
           () => writes.setDependencyMode(id, mode),
           (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
+      // Its icon shows todo again, so the next occurrence is told (#93).
+      advanceStuckDone: () =>
+        run(
+          async () => {
+            const result = await writes.advanceStuckDone(id);
+            // Its last occurrence: the recurrence ended instead (#89).
+            if (result.next === null) {
+              notify("success", t("Recurrence ended"));
+              return;
+            }
+            notify(
+              "success",
+              t("Next: ${date}", {
+                date: formatDate(result.next, result.repairedOn),
+              }),
+            );
+          },
+          (reason) => t("Could not advance the task: ${reason}", { reason }),
         ),
     };
   }, [writes, id]);

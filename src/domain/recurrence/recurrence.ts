@@ -74,6 +74,15 @@ export type RecurrenceRead =
 /** No rule: what a task reads as without one. */
 export const noRecurrence: RecurrenceRead = { kind: "none" };
 
+/**
+ * Whether the task recurs (GLOSSARY: 重复任务): it holds a rule this plugin
+ * reads. Such a task never stays done, so a dependency on it, or a sequential
+ * sibling after it, stays unmet until the rule ends (ADR 0021).
+ */
+export function recurs(recurrence: RecurrenceRead): boolean {
+  return recurrence.kind === "rule";
+}
+
 /** A task's dates, as the next occurrence needs them. */
 export interface TaskDates {
   readonly start: CalendarDate | null;
@@ -176,7 +185,8 @@ function afterOccurrence(rule: RecurrenceRule): RecurrenceRule | undefined {
 
 /**
  * Advancing a recurring task once it is completed (GLOSSARY: 进入下一次):
- * the task itself only; its descendants are left to #90.
+ * the task itself only; its descendant tasks are planned by
+ * `planDescendantResets` (descendant-reset.ts).
  */
 export function planAdvance(
   rule: RecurrenceRule,
@@ -219,6 +229,27 @@ export function planAdvance(
     next,
     ...(recurrence && { recurrence }),
   };
+}
+
+/** What repairing a task stuck in done writes, in one undo. */
+export type RepairPlan = Omit<AdvancePlan, "history">;
+
+/**
+ * Advancing a recurring task stuck in done (GLOSSARY: 进入下一次), on the
+ * user's request at `repair`. No completion is recorded: when it was
+ * completed in Orca is unknown, so after completion it counts from the
+ * logical day of the repair; on a fixed schedule from its current dates, as
+ * any advance does.
+ */
+export function planRepair(
+  rule: RecurrenceRule,
+  task: AdvancingTask,
+  repair: CompletionEntry,
+): RepairPlan {
+  // The same advance, its completion left out; it uses up an occurrence as
+  // any advance does (#89).
+  const { history: _, ...plan } = planAdvance(rule, task, [], repair);
+  return plan;
 }
 
 /**
@@ -272,4 +303,17 @@ function firstExisting(
 /** Whether the date is a day of the calendar (not e.g. February 30). */
 function exists(date: CalendarDate): boolean {
   return addDays(date, 0).day === date.day;
+}
+
+/**
+ * A recurring task stuck in done (GLOSSARY: 进入下一次): it holds a rule and
+ * is done, so it was completed outside the plugin (in Orca's own interface)
+ * and did not advance. A rule that cannot be read does not count: whether it
+ * would have advanced is unknown.
+ */
+export function isStuckDone(task: {
+  readonly status: TaskStatus;
+  readonly recurrence: RecurrenceRead;
+}): boolean {
+  return task.status === "done" && task.recurrence.kind === "rule";
 }

@@ -93,6 +93,17 @@ export type InitialProperties = Pick<
   readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
 };
 
+/** One task's part of a write to several tasks (`updateTasks`). */
+export interface TaskWrite {
+  readonly id: TaskId;
+  /** The properties to write; those absent are left as they are. */
+  readonly changes: TaskChanges;
+  /** Replaces the task's completion history; absent leaves it. */
+  readonly completionHistory?: CompletionHistory;
+  /** Replaces the task's recurrence rule, `null` removes it; absent leaves it. */
+  readonly recurrence?: RecurrenceRule | null;
+}
+
 /**
  * Where tasks are read from and written to. Implementations hide every Orca
  * detail: mirror blocks, orphans, note-facing names and error conversion.
@@ -133,20 +144,28 @@ export interface TaskRepository {
    * Writes the properties present in `changes` and leaves the others as they
    * are; with `completionHistory`, also replaces the task's completion
    * history with it. Contexts and labels written are made choices of the
-   * task tag first, so they show in the notes and become candidates. With
-   * `recurrence` (a rule, or `null` to remove it), also writes the task's
-   * recurrence rule, as `writeRecurrence` does, so advancing a recurring
-   * task is one write (#89). The user undoes the whole write with one undo.
-   * Fails, writing nothing, when the block is not a task, a property is
-   * invalidated, or the completion history or the rule is to be replaced but
-   * reads as unreadable. A mirror block's ID writes to its source block.
+   * task tag first, so they show in the notes and become candidates. The
+   * user undoes the whole write with one undo. Fails, writing nothing, when
+   * the block is not a task, a property is invalidated, or the completion
+   * history is to be replaced but reads as unreadable. A mirror block's ID
+   * writes to its source block.
    */
   updateTask(
     id: TaskId,
     changes: TaskChanges,
     completionHistory?: CompletionHistory,
-    recurrence?: RecurrenceRule | null,
   ): Promise<void>;
+
+  /**
+   * Writes several tasks as `updateTask` writes one, each as its `TaskWrite`
+   * says, and with `recurrence` also replaces its recurrence rule (`null`
+   * removes it, the property kept, as `writeRecurrence` does). The user
+   * undoes every task's write with one undo. Fails, writing nothing at all,
+   * when any block is not a task, a property is invalidated, or a completion
+   * history or recurrence rule to be replaced reads as unreadable. A mirror
+   * block's ID writes to its source block.
+   */
+  updateTasks(writes: readonly TaskWrite[]): Promise<void>;
 
   /**
    * The completion history of a task. A block that is not a task reads as an

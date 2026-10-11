@@ -356,6 +356,23 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   font-style: italic;
 }
 
+/* A recurring task stuck in done (#93): a warning line with its fix. */
+.nextaction-stuck-done {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border-radius: var(--orca-radius-md);
+  background-color: color-mix(in srgb, var(--orca-color-text-yellow) 12%, transparent);
+  color: var(--orca-color-text-yellow);
+}
+
+.nextaction-stuck-done-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .nextaction-sequential-field {
   display: flex;
   align-items: center;
@@ -434,6 +451,19 @@ button.nextaction-dependency-task:hover {
 .nextaction-dependency[data-stale] .nextaction-dependency-task {
   text-decoration: line-through;
   color: var(--orca-color-text-2);
+}
+
+.nextaction-dependency-recurring,
+.nextaction-not-next-action-reason-recurring {
+  margin-inline-start: var(--orca-spacing-xs);
+  color: var(--orca-color-text-2);
+}
+
+/* Recurring tasks (#94, ADR 0021): why the dependency or order stays unmet. */
+.nextaction-dependency-hint,
+.nextaction-not-next-action-reason-hint {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-dependency-stale {

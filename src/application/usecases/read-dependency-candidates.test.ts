@@ -19,8 +19,8 @@ describe("read dependency candidates", () => {
     });
 
     expect(await readDependencyCandidates(1)).toEqual([
-      { id: 2, text: "Call the plumber", cycle: null },
-      { id: 4, text: "Clear the cupboard", cycle: null },
+      { id: 2, text: "Call the plumber", cycle: null, recurring: false },
+      { id: 4, text: "Clear the cupboard", cycle: null, recurring: false },
     ]);
   });
 
@@ -35,9 +35,33 @@ describe("read dependency candidates", () => {
     });
 
     expect(await readDependencyCandidates(1)).toEqual([
-      { id: 2, text: "Pack", cycle: "below" },
-      { id: 3, text: "Book a van", cycle: "waits" },
-      { id: 4, text: "Tell the bank", cycle: null },
+      { id: 2, text: "Pack", cycle: "below", recurring: false },
+      { id: 3, text: "Book a van", cycle: "waits", recurring: false },
+      { id: 4, text: "Tell the bank", cycle: null, recurring: false },
+    ]);
+  });
+
+  it("says which candidates are recurring tasks (ADR 0021)", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, text: "Send the report" });
+    repository.addTask({
+      id: 2,
+      text: "Weekly review",
+      recurrence: {
+        kind: "rule",
+        rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+      },
+    });
+    repository.addTask({ id: 3, text: "Draft the report" });
+    const readDependencyCandidates = createReadDependencyCandidates({
+      repository,
+    });
+
+    const candidates = await readDependencyCandidates(1);
+
+    expect(candidates.map((c) => [c.id, c.recurring])).toEqual([
+      [2, true],
+      [3, false],
     ]);
   });
 });

@@ -1,7 +1,9 @@
 // The task panel's dependencies (#57, GLOSSARY: 依赖, 失效依赖): the tasks
 // this one waits for, each removable on its own, stale ones marked; tasks are
 // added by searching their text. Every add or remove is one write, so one
-// undo. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// undo. Recurring tasks, offered or picked, are marked with a hint that the
+// dependency stays unmet until they no longer recur (#94, ADR 0021).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 
 import type {
   DependencyCandidate,
@@ -32,6 +34,13 @@ function cycleText(candidate: DependencyCandidate): string | null {
     case "waits":
       return t("Would make a dependency cycle: it already waits for this task");
   }
+}
+
+/** Why depending on a recurring task keeps this one waiting (ADR 0021). */
+function recurringHint(): string {
+  return t(
+    "A recurring task advances to its next occurrence each time it is completed; the dependency is met only once it no longer recurs and is done at last.",
+  );
 }
 
 export function DependenciesField(props: {
@@ -72,14 +81,17 @@ export function DependenciesField(props: {
   const options: SelectOption[] = offered
     .map((candidate) => {
       const text = shownText(candidate).text;
-      const reason = cycleText(candidate);
+      const reason =
+        cycleText(candidate) ??
+        (candidate.recurring ? t("Recurring task") : null);
       return {
         text,
-        cycles: reason !== null,
+        cycles: candidate.cycle !== null,
         option: {
           value: String(candidate.id),
           label:
             reason === null ? text : t("${text} (${reason})", { text, reason }),
+          ...(candidate.recurring && { icon: "ti ti-repeat" }),
         },
       };
     })
@@ -118,6 +130,17 @@ export function DependenciesField(props: {
                     {t("(No longer a task)")}
                   </span>
                 )}
+                {dependency.recurring && (
+                  <Tooltip text={recurringHint()}>
+                    <span
+                      className="nextaction-dependency-recurring"
+                      role="img"
+                      aria-label={t("Recurring task")}
+                    >
+                      <i className="ti ti-repeat" aria-hidden="true" />
+                    </span>
+                  </Tooltip>
+                )}
                 {dependency.stale && (
                   <span className="nextaction-dependency-stale">
                     {t("Stale")}
@@ -140,6 +163,9 @@ export function DependenciesField(props: {
             );
           })}
         </ul>
+      )}
+      {shown.some((dependency) => dependency.recurring) && (
+        <div className="nextaction-dependency-hint">{recurringHint()}</div>
       )}
       <Select
         selected={[]}

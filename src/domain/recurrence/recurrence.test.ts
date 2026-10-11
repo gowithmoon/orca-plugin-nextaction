@@ -3,8 +3,10 @@ import {
   countEnd,
   countsFrom,
   isLastOccurrence,
+  isStuckDone,
   nextOccurrence,
   planAdvance,
+  planRepair,
   type RecurrenceRule,
 } from "./recurrence";
 
@@ -303,5 +305,92 @@ describe("end conditions", () => {
       changes: { status: "done" },
       recurrence: null,
     });
+  });
+});
+
+describe("a recurring task stuck in done", () => {
+  const rule = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+
+  it("is a done task with a rule", () => {
+    expect(
+      isStuckDone({ status: "done", recurrence: { kind: "rule", rule } }),
+    ).toBe(true);
+  });
+
+  it("is not a done task without a rule", () => {
+    expect(isStuckDone({ status: "done", recurrence: { kind: "none" } })).toBe(
+      false,
+    );
+  });
+
+  it("is not a done task whose rule cannot be read", () => {
+    expect(
+      isStuckDone({
+        status: "done",
+        recurrence: { kind: "unreadable", reason: "unknown version 2" },
+      }),
+    ).toBe(false);
+  });
+
+  it.each(["inbox", "todo", "doing", "waiting", "someday"] as const)(
+    "is not a %s task with a rule",
+    (status) => {
+      expect(isStuckDone({ status, recurrence: { kind: "rule", rule } })).toBe(
+        false,
+      );
+    },
+  );
+});
+
+describe("advancing a recurring task stuck in done (repairing it)", () => {
+  // Repaired on Wednesday October 14; Orca had it marked done earlier.
+  const repair = {
+    at: new Date("2026-10-14T01:00:00.000Z"),
+    day: day(2026, 10, 14),
+  };
+
+  it("after completion, counts from the day it is repaired, not from its dates", () => {
+    const plan = planRepair(
+      { period: { interval: 3, unit: "day" }, basis: "completion" },
+      { status: "done", start: null, due: day(2026, 10, 5) },
+      repair,
+    );
+    expect(plan.changes).toEqual({ status: "todo", due: day(2026, 10, 17) });
+    expect(plan.next).toEqual(day(2026, 10, 17));
+  });
+
+  it("on a fixed schedule, counts from the task's current date", () => {
+    // Due Monday October 12, every week: next is Monday October 19.
+    const plan = planRepair(
+      { period: { interval: 1, unit: "week" }, basis: "schedule" },
+      { status: "done", start: day(2026, 10, 9), due: day(2026, 10, 12) },
+      repair,
+    );
+    expect(plan.changes).toEqual({
+      status: "todo",
+      start: day(2026, 10, 16),
+      due: day(2026, 10, 19),
+    });
+  });
+
+  it("on a fixed schedule without dates, counts from the day it is repaired", () => {
+    const plan = planRepair(
+      { period: { interval: 1, unit: "week" }, basis: "schedule" },
+      { status: "done", start: null, due: null },
+      repair,
+    );
+    expect(plan.changes).toEqual({ status: "todo", start: day(2026, 10, 21) });
+  });
+
+  it("records nothing: the plan holds no completion history to write", () => {
+    const plan = planRepair(
+      { period: { interval: 1, unit: "week" }, basis: "completion" },
+      { status: "done", start: null, due: null },
+      repair,
+    );
+    expect(plan).not.toHaveProperty("history");
   });
 });

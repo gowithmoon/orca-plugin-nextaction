@@ -14,6 +14,7 @@ import type {
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import type { CompletionEntry } from "../src/domain/task/completion-history";
 import type { MyDayRead } from "../src/domain/task/my-day";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
@@ -173,6 +174,52 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     }
   };
 
+  /** Runs a write: all of it, or (when writes fail) none of it. */
+  const write = (apply: () => void) => {
+    if (failure) throw failure;
+    apply();
+    writes += 1;
+  };
+
+  /** Applies a task write to a block, as Orca applies it. */
+  const applyChanges = (
+    block: StoredBlock & { task: Task },
+    changes: TaskChanges,
+    completionHistory: readonly CompletionEntry[] | undefined,
+  ) => {
+    // Written contexts and labels become choices of the task tag, as in
+    // Orca (multi-choices-created), so they stay candidates.
+    for (const property of ["contexts", "labels"] as const) {
+      for (const value of changes[property] ?? []) {
+        if (!choices[property].includes(value)) {
+          choices[property].push(value);
+        }
+      }
+    }
+    const { dependencyDelay, ...rest } = changes;
+    block.task = { ...block.task, ...rest };
+    // A cleared dependency delay reads back as 0, as decoding does.
+    if (dependencyDelay !== undefined) {
+      block.task = { ...block.task, dependencyDelay: dependencyDelay ?? 0 };
+    }
+    // A status written is one of the plugin's: it reads back without the
+    // anomaly an empty or unknown one had, as decoding does.
+    if (changes.status !== undefined) {
+      block.task = {
+        ...block.task,
+        anomalies: block.task.anomalies.filter(
+          (anomaly) => anomaly.property !== "status",
+        ),
+      };
+    }
+    if (completionHistory) {
+      block.completionHistory = {
+        kind: "readable",
+        history: [...completionHistory],
+      };
+    }
+  };
+
   /** A recurrence rule this plugin cannot read is never overwritten. */
   const refuseUnreadableRecurrence = (
     block: StoredBlock & { task: Task },
@@ -183,13 +230,6 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
       );
     }
-  };
-
-  /** Runs a write: all of it, or (when writes fail) none of it. */
-  const write = (apply: () => void) => {
-    if (failure) throw failure;
-    apply();
-    writes += 1;
   };
 
   const isBelow = (id: number, ancestorId: number) => {
@@ -316,51 +356,36 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return tasks;
     },
 
-    async updateTask(id, changes: TaskChanges, completionHistory, recurrence) {
-      const block = taskToWrite(id);
-      if (completionHistory) refuseUnreadable(block, id);
-      if (recurrence !== undefined) refuseUnreadableRecurrence(block, id);
+    async updateTasks(taskWrites) {
+      // Every task is checked before any is written: one that fails leaves
+      // them all as they were.
+      const checked = taskWrites.map((taskWrite) => {
+        const block = taskToWrite(taskWrite.id);
+        if (taskWrite.completionHistory) refuseUnreadable(block, taskWrite.id);
+        if (taskWrite.recurrence !== undefined) {
+          refuseUnreadableRecurrence(block, taskWrite.id);
+        }
+        return { block, taskWrite };
+      });
       write(() => {
-        // Written contexts and labels become choices of the task tag, as in
-        // Orca (multi-choices-created), so they stay candidates.
-        for (const property of ["contexts", "labels"] as const) {
-          for (const value of changes[property] ?? []) {
-            if (!choices[property].includes(value)) {
-              choices[property].push(value);
-            }
+        for (const { block, taskWrite } of checked) {
+          applyChanges(block, taskWrite.changes, taskWrite.completionHistory);
+          if (taskWrite.recurrence !== undefined) {
+            block.task = {
+              ...block.task,
+              recurrence: taskWrite.recurrence
+                ? { kind: "rule", rule: taskWrite.recurrence }
+                : { kind: "none" },
+            };
           }
         }
-        const { dependencyDelay, ...rest } = changes;
-        block.task = { ...block.task, ...rest };
-        // A cleared dependency delay reads back as 0, as decoding does.
-        if (dependencyDelay !== undefined) {
-          block.task = { ...block.task, dependencyDelay: dependencyDelay ?? 0 };
-        }
-        // A status written is one of the plugin's: it reads back without the
-        // anomaly an empty or unknown one had, as decoding does.
-        if (changes.status !== undefined) {
-          block.task = {
-            ...block.task,
-            anomalies: block.task.anomalies.filter(
-              (anomaly) => anomaly.property !== "status",
-            ),
-          };
-        }
-        if (completionHistory) {
-          block.completionHistory = {
-            kind: "readable",
-            history: [...completionHistory],
-          };
-        }
-        if (recurrence !== undefined) {
-          block.task = {
-            ...block.task,
-            recurrence: recurrence
-              ? { kind: "rule", rule: recurrence }
-              : { kind: "none" },
-          };
-        }
       });
+    },
+
+    async updateTask(id, changes: TaskChanges, completionHistory) {
+      const block = taskToWrite(id);
+      if (completionHistory) refuseUnreadable(block, id);
+      write(() => applyChanges(block, changes, completionHistory));
     },
 
     async readTaskGraph() {
@@ -431,7 +456,12 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async writeRecurrence(id, rule) {
       const block = taskToWrite(id);
-      refuseUnreadableRecurrence(block, id);
+      // A rule this plugin cannot read is never overwritten.
+      if (block.task.recurrence.kind === "unreadable") {
+        throw new Error(
+          `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
+        );
+      }
       write(() => {
         block.task = {
           ...block.task,
