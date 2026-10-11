@@ -105,6 +105,64 @@ describe("set recurrence", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("resuming the rule of a done task uses up one of the remaining occurrences, in the same write (#89)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const counted = {
+      ...everyTwoWeeks,
+      end: { kind: "count", total: 5, remaining: 3 },
+    } as const;
+    repository.addTask({
+      id: 14,
+      status: "done",
+      due: { year: 2026, month: 10, day: 2 },
+      recurrence: { kind: "rule", rule: { ...counted, paused: true } },
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    expect(await setRecurrence(14, counted)).toMatchObject({
+      kind: "advanced",
+      next: { year: 2026, month: 10, day: 16 },
+    });
+
+    expect(await repository.getTask(14)).toMatchObject({
+      status: "todo",
+      recurrence: {
+        kind: "rule",
+        rule: { ...counted, end: { kind: "count", total: 5, remaining: 2 } },
+      },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("resuming the rule of a done task on its last occurrence ends the recurrence: done, the rule removed (#89)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 2 };
+    const lastOne = {
+      ...everyTwoWeeks,
+      end: { kind: "count", total: 5, remaining: 1 },
+    } as const;
+    repository.addTask({
+      id: 15,
+      status: "done",
+      due,
+      recurrence: { kind: "rule", rule: { ...lastOne, paused: true } },
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    expect(await setRecurrence(15, lastOne)).toEqual({ kind: "ended" });
+
+    expect(await repository.getTask(15)).toMatchObject({
+      status: "done",
+      due,
+      recurrence: { kind: "none" },
+    });
+    expect(await repository.readCompletionHistory(15)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
   it("resuming the rule of a task not done writes only the rule", async () => {
     const repository = createInMemoryTaskRepository();
     const due = { year: 2026, month: 10, day: 2 };

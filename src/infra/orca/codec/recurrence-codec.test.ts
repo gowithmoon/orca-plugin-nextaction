@@ -35,6 +35,38 @@ describe("readRecurrence and planRecurrenceWrite", () => {
     });
   });
 
+  it.each([
+    [
+      "an end day",
+      { kind: "until", day: { year: 2026, month: 12, day: 31 } },
+      { until: "2026-12-31" },
+    ],
+    [
+      "a number of occurrences",
+      { kind: "count", total: 5, remaining: 3 },
+      { count: { total: 5, remaining: 3 } },
+    ],
+  ] as const)(
+    "reads back %s it writes as the end condition",
+    (_, end, stored) => {
+      const rule = { ...everyTwoWeeks, end };
+      const plan = planRecurrenceWrite(taskBlockWith(), rule);
+      if (plan.kind !== "write") throw new Error("refused");
+      expect(plan.property.value).toEqual({
+        v: 1,
+        rule: {
+          period: { interval: 2, unit: "week" },
+          basis: "schedule",
+          end: stored,
+        },
+      });
+      expect(readRecurrence(taskBlockWith(plan.property))).toEqual({
+        kind: "rule",
+        rule,
+      });
+    },
+  );
+
   it("reads a task without nextaction.recurrence as no rule", () => {
     expect(readRecurrence(taskBlockWith())).toEqual({ kind: "none" });
   });
@@ -77,6 +109,31 @@ describe("readRecurrence and planRecurrenceWrite", () => {
       "an unknown basis",
       { rule: { period: { interval: 1, unit: "week" }, basis: "random" } },
     ],
+    ...(
+      [
+        ["an end day that is not a day", { until: "2026-02-30" }],
+        ["an unknown end condition", { after: 3 }],
+        ["0 occurrences remaining", { count: { total: 5, remaining: 0 } }],
+        [
+          "negative occurrences remaining",
+          { count: { total: 5, remaining: -1 } },
+        ],
+        [
+          "occurrences remaining that are not whole",
+          { count: { total: 5, remaining: 2.5 } },
+        ],
+        ["a total of 0", { count: { total: 0, remaining: 0 } }],
+        [
+          "more occurrences remaining than the total",
+          { count: { total: 3, remaining: 4 } },
+        ],
+      ] as const
+    ).map(([name, end]): [string, Record<string, unknown>] => [
+      name,
+      {
+        rule: { period: { interval: 1, unit: "week" }, basis: "schedule", end },
+      },
+    ]),
   ])(
     "keeps a value with %s as found, unreadable, and refuses to overwrite it",
     (_, data) => {

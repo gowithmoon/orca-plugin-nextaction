@@ -13,14 +13,17 @@
 // February 29 included). Days and weekdays have none; a placement out of
 // range, or not one the unit can have, reads as unreadable. `rule.paused:
 // true` while the rule is paused (GLOSSARY: 暂停重复, #92); absent reads as
-// not paused, and it is written only while paused. End conditions
-// (`rule.end`) go inside `rule` in a later ticket of step 8 (#89); fields
-// this version does not know are not read yet. The version number is added
-// and checked by the plugin block property codec.
+// not paused, and it is written only while paused. The optional end
+// condition (`rule.end`, #89) is `{ until: "YYYY-MM-DD" }` (the last logical
+// day) or `{ count: { total, remaining } }` (whole numbers from 1 up,
+// `remaining` no more than `total`; setting "N times" writes N for both).
+// Fields this version does not know are not read yet. The version number is
+// added and checked by the plugin block property codec.
 import {
   type DayOfWeek,
   daysOfWeek,
   type RecurrenceBasis,
+  type RecurrenceEnd,
   type RecurrencePeriod,
   type RecurrencePlacement,
   type RecurrenceRead,
@@ -38,6 +41,7 @@ import {
   pluginPropertyPrefix,
   readPluginProperty,
 } from "./plugin-block-property-codec";
+import { formatDay, parseDay } from "./stored-values";
 
 /** The plugin block property key (without the `nextaction.` prefix). */
 const key = "recurrence";
@@ -159,6 +163,31 @@ function storedPeriod(period: RecurrencePeriod): Record<string, unknown> {
   };
 }
 
+const isWholeFromOne = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1;
+
+/** The end condition stored (`rule.end`), or why it cannot be read. */
+function parseEnd(value: unknown): RecurrenceEnd | string {
+  if (!isObject(value)) return "the end condition is not an object";
+  if ("until" in value) {
+    const day = parseDay(value.until);
+    return day ? { kind: "until", day } : "the end day is not a day";
+  }
+  if ("count" in value) {
+    const count = value.count;
+    if (!isObject(count)) return "the end count is not an object";
+    const { total, remaining } = count;
+    if (!isWholeFromOne(total) || !isWholeFromOne(remaining)) {
+      return "the end count is not a whole number from 1 up";
+    }
+    if (remaining > total) {
+      return "more occurrences remain than the end count";
+    }
+    return { kind: "count", total, remaining };
+  }
+  return "the end condition is not one this plugin knows";
+}
+
 /** The rule stored, or why it cannot be read. */
 function parseRule(value: unknown): RecurrenceRule | string {
   if (!isObject(value)) return "the rule is not an object";
@@ -173,9 +202,25 @@ function parseRule(value: unknown): RecurrenceRule | string {
   if (value.paused !== undefined && typeof value.paused !== "boolean") {
     return "the paused flag is neither true nor false";
   }
-  return value.paused === true
-    ? { period, basis, paused: true }
-    : { period, basis };
+  let end: RecurrenceEnd | undefined;
+  if (value.end !== undefined) {
+    const parsed = parseEnd(value.end);
+    if (typeof parsed === "string") return parsed;
+    end = parsed;
+  }
+  return {
+    period,
+    basis,
+    ...(end && { end }),
+    ...(value.paused === true && { paused: true }),
+  };
+}
+
+/** `end` as stored in `rule.end`. */
+function encodeEnd(end: RecurrenceEnd) {
+  return end.kind === "until"
+    ? { until: formatDay(end.day) }
+    : { count: { total: end.total, remaining: end.remaining } };
 }
 
 /**
@@ -228,6 +273,7 @@ export function planRecurrenceWrite(
     rule: rule && {
       period: storedPeriod(rule.period),
       basis: rule.basis,
+      ...(rule.end && { end: encodeEnd(rule.end) }),
       // Written only while paused (#92): a rule without it is not paused.
       ...(rule.paused && { paused: true }),
     },

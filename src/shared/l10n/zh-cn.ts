@@ -300,6 +300,18 @@ const zhCN: Record<string, string> = {
   "The rule is kept but does not apply. Turning this off moves the done task to its next occurrence.":
     "规则保留但不起作用。关掉暂停后，已完成的任务会立即进入下一次。",
   Save: "保存",
+  "Recurrence ended": "重复已结束",
+  "Until ${date}": "到 ${date}",
+  "${total} times, ${remaining} left": "共 ${total} 次，剩 ${remaining} 次",
+  "${rule} · ${end}": "${rule} · ${end}",
+  Ends: "结束条件",
+  Never: "无",
+  "On a day": "到某日为止",
+  "After a number of times": "共 N 次",
+  times: "次",
+  "${remaining} left": "剩 ${remaining} 次",
+  "This is the last occurrence: once it is done, the task stays done and the rule is removed.":
+    "这是最后一次：完成后任务停在已完成，规则随之移除。",
   "Every weekday": "每个工作日",
   "Every ${n} weekdays": "每 ${n} 个工作日",
   Weekdays: "工作日",

@@ -27,6 +27,60 @@ const deps = (repository: InMemoryTaskRepository) => ({
   dayBoundary: createFixedDayBoundary(),
 });
 
+describe("advance a recurring task stuck in done: end conditions (#89)", () => {
+  it("uses up one of the remaining occurrences, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 11,
+      status: "done",
+      due: { year: 2026, month: 10, day: 12 },
+      recurrence: {
+        kind: "rule",
+        rule: { ...weekly, end: { kind: "count", total: 5, remaining: 3 } },
+      },
+    });
+    const advance = createAdvanceStuckDone(deps(repository));
+
+    expect(await advance(11)).toMatchObject({
+      next: { year: 2026, month: 10, day: 19 },
+    });
+
+    expect((await repository.getTask(11))?.recurrence).toEqual({
+      kind: "rule",
+      rule: { ...weekly, end: { kind: "count", total: 5, remaining: 2 } },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("on the one remaining occurrence, ends the recurrence: the task stays done and the rule is removed", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 12 };
+    repository.addTask({
+      id: 12,
+      status: "done",
+      due,
+      recurrence: {
+        kind: "rule",
+        rule: { ...weekly, end: { kind: "count", total: 5, remaining: 1 } },
+      },
+    });
+    const advance = createAdvanceStuckDone(deps(repository));
+
+    expect(await advance(12)).toEqual({ next: null });
+
+    expect(await repository.getTask(12)).toMatchObject({
+      status: "done",
+      due,
+      recurrence: { kind: "none" },
+    });
+    expect(await repository.readCompletionHistory(12)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+});
+
 describe("advance a recurring task stuck in done", () => {
   it("advances it in one write, recording no completion", async () => {
     const repository = createInMemoryTaskRepository();

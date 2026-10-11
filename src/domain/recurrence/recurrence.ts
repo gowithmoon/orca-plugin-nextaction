@@ -111,12 +111,30 @@ export type RecurrenceBasis = (typeof recurrenceBases)[number];
 export interface RecurrenceRule {
   readonly period: RecurrencePeriod;
   readonly basis: RecurrenceBasis;
+  /** Without one, the task recurs until the rule is removed. */
+  readonly end?: RecurrenceEnd;
   /**
    * Paused (GLOSSARY: 暂停重复, #92): the rule is kept but does not apply,
    * so the task is a plain task. Absent reads as not paused.
    */
   readonly paused?: boolean;
 }
+
+/**
+ * When a recurring task stops recurring (GLOSSARY: 重复规则, 结束条件): after
+ * a logical day (`until`: an occurrence on that day still happens), or after
+ * a number of occurrences (`count`: `total` set by the user, `remaining`
+ * counting this occurrence, so 1 means this is the last; completing and
+ * skipping both use one up). Both are whole numbers from 1 up, `remaining`
+ * no more than `total`.
+ */
+export type RecurrenceEnd =
+  | { readonly kind: "until"; readonly day: CalendarDate }
+  | {
+      readonly kind: "count";
+      readonly total: number;
+      readonly remaining: number;
+    };
 
 /**
  * What a task's recurrence rule reads as. `none`: not a recurring task (no
@@ -180,14 +198,79 @@ export interface AdvancingTask extends TaskDates {
   readonly status: TaskStatus;
 }
 
-/** What advancing a recurring task writes, in one undo. */
+/**
+ * What advancing a recurring task writes, in one undo. `last`: this was the
+ * last occurrence (the next one would fall outside the end condition), so
+ * the task stays done and the rule is removed (GLOSSARY: 重复规则).
+ */
 export interface AdvancePlan {
-  /** The task's properties: back to todo, its dates moved. */
+  readonly last: boolean;
+  /**
+   * The task's properties: back to todo with its dates moved, or done on
+   * the last occurrence.
+   */
   readonly changes: TaskChanges;
   /** The completion history with the completion appended. */
   readonly history: CompletionHistory;
-  /** The day the task now falls on (GLOSSARY: 下一次发生). */
-  readonly next: CalendarDate;
+  /**
+   * The day the task now falls on (GLOSSARY: 下一次发生); `null` on the last
+   * occurrence.
+   */
+  readonly next: CalendarDate | null;
+  /**
+   * The rule to write with it, present only when it changes: one of the
+   * remaining occurrences used up, or `null` (removed) on the last.
+   */
+  readonly recurrence?: RecurrenceRule | null;
+}
+
+/**
+ * The end condition "`total` times" as the rule popup saves it: all `total`
+ * remaining, except that saving the same total the rule already has keeps
+ * the occurrences used up so far (editing another field of the rule does
+ * not start the count over).
+ */
+export function countEnd(
+  total: number,
+  current: RecurrenceEnd | undefined,
+): RecurrenceEnd {
+  if (current?.kind === "count" && current.total === total) return current;
+  return { kind: "count", total, remaining: total };
+}
+
+/**
+ * Whether the end condition stops the recurrence before `next` (GLOSSARY:
+ * 重复规则): `next` is after the end day, or this occurrence was the one
+ * remaining.
+ */
+function endsBefore(end: RecurrenceEnd | undefined, next: CalendarDate) {
+  if (end === undefined) return false;
+  return end.kind === "until"
+    ? compareDays(next, end.day) > 0
+    : end.remaining <= 1;
+}
+
+/**
+ * Whether this occurrence is the last (GLOSSARY: 重复规则): completing or
+ * skipping it on `eventDay` (its logical day) would bring the next occurrence
+ * outside the end condition. The task menu offers no skip on the last one
+ * (#91).
+ */
+export function isLastOccurrence(
+  rule: RecurrenceRule,
+  dates: TaskDates,
+  eventDay: CalendarDate,
+): boolean {
+  return endsBefore(
+    rule.end,
+    nextOccurrence(rule.period, countsFrom(rule, dates, eventDay)),
+  );
+}
+
+/** The rule once this occurrence is over: one of the remaining used up. */
+function afterOccurrence(rule: RecurrenceRule): RecurrenceRule | undefined {
+  if (rule.end?.kind !== "count") return undefined;
+  return { ...rule, end: { ...rule.end, remaining: rule.end.remaining - 1 } };
 }
 
 /**
@@ -205,6 +288,16 @@ export function planAdvance(
     rule.period,
     countsFrom(rule, task, completion.day),
   );
+  if (endsBefore(rule.end, next)) {
+    return {
+      last: true,
+      changes: { status: "done" },
+      history: [...history, completion],
+      next: null,
+      recurrence: null,
+    };
+  }
+  const recurrence = afterOccurrence(rule);
   const changes: TaskChanges =
     task.due !== null
       ? {
@@ -219,7 +312,13 @@ export function planAdvance(
         // written as the start, so the task shows on that day without
         // becoming overdue.
         { status: "todo", start: next };
-  return { changes, history: [...history, completion], next };
+  return {
+    last: false,
+    changes,
+    history: [...history, completion],
+    next,
+    ...(recurrence && { recurrence }),
+  };
 }
 
 /** What repairing a task stuck in done writes, in one undo. */
@@ -237,9 +336,10 @@ export function planRepair(
   task: AdvancingTask,
   repair: CompletionEntry,
 ): RepairPlan {
-  // The same advance, its completion left out.
-  const { changes, next } = planAdvance(rule, task, [], repair);
-  return { changes, next };
+  // The same advance, its completion left out; it uses up an occurrence as
+  // any advance does (#89).
+  const { history: _, ...plan } = planAdvance(rule, task, [], repair);
+  return plan;
 }
 
 /** What resuming a done recurring task writes, in one undo. */
@@ -263,9 +363,10 @@ export function planResume(
   // from the task's dates, or without dates from the day it is resumed.
   const from =
     rule.basis === "completion" ? (history.at(-1) ?? resume) : resume;
-  // The same advance, its completion left out.
-  const { changes, next } = planAdvance(rule, task, [], from);
-  return { changes, next };
+  // The same advance, its completion left out; it uses up an occurrence, or
+  // ends the recurrence on the last, as any advance does (#89).
+  const { history: _, ...plan } = planAdvance(rule, task, [], from);
+  return plan;
 }
 
 /**

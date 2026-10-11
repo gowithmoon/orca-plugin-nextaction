@@ -57,4 +57,32 @@ describe("preview next occurrence", () => {
       ),
     ).toEqual({ year: 2026, month: 10, day: 9 });
   });
+
+  it("is none when completing today would be the last occurrence (#89)", () => {
+    const preview = createPreviewNextOccurrence(deps());
+    const weekly = { interval: 1, unit: "week" } as const;
+    const dueMonday = { start: null, due: { year: 2026, month: 10, day: 12 } };
+
+    expect(
+      preview(
+        {
+          period: weekly,
+          basis: "schedule",
+          end: { kind: "count", total: 3, remaining: 1 },
+        },
+        dueMonday,
+      ),
+    ).toBeNull();
+    // The next occurrence, October 19, is after the end day.
+    expect(
+      preview(
+        {
+          period: weekly,
+          basis: "schedule",
+          end: { kind: "until", day: { year: 2026, month: 10, day: 18 } },
+        },
+        dueMonday,
+      ),
+    ).toBeNull();
+  });
 });

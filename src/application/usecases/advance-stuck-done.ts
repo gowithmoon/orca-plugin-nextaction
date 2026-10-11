@@ -8,12 +8,18 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
-/** What advancing did: the task's dates are on `next`. */
-export interface AdvanceStuckDoneResult {
-  readonly next: CalendarDate;
-  /** The logical day of the repair, for showing `next` beside it. */
-  readonly repairedOn: CalendarDate;
-}
+/**
+ * What advancing did: the task's dates are on `next`; or, `next` being
+ * `null`, this was its last occurrence (#89): the task stays done and its
+ * rule is removed.
+ */
+export type AdvanceStuckDoneResult =
+  | {
+      readonly next: CalendarDate;
+      /** The logical day of the repair, for showing `next` beside it. */
+      readonly repairedOn: CalendarDate;
+    }
+  | { readonly next: null };
 
 /**
  * The task is not stuck in done (not done, no rule, a rule this plugin
@@ -47,7 +53,15 @@ export function createAdvanceStuckDone(deps: {
       day: logicalDay(now, deps.dayBoundary.current()),
     };
     const plan = planRepair(task.recurrence.rule, task, repair);
-    await deps.repository.updateTask(id, plan.changes);
+    // The rule is written with it when an occurrence is used up (#89).
+    await deps.repository.updateTasks([
+      {
+        id,
+        changes: plan.changes,
+        ...(plan.recurrence !== undefined && { recurrence: plan.recurrence }),
+      },
+    ]);
+    if (plan.next === null) return { next: null };
     return { next: plan.next, repairedOn: repair.day };
   };
 }

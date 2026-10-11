@@ -3,6 +3,7 @@
 // today. Nothing is read or written.
 import {
   countsFrom,
+  isLastOccurrence,
   nextOccurrence,
   type RecurrenceRule,
   type TaskDates,
@@ -14,12 +15,13 @@ import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 
 /**
  * The day `rule` would move a task with `dates` to, were it completed today
- * (the current logical day).
+ * (the current logical day); `null` when that would be its last occurrence
+ * (#89): the task would stay done, the rule removed.
  */
 export type PreviewNextOccurrence = (
   rule: RecurrenceRule,
   dates: TaskDates,
-) => CalendarDate;
+) => CalendarDate | null;
 
 export function createPreviewNextOccurrence(deps: {
   clock: Clock;
@@ -27,6 +29,7 @@ export function createPreviewNextOccurrence(deps: {
 }): PreviewNextOccurrence {
   return (rule, dates) => {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
+    if (isLastOccurrence(rule, dates, today)) return null;
     return nextOccurrence(rule.period, countsFrom(rule, dates, today));
   };
 }

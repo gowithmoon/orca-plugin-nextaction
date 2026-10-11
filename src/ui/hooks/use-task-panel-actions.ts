@@ -106,6 +106,11 @@ export function useTaskPanelActions(
         run(
           async () => {
             const result = await writes.advanceStuckDone(id);
+            // Its last occurrence: the recurrence ended instead (#89).
+            if (result.next === null) {
+              notify("success", t("Recurrence ended"));
+              return;
+            }
             notify(
               "success",
               t("Next: ${date}", {

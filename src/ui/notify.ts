@@ -107,7 +107,8 @@ export function notifyActionFailure(
 /**
  * Changes the status and reports a failure; success says nothing (the icon
  * changes), except for a recurring task that advanced: its icon shows todo
- * again, so the next occurrence is told (#95). Never throws. Shared by the
+ * again, so the next occurrence is told (#95); on its last occurrence, that
+ * the recurrence ended (#89). Never throws. Shared by the
  * task menu, the task card and the task panel.
  */
 export async function changeStatusReporting(
@@ -125,6 +126,9 @@ export async function changeStatusReporting(
           date: formatDate(result.next, result.completedOn),
         }),
       );
+    } else if (result.kind === "ended") {
+      // The last occurrence (#89): the task stays done, its rule removed.
+      notify("success", t("Recurrence ended"));
     }
   } catch (error) {
     if (error instanceof RecurrenceUnreadableError) {

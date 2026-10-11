@@ -29,7 +29,12 @@ export type SetRecurrenceResult =
    * `resumedOn` is the logical day of the resume, for showing `next` beside
    * it.
    */
-  | { kind: "advanced"; next: CalendarDate; resumedOn: CalendarDate };
+  | { kind: "advanced"; next: CalendarDate; resumedOn: CalendarDate }
+  /**
+   * The rule of a done task was resumed on its last occurrence (#89): the
+   * task stays done and the rule is removed.
+   */
+  | { kind: "ended" };
 
 /**
  * Writes `rule` as task `id`'s recurrence rule in one undo; `null` removes
@@ -73,6 +78,14 @@ export function createSetRecurrence(deps: {
       day: logicalDay(now, deps.dayBoundary.current()),
     };
     const plan = planResume(rule, task, read.history, resume);
+    if (plan.next === null) {
+      // Its last occurrence (#89): it stays done, the rule removed, and its
+      // descendants are left as they are.
+      await deps.repository.updateTasks([
+        { id, changes: plan.changes, recurrence: null },
+      ]);
+      return { kind: "ended" };
+    }
     // Its done descendant tasks go back to todo, as on any advance (#90).
     const graph = await deps.repository.readTaskGraph();
     const descendants = planDescendantResets(task, plan.next, graph.tasks);
@@ -84,7 +97,8 @@ export function createSetRecurrence(deps: {
     // The rule, the task's status and dates, and its descendant tasks in one
     // write, so one undo.
     await deps.repository.updateTasks([
-      { id, changes: plan.changes, recurrence: rule },
+      // With one of the remaining occurrences used up, when it counts them.
+      { id, changes: plan.changes, recurrence: plan.recurrence ?? rule },
       ...descendants.resets,
     ]);
     return { kind: "advanced", next: plan.next, resumedOn: resume.day };

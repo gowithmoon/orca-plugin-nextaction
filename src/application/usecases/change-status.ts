@@ -31,7 +31,12 @@ export type ChangeStatusResult =
    * completion recorded, back to todo, its dates on `next`. `completedOn` is
    * the logical day of the completion, for showing `next` beside it.
    */
-  | { kind: "advanced"; next: CalendarDate; completedOn: CalendarDate };
+  | { kind: "advanced"; next: CalendarDate; completedOn: CalendarDate }
+  /**
+   * A recurring task's last occurrence was completed (GLOSSARY: 重复规则): a
+   * completion recorded, the task stays done and its rule is removed.
+   */
+  | { kind: "ended" };
 
 /**
  * The task's completion history holds something this plugin cannot read
@@ -99,10 +104,24 @@ export function createChangeStatus(deps: {
     // completed like a plain task, its completion still recorded.
     const rule = activeRule(task.recurrence);
     if (rule) {
-      // A recurring task advances (GLOSSARY: 进入下一次): status, dates and
-      // history, and its done descendant tasks back to todo (#90), in one
-      // write, so one undo.
+      // A recurring task advances (GLOSSARY: 进入下一次): status, dates,
+      // history, the rule (one occurrence used up, #89) and its done
+      // descendant tasks back to todo (#90), in one write, so one undo.
       const plan = planAdvance(rule, task, read.history, completion);
+      if (plan.next === null) {
+        // The last occurrence (#89): the task stays done and its rule is
+        // removed; it does not advance, so its descendants are left as they
+        // are.
+        await deps.repository.updateTasks([
+          {
+            id,
+            changes: plan.changes,
+            completionHistory: plan.history,
+            recurrence: null,
+          },
+        ]);
+        return { kind: "ended" };
+      }
       const graph = await deps.repository.readTaskGraph();
       const descendants = planDescendantResets(task, plan.next, graph.tasks);
       if (descendants.kind === "unreadable") {
@@ -111,7 +130,14 @@ export function createChangeStatus(deps: {
         );
       }
       await deps.repository.updateTasks([
-        { id, changes: plan.changes, completionHistory: plan.history },
+        {
+          id,
+          changes: plan.changes,
+          completionHistory: plan.history,
+          ...(plan.recurrence !== undefined && {
+            recurrence: plan.recurrence,
+          }),
+        },
         ...descendants.resets,
       ]);
       return {
