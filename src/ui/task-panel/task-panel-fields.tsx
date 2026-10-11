@@ -309,7 +309,7 @@ export function NoteField(props: {
 }
 
 /**
- * Repeat (GLOSSARY: 重复规则, #95): the rule's summary ("每 2 周 · 按日程", or
+ * Repeat (GLOSSARY: 重复规则, #95): the rule's summary ("每 2 周 · 按固定日程", or
  * "不重复"), as a button that opens the recurrence rule popup.
  */
 export function RecurrenceField(props: {
@@ -339,7 +339,7 @@ export function RecurrenceField(props: {
 }
 
 /**
- * A recurring task stuck in done (GLOSSARY: 进入下一次, #93): it was marked
+ * A recurring task not advanced (GLOSSARY: 未自动重复, #93): it was marked
  * done outside the plugin and did not advance. "Advance" moves it to the
  * next occurrence in one undo, recording no completion.
  */

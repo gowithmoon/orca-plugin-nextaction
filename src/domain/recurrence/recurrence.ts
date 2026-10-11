@@ -1,4 +1,4 @@
-// Recurring tasks (GLOSSARY: 重复任务, 重复规则, 重复基准, 下一次发生, 进入下一次;
+// Recurring tasks (GLOSSARY: 重复任务, 重复规则, 重复方式, 下次日期, 安排下一次;
 // ADR 0006). Pure: the event's time and logical day are passed in; whole-day
 // arithmetic comes from `domain/time`.
 import {
@@ -98,9 +98,9 @@ export type RecurrencePeriod =
     };
 
 /**
- * Where the next occurrence counts from (GLOSSARY: 重复基准): the task's
- * current dates ("schedule", 按日程) or the logical day it was completed
- * ("completion", 按完成).
+ * Where the next occurrence counts from (GLOSSARY: 重复方式): the task's
+ * current dates ("schedule", 按固定日程) or the logical day it was completed
+ * ("completion", 按完成日期).
  */
 export const recurrenceBases = ["schedule", "completion"] as const;
 export type RecurrenceBasis = (typeof recurrenceBases)[number];
@@ -181,7 +181,7 @@ export interface TaskDates {
 }
 
 /**
- * The day the next occurrence counts from (GLOSSARY: 重复基准). On a fixed
+ * The day the next occurrence counts from (GLOSSARY: 重复方式). On a fixed
  * schedule: the due date, else the start date, else `completedOn`; after
  * completion: `completedOn`, the logical day the task was completed.
  */
@@ -214,7 +214,7 @@ export interface AdvancePlan {
   /** The completion history with the completion appended. */
   readonly history: CompletionHistory;
   /**
-   * The day the task now falls on (GLOSSARY: 下一次发生); `null` on the last
+   * The day the task now falls on (GLOSSARY: 下次日期); `null` on the last
    * occurrence.
    */
   readonly next: CalendarDate | null;
@@ -275,7 +275,7 @@ function afterOccurrence(rule: RecurrenceRule): RecurrenceRule | undefined {
 }
 
 /**
- * Advancing a recurring task once it is completed (GLOSSARY: 进入下一次):
+ * Advancing a recurring task once it is completed (GLOSSARY: 安排下一次):
  * the task itself only; its descendant tasks are planned by
  * `planDescendantResets` (descendant-reset.ts).
  */
@@ -342,7 +342,7 @@ export function planSkip(
 export type RepairPlan = Omit<AdvancePlan, "history">;
 
 /**
- * Advancing a recurring task stuck in done (GLOSSARY: 进入下一次), on the
+ * Advancing a recurring task stuck in done (GLOSSARY: 安排下一次), on the
  * user's request at `repair`. No completion is recorded: when it was
  * completed in Orca is unknown, so after completion it counts from the
  * logical day of the repair; on a fixed schedule from its current dates, as
@@ -364,7 +364,7 @@ export type ResumePlan = Omit<AdvancePlan, "history">;
 
 /**
  * Advancing a done task as its paused rule is resumed (GLOSSARY: 暂停重复,
- * 进入下一次), at `resume`. No completion is recorded: the task was completed
+ * 安排下一次), at `resume`. No completion is recorded: the task was completed
  * while paused, and that completion is in the history already. After
  * completion it counts from the logical day of the last completion
  * recorded (a skip is no completion, #91), or of the resume without one; on a fixed schedule from the
@@ -388,7 +388,7 @@ export function planResume(
 }
 
 /**
- * The next occurrence (GLOSSARY: 下一次发生): the first day the period lays
+ * The next occurrence (GLOSSARY: 下次日期): the first day the period lays
  * out strictly after `from`.
  */
 export function nextOccurrence(
@@ -486,7 +486,7 @@ function dayInMonth(
 }
 
 /**
- * A recurring task stuck in done (GLOSSARY: 进入下一次): it holds a rule and
+ * A recurring task not advanced (GLOSSARY: 未自动重复): it holds a rule and
  * is done, so it was completed outside the plugin (in Orca's own interface)
  * and did not advance. A rule that cannot be read does not count: whether it
  * would have advanced is unknown.

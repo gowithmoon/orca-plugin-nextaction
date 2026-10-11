@@ -1,5 +1,5 @@
 // The recurrence rule popup (GLOSSARY: 重复规则, #95): every N days / weeks /
-// months / years, and the recurrence basis (按日程 / 按完成). Saving writes the
+// months / years, and the recurrence basis (按固定日程 / 按完成日期). Saving writes the
 // rule in one undo; the task's dates are not touched. A task with a rule can
 // have it removed or paused here; resuming a done task advances it (#92).
 // Each unit offers its placement, and the next occurrence is previewed

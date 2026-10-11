@@ -27,7 +27,7 @@ export type ChangeStatusResult =
    */
   | { kind: "unchanged" }
   /**
-   * A recurring task was completed and advanced (GLOSSARY: 进入下一次): a
+   * A recurring task was completed and advanced (GLOSSARY: 安排下一次): a
    * completion recorded, back to todo, its dates on `next`. `completedOn` is
    * the logical day of the completion, for showing `next` beside it.
    */
@@ -104,7 +104,7 @@ export function createChangeStatus(deps: {
     // completed like a plain task, its completion still recorded.
     const rule = activeRule(task.recurrence);
     if (rule) {
-      // A recurring task advances (GLOSSARY: 进入下一次): status, dates,
+      // A recurring task advances (GLOSSARY: 安排下一次): status, dates,
       // history, the rule (one occurrence used up, #89) and its done
       // descendant tasks back to todo (#90), in one write, so one undo.
       const plan = planAdvance(rule, task, read.history, completion);

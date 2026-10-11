@@ -1,5 +1,5 @@
 // Resetting the descendant tasks of a recurring task as it advances
-// (GLOSSARY: 进入下一次). Pure.
+// (GLOSSARY: 安排下一次). Pure.
 import type { CalendarDate, Task, TaskId } from "../task/task";
 import type { TaskChanges } from "../task/task-changes";
 import { addDays, daysBetween } from "../time/calendar-days";
@@ -32,7 +32,7 @@ export type DescendantResetPlan =
 
 /**
  * The descendant tasks to reset as task `advanced` advances to `next`
- * (GLOSSARY: 进入下一次), at any depth, in the order of `graph`: each done
+ * (GLOSSARY: 安排下一次), at any depth, in the order of `graph`: each done
  * one without a rule of its own (a paused one is still its own) goes back
  * to todo, its dates moved by as many days as the task moved. Those not
  * done, and those with a rule, are left as they are. No completion is
