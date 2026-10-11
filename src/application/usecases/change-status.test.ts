@@ -324,6 +324,39 @@ describe("change status: recurring tasks", () => {
     expect(await repository.getTask(63)).toMatchObject({ status: "todo", due });
     expect(repository.writeCount()).toBe(0);
   });
+
+  it("completing a recurring task with a placement puts its date on the placement (#88)", async () => {
+    const repository = createInMemoryTaskRepository();
+    // Every month on the last Friday, after completion: done on Thursday
+    // October 8, 2026, so next is Friday October 30.
+    repository.addTask({
+      id: 64,
+      status: "todo",
+      due: { year: 2026, month: 9, day: 25 },
+      recurrence: {
+        kind: "rule",
+        rule: {
+          period: {
+            interval: 1,
+            unit: "month",
+            placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+          },
+          basis: "completion",
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(64, "done")).toMatchObject({
+      kind: "advanced",
+      next: { year: 2026, month: 10, day: 30 },
+    });
+    expect((await repository.getTask(64))?.due).toEqual({
+      year: 2026,
+      month: 10,
+      day: 30,
+    });
+  });
 });
 
 describe("change status: the descendant tasks of a recurring task", () => {

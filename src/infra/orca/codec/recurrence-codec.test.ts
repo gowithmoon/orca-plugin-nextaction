@@ -106,3 +106,111 @@ describe("readRecurrence and planRecurrenceWrite", () => {
     });
   });
 });
+
+describe("placements and weekdays (#88)", () => {
+  it.each([
+    [
+      "some days of the week",
+      {
+        interval: 2,
+        unit: "week",
+        placement: { kind: "daysOfWeek", days: [1, 3, 5] },
+      },
+    ],
+    [
+      "a day of the month",
+      {
+        interval: 1,
+        unit: "month",
+        placement: { kind: "dayOfMonth", day: 31 },
+      },
+    ],
+    [
+      "the last day of the month",
+      { interval: 1, unit: "month", placement: { kind: "lastDayOfMonth" } },
+    ],
+    [
+      "the second Tuesday of the month",
+      {
+        interval: 1,
+        unit: "month",
+        placement: { kind: "weekdayOfMonth", ordinal: 2, weekday: 2 },
+      },
+    ],
+    [
+      "the last Friday of the month",
+      {
+        interval: 1,
+        unit: "month",
+        placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+      },
+    ],
+    [
+      "a month and day of the year",
+      {
+        interval: 1,
+        unit: "year",
+        placement: { kind: "dayOfYear", month: 3, day: 15 },
+      },
+    ],
+    ["every N weekdays", { interval: 3, unit: "weekday" }],
+  ] as const)("reads back a period on %s as written", (_, period) => {
+    const rule = { period, basis: "completion" } as const;
+    const plan = planRecurrenceWrite(taskBlockWith(), rule);
+    if (plan.kind !== "write") throw new Error("refused");
+    expect(readRecurrence(taskBlockWith(plan.property))).toEqual({
+      kind: "rule",
+      rule,
+    });
+  });
+
+  it("writes a period without a placement without the field", () => {
+    const plan = planRecurrenceWrite(taskBlockWith(), everyTwoWeeks);
+    if (plan.kind !== "write") throw new Error("refused");
+    expect(plan.property.value).toEqual({
+      v: 1,
+      rule: { period: { interval: 2, unit: "week" }, basis: "schedule" },
+    });
+  });
+
+  it.each([
+    ["a week with no days", "week", { kind: "daysOfWeek", days: [] }],
+    ["a week with day 8", "week", { kind: "daysOfWeek", days: [1, 8] }],
+    ["a day of the month of 0", "month", { kind: "dayOfMonth", day: 0 }],
+    ["a day of the month of 32", "month", { kind: "dayOfMonth", day: 32 }],
+    [
+      "a sixth Friday",
+      "month",
+      { kind: "weekdayOfMonth", ordinal: 6, weekday: 5 },
+    ],
+    [
+      "an ordinal of 0",
+      "month",
+      { kind: "weekdayOfMonth", ordinal: 0, weekday: 5 },
+    ],
+    [
+      "a weekday of 0",
+      "month",
+      { kind: "weekdayOfMonth", ordinal: 1, weekday: 0 },
+    ],
+    ["February 30", "year", { kind: "dayOfYear", month: 2, day: 30 }],
+    ["month 13", "year", { kind: "dayOfYear", month: 13, day: 1 }],
+    ["a month's placement on a week", "week", { kind: "lastDayOfMonth" }],
+    ["a placement on days", "day", { kind: "dayOfMonth", day: 1 }],
+    ["a placement on weekdays", "weekday", { kind: "daysOfWeek", days: [1] }],
+  ])(
+    "keeps a rule with %s as found, unreadable, and refuses to overwrite it",
+    (_, unit, placement) => {
+      const raw = {
+        v: 1,
+        rule: { period: { interval: 1, unit, placement }, basis: "schedule" },
+      };
+      const block = taskBlockWith({
+        name: "nextaction.recurrence",
+        value: raw,
+      });
+      expect(readRecurrence(block)).toMatchObject({ kind: "unreadable", raw });
+      expect(planRecurrenceWrite(block, everyTwoWeeks).kind).toBe("refused");
+    },
+  );
+});

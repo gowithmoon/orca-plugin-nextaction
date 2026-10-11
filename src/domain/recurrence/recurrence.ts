@@ -7,22 +7,94 @@ import type {
 } from "../task/completion-history";
 import type { CalendarDate, TaskStatus } from "../task/task";
 import type { TaskChanges } from "../task/task-changes";
-import { addDays, daysBetween } from "../time/calendar-days";
-
-/** The unit a period counts in. */
-export const recurrenceUnits = ["day", "week", "month", "year"] as const;
-export type RecurrenceUnit = (typeof recurrenceUnits)[number];
+import {
+  addDays,
+  compareDays,
+  dayOfWeek,
+  daysBetween,
+  daysInMonth,
+} from "../time/calendar-days";
 
 /**
- * How often a recurring task happens: every `interval` units. Without a
- * placement (this step's only kind), it falls on the day matching the day it
- * counts from.
+ * The unit a period counts in. `weekday` (GLOSSARY: 工作日) counts Monday to
+ * Friday only, holidays not known.
  */
-export interface RecurrencePeriod {
-  /** A whole number from 1 up. */
-  readonly interval: number;
-  readonly unit: RecurrenceUnit;
+export const recurrenceUnits = [
+  "day",
+  "week",
+  "month",
+  "year",
+  "weekday",
+] as const;
+export type RecurrenceUnit = (typeof recurrenceUnits)[number];
+
+/** A day of the week, Monday (1) to Sunday (7), as ISO 8601 numbers them. */
+export const daysOfWeek = [1, 2, 3, 4, 5, 6, 7] as const;
+export type DayOfWeek = (typeof daysOfWeek)[number];
+
+/** Which of a month's days of the week: the first to the fifth, or the last. */
+export const weekdayOrdinals = [1, 2, 3, 4, 5, "last"] as const;
+export type WeekdayOrdinal = (typeof weekdayOrdinals)[number];
+
+/** Where in a week a weekly period falls: some days of the week, at least one. */
+export interface WeekPlacement {
+  readonly kind: "daysOfWeek";
+  /** Ascending, without repeats, at least one. */
+  readonly days: readonly DayOfWeek[];
 }
+
+/**
+ * Where in a month a monthly period falls: a day of the month (1–31), the
+ * last day of the month, or the first to fifth or last given day of the week
+ * ("每月第二个周二", "每月最后一个周五").
+ */
+export type MonthPlacement =
+  | { readonly kind: "dayOfMonth"; readonly day: number }
+  | { readonly kind: "lastDayOfMonth" }
+  | {
+      readonly kind: "weekdayOfMonth";
+      readonly ordinal: WeekdayOrdinal;
+      readonly weekday: DayOfWeek;
+    };
+
+/** Where in a year a yearly period falls: a month (1–12) and a day of it. */
+export interface YearPlacement {
+  readonly kind: "dayOfYear";
+  readonly month: number;
+  readonly day: number;
+}
+
+export type RecurrencePlacement =
+  | WeekPlacement
+  | MonthPlacement
+  | YearPlacement;
+
+/**
+ * How often a recurring task happens: every `interval` units, on the
+ * placement chosen for the unit (#88). Without a placement, it falls on the
+ * day matching the day it counts from. Days and weekdays have no placement.
+ */
+export type RecurrencePeriod =
+  | {
+      /** A whole number from 1 up. */
+      readonly interval: number;
+      readonly unit: "day" | "weekday";
+    }
+  | {
+      readonly interval: number;
+      readonly unit: "week";
+      readonly placement?: WeekPlacement;
+    }
+  | {
+      readonly interval: number;
+      readonly unit: "month";
+      readonly placement?: MonthPlacement;
+    }
+  | {
+      readonly interval: number;
+      readonly unit: "year";
+      readonly placement?: YearPlacement;
+    };
 
 /**
  * Where the next occurrence counts from (GLOSSARY: 重复基准): the task's
@@ -33,8 +105,8 @@ export const recurrenceBases = ["schedule", "completion"] as const;
 export type RecurrenceBasis = (typeof recurrenceBases)[number];
 
 /**
- * A recurrence rule (GLOSSARY: 重复规则). Placements, end conditions and
- * pausing are added by later tickets of step 8 (#88, #89, #92).
+ * A recurrence rule (GLOSSARY: 重复规则). End conditions and pausing are
+ * added by later tickets of step 8 (#89, #92).
  */
 export interface RecurrenceRule {
   readonly period: RecurrencePeriod;
@@ -163,46 +235,91 @@ export function nextOccurrence(
   switch (period.unit) {
     case "day":
       return addDays(from, period.interval);
-    case "week":
-      return addDays(from, 7 * period.interval);
-    case "month":
-      return firstExisting((step) => {
-        const months = from.month - 1 + step * period.interval;
-        return {
-          year: from.year + Math.floor(months / 12),
-          month: (months % 12) + 1,
-          day: from.day,
-        };
-      });
-    case "year":
-      return firstExisting((step) => ({
-        year: from.year + step * period.interval,
-        month: from.month,
+    case "weekday": {
+      // Count `interval` Mondays to Fridays after `from`; holidays are not
+      // known (GLOSSARY: 工作日).
+      let date = from;
+      for (let left = period.interval; left > 0; ) {
+        date = addDays(date, 1);
+        if (dayOfWeek(date) <= 5) left -= 1;
+      }
+      return date;
+    }
+    case "week": {
+      const days = period.placement?.days ?? [dayOfWeek(from)];
+      // The Monday of the week `from` falls in.
+      const monday = addDays(from, 1 - dayOfWeek(from));
+      return firstAfter(from, (step) =>
+        days.map((d) => addDays(monday, 7 * step * period.interval + d - 1)),
+      );
+    }
+    case "month": {
+      const placement: MonthPlacement = period.placement ?? {
+        kind: "dayOfMonth",
         day: from.day,
-      }));
+      };
+      return firstAfter(from, (step) => {
+        const months = from.month - 1 + step * period.interval;
+        const year = from.year + Math.floor(months / 12);
+        const month = (months % 12) + 1;
+        return dayInMonth(year, month, placement);
+      });
+    }
+    case "year": {
+      const { month, day } = period.placement ?? from;
+      return firstAfter(from, (step) => {
+        const year = from.year + step * period.interval;
+        return day <= daysInMonth(year, month) ? [{ year, month, day }] : [];
+      });
+    }
   }
 }
 
 /**
- * The first day that exists among `candidate(1)`, `candidate(2)`, …: a month
- * or a year without that day is skipped (GLOSSARY: 重复规则), never moved to
- * another day. Every candidate is later than the one before.
+ * The first day strictly after `from` among the days `inPeriod(0)`,
+ * `inPeriod(1)`, … lay out: period 0 is the week, month or year `from` falls
+ * in, each next one `interval` units later. Days a period does not have
+ * (February 30, a fifth Friday in a month with four) are left out by
+ * `inPeriod`, so that period is skipped (GLOSSARY: 重复规则).
  */
-function firstExisting(
-  candidate: (step: number) => CalendarDate,
+function firstAfter(
+  from: CalendarDate,
+  inPeriod: (step: number) => readonly CalendarDate[],
 ): CalendarDate {
   // A day that exists once comes back within 400 years (the Gregorian
   // cycle); the bound only guards against a loop without end.
-  for (let step = 1; step <= 400 * 12; step += 1) {
-    const date = candidate(step);
-    if (exists(date)) return date;
+  for (let step = 0; step <= 400 * 53; step += 1) {
+    const [first] = inPeriod(step)
+      .filter((date) => compareDays(date, from) > 0)
+      .sort(compareDays);
+    if (first) return first;
   }
   throw new Error("no next occurrence within 400 years");
 }
 
-/** Whether the date is a day of the calendar (not e.g. February 30). */
-function exists(date: CalendarDate): boolean {
-  return addDays(date, 0).day === date.day;
+/** The placement's day in a month, or none when the month does not have it. */
+function dayInMonth(
+  year: number,
+  month: number,
+  placement: MonthPlacement,
+): CalendarDate[] {
+  switch (placement.kind) {
+    case "dayOfMonth":
+      return placement.day <= daysInMonth(year, month)
+        ? [{ year, month, day: placement.day }]
+        : [];
+    case "lastDayOfMonth":
+      return [{ year, month, day: daysInMonth(year, month) }];
+    case "weekdayOfMonth": {
+      const length = daysInMonth(year, month);
+      // The month's first day of that weekday, then every 7 days on.
+      const first =
+        1 + ((placement.weekday - dayOfWeek({ year, month, day: 1 }) + 7) % 7);
+      const count = Math.floor((length - first) / 7) + 1;
+      const nth = placement.ordinal === "last" ? count : placement.ordinal;
+      return nth <= count ? [{ year, month, day: first + 7 * (nth - 1) }] : [];
+    }
+  }
 }
 
 /**

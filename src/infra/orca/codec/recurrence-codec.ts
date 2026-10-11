@@ -3,20 +3,31 @@
 // `{ v: 1, rule: { period: { interval, unit }, basis } }`, or `{ v: 1, rule:
 // null }` once the rule is removed (the property is kept, so there is one
 // write path, as for the My Day entries in ADR 0020). `interval` is a whole
-// number from 1 up, `unit` one of `day` / `week` / `month` / `year`, `basis`
-// `schedule` (按日程) or `completion` (按完成). Placements
-// (`period.placement`), end conditions (`rule.end`) and pausing
-// (`rule.paused`) go inside `rule` in later tickets of step 8 (#88, #89,
-// #92); fields this version does not know are not read yet. The version
-// number is added and checked by the plugin block property codec.
+// number from 1 up, `unit` one of `day` / `week` / `month` / `year` /
+// `weekday`, `basis` `schedule` (按日程) or `completion` (按完成). An optional
+// `period.placement` (#88) says where in the unit the period falls: for a
+// week `{ kind: "daysOfWeek", days: [1–7, …] }` (at least one, Monday 1);
+// for a month `{ kind: "dayOfMonth", day: 1–31 }`, `{ kind: "lastDayOfMonth" }`
+// or `{ kind: "weekdayOfMonth", ordinal: 1–5 | "last", weekday: 1–7 }`; for a
+// year `{ kind: "dayOfYear", month: 1–12, day }` (a day that month can have,
+// February 29 included). Days and weekdays have none; a placement out of
+// range, or not one the unit can have, reads as unreadable. End conditions
+// (`rule.end`) and pausing (`rule.paused`) go inside `rule` in later tickets
+// of step 8 (#89, #92); fields this version does not know are not read yet.
+// The version number is added and checked by the plugin block property codec.
 import {
+  type DayOfWeek,
+  daysOfWeek,
   type RecurrenceBasis,
   type RecurrencePeriod,
+  type RecurrencePlacement,
   type RecurrenceRead,
   type RecurrenceRule,
   type RecurrenceUnit,
   recurrenceBases,
   recurrenceUnits,
+  type WeekdayOrdinal,
+  weekdayOrdinals,
 } from "../../../domain/recurrence/recurrence";
 import {
   type BlockWithProperties,
@@ -57,7 +68,93 @@ function parsePeriod(value: unknown): RecurrencePeriod | string {
   if (!recurrenceUnits.includes(unit as RecurrenceUnit)) {
     return "the unit is not one this plugin knows";
   }
-  return { interval, unit: unit as RecurrenceUnit };
+  const known = unit as RecurrenceUnit;
+  if (value.placement === undefined || value.placement === null) {
+    return { interval, unit: known } as RecurrencePeriod;
+  }
+  const placement = parsePlacement(known, value.placement);
+  if (typeof placement === "string") return placement;
+  return { interval, unit: known, placement } as RecurrencePeriod;
+}
+
+const isWholeIn = (value: unknown, min: number, max: number): boolean =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= min &&
+  value <= max;
+
+const isDayOfWeek = (value: unknown): value is DayOfWeek =>
+  daysOfWeek.includes(value as DayOfWeek);
+
+/** The placement stored for `unit` (#88), or why it cannot be read. */
+function parsePlacement(
+  unit: RecurrenceUnit,
+  value: unknown,
+): RecurrencePlacement | string {
+  if (!isObject(value)) return "the placement is not an object";
+  switch (unit) {
+    case "week": {
+      const { days } = value;
+      if (value.kind !== "daysOfWeek" || !Array.isArray(days)) {
+        return "the placement is not one a week can have";
+      }
+      if (days.length === 0 || !days.every(isDayOfWeek)) {
+        return "the days of the week are not at least one of Monday (1) to Sunday (7)";
+      }
+      // Ascending without repeats, as the domain expects.
+      return { kind: "daysOfWeek", days: [...new Set(days)].sort() };
+    }
+    case "month":
+      switch (value.kind) {
+        case "dayOfMonth":
+          return isWholeIn(value.day, 1, 31)
+            ? { kind: "dayOfMonth", day: value.day as number }
+            : "the day of the month is not from 1 to 31";
+        case "lastDayOfMonth":
+          return { kind: "lastDayOfMonth" };
+        case "weekdayOfMonth": {
+          const { ordinal, weekday } = value;
+          if (!weekdayOrdinals.includes(ordinal as WeekdayOrdinal)) {
+            return "the ordinal is not 1 to 5 or last";
+          }
+          if (!isDayOfWeek(weekday)) {
+            return "the day of the week is not Monday (1) to Sunday (7)";
+          }
+          return {
+            kind: "weekdayOfMonth",
+            ordinal: ordinal as WeekdayOrdinal,
+            weekday,
+          };
+        }
+        default:
+          return "the placement is not one a month can have";
+      }
+    case "year": {
+      const { month, day } = value;
+      if (value.kind !== "dayOfYear") {
+        return "the placement is not one a year can have";
+      }
+      if (!isWholeIn(month, 1, 12)) return "the month is not from 1 to 12";
+      // February 29 is a day of the year; it is skipped in common years.
+      const longest = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      if (!isWholeIn(day, 1, longest[(month as number) - 1] ?? 0)) {
+        return "the day is not one that month has";
+      }
+      return { kind: "dayOfYear", month: month as number, day: day as number };
+    }
+    default:
+      return "days and weekdays have no placement";
+  }
+}
+
+/** The period as stored: its placement only when it has one. */
+function storedPeriod(period: RecurrencePeriod): Record<string, unknown> {
+  return {
+    interval: period.interval,
+    unit: period.unit,
+    ...("placement" in period &&
+      period.placement !== undefined && { placement: period.placement }),
+  };
 }
 
 /** The rule stored, or why it cannot be read. */
@@ -119,7 +216,7 @@ export function planRecurrenceWrite(
   }
   return planPluginPropertyWrite(block, key, {
     rule: rule && {
-      period: { interval: rule.period.interval, unit: rule.period.unit },
+      period: storedPeriod(rule.period),
       basis: rule.basis,
     },
   });

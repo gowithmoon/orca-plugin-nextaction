@@ -29,6 +29,19 @@ export function addDays(date: CalendarDate, days: number): CalendarDate {
   };
 }
 
+/** The day of the week, Monday (1) to Sunday (7), as ISO 8601 numbers them. */
+export function dayOfWeek(date: CalendarDate): 1 | 2 | 3 | 4 | 5 | 6 | 7 {
+  const sundayFirst = new Date(
+    Date.UTC(date.year, date.month - 1, date.day),
+  ).getUTCDay();
+  return (sundayFirst === 0 ? 7 : sundayFirst) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
+}
+
+/** The number of days in a month (1–12) of a year. */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 /** The later of two dates; `null` stands for none. */
 export function laterDay(
   a: CalendarDate | null,

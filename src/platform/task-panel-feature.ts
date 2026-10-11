@@ -4,6 +4,7 @@ import type { TaskRepository } from "../application/ports/task-repository";
 import { createAdvanceStuckDone } from "../application/usecases/advance-stuck-done";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createPreviewNextOccurrence } from "../application/usecases/preview-next-occurrence";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
@@ -71,6 +72,11 @@ export function createTaskPanelFeature(deps: {
     openRecurrencePopup: createRecurrencePopup({
       deps: {
         setRecurrence: createSetRecurrence({ repository }),
+        previewNextOccurrence: createPreviewNextOccurrence({
+          clock: systemClock,
+          dayBoundary: deps.dayBoundary,
+        }),
+        today: deps.today,
         notify: deps.taskActions.notify,
       },
       // Into the load's root; nothing outside a load.

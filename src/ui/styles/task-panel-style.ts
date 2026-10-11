@@ -616,4 +616,50 @@ button.nextaction-dependency-task:hover {
 .nextaction-recurrence-popup-spacer {
   flex: 1 1 auto;
 }
+
+/* The days of a weekly placement (#88): seven toggles in a row. */
+.nextaction-recurrence-popup-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.nextaction-recurrence-popup-day {
+  padding: var(--orca-spacing-xs) 0;
+  border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  border-radius: var(--orca-radius-md);
+  background-color: transparent;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  cursor: pointer;
+}
+
+.nextaction-recurrence-popup-day:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-recurrence-popup-day[data-chosen] {
+  border-color: var(--orca-color-primary-5);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 12%, var(--orca-color-bg-1));
+  color: var(--orca-color-text-1);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+/* One dropdown of a placement (a day of the month, a month, an ordinal). */
+.nextaction-recurrence-popup-choice {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+/* The next occurrence of the rule being edited (#88). */
+.nextaction-recurrence-popup-preview {
+  color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-sm);
+}
 `;
