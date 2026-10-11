@@ -105,14 +105,19 @@ export const recurrenceBases = ["schedule", "completion"] as const;
 export type RecurrenceBasis = (typeof recurrenceBases)[number];
 
 /**
- * A recurrence rule (GLOSSARY: 重复规则). End conditions and pausing are
- * added by later tickets of step 8 (#89, #92).
+ * A recurrence rule (GLOSSARY: 重复规则), with its pause flag (#92). End
+ * conditions are added by a later ticket of step 8 (#89).
  */
 export interface RecurrenceRule {
   readonly period: RecurrencePeriod;
   readonly basis: RecurrenceBasis;
   /** Without one, the task recurs until the rule is removed. */
   readonly end?: RecurrenceEnd;
+  /**
+   * Paused (GLOSSARY: 暂停重复, #92): the rule is kept but does not apply,
+   * so the task is a plain task. Absent reads as not paused.
+   */
+  readonly paused?: boolean;
 }
 
 /**
@@ -152,7 +157,20 @@ export const noRecurrence: RecurrenceRead = { kind: "none" };
  * sibling after it, stays unmet until the rule ends (ADR 0021).
  */
 export function recurs(recurrence: RecurrenceRead): boolean {
-  return recurrence.kind === "rule";
+  return activeRule(recurrence) !== undefined;
+}
+
+/**
+ * The rule that applies to the task: one it reads and that is not paused
+ * (GLOSSARY: 暂停重复, #92). A paused rule is kept, but the task is a plain
+ * task until it is resumed.
+ */
+export function activeRule(
+  recurrence: RecurrenceRead,
+): RecurrenceRule | undefined {
+  return recurrence.kind === "rule" && !recurrence.rule.paused
+    ? recurrence.rule
+    : undefined;
 }
 
 /** A task's dates, as the next occurrence needs them. */
@@ -324,6 +342,33 @@ export function planRepair(
   return plan;
 }
 
+/** What resuming a done recurring task writes, in one undo. */
+export type ResumePlan = Omit<AdvancePlan, "history">;
+
+/**
+ * Advancing a done task as its paused rule is resumed (GLOSSARY: 暂停重复,
+ * 进入下一次), at `resume`. No completion is recorded: the task was completed
+ * while paused, and that completion is in the history already. After
+ * completion it counts from the logical day of the last completion
+ * recorded, or of the resume without one; on a fixed schedule from the
+ * task's current dates, as any advance does.
+ */
+export function planResume(
+  rule: RecurrenceRule,
+  task: AdvancingTask,
+  history: CompletionHistory,
+  resume: CompletionEntry,
+): ResumePlan {
+  // After completion it counts from the last completion; on a fixed schedule
+  // from the task's dates, or without dates from the day it is resumed.
+  const from =
+    rule.basis === "completion" ? (history.at(-1) ?? resume) : resume;
+  // The same advance, its completion left out; it uses up an occurrence, or
+  // ends the recurrence on the last, as any advance does (#89).
+  const { history: _, ...plan } = planAdvance(rule, task, [], from);
+  return plan;
+}
+
 /**
  * The next occurrence (GLOSSARY: 下一次发生): the first day the period lays
  * out strictly after `from`.
@@ -432,5 +477,6 @@ export function isStuckDone(task: {
   readonly status: TaskStatus;
   readonly recurrence: RecurrenceRead;
 }): boolean {
-  return task.status === "done" && task.recurrence.kind === "rule";
+  // A paused rule does not apply (#92): the task is done like a plain task.
+  return task.status === "done" && recurs(task.recurrence);
 }

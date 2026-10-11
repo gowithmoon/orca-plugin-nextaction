@@ -141,6 +141,13 @@ describe("advance a recurring task stuck in done", () => {
     ],
     ["has no rule", { status: "done", recurrence: { kind: "none" } }],
     [
+      "has a paused rule (#92)",
+      {
+        status: "done",
+        recurrence: { kind: "rule", rule: { ...weekly, paused: true } },
+      },
+    ],
+    [
       "has a rule it cannot read",
       {
         status: "done",

@@ -11,13 +11,14 @@
 // or `{ kind: "weekdayOfMonth", ordinal: 1–5 | "last", weekday: 1–7 }`; for a
 // year `{ kind: "dayOfYear", month: 1–12, day }` (a day that month can have,
 // February 29 included). Days and weekdays have none; a placement out of
-// range, or not one the unit can have, reads as unreadable. The optional end
+// range, or not one the unit can have, reads as unreadable. `rule.paused:
+// true` while the rule is paused (GLOSSARY: 暂停重复, #92); absent reads as
+// not paused, and it is written only while paused. The optional end
 // condition (`rule.end`, #89) is `{ until: "YYYY-MM-DD" }` (the last logical
 // day) or `{ count: { total, remaining } }` (whole numbers from 1 up,
 // `remaining` no more than `total`; setting "N times" writes N for both).
-// Pausing (`rule.paused`) goes inside `rule` in a later ticket of step 8
-// (#92); fields this version does not know are not read yet.
-// The version number is added and checked by the plugin block property codec.
+// Fields this version does not know are not read yet. The version number is
+// added and checked by the plugin block property codec.
 import {
   type DayOfWeek,
   daysOfWeek,
@@ -196,10 +197,23 @@ function parseRule(value: unknown): RecurrenceRule | string {
     return "the basis is not one this plugin knows";
   }
   const basis = value.basis as RecurrenceBasis;
-  if (value.end === undefined) return { period, basis };
-  const end = parseEnd(value.end);
-  if (typeof end === "string") return end;
-  return { period, basis, end };
+  // Paused (#92): absent reads as not paused; anything but true or false is
+  // a value this plugin cannot read.
+  if (value.paused !== undefined && typeof value.paused !== "boolean") {
+    return "the paused flag is neither true nor false";
+  }
+  let end: RecurrenceEnd | undefined;
+  if (value.end !== undefined) {
+    const parsed = parseEnd(value.end);
+    if (typeof parsed === "string") return parsed;
+    end = parsed;
+  }
+  return {
+    period,
+    basis,
+    ...(end && { end }),
+    ...(value.paused === true && { paused: true }),
+  };
 }
 
 /** `end` as stored in `rule.end`. */
@@ -260,6 +274,8 @@ export function planRecurrenceWrite(
       period: storedPeriod(rule.period),
       basis: rule.basis,
       ...(rule.end && { end: encodeEnd(rule.end) }),
+      // Written only while paused (#92): a rule without it is not paused.
+      ...(rule.paused && { paused: true }),
     },
   });
 }

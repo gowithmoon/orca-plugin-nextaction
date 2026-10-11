@@ -415,6 +415,36 @@ describe("change status: recurring tasks", () => {
   });
 });
 
+describe("change status: a paused rule (#92)", () => {
+  it("completing a task whose rule is paused leaves it done like a plain task, recording the completion", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 5 };
+    repository.addTask({
+      id: 70,
+      status: "todo",
+      due,
+      recurrence: {
+        kind: "rule",
+        rule: {
+          period: { interval: 1, unit: "week" },
+          basis: "schedule",
+          paused: true,
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(70, "done")).toEqual({ kind: "changed" });
+
+    expect(await repository.getTask(70)).toMatchObject({ status: "done", due });
+    expect(await repository.readCompletionHistory(70)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+});
+
 describe("change status: the descendant tasks of a recurring task", () => {
   const weekly = {
     kind: "rule",

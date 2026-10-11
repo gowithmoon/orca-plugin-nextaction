@@ -292,6 +292,13 @@ const zhCN: Record<string, string> = {
     "从任务的截止日期（没有时取开始日期）往后排，与哪天完成无关。",
   "From the day it is done.": "从完成的那天往后排。",
   "Remove rule": "移除规则",
+  Pause: "暂停重复",
+  "${rule} · Paused": "${rule} · 已暂停",
+  "Keep the rule but stop it applying for a while.": "保留规则，暂时不起作用。",
+  "The rule is kept but does not apply: done, the task stays done.":
+    "规则保留但不起作用：完成后停在已完成。",
+  "The rule is kept but does not apply. Turning this off moves the done task to its next occurrence.":
+    "规则保留但不起作用。关掉暂停后，已完成的任务会立即进入下一次。",
   Save: "保存",
   "Recurrence ended": "重复已结束",
   "Until ${date}": "到 ${date}",

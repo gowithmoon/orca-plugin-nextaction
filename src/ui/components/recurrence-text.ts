@@ -167,15 +167,19 @@ export function endText(end: RecurrenceEnd): string {
   });
 }
 
-/** "每 2 周 · 按日程", with the end condition: "每周 · 按日程 · 共 5 次，剩 3 次". */
+/**
+ * "每 2 周 · 按日程", with the end condition: "每周 · 按日程 · 共 5 次，剩 3 次"
+ * (#89), and "· 已暂停" while paused (#92).
+ */
 export function ruleText(rule: RecurrenceRule): string {
   const text = t("${period} · ${basis}", {
     period: periodText(rule.period),
     basis: basisName(rule.basis),
   });
-  return rule.end
+  const withEnd = rule.end
     ? t("${rule} · ${end}", { rule: text, end: endText(rule.end) })
     : text;
+  return rule.paused ? t("${rule} · Paused", { rule: withEnd }) : withEnd;
 }
 
 /** What the task panel's row shows for a task's rule as read. */

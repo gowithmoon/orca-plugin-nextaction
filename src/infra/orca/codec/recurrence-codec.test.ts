@@ -164,6 +164,35 @@ describe("readRecurrence and planRecurrenceWrite", () => {
   });
 });
 
+describe("pausing the rule (#92)", () => {
+  it("reads back a paused rule it writes", () => {
+    const paused = { ...everyTwoWeeks, paused: true };
+    const plan = planRecurrenceWrite(taskBlockWith(), paused);
+    if (plan.kind !== "write") throw new Error("refused");
+    expect(plan.property.value).toEqual({
+      v: 1,
+      rule: {
+        period: { interval: 2, unit: "week" },
+        basis: "schedule",
+        paused: true,
+      },
+    });
+    expect(readRecurrence(taskBlockWith(plan.property))).toEqual({
+      kind: "rule",
+      rule: paused,
+    });
+  });
+
+  it("keeps a rule whose paused flag is neither true nor false as found, unreadable", () => {
+    const block = taskBlockWith({
+      name: "nextaction.recurrence",
+      value: { v: 1, rule: { ...everyTwoWeeks, paused: "yes" } },
+    });
+    expect(readRecurrence(block)).toMatchObject({ kind: "unreadable" });
+    expect(planRecurrenceWrite(block, everyTwoWeeks).kind).toBe("refused");
+  });
+});
+
 describe("placements and weekdays (#88)", () => {
   it.each([
     [

@@ -2,7 +2,7 @@
 // record a completion when the task enters done (GLOSSARY: 完成历史).
 
 import { planDescendantResets } from "../../domain/recurrence/descendant-reset";
-import { planAdvance } from "../../domain/recurrence/recurrence";
+import { activeRule, planAdvance } from "../../domain/recurrence/recurrence";
 import {
   historyAfterStatusChange,
   recordsCompletion,
@@ -100,16 +100,14 @@ export function createChangeStatus(deps: {
       at: now,
       day: logicalDay(now, deps.dayBoundary.current()),
     };
-    if (task.recurrence.kind === "rule") {
+    // A paused rule does not apply (GLOSSARY: 暂停重复, #92): the task is
+    // completed like a plain task, its completion still recorded.
+    const rule = activeRule(task.recurrence);
+    if (rule) {
       // A recurring task advances (GLOSSARY: 进入下一次): status, dates,
       // history, the rule (one occurrence used up, #89) and its done
       // descendant tasks back to todo (#90), in one write, so one undo.
-      const plan = planAdvance(
-        task.recurrence.rule,
-        task,
-        read.history,
-        completion,
-      );
+      const plan = planAdvance(rule, task, read.history, completion);
       if (plan.next === null) {
         // The last occurrence (#89): the task stays done and its rule is
         // removed; it does not advance, so its descendants are left as they
