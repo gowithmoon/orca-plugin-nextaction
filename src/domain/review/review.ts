@@ -1,18 +1,69 @@
 // Reviewing single tasks (GLOSSARY: 回顾周期, 指定回顾日, 需要回顾, 标记已回顾).
 // Pure: today's logical day is passed in; whole-day arithmetic comes from
 // `domain/time`.
+import {
+  dayInMonth,
+  type MonthPlacement,
+  nextInMonths,
+  nextOccurrence,
+  type WeekPlacement,
+} from "../recurrence/recurrence";
 import type { CalendarDate, TaskStatus } from "../task/task";
-import { addDays, compareDays, daysInMonth } from "../time/calendar-days";
+import {
+  addDays,
+  compareDays,
+  dayOfWeek,
+  daysInMonth,
+} from "../time/calendar-days";
 
 /** The units a review interval counts in. */
 export const reviewUnits = ["day", "week", "month"] as const;
 export type ReviewUnit = (typeof reviewUnits)[number];
 
-/** How often a task is to be reviewed: every `every` units. */
-export interface ReviewInterval {
-  /** A whole number from 1 up. */
-  readonly every: number;
-  readonly unit: ReviewUnit;
+/**
+ * How often a task is to be reviewed: every `every` units, on the review
+ * placement chosen for the unit (GLOSSARY: 回顾周期, #105). Days have no
+ * placement.
+ */
+export type ReviewInterval =
+  | {
+      /** A whole number from 1 up. */
+      readonly every: number;
+      readonly unit: "day";
+    }
+  | {
+      readonly every: number;
+      readonly unit: "week";
+      readonly placement?: WeekPlacement;
+    }
+  | {
+      readonly every: number;
+      readonly unit: "month";
+      readonly placement?: ReviewMonthPlacement;
+    };
+
+/**
+ * Where in a month a monthly review interval falls (回顾落点): a day of the
+ * month (1–31), the last day of the month, or the last weekday of the month
+ * (GLOSSARY: 工作日; Monday to Friday, holidays not known).
+ */
+export type ReviewMonthPlacement =
+  | Extract<MonthPlacement, { kind: "dayOfMonth" | "lastDayOfMonth" }>
+  | { readonly kind: "lastWeekdayOfMonth" };
+
+/** The placement's day in a month, or none when the month does not have it. */
+function reviewDayInMonth(
+  year: number,
+  month: number,
+  placement: ReviewMonthPlacement,
+): readonly CalendarDate[] {
+  if (placement.kind !== "lastWeekdayOfMonth") {
+    return dayInMonth(year, month, placement);
+  }
+  // The last day, moved back to Friday when it is a Saturday or Sunday.
+  const last = { year, month, day: daysInMonth(year, month) };
+  const weekday = dayOfWeek(last);
+  return [weekday <= 5 ? last : addDays(last, 5 - weekday)];
 }
 
 /**
@@ -159,8 +210,21 @@ export function nextReviewDay(plan: ReviewPlan): CalendarDate | null {
     case "day":
       return addDays(lastReviewed, interval.every);
     case "week":
+      if (interval.placement) {
+        return nextOccurrence(
+          { interval: interval.every, unit: "week", placement: interval.placement },
+          lastReviewed,
+        );
+      }
       return addDays(lastReviewed, 7 * interval.every);
     case "month": {
+      const { placement } = interval;
+      if (placement) {
+        // Months without that day are skipped, as for a recurrence rule.
+        return nextInMonths(lastReviewed, interval.every, (year, month) =>
+          reviewDayInMonth(year, month, placement),
+        );
+      }
       const months = lastReviewed.month - 1 + interval.every;
       const year = lastReviewed.year + Math.floor(months / 12);
       const month = (months % 12) + 1;
