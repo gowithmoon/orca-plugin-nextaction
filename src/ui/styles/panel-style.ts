@@ -310,6 +310,47 @@ export const panelCss = `
   margin-top: var(--orca-spacing-md);
 }
 
+/* The summary (#101): its numbers, the steps not opened, "Complete review". */
+.nextaction-review-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--orca-spacing-md);
+}
+
+.nextaction-review-summary-counts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-review-summary-counts > li {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-review-summary-count {
+  font-weight: var(--orca-fontweight-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-review-summary-unopened {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-review-summary-unopened > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-xs);
+  margin: var(--orca-spacing-xs) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* A card's "Drop" turns the dangerous colour on hover. */
 .nextaction-task-card-extra[data-dangerous]:hover {
   color: var(--orca-color-dangerous-5);

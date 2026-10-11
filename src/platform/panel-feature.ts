@@ -2,6 +2,7 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createAddToMyDay } from "../application/usecases/add-to-my-day";
+import { createCompleteFullReview } from "../application/usecases/complete-full-review";
 import { createDropTask } from "../application/usecases/drop-task";
 import {
   createCanMarkReviewed,
@@ -18,6 +19,7 @@ import { createReadReview } from "../application/usecases/read-review";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
+import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
@@ -107,6 +109,10 @@ export function createPanelFeature(deps: {
   const allTasksFilter = createAllTasksFilterStore();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
+  // When the last full review was completed (#101), in `plugins.setData`
+  // under the current load's name.
+  let loadedPluginName: string | undefined;
+  const lastFullReview = createPluginDataLastFullReview(() => loadedPluginName);
   const readCandidates = createReadCandidates({ repository });
   views.register(
     createNextActionView({
@@ -193,6 +199,11 @@ export function createPanelFeature(deps: {
       readReview: createReadReview({
         ...myDayDeps,
         startPreviewDays: deps.startPreviewDays,
+        lastFullReview,
+      }),
+      completeFullReview: createCompleteFullReview({
+        clock: systemClock,
+        lastFullReview,
       }),
       markReviewed: createMarkReviewed(myDayDeps),
       canMarkReviewed: createCanMarkReviewed(),
@@ -222,6 +233,10 @@ export function createPanelFeature(deps: {
 
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
+    loadedPluginName = pluginName;
+    registry.add(`${pluginName}.lastFullReviewName`, () => {
+      loadedPluginName = undefined;
+    });
     // Identifiers share one namespace across kinds: the style sheet must not
     // be named like the panel type.
     // Each load is a new module instance already (plugin-lifecycle-settings);

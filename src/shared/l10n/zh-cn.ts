@@ -413,6 +413,16 @@ const zhCN: Record<string, string> = {
   Activate: "激活",
   Previous: "上一步",
   Next: "下一步",
+  "No full review completed yet": "还没做过完整回顾",
+  "Last full review: today": "上次完整回顾：今天",
+  "Last full review: yesterday": "上次完整回顾：昨天",
+  "Last full review: ${count} days ago": "上次完整回顾：${count} 天前",
+  "This is your first full review.": "这是你第一次做完整回顾。",
+  "Left in the inbox": "收集箱剩余",
+  "Not opened in this review:": "这次还没看的步骤：",
+  "Complete review": "完成回顾",
+  "Review completed": "回顾已完成",
+  "Could not complete the review: ${reason}": "无法完成回顾：${reason}",
 };
 
 export default zhCN;

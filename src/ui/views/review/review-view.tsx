@@ -8,6 +8,7 @@
 // (ADR 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { AddToMyDay } from "../../../application/usecases/add-to-my-day";
+import type { CompleteFullReview } from "../../../application/usecases/complete-full-review";
 import type { DropTask } from "../../../application/usecases/drop-task";
 import type {
   CanMarkReviewed,
@@ -30,6 +31,7 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { useCompleteFullReview } from "../../hooks/use-complete-full-review";
 import { useMarkReviewed } from "../../hooks/use-mark-reviewed";
 import { useReviewCardActions } from "../../hooks/use-review-card-actions";
 import {
@@ -54,12 +56,15 @@ import {
   firstStep,
   fullReviewStep,
   fullReviewSteps,
+  isAvailable,
   type ReviewCardAction,
   type ReviewStepList,
 } from "./review-steps";
 
 export interface ReviewViewDeps {
   readReview: ReadReview;
+  /** The summary's "Complete review": records the moment (#101). */
+  completeFullReview: CompleteFullReview;
   /** A card's "Mark reviewed" (GLOSSARY: 标记已回顾). */
   markReviewed: MarkReviewed;
   /** Whether a card offers "Mark reviewed". */
@@ -267,6 +272,105 @@ function CaptureButton(props: { onClick: () => void }) {
   );
 }
 
+/** How long ago the last full review was completed, in logical days. */
+function lastFullReviewText(last: ReadReviewResult["lastFullReview"]): string {
+  if (last === null) return t("No full review completed yet");
+  if (last.daysAgo <= 0) return t("Last full review: today");
+  if (last.daysAgo === 1) return t("Last full review: yesterday");
+  return t("Last full review: ${count} days ago", {
+    count: String(last.daysAgo),
+  });
+}
+
+/**
+ * The summary (#101): how the system stands now, the steps not opened in
+ * this full review (a reminder only), and "Complete review".
+ */
+function SummaryPage(props: {
+  query: ViewQuery<ReadReviewResult>;
+  opened: readonly FullReviewStepId[];
+  onOpen: (step: FullReviewStepId) => void;
+  onComplete: () => void;
+}) {
+  const { Button } = orca.components;
+  const state = useViewQuery(props.query);
+  if (state.kind === "loading") return <TaskListPlaceholder />;
+  if (state.kind === "paused") return <PausedNotice />;
+  if (state.kind === "failed") {
+    return (
+      <FailedNotice
+        error={state.error}
+        message={(reason) =>
+          t("Could not read the review: ${reason}", { reason })
+        }
+        onRetry={() => props.query.reset()}
+      />
+    );
+  }
+  const { summary, lastFullReview } = state.data;
+  const notOpened = fullReviewSteps.filter(
+    (step) =>
+      step.id !== "summary" &&
+      isAvailable(step) &&
+      !props.opened.includes(step.id),
+  );
+  const rows: readonly { label: string; count: number; icon: string }[] = [
+    {
+      label: t("Left in the inbox"),
+      count: summary.inbox,
+      icon: "ti ti-inbox",
+    },
+    {
+      label: t("Overdue tasks"),
+      count: summary.overdue,
+      icon: "ti ti-alert-circle",
+    },
+    {
+      label: t("Tasks due for review"),
+      count: summary.dueForReview,
+      icon: "ti ti-list-check",
+    },
+  ];
+  return (
+    <div className="nextaction-review-summary">
+      <ul className="nextaction-review-summary-counts">
+        {rows.map((row) => (
+          <li key={row.label}>
+            <i className={row.icon} aria-hidden="true" />
+            <span>{row.label}</span>
+            <span className="nextaction-review-summary-count">{row.count}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="nextaction-review-start-status">
+        {lastFullReview === null
+          ? t("This is your first full review.")
+          : lastFullReviewText(lastFullReview)}
+      </div>
+      {notOpened.length > 0 && (
+        <div className="nextaction-review-summary-unopened">
+          <div>{t("Not opened in this review:")}</div>
+          <ul>
+            {notOpened.map((step) => (
+              <li key={step.id}>
+                <Button variant="plain" onClick={() => props.onOpen(step.id)}>
+                  {step.label()}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div>
+        <Button variant="solid" onClick={props.onComplete}>
+          <i className="ti ti-circle-check" aria-hidden="true" />
+          {t("Complete review")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** The start page: how many tasks are due for review, and the entries. */
 function ReviewStart(props: {
   query: ViewQuery<ReadReviewResult>;
@@ -275,17 +379,21 @@ function ReviewStart(props: {
 }) {
   const { Button } = orca.components;
   const state = useViewQuery(props.query);
-  const total =
-    state.kind === "loaded" ? state.data.steps.dueForReview.total : undefined;
+  const read = state.kind === "loaded" ? state.data : undefined;
   return (
     <>
       <ViewHeader title={t("Review")} />
       <div className="nextaction-review-start">
-        {total !== undefined && (
+        {read && (
           <div className="nextaction-review-start-status">
-            {total === 0
-              ? t("No tasks due for review")
-              : t("${count} tasks due for review", { count: String(total) })}
+            <div>{lastFullReviewText(read.lastFullReview)}</div>
+            <div>
+              {read.steps.dueForReview.total === 0
+                ? t("No tasks due for review")
+                : t("${count} tasks due for review", {
+                    count: String(read.steps.dueForReview.total),
+                  })}
+            </div>
           </div>
         )}
         <div className="nextaction-review-entries">
@@ -314,7 +422,7 @@ function StepBar(props: {
     <nav className="nextaction-review-steps" aria-label={t("Review steps")}>
       <ol>
         {fullReviewSteps.map((step, index) => {
-          const available = step.list !== undefined;
+          const available = isAvailable(step);
           const current = step.id === props.current;
           const opened = props.opened.includes(step.id);
           const item = (
@@ -402,6 +510,8 @@ function FullReviewPage(props: {
   page: Extract<ReviewPage, { kind: "full" }>;
   onOpen: (step: FullReviewStepId) => void;
   onLeave: () => void;
+  /** The summary's "Complete review". */
+  onComplete: () => void;
 }) {
   const { query, deps, page, onOpen } = props;
   const { Button } = orca.components;
@@ -422,6 +532,14 @@ function FullReviewPage(props: {
         <CaptureButton onClick={deps.openQuickCapture} />
       </div>
       {step.list && <StepList query={query} deps={deps} list={step.list} />}
+      {page.step === "summary" && (
+        <SummaryPage
+          query={query}
+          opened={page.opened}
+          onOpen={onOpen}
+          onComplete={props.onComplete}
+        />
+      )}
       <div className="nextaction-review-pager">
         <Button
           variant="outline"
@@ -543,6 +661,16 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
           : [...page.opened, step],
       });
     };
+    // Done: the progress is cleared and the start page shows, read again
+    // so its days since the last full review start from 0.
+    const complete = useCompleteFullReview(
+      deps.completeFullReview,
+      deps.taskActions.notify,
+      React.useCallback(() => {
+        deps.page.clear();
+        query.reload();
+      }, []),
+    );
     return (
       <FullReviewPage
         query={query}
@@ -550,6 +678,7 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
         page={page}
         onOpen={open}
         onLeave={deps.page.clear}
+        onComplete={complete}
       />
     );
   }
