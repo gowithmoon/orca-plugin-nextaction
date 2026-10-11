@@ -285,6 +285,62 @@ describe("change status: recurring tasks", () => {
     expect(task?.start).toEqual({ year: 2026, month: 10, day: 15 });
   });
 
+  it("completing the last occurrence ends the recurrence: done, the rule removed, in one write", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 5 };
+    repository.addTask({
+      id: 64,
+      status: "todo",
+      due,
+      recurrence: {
+        kind: "rule",
+        rule: {
+          ...weekly.rule,
+          end: { kind: "count", total: 3, remaining: 1 },
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(64, "done")).toEqual({ kind: "ended" });
+
+    expect(await repository.getTask(64)).toMatchObject({
+      status: "done",
+      due,
+      recurrence: { kind: "none" },
+    });
+    expect(await repository.readCompletionHistory(64)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("completing a recurring task with occurrences left uses one up, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 65,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: {
+        kind: "rule",
+        rule: {
+          ...weekly.rule,
+          end: { kind: "count", total: 3, remaining: 3 },
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(65, "done")).toMatchObject({ kind: "advanced" });
+
+    expect((await repository.getTask(65))?.recurrence).toEqual({
+      kind: "rule",
+      rule: { ...weekly.rule, end: { kind: "count", total: 3, remaining: 2 } },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
   it("fails to complete a task whose rule is unreadable, writing nothing", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({

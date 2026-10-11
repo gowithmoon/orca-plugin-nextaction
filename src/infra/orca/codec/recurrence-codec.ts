@@ -4,13 +4,17 @@
 // null }` once the rule is removed (the property is kept, so there is one
 // write path, as for the My Day entries in ADR 0020). `interval` is a whole
 // number from 1 up, `unit` one of `day` / `week` / `month` / `year`, `basis`
-// `schedule` (按日程) or `completion` (按完成). Placements
-// (`period.placement`), end conditions (`rule.end`) and pausing
-// (`rule.paused`) go inside `rule` in later tickets of step 8 (#88, #89,
-// #92); fields this version does not know are not read yet. The version
+// `schedule` (按日程) or `completion` (按完成). The optional end condition
+// (`rule.end`, #89) is `{ until: "YYYY-MM-DD" }` (the last logical day) or
+// `{ count: { total, remaining } }` (whole numbers from 1 up, `remaining`
+// no more than `total`; setting "N times" writes N for both). Placements
+// (`period.placement`) and pausing (`rule.paused`) go inside `rule` in later
+// tickets of step 8 (#88, #92); fields this version does not know are not
+// read yet. The version
 // number is added and checked by the plugin block property codec.
 import {
   type RecurrenceBasis,
+  type RecurrenceEnd,
   type RecurrencePeriod,
   type RecurrenceRead,
   type RecurrenceRule,
@@ -25,6 +29,7 @@ import {
   pluginPropertyPrefix,
   readPluginProperty,
 } from "./plugin-block-property-codec";
+import { formatDay, parseDay } from "./stored-values";
 
 /** The plugin block property key (without the `nextaction.` prefix). */
 const key = "recurrence";
@@ -60,6 +65,31 @@ function parsePeriod(value: unknown): RecurrencePeriod | string {
   return { interval, unit: unit as RecurrenceUnit };
 }
 
+const isWholeFromOne = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1;
+
+/** The end condition stored (`rule.end`), or why it cannot be read. */
+function parseEnd(value: unknown): RecurrenceEnd | string {
+  if (!isObject(value)) return "the end condition is not an object";
+  if ("until" in value) {
+    const day = parseDay(value.until);
+    return day ? { kind: "until", day } : "the end day is not a day";
+  }
+  if ("count" in value) {
+    const count = value.count;
+    if (!isObject(count)) return "the end count is not an object";
+    const { total, remaining } = count;
+    if (!isWholeFromOne(total) || !isWholeFromOne(remaining)) {
+      return "the end count is not a whole number from 1 up";
+    }
+    if (remaining > total) {
+      return "more occurrences remain than the end count";
+    }
+    return { kind: "count", total, remaining };
+  }
+  return "the end condition is not one this plugin knows";
+}
+
 /** The rule stored, or why it cannot be read. */
 function parseRule(value: unknown): RecurrenceRule | string {
   if (!isObject(value)) return "the rule is not an object";
@@ -68,7 +98,18 @@ function parseRule(value: unknown): RecurrenceRule | string {
   if (!recurrenceBases.includes(value.basis as RecurrenceBasis)) {
     return "the basis is not one this plugin knows";
   }
-  return { period, basis: value.basis as RecurrenceBasis };
+  const basis = value.basis as RecurrenceBasis;
+  if (value.end === undefined) return { period, basis };
+  const end = parseEnd(value.end);
+  if (typeof end === "string") return end;
+  return { period, basis, end };
+}
+
+/** `end` as stored in `rule.end`. */
+function encodeEnd(end: RecurrenceEnd) {
+  return end.kind === "until"
+    ? { until: formatDay(end.day) }
+    : { count: { total: end.total, remaining: end.remaining } };
 }
 
 /**
@@ -121,6 +162,7 @@ export function planRecurrenceWrite(
     rule: rule && {
       period: { interval: rule.period.interval, unit: rule.period.unit },
       basis: rule.basis,
+      ...(rule.end && { end: encodeEnd(rule.end) }),
     },
   });
 }

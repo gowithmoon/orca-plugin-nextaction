@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { countsFrom, nextOccurrence, planAdvance } from "./recurrence";
+import {
+  countEnd,
+  countsFrom,
+  isLastOccurrence,
+  nextOccurrence,
+  planAdvance,
+  type RecurrenceRule,
+} from "./recurrence";
 
 const day = (year: number, month: number, date: number) => ({
   year,
@@ -173,5 +180,128 @@ describe("advancing a recurring task once it is completed", () => {
       completion,
     );
     expect(plan.history).toEqual([earlier, completion]);
+  });
+});
+
+describe("end conditions", () => {
+  const completion = {
+    at: new Date("2026-10-14T01:00:00.000Z"),
+    day: day(2026, 10, 14),
+  };
+  const weeklyEnding = (end: RecurrenceRule["end"]): RecurrenceRule => ({
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+    end,
+  });
+  const dueMonday = {
+    status: "todo",
+    start: null,
+    due: day(2026, 10, 12),
+  } as const;
+
+  it("each advance uses up one of the remaining occurrences", () => {
+    const plan = planAdvance(
+      weeklyEnding({ kind: "count", total: 5, remaining: 3 }),
+      dueMonday,
+      [],
+      completion,
+    );
+    expect(plan).toMatchObject({
+      last: false,
+      next: day(2026, 10, 19),
+      changes: { status: "todo", due: day(2026, 10, 19) },
+      recurrence: weeklyEnding({ kind: "count", total: 5, remaining: 2 }),
+    });
+  });
+
+  it("completing the one remaining occurrence is the last: the task stays done and the rule is removed", () => {
+    const plan = planAdvance(
+      weeklyEnding({ kind: "count", total: 5, remaining: 1 }),
+      dueMonday,
+      [],
+      completion,
+    );
+    expect(plan).toEqual({
+      last: true,
+      changes: { status: "done" },
+      history: [completion],
+      next: null,
+      recurrence: null,
+    });
+  });
+
+  it("an occurrence on the end day still happens", () => {
+    const plan = planAdvance(
+      weeklyEnding({ kind: "until", day: day(2026, 10, 19) }),
+      dueMonday,
+      [],
+      completion,
+    );
+    expect(plan).toMatchObject({ last: false, next: day(2026, 10, 19) });
+    // The end day is not used up: the rule is not rewritten.
+    expect(plan).not.toHaveProperty("recurrence");
+  });
+
+  it.each([
+    ["no end condition", undefined, false],
+    [
+      "one occurrence remaining",
+      { kind: "count", total: 5, remaining: 1 },
+      true,
+    ],
+    [
+      "two occurrences remaining",
+      { kind: "count", total: 5, remaining: 2 },
+      false,
+    ],
+    [
+      "the next occurrence on the end day",
+      { kind: "until", day: day(2026, 10, 19) },
+      false,
+    ],
+    [
+      "the next occurrence after the end day",
+      { kind: "until", day: day(2026, 10, 18) },
+      true,
+    ],
+  ] as const)(
+    "whether this is the last occurrence, with %s",
+    (_, end, last) => {
+      expect(
+        isLastOccurrence(weeklyEnding(end), dueMonday, completion.day),
+      ).toBe(last);
+    },
+  );
+
+  it("setting N times counts N occurrences remaining", () => {
+    expect(countEnd(5, undefined)).toEqual({
+      kind: "count",
+      total: 5,
+      remaining: 5,
+    });
+  });
+
+  it("keeping the same N times keeps the occurrences remaining; another N starts over", () => {
+    const current = { kind: "count", total: 5, remaining: 3 } as const;
+    expect(countEnd(5, current)).toEqual(current);
+    expect(countEnd(4, current)).toEqual({
+      kind: "count",
+      total: 4,
+      remaining: 4,
+    });
+  });
+
+  it("a next occurrence after the end day makes this the last", () => {
+    const plan = planAdvance(
+      weeklyEnding({ kind: "until", day: day(2026, 10, 18) }),
+      dueMonday,
+      [],
+      completion,
+    );
+    expect(plan).toMatchObject({
+      last: true,
+      changes: { status: "done" },
+      recurrence: null,
+    });
   });
 });

@@ -71,6 +71,7 @@ export function createTaskPanelFeature(deps: {
       deps: {
         setRecurrence: createSetRecurrence({ repository }),
         notify: deps.taskActions.notify,
+        today: deps.today,
       },
       // Into the load's root; nothing outside a load.
       render: (node) => renderRecurrencePopup(node),

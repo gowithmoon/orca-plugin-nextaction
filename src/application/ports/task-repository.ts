@@ -133,16 +133,19 @@ export interface TaskRepository {
    * Writes the properties present in `changes` and leaves the others as they
    * are; with `completionHistory`, also replaces the task's completion
    * history with it. Contexts and labels written are made choices of the
-   * task tag first, so they show in the notes and become candidates. The
-   * user undoes the whole write with one undo. Fails, writing nothing, when
-   * the block is not a task, a property is invalidated, or the completion
-   * history is to be replaced but reads as unreadable. A mirror block's ID
-   * writes to its source block.
+   * task tag first, so they show in the notes and become candidates. With
+   * `recurrence` (a rule, or `null` to remove it), also writes the task's
+   * recurrence rule, as `writeRecurrence` does, so advancing a recurring
+   * task is one write (#89). The user undoes the whole write with one undo.
+   * Fails, writing nothing, when the block is not a task, a property is
+   * invalidated, or the completion history or the rule is to be replaced but
+   * reads as unreadable. A mirror block's ID writes to its source block.
    */
   updateTask(
     id: TaskId,
     changes: TaskChanges,
     completionHistory?: CompletionHistory,
+    recurrence?: RecurrenceRule | null,
   ): Promise<void>;
 
   /**

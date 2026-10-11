@@ -288,6 +288,18 @@ const zhCN: Record<string, string> = {
   "From the day it is done.": "从完成的那天往后排。",
   "Remove rule": "移除规则",
   Save: "保存",
+  "Recurrence ended": "重复已结束",
+  "Until ${date}": "到 ${date}",
+  "${total} times, ${remaining} left": "共 ${total} 次，剩 ${remaining} 次",
+  "${rule} · ${end}": "${rule} · ${end}",
+  Ends: "结束条件",
+  Never: "无",
+  "On a day": "到某日为止",
+  "After a number of times": "共 N 次",
+  times: "次",
+  "${remaining} left": "剩 ${remaining} 次",
+  "This is the last occurrence: once it is done, the task stays done and the rule is removed.":
+    "这是最后一次：完成后任务停在已完成，规则随之移除。",
 };
 
 export default zhCN;

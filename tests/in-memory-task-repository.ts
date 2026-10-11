@@ -173,6 +173,18 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     }
   };
 
+  /** A recurrence rule this plugin cannot read is never overwritten. */
+  const refuseUnreadableRecurrence = (
+    block: StoredBlock & { task: Task },
+    id: TaskId,
+  ) => {
+    if (block.task.recurrence.kind === "unreadable") {
+      throw new Error(
+        `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
+      );
+    }
+  };
+
   /** Runs a write: all of it, or (when writes fail) none of it. */
   const write = (apply: () => void) => {
     if (failure) throw failure;
@@ -304,9 +316,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return tasks;
     },
 
-    async updateTask(id, changes: TaskChanges, completionHistory) {
+    async updateTask(id, changes: TaskChanges, completionHistory, recurrence) {
       const block = taskToWrite(id);
       if (completionHistory) refuseUnreadable(block, id);
+      if (recurrence !== undefined) refuseUnreadableRecurrence(block, id);
       write(() => {
         // Written contexts and labels become choices of the task tag, as in
         // Orca (multi-choices-created), so they stay candidates.
@@ -337,6 +350,14 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           block.completionHistory = {
             kind: "readable",
             history: [...completionHistory],
+          };
+        }
+        if (recurrence !== undefined) {
+          block.task = {
+            ...block.task,
+            recurrence: recurrence
+              ? { kind: "rule", rule: recurrence }
+              : { kind: "none" },
           };
         }
       });
@@ -410,12 +431,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async writeRecurrence(id, rule) {
       const block = taskToWrite(id);
-      // A rule this plugin cannot read is never overwritten.
-      if (block.task.recurrence.kind === "unreadable") {
-        throw new Error(
-          `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
-        );
-      }
+      refuseUnreadableRecurrence(block, id);
       write(() => {
         block.task = {
           ...block.task,

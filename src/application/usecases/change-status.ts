@@ -30,7 +30,12 @@ export type ChangeStatusResult =
    * completion recorded, back to todo, its dates on `next`. `completedOn` is
    * the logical day of the completion, for showing `next` beside it.
    */
-  | { kind: "advanced"; next: CalendarDate; completedOn: CalendarDate };
+  | { kind: "advanced"; next: CalendarDate; completedOn: CalendarDate }
+  /**
+   * A recurring task's last occurrence was completed (GLOSSARY: 重复规则): a
+   * completion recorded, the task stays done and its rule is removed.
+   */
+  | { kind: "ended" };
 
 /**
  * The task's completion history holds something this plugin cannot read
@@ -95,15 +100,22 @@ export function createChangeStatus(deps: {
       day: logicalDay(now, deps.dayBoundary.current()),
     };
     if (task.recurrence.kind === "rule") {
-      // A recurring task advances (GLOSSARY: 进入下一次): status, dates and
-      // history in one write, so one undo.
+      // A recurring task advances (GLOSSARY: 进入下一次): status, dates,
+      // history and the rule (one occurrence used up, or removed on the last)
+      // in one write, so one undo.
       const plan = planAdvance(
         task.recurrence.rule,
         task,
         read.history,
         completion,
       );
-      await deps.repository.updateTask(id, plan.changes, plan.history);
+      await deps.repository.updateTask(
+        id,
+        plan.changes,
+        plan.history,
+        plan.recurrence,
+      );
+      if (plan.next === null) return { kind: "ended" };
       return {
         kind: "advanced",
         next: plan.next,

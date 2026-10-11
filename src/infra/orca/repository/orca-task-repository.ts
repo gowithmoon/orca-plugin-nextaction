@@ -450,6 +450,7 @@ export function createOrcaTaskRepository(
       id: TaskId,
       changes: TaskChanges,
       completionHistory?: CompletionHistory,
+      recurrence?: RecurrenceRule | null,
     ): Promise<void> {
       const state = readyTag();
       // Encoded first: an invalidated property fails before anything is read
@@ -464,14 +465,20 @@ export function createOrcaTaskRepository(
       });
       // The completion history is planned before anything is written: a
       // value this plugin cannot read fails the whole write.
-      const properties = completionHistory
-        ? [
-            plannedWrite(
-              block,
-              planCompletionHistoryWrite(block, completionHistory),
-            ),
-          ]
-        : [];
+      // So is the recurrence rule (#89), written in the same setProperties.
+      const properties = [
+        ...(completionHistory
+          ? [
+              plannedWrite(
+                block,
+                planCompletionHistoryWrite(block, completionHistory),
+              ),
+            ]
+          : []),
+        ...(recurrence !== undefined
+          ? [plannedWrite(block, planRecurrenceWrite(block, recurrence))]
+          : []),
+      ];
       // Dependency targets are block IDs coming in: mirrors resolve to their
       // sources first, as every block ID does (block-properties-json M3).
       const dependencyPlan =

@@ -2,6 +2,7 @@
 // "每 2 周 · 按日程". Display only.
 import type {
   RecurrenceBasis,
+  RecurrenceEnd,
   RecurrencePeriod,
   RecurrenceRead,
   RecurrenceRule,
@@ -44,12 +45,35 @@ export function basisName(basis: RecurrenceBasis): string {
   return basis === "schedule" ? t("Fixed schedule") : t("After completion");
 }
 
-/** "每 2 周 · 按日程". */
+/**
+ * "到 2026年12月31日为止", "共 5 次，剩 3 次" (#89). The end day carries its
+ * year: the summary has no current day to leave it out against.
+ */
+export function endText(end: RecurrenceEnd): string {
+  if (end.kind === "until") {
+    return t("Until ${date}", {
+      date: t("${year}/${month}/${day}", {
+        year: String(end.day.year),
+        month: String(end.day.month),
+        day: String(end.day.day),
+      }),
+    });
+  }
+  return t("${total} times, ${remaining} left", {
+    total: String(end.total),
+    remaining: String(end.remaining),
+  });
+}
+
+/** "每 2 周 · 按日程", with the end condition: "每周 · 按日程 · 共 5 次，剩 3 次". */
 export function ruleText(rule: RecurrenceRule): string {
-  return t("${period} · ${basis}", {
+  const text = t("${period} · ${basis}", {
     period: periodText(rule.period),
     basis: basisName(rule.basis),
   });
+  return rule.end
+    ? t("${rule} · ${end}", { rule: text, end: endText(rule.end) })
+    : text;
 }
 
 /** What the task panel's row shows for a task's rule as read. */
