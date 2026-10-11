@@ -89,15 +89,29 @@ export function planMarkReviewed(
 ):
   | { readonly kind: "markable"; readonly plan: ReviewPlan }
   | { readonly kind: "refused"; readonly reason: NotMarkableReason } {
-  const plan = task.review.kind === "plan" ? task.review.plan : null;
-  if (!plan || (!plan.interval && !plan.reviewOn)) {
-    return { kind: "refused", reason: "no-plan" };
+  const reason = notMarkableReason(task);
+  if (reason !== null || task.review.kind !== "plan") {
+    return { kind: "refused", reason: reason ?? "no-plan" };
   }
-  if (task.status === "done") return { kind: "refused", reason: "done" };
+  const { interval } = task.review.plan;
   return {
     kind: "markable",
-    plan: { interval: plan.interval, lastReviewed: today, reviewOn: null },
+    plan: { interval, lastReviewed: today, reviewOn: null },
   };
+}
+
+/**
+ * Why `task` cannot be marked reviewed, or `null` when it can
+ * (`planMarkReviewed`). A review plan this plugin cannot read counts as no
+ * plan.
+ */
+export function notMarkableReason(
+  task: ReviewedTask,
+): NotMarkableReason | null {
+  const plan = task.review.kind === "plan" ? task.review.plan : null;
+  if (!plan || (!plan.interval && !plan.reviewOn)) return "no-plan";
+  if (task.status === "done") return "done";
+  return null;
 }
 
 /** What whether a task is due for review depends on. */

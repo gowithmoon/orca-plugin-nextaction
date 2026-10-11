@@ -3,9 +3,10 @@
 // day is cleared. Only this counts as having reviewed the task.
 import {
   type NotMarkableReason,
+  notMarkableReason,
   planMarkReviewed,
 } from "../../domain/review/review";
-import type { TaskId } from "../../domain/task/task";
+import type { Task, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -24,6 +25,17 @@ export class NotMarkableError extends Error {
   constructor(readonly reason: NotMarkableReason) {
     super(`the task cannot be marked reviewed (${reason})`);
   }
+}
+
+/**
+ * Whether the task menu and the task panel offer "Mark reviewed" for `task`,
+ * as it was read: not done, with a review interval or a review-on day it
+ * can read. Writes nothing.
+ */
+export type CanMarkReviewed = (task: Task) => boolean;
+
+export function createCanMarkReviewed(): CanMarkReviewed {
+  return (task) => notMarkableReason(task) === null;
 }
 
 /**

@@ -5,7 +5,12 @@ import {
   createInMemoryTaskRepository,
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
-import { createMarkReviewed, NotMarkableError } from "./mark-reviewed";
+import type { Task } from "../../domain/task/task";
+import {
+  createCanMarkReviewed,
+  createMarkReviewed,
+  NotMarkableError,
+} from "./mark-reviewed";
 import { ReviewUnreadableError } from "./review-unreadable-error";
 
 const weekly = { every: 1, unit: "week" } as const;
@@ -79,5 +84,74 @@ describe("mark a task reviewed", () => {
       new ReviewUnreadableError("unknown version 2"),
     );
     expect(repository.writeCount()).toBe(0);
+  });
+});
+
+describe("whether the task menu offers Mark reviewed", () => {
+  const canMark = createCanMarkReviewed();
+  const task = (partial: Partial<Task>): Task => ({
+    id: 1,
+    text: "",
+    status: "todo",
+    importance: 4,
+    urgency: 4,
+    effort: 4,
+    start: null,
+    due: null,
+    contexts: [],
+    labels: [],
+    note: null,
+    sequential: false,
+    dependencies: [],
+    dependencyMode: "all",
+    dependencyDelay: 0,
+    created: new Date("2026-01-01T00:00:00.000Z"),
+    recurrence: { kind: "none" },
+    review: { kind: "none" },
+    anomalies: [],
+    ...partial,
+  });
+
+  it("offers it for a task not done with a review interval or a review-on day", () => {
+    expect(
+      canMark(
+        task({
+          status: "someday",
+          review: {
+            kind: "plan",
+            plan: { interval: null, lastReviewed: null, reviewOn: oct10 },
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["no review plan", task({ review: { kind: "none" } })],
+    [
+      "neither a review interval nor a review-on day",
+      task({
+        review: {
+          kind: "plan",
+          plan: { interval: null, lastReviewed: oct1, reviewOn: null },
+        },
+      }),
+    ],
+    [
+      "a done task",
+      task({
+        status: "done",
+        review: {
+          kind: "plan",
+          plan: { interval: weekly, lastReviewed: oct1, reviewOn: null },
+        },
+      }),
+    ],
+    [
+      "a review plan it cannot read",
+      task({ review: { kind: "unreadable", reason: "unknown version 2" } }),
+    ],
+  ])("does not offer it for %s", (_, shown) => {
+    expect(canMark(shown)).toBe(false);
   });
 });
