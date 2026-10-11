@@ -11,14 +11,46 @@ export interface TaskMenuPlace {
   readonly selectTask: (taskId: TaskId) => void;
 }
 
-/** One entry of the task menu. */
-export interface TaskMenuItem {
+/** What every entry of the task menu has. */
+interface TaskMenuItemBase {
   /** Stable identifier, unique within the menu. */
   readonly id: string;
   /** Items of one group sit together, lowest group first. */
   readonly group: number;
   /** Position within the group, lowest first. */
   readonly order: number;
+  /** Whether the item shows for this task; shown when absent. */
+  readonly isShownFor?: (task: Task) => boolean;
+}
+
+/** What a resolved item shows and does. */
+export interface ResolvedTaskMenuEntry {
+  /** The text shown, already translated. */
+  readonly label: string;
+  /** A tabler icon class. */
+  readonly icon?: string;
+  /** As `StaticTaskMenuItem.run`. */
+  readonly run: (place?: TaskMenuPlace) => Promise<void>;
+}
+
+/**
+ * An entry whose text depends on more than the task, e.g. whether it is in
+ * today's My Day: worked out each time the menu opens. It does not show until
+ * resolved.
+ */
+export interface ResolvedTaskMenuItem extends TaskMenuItemBase {
+  /**
+   * What the item shows and does for `task`; `null` hides it. Never rejects:
+   * errors are the item's to report.
+   */
+  readonly resolve: (task: Task) => Promise<ResolvedTaskMenuEntry | null>;
+}
+
+/** One entry of the task menu. */
+export type TaskMenuItem = StaticTaskMenuItem | ResolvedTaskMenuItem;
+
+/** An entry whose text follows from the task alone. */
+export interface StaticTaskMenuItem extends TaskMenuItemBase {
   /** The text shown, already translated. */
   readonly label: (task: Task) => string;
   /** A tabler icon class, e.g. `"ti ti-trash"`. */
@@ -26,8 +58,6 @@ export interface TaskMenuItem {
   readonly dangerous?: boolean;
   /** Marked as the task's current choice (e.g. its status). */
   readonly isCurrent?: (task: Task) => boolean;
-  /** Whether the item shows for this task; shown when absent. */
-  readonly isShownFor?: (task: Task) => boolean;
   /**
    * What choosing the item does; `place` is the plugin panel the menu was
    * opened in, absent in Orca's own menus. The menu closes first; errors are

@@ -14,8 +14,13 @@ import {
 import type { TaskMenuItems } from "./menu-items";
 import { statusIcons } from "./status-icons";
 
-/** Menu groups, lowest first. Gaps leave room for later steps (task panel, my day). */
-export const taskMenuGroups = { status: 10, taskPanel: 50, drop: 100 } as const;
+/** Menu groups, lowest first. Gaps leave room for later steps. */
+export const taskMenuGroups = {
+  status: 10,
+  myDay: 30,
+  taskPanel: 50,
+  drop: 100,
+} as const;
 
 export function registerBuiltinTaskMenuItems(
   items: TaskMenuItems,

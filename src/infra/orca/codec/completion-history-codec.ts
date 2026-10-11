@@ -7,7 +7,6 @@ import type {
   CompletionEntry,
   CompletionHistory,
 } from "../../../domain/task/completion-history";
-import type { CalendarDate } from "../../../domain/task/task";
 import {
   type BlockWithProperties,
   type PluginPropertyWrite,
@@ -15,6 +14,7 @@ import {
   pluginPropertyPrefix,
   readPluginProperty,
 } from "./plugin-block-property-codec";
+import { formatDay, parseDay, parseTime } from "./stored-values";
 
 /** The plugin block property key (without the `nextaction.` prefix). */
 const key = "completions";
@@ -27,41 +27,6 @@ export type StoredCompletionHistory =
    * damaged). `raw` is the value as found; it must not be overwritten.
    */
   | { kind: "unreadable"; raw: unknown; reason: string };
-
-const dayPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-/** A `YYYY-MM-DD` string naming a day that exists, or `undefined`. */
-function parseDay(value: unknown): CalendarDate | undefined {
-  if (typeof value !== "string") return undefined;
-  const match = dayPattern.exec(value);
-  if (!match) return undefined;
-  const [year, month, day] = match.slice(1).map(Number) as [
-    number,
-    number,
-    number,
-  ];
-  // UTC arithmetic only checks the date exists; no time zone is involved.
-  const check = new Date(Date.UTC(year, month - 1, day));
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() !== month - 1 ||
-    check.getUTCDate() !== day
-  ) {
-    return undefined;
-  }
-  return { year, month, day };
-}
-
-/**
- * A time, or `undefined`. Written as an ISO string, it reads back from Orca
- * as a `Date` (#72 acceptance, as for date properties in
- * plugin-panel-writes); both are taken.
- */
-function parseTime(value: unknown): Date | undefined {
-  if (!(typeof value === "string" || value instanceof Date)) return undefined;
-  const at = new Date(value);
-  return Number.isNaN(at.getTime()) ? undefined : at;
-}
 
 function parseEntry(value: unknown): CompletionEntry | undefined {
   if (typeof value !== "object" || value === null) return undefined;
@@ -97,12 +62,6 @@ export function readCompletionHistory(
   }
   return { kind: "readable", history };
 }
-
-const pad = (value: number, width: number) =>
-  String(value).padStart(width, "0");
-
-const formatDay = (day: CalendarDate) =>
-  `${pad(day.year, 4)}-${pad(day.month, 2)}-${pad(day.day, 2)}`;
 
 /**
  * Plans writing `history` to a block, replacing what it holds. A value this

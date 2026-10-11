@@ -49,6 +49,12 @@ export interface TaskCardProps {
    * a dependency cycle. The task panel says why.
    */
   blocked?: boolean;
+  /**
+   * A view's own buttons, before "open in notes" and shown like it (e.g. My
+   * Day's schedule button, #84). Their clicks must stop propagating, or they
+   * also open the task panel.
+   */
+  buttons?: React.ReactNode;
 }
 
 /** A click that selected text is not a click on the card. */
@@ -57,11 +63,22 @@ function selectsText(): boolean {
   return selection !== null && !selection.isCollapsed;
 }
 
-function StatusButton(props: { task: Task; actions: TaskActions }) {
-  const { task, actions } = props;
+/** The status icon that opens the status menu; shared with My Day's timeline cards. */
+export function StatusButton(props: {
+  task: Task;
+  actions: TaskActions;
+  /**
+   * Where the status menu goes. Without it Orca puts it into the button's
+   * `offsetParent` (orca-popup-container): a positioned card that clips its
+   * content (My Day's timeline cards) would clip the menu.
+   */
+  menuContainer?: React.RefObject<HTMLElement>;
+}) {
+  const { task, actions, menuContainer } = props;
   const { ContextMenu } = orca.components;
   return (
     <ContextMenu
+      container={menuContainer}
       menu={(close) => (
         <StatusMenu
           current={markedStatus(task)}
@@ -141,6 +158,7 @@ export function TaskCard(props: TaskCardProps) {
     keptStatusShown = true,
     parentText,
     blocked,
+    buttons,
   } = props;
   const { ContextMenu } = orca.components;
   const text = shownText(task);
@@ -204,6 +222,7 @@ export function TaskCard(props: TaskCardProps) {
           blocked={blocked}
         />
       </div>
+      {buttons}
       {actions && <OpenInNotesButton task={task} actions={actions} />}
     </article>
   );

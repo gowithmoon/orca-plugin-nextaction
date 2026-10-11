@@ -2,6 +2,7 @@
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
 import type { CompletionEntry } from "../task/completion-history";
+import type { MyDayRead } from "../task/my-day";
 import type {
   AncestorRatings,
   CalendarDate,
@@ -25,6 +26,11 @@ export interface SnapshotTask {
    * when it has none, or the history cannot be read.
    */
   readonly lastCompletion?: CompletionEntry;
+  /**
+   * Its My Day entries (GLOSSARY: 我的一天记录), every logical day's; absent
+   * when it has none. Unreadable ones are marked so, not read as none.
+   */
+  readonly myDay?: MyDayRead;
   /** Its block is a page: it has an alias. Absent when it is not. */
   readonly page?: boolean;
   /**

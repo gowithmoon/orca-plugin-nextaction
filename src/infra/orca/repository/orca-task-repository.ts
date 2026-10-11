@@ -12,6 +12,7 @@ import {
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { CompletionHistory } from "../../../domain/task/completion-history";
+import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block } from "../../../orca.d.ts";
@@ -24,6 +25,7 @@ import {
   dependentsOf,
   planDependencyWrite,
 } from "../codec/dependency-write";
+import { planMyDayWrite, readMyDay } from "../codec/my-day-codec";
 import { type PropertyKey, propertyName } from "../codec/names";
 import {
   type PluginPropertyWrite,
@@ -122,6 +124,18 @@ function plannedWrite(block: Block, plan: PluginPropertyWrite) {
     );
   }
   return plan.property;
+}
+
+/**
+ * A block's My Day entries as the port reads them; `undefined` when it holds
+ * none, so a snapshot task carries nothing.
+ */
+function myDayOf(block: Block): MyDayRead | undefined {
+  const read = readMyDay(block);
+  if (read.kind === "unreadable") {
+    return { kind: "unreadable", reason: read.reason };
+  }
+  return read.entries.length > 0 ? read : undefined;
 }
 
 /**
@@ -335,11 +349,16 @@ export function createOrcaTaskRepository(
         const history = block ? readCompletionHistory(block) : undefined;
         const lastCompletion =
           history?.kind === "readable" ? history.history.at(-1) : undefined;
+        // The My Day entries, from the same block. Unreadable ones are marked
+        // so, without a warning on every read; readMyDay warns when they are
+        // read by ID.
+        const myDay = block ? myDayOf(block) : undefined;
         return {
           task,
           parentId: place?.parentId ?? null,
           position: place?.position ?? Number.MAX_SAFE_INTEGER,
           ...(lastCompletion && { lastCompletion }),
+          ...(myDay && { myDay }),
           // A page has an alias; with no parent block it sits at the top of
           // the notes, where only pages are tasks (ADR 0013, move-blocks P2).
           ...(block && block.aliases.length > 0 && { page: true }),
@@ -559,6 +578,37 @@ export function createOrcaTaskRepository(
         return { kind: "unreadable", reason: read.reason };
       }
       return read;
+    },
+
+    async readMyDay(id: TaskId): Promise<MyDayRead> {
+      // Only tagged blocks, as for the completion history: what a dropped
+      // task left behind is not task data (block-properties-json J4).
+      const block = await taskBlock(id, currentTag());
+      if (!block) return { kind: "readable", entries: [] };
+      const read = myDayOf(block);
+      if (read?.kind === "unreadable") {
+        console.warn(
+          `[nextaction] block ${block.id}: the My Day entries are kept as they are (${read.reason})`,
+        );
+      }
+      return read ?? { kind: "readable", entries: [] };
+    },
+
+    async writeMyDay(id: TaskId, entries: MyDayEntries): Promise<void> {
+      // Mirrors resolve to their source blocks (block-properties-json M3).
+      const block = await taskBlockToWrite(id, currentTag());
+      // Planned before anything is written: a value this plugin cannot read
+      // fails the write, writing nothing.
+      const property = plannedWrite(block, planMyDayWrite(block, entries));
+      // setProperties replaces a property of the same name and keeps the
+      // others (block-properties-json J2); one command in one group, one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [block.id],
+          [property],
+        );
+      });
     },
 
     async convertToTask(id: number): Promise<ConvertToTaskResult> {

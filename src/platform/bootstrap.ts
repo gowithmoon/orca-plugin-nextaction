@@ -157,6 +157,7 @@ export function createNextActionPlugin(): Plugin {
     changes: taskChanges.changes,
     today: day.today,
     dayBoundary: day.dayBoundary,
+    dayBoundaryChanges: day.changes,
     startPreviewDays: preview.startPreviewDays,
     taskActions: taskActions.taskActions,
     menuItems: taskMenu.items,

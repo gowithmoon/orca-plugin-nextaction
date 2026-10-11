@@ -53,6 +53,22 @@ export function formatDate(date: CalendarDate, today: CalendarDate): string {
   return `${day} ${weekday(date)}`;
 }
 
+/** A time of the local clock as "9:05" (a schedule's times, the timeline's hours). */
+export function formatClock(at: Date): string {
+  return `${at.getHours()}:${String(at.getMinutes()).padStart(2, "0")}`;
+}
+
+/** A schedule's times as "9:00–10:30". */
+export function formatTimeRange(range: {
+  readonly start: Date;
+  readonly end: Date;
+}): string {
+  return t("${start}–${end}", {
+    start: formatClock(range.start),
+    end: formatClock(range.end),
+  });
+}
+
 /** A context always reads with `@` (GLOSSARY: 上下文); a label never gets one. */
 export function formatContext(context: string): string {
   return context.startsWith("@") ? context : `@${context}`;

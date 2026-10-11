@@ -73,10 +73,10 @@ function useTier(ref: React.RefObject<HTMLElement>): PanelTier | undefined {
 }
 
 /**
- * Shows the selected task in the popup while `inPopup`: across a tier change
- * the popup and the side pane take over from each other, the task unchanged.
- * Closing the popup (or the task going away) clears the selection; the
- * plugin panel closing takes its popup with it.
+ * Shows the selected task in the popup while `inPopup`: a popup open when
+ * the panel widens into the wide tier gives way to the side pane, the task
+ * unchanged. Closing the popup (or the task going away) clears the
+ * selection; the plugin panel closing takes its popup with it.
  */
 function useSelectionPopup(
   openPopup: OpenTaskPanelPopup,
@@ -122,6 +122,17 @@ export function createNextActionPanel(
      * block the user went to see. Selecting a task again lifts it.
      */
     const [heldFromPopup, setHeldFromPopup] = React.useState<TaskId>();
+    // Narrowing out of the wide tier hides the side pane, but does not pop
+    // the selected task up: a popup the user did not ask for covers the view
+    // they were resizing for. The task stays selected (and back in the side
+    // pane when the panel widens again); selecting a task opens the popup.
+    const [shownTier, setShownTier] = React.useState(tier);
+    if (tier !== shownTier) {
+      setShownTier(tier);
+      if (shownTier === "wide" && tier !== "wide") {
+        setHeldFromPopup(selectedTaskId);
+      }
+    }
     const selected = React.useRef(selectedTaskId);
     selected.current = selectedTaskId;
     const selectTask = React.useCallback((taskId: TaskId) => {
