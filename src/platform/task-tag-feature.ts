@@ -60,6 +60,11 @@ export function createTaskTagFeature(
   repository: TaskRepository;
   /** The task tag block's ID; `undefined` while task features are paused. */
   taskTagBlockId: () => number | undefined;
+  /**
+   * Opens the quick capture popup, as its command does (the review's steps,
+   * #99); does nothing outside a load.
+   */
+  openQuickCapture: () => void;
 } {
   let state: TaskTagState = { kind: "paused", reason: "starting" };
   const listeners = new Set<() => void>();
@@ -257,6 +262,8 @@ export function createTaskTagFeature(
   };
 
   const repository = createOrcaTaskRepository(() => state, onWritten);
+  // The quick capture popup's opener exists only while loaded.
+  let openCapture: () => void = () => {};
 
   const feature: FeatureModule = async (context) => {
     // No shortcut is assigned: the user binds one in Orca's settings.
@@ -275,16 +282,19 @@ export function createTaskTagFeature(
     // opens it; unload unmounts it.
     context.registry.css("quickCaptureStyle", quickCaptureCss);
     const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
-    context.registry.command(
-      "quickCapture",
-      createQuickCaptureCommand(
-        createQuickCapture({ repository, clock: systemClock }),
-        context.pluginName,
-        today,
-        captureRoot.render,
-      ),
-      t("Create task"),
+    const quickCapture = createQuickCaptureCommand(
+      createQuickCapture({ repository, clock: systemClock }),
+      context.pluginName,
+      today,
+      captureRoot.render,
     );
+    context.registry.command("quickCapture", quickCapture, t("Create task"));
+    // Recorded after the root, so it is released first: nothing opens the
+    // popup into a root that is going away.
+    openCapture = () => void quickCapture();
+    context.registry.add(`${context.pluginName}.quickCaptureOpen`, () => {
+      openCapture = () => {};
+    });
     const uiLanguage = noteLanguageFor(orca.state.locale);
     await start(context, uiLanguage);
 
@@ -310,5 +320,11 @@ export function createTaskTagFeature(
   const taskTagBlockId = () =>
     state.kind === "ready" ? state.tagBlockId : undefined;
 
-  return { feature, names, repository, taskTagBlockId };
+  return {
+    feature,
+    names,
+    repository,
+    taskTagBlockId,
+    openQuickCapture: () => openCapture(),
+  };
 }

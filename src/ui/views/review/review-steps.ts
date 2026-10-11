@@ -1,0 +1,180 @@
+// The full review's steps (GLOSSARY: 回顾, 完整回顾), in the glossary's order:
+// the one list the step bar, "Previous / Next" and each step's page follow.
+// A step without `list` is not built yet (look back, overdue, due in the
+// next 7 days, the summary: #100–#102): the step bar shows it unavailable
+// and "Previous / Next" pass over it. Those issues give it its `list` (or
+// their own page) here. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+import type { ReviewStepKey } from "../../../application/usecases/read-review";
+import { t } from "../../../shared/l10n/l10n";
+
+export type FullReviewStepId =
+  | "inbox"
+  | "lookBack"
+  | "overdue"
+  | "dueSoon"
+  | "nextActions"
+  | "waiting"
+  | "someday"
+  | "dueForReview"
+  | "summary";
+
+/** A card's own action in a step, an icon button beside "open in notes". */
+export type ReviewCardAction =
+  /** Marks the task reviewed (GLOSSARY: 标记已回顾), when it can be. */
+  | "markReviewed"
+  /** Adds the task to today's My Day (GLOSSARY: 我的一天). */
+  | "addToMyDay"
+  /** A waiting task back to todo. */
+  | "backToTodo"
+  /** A someday task to todo. */
+  | "activate"
+  /** Drops the task (GLOSSARY: 放弃). */
+  | "drop"
+  /** Opens the review popup (#103). */
+  | "changeReviewInterval";
+
+/** What a step that lists tasks shows. */
+export interface ReviewStepList {
+  /** The read's list. */
+  readonly key: ReviewStepKey;
+  /**
+   * The cards' own actions, in the order shown. "Mark reviewed" is offered
+   * in every step (#99): placed last unless the step places it.
+   */
+  readonly actions: readonly ReviewCardAction[];
+  /**
+   * A card kept after it left the step says its new status ("Changed to
+   * …"); `false` only fades it, where a task leaves for reasons besides its
+   * status (the next actions) or keeps its status (marked reviewed).
+   */
+  readonly keptStatusShown: boolean;
+  /** An empty list's icon and title. */
+  readonly emptyIcon: string;
+  readonly empty: () => string;
+  /** A line under it, when the title alone does not say enough. */
+  readonly emptyDetail?: () => string;
+}
+
+export interface FullReviewStep {
+  readonly id: FullReviewStepId;
+  readonly label: () => string;
+  /** Absent while the step is not built. */
+  readonly list?: ReviewStepList;
+}
+
+export const fullReviewSteps: readonly FullReviewStep[] = [
+  {
+    id: "inbox",
+    label: () => t("Inbox"),
+    list: {
+      key: "inbox",
+      // Clarifying is the task panel's, opened by a click on the card, as
+      // in the inbox view.
+      actions: [],
+      keptStatusShown: true,
+      emptyIcon: "ti ti-inbox",
+      empty: () => t("Inbox is clear"),
+    },
+  },
+  { id: "lookBack", label: () => t("Look back") },
+  { id: "overdue", label: () => t("Overdue tasks") },
+  { id: "dueSoon", label: () => t("Due in the next 7 days") },
+  {
+    id: "nextActions",
+    label: () => t("Next actions"),
+    list: {
+      key: "nextActions",
+      actions: ["addToMyDay"],
+      keptStatusShown: false,
+      emptyIcon: "ti ti-player-play",
+      empty: () => t("Nothing to do right now"),
+    },
+  },
+  {
+    id: "waiting",
+    label: () => t("Waiting"),
+    list: {
+      key: "waiting",
+      actions: ["backToTodo"],
+      keptStatusShown: true,
+      emptyIcon: "ti ti-hourglass",
+      empty: () => t("No waiting tasks"),
+    },
+  },
+  {
+    id: "someday",
+    label: () => t("Someday"),
+    list: {
+      key: "someday",
+      actions: ["activate", "drop"],
+      keptStatusShown: true,
+      emptyIcon: "ti ti-cloud",
+      empty: () => t("No someday tasks"),
+    },
+  },
+  {
+    id: "dueForReview",
+    label: () => t("Tasks due for review"),
+    list: dueForReviewList(),
+  },
+  { id: "summary", label: () => t("Summary") },
+];
+
+/**
+ * The tasks due for review: the full review's step, and the list "only the
+ * tasks due for review" shows.
+ */
+export function dueForReviewList(): ReviewStepList {
+  return {
+    key: "dueForReview",
+    actions: ["markReviewed", "changeReviewInterval"],
+    // Only faded: marking reviewed or changing the plan leaves the status
+    // as it was, so "Changed to" would mislead.
+    keptStatusShown: false,
+    emptyIcon: "ti ti-list-check",
+    empty: () => t("No tasks due for review"),
+    emptyDetail: () =>
+      t(
+        "Tasks with a review interval or a review-on day show here once their day comes.",
+      ),
+  };
+}
+
+/** The card actions shown, "Mark reviewed" among them. */
+export function cardActions(list: ReviewStepList): readonly ReviewCardAction[] {
+  return list.actions.includes("markReviewed")
+    ? list.actions
+    : [...list.actions, "markReviewed"];
+}
+
+/** The step's definition. */
+export function fullReviewStep(id: FullReviewStepId): FullReviewStep {
+  const step = fullReviewSteps.find((candidate) => candidate.id === id);
+  if (!step) throw new Error(`unknown review step ${id}`);
+  return step;
+}
+
+/**
+ * The nearest step that can be opened before (`-1`) or after (`1`) `id`;
+ * `undefined` when there is none.
+ */
+export function adjacentStep(
+  id: FullReviewStepId,
+  direction: -1 | 1,
+): FullReviewStep | undefined {
+  const at = fullReviewSteps.findIndex((step) => step.id === id);
+  for (
+    let index = at + direction;
+    index >= 0 && index < fullReviewSteps.length;
+    index += direction
+  ) {
+    const step = fullReviewSteps[index];
+    if (step?.list) return step;
+  }
+  return undefined;
+}
+
+/** Where a full review starts: the first step that can be opened. */
+export function firstStep(): FullReviewStepId {
+  return fullReviewSteps.find((step) => step.list)?.id ?? "inbox";
+}

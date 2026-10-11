@@ -2,6 +2,7 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createAddToMyDay } from "../application/usecases/add-to-my-day";
+import { createDropTask } from "../application/usecases/drop-task";
 import {
   createCanMarkReviewed,
   createMarkReviewed,
@@ -57,7 +58,7 @@ export function pluginPanelType(pluginName: string): string {
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
  * style sheet, with the next action view (#53), the My Day view (#83), the
- * inbox view (#37), the all tasks view (#65), the review view (#98) and their
+ * inbox view (#37), the all tasks view (#65), the review view (#98, #99) and their
  * card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
@@ -85,6 +86,8 @@ export function createPanelFeature(deps: {
   taskPanel: { openPopup: OpenTaskPanelPopup; formDeps: TaskPanelFormDeps };
   /** The review popup (#103), for the review view's "Change review interval". */
   openReviewPopup: OpenReviewPopup;
+  /** The quick capture popup, for the review's "Create task" (#99). */
+  openQuickCapture: () => void;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
 }): { feature: FeatureModule; views: PanelViews } {
@@ -194,7 +197,11 @@ export function createPanelFeature(deps: {
       markReviewed: createMarkReviewed(myDayDeps),
       canMarkReviewed: createCanMarkReviewed(),
       openReviewPopup: deps.openReviewPopup,
+      addToMyDay: createAddToMyDay(myDayDeps),
+      dropTask: createDropTask({ repository }),
+      openQuickCapture: deps.openQuickCapture,
       today: deps.today,
+      now: () => systemClock.now(),
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
