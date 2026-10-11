@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import type { ReviewRead } from "../../domain/review/review";
 import { createReadReview } from "./read-review";
@@ -28,6 +29,7 @@ function setup() {
     // Wednesday October 14, 2026, 09:00 in UTC+8: the logical day October 14.
     clock: createFixedClock("2026-10-14T09:00:00+08:00"),
     dayBoundary: createFixedDayBoundary(),
+    startPreviewDays: createFixedStartPreviewDays(),
   });
   return { repository, readReview };
 }
@@ -79,10 +81,13 @@ describe("read review", () => {
       repository.addTask({ id: 4, status: "todo", review: plan(2) });
 
       const read = await readReview({
-        keep: new Map([
-          [2, october(10)],
-          [4, october(12)],
-        ]),
+        keep: {
+          step: "dueForReview",
+          tasks: new Map([
+            [2, october(10)],
+            [4, october(12)],
+          ]),
+        },
       });
 
       expect(
@@ -102,8 +107,11 @@ describe("read review", () => {
       repository.addTask({ id: 3, status: "todo", review: plan(6) });
 
       expect(
-        (await readReview({ keep: new Map([[2, october(8)]]) })).steps
-          .dueForReview.total,
+        (
+          await readReview({
+            keep: { step: "dueForReview", tasks: new Map([[2, october(8)]]) },
+          })
+        ).steps.dueForReview.total,
       ).toBe(2);
     });
 
@@ -113,9 +121,170 @@ describe("read review", () => {
       repository.addTask({ id: 2, status: "todo", review: plan(1) });
       await repository.dropTask(2);
 
-      const read = await readReview({ keep: new Map([[2, october(8)]]) });
+      const read = await readReview({
+        keep: { step: "dueForReview", tasks: new Map([[2, october(8)]]) },
+      });
 
       expect(ids(read.steps.dueForReview.items)).toEqual([1]);
+    });
+  });
+
+  describe("inbox", () => {
+    it("lists the tasks in the inbox, in the order they were captured", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({
+        id: 1,
+        status: "inbox",
+        created: new Date("2026-10-12T08:00:00+08:00"),
+      });
+      repository.addTask({ id: 2, status: "todo" });
+      repository.addTask({
+        id: 3,
+        status: "inbox",
+        created: new Date("2026-10-10T08:00:00+08:00"),
+      });
+      repository.addTask({
+        id: 4,
+        status: "inbox",
+        created: new Date("2026-10-13T08:00:00+08:00"),
+      });
+
+      const read = await readReview();
+
+      expect(ids(read.steps.inbox.items)).toEqual([3, 1, 4]);
+      expect(read.steps.inbox.total).toBe(3);
+    });
+
+    it("still lists a kept task after it left the inbox, in its place by capture, marked as kept", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({
+        id: 1,
+        status: "inbox",
+        created: new Date("2026-10-12T08:00:00+08:00"),
+      });
+      // Clarified to todo while the step showed.
+      repository.addTask({
+        id: 2,
+        status: "todo",
+        created: new Date("2026-10-11T08:00:00+08:00"),
+      });
+      repository.addTask({
+        id: 3,
+        status: "inbox",
+        created: new Date("2026-10-10T08:00:00+08:00"),
+      });
+
+      const read = await readReview({
+        keep: { step: "inbox", tasks: new Set([2]) },
+      });
+
+      expect(
+        read.steps.inbox.items.map((item) => [item.task.id, item.kept]),
+      ).toEqual([
+        [3, false],
+        [2, true],
+        [1, false],
+      ]);
+      expect(read.steps.inbox.total).toBe(2);
+    });
+  });
+
+  describe("next actions", () => {
+    it("lists the next actions, the highest score first, whatever blocks the others", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "todo", importance: 2 });
+      // Held back by its open subtask 3.
+      repository.addTask({ id: 2, status: "todo", importance: 7 });
+      repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+      repository.addTask({ id: 4, status: "doing", due: october(14) });
+      repository.addTask({ id: 5, status: "waiting" });
+
+      const read = await readReview();
+
+      expect(ids(read.steps.nextActions.items)).toEqual([4, 3, 1]);
+      expect(read.steps.nextActions.total).toBe(3);
+    });
+
+    it("still lists a kept task after it stopped being a next action, in its place by score, marked as kept", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "todo", importance: 2 });
+      // Changed to waiting while the step showed.
+      repository.addTask({ id: 2, status: "waiting", importance: 7 });
+
+      const read = await readReview({
+        keep: { step: "nextActions", tasks: new Set([2]) },
+      });
+
+      expect(
+        read.steps.nextActions.items.map((item) => [item.task.id, item.kept]),
+      ).toEqual([
+        [2, true],
+        [1, false],
+      ]);
+      expect(read.steps.nextActions.total).toBe(1);
+      // Still in the waiting step, as a waiting task.
+      expect(read.steps.waiting.items).toEqual([
+        expect.objectContaining({ kept: false }),
+      ]);
+    });
+  });
+
+  describe("waiting and someday", () => {
+    it("lists the waiting tasks and the someday tasks in their own steps, the highest score first", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "waiting", importance: 2 });
+      repository.addTask({ id: 2, status: "someday", importance: 2 });
+      repository.addTask({ id: 3, status: "waiting", due: october(14) });
+      repository.addTask({ id: 4, status: "someday", importance: 7 });
+      repository.addTask({ id: 5, status: "todo" });
+      // Under a waiting parent: parked, but still in its own status's step.
+      repository.addTask({ id: 6, status: "someday" }, { parentId: 1 });
+
+      const read = await readReview();
+
+      expect(ids(read.steps.waiting.items)).toEqual([3, 1]);
+      expect(read.steps.waiting.total).toBe(2);
+      expect(ids(read.steps.someday.items)).toEqual([4, 6, 2]);
+      expect(read.steps.someday.total).toBe(3);
+    });
+
+    it("still lists a kept task after it was activated, in its place by score, marked as kept", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "someday", importance: 2 });
+      // Activated (to todo) while the step showed.
+      repository.addTask({ id: 2, status: "todo", importance: 5 });
+      repository.addTask({ id: 3, status: "someday", importance: 7 });
+
+      const read = await readReview({
+        keep: { step: "someday", tasks: new Set([2]) },
+      });
+
+      expect(
+        read.steps.someday.items.map((item) => [item.task.id, item.kept]),
+      ).toEqual([
+        [3, false],
+        [2, true],
+        [1, false],
+      ]);
+      expect(read.steps.someday.total).toBe(2);
+      // Kept in the someday step only.
+      expect(read.steps.waiting.items).toEqual([]);
+    });
+  });
+
+  describe("tasks in several steps", () => {
+    it("lists a task in every step it belongs to", async () => {
+      const { repository, readReview } = setup();
+      // A next action due for review.
+      repository.addTask({ id: 1, status: "todo", review: plan(1) });
+      // A waiting task due for review.
+      repository.addTask({ id: 2, status: "waiting", review: plan(null, 3) });
+
+      const read = await readReview();
+
+      expect(ids(read.steps.nextActions.items)).toEqual([1]);
+      expect(ids(read.steps.waiting.items)).toEqual([2]);
+      expect(ids(read.steps.dueForReview.items)).toEqual([2, 1]);
     });
   });
 });

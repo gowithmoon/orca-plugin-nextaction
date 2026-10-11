@@ -405,6 +405,20 @@ const zhCN: Record<string, string> = {
   "Change review interval": "修改回顾周期",
   Back: "返回",
   "Tasks due for review": "需要回顾的任务",
+  "Start full review": "开始完整回顾",
+  "Review steps": "回顾步骤",
+  "(opened)": "（已看过）",
+  "Not available yet": "暂未开放",
+  "Look back": "回看过去",
+  "Overdue tasks": "逾期任务",
+  "Due in the next 7 days": "未来 7 天到期",
+  Summary: "小结",
+  "No waiting tasks": "没有等待中的任务",
+  "No someday tasks": "没有将来/也许的任务",
+  "Back to todo": "改回待开始",
+  Activate: "激活",
+  Previous: "上一步",
+  Next: "下一步",
 };
 
 export default zhCN;

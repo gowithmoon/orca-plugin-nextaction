@@ -212,4 +212,106 @@ export const panelCss = `
   margin-bottom: var(--orca-spacing-sm);
   margin-left: calc(var(--orca-spacing-sm) * -1);
 }
+
+/* The full review (#99): a step's title with "Create task" beside it. */
+.nextaction-review-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-review-title > .nextaction-view-header {
+  flex: 0 1 auto;
+}
+
+.nextaction-review-capture {
+  flex: 0 0 auto;
+}
+
+/*
+ * The step bar: every step, numbered, in one row that wraps; the current one
+ * filled as the navigation's pills, the ones opened with a check, the ones
+ * not built yet faint.
+ */
+.nextaction-review-steps {
+  margin-bottom: var(--orca-spacing-md);
+}
+
+.nextaction-review-steps > ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-review-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: none;
+  border-radius: var(--orca-radius-md);
+  background: transparent;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  cursor: pointer;
+}
+
+.nextaction-review-step:hover:not(:disabled) {
+  color: var(--orca-color-text-1);
+}
+
+.nextaction-review-step[aria-current="step"] {
+  background-color: var(--orca-color-bg-2);
+  color: var(--orca-color-text-1);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+.nextaction-review-step:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.nextaction-review-step:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-review-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  border-radius: 999px;
+  border: 1px solid var(--orca-color-border);
+  font-size: var(--orca-fontsize-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-review-step[data-opened] .nextaction-review-step-number {
+  border-color: transparent;
+  color: var(--orca-color-text-green, var(--orca-color-primary-5));
+}
+
+.nextaction-review-step[aria-current="step"] .nextaction-review-step-number {
+  border-color: var(--orca-color-primary-5);
+  color: var(--orca-color-primary-5);
+}
+
+/* "Previous / Next" below a step's list. */
+.nextaction-review-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--orca-spacing-sm);
+  margin-top: var(--orca-spacing-md);
+}
+
+/* A card's "Drop" turns the dangerous colour on hover. */
+.nextaction-task-card-extra[data-dangerous]:hover {
+  color: var(--orca-color-dangerous-5);
+}
 `;
