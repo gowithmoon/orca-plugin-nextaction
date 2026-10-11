@@ -22,6 +22,7 @@ import {
   importanceName,
   urgencyName,
 } from "./format";
+import { ruleText } from "./recurrence-text";
 import { statusLabel } from "./status-label";
 
 function anomalyText(anomaly: DataAnomaly): string {
@@ -68,8 +69,14 @@ export function PropertyRow(props: {
   kept?: boolean;
   /** Marked blocked (#65), right after a new status. */
   blocked?: boolean;
+  /**
+   * A recurring task completed today that has advanced already (My Day,
+   * #95): it says so, as its status icon shows todo again.
+   */
+  doneToday?: boolean;
 }) {
-  const { task, today, kept, blocked } = props;
+  const { task, today, kept, blocked, doneToday } = props;
+  const { Tooltip } = orca.components;
   const overdue = isOverdue(task, today);
   const importance = importanceName(task.importance);
   const urgency = urgencyName(task.urgency);
@@ -79,6 +86,11 @@ export function PropertyRow(props: {
       {kept && (
         <span className="nextaction-property nextaction-property-kept">
           {t("Changed to ${status}", { status: statusLabel(task.status) })}
+        </span>
+      )}
+      {doneToday && (
+        <span className="nextaction-property nextaction-property-kept">
+          {t("Done today")}
         </span>
       )}
       {blocked && (
@@ -96,6 +108,20 @@ export function PropertyRow(props: {
           {anomalyText(anomaly)}
         </span>
       ))}
+      {/* A recurring task (#95): an icon, the rule on hover. */}
+      {task.recurrence.kind === "rule" && (
+        <Tooltip text={ruleText(task.recurrence.rule)}>
+          <span
+            className="nextaction-property nextaction-property-recurrence"
+            role="img"
+            aria-label={t("Repeats: ${rule}", {
+              rule: ruleText(task.recurrence.rule),
+            })}
+          >
+            <i className="ti ti-repeat" aria-hidden="true" />
+          </span>
+        </Tooltip>
+      )}
       {task.due && (
         <span
           className="nextaction-property nextaction-property-due"

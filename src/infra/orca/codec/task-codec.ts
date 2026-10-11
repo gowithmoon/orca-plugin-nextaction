@@ -14,6 +14,7 @@ import {
   findStatusKey,
   type PropertyKey,
 } from "./names";
+import { recurrenceOf } from "./recurrence-codec";
 
 /** What the codec needs to know about the task tag. */
 export interface TaskTagContext {
@@ -145,6 +146,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       dependencyMode: dependencyModeValue(values.get("dependencyMode")),
       dependencyDelay: numberValue(values.get("dependencyDelay")),
       created: createdValue(block.id, block.created),
+      recurrence: recurrenceOf(block),
     }),
   };
 }

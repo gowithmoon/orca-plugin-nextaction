@@ -1,10 +1,13 @@
 // Use case: change a task's status from the task menu (GLOSSARY: 状态), and
 // record a completion when the task enters done (GLOSSARY: 完成历史).
+
+import { planAdvance } from "../../domain/recurrence/recurrence";
 import {
   historyAfterStatusChange,
   recordsCompletion,
 } from "../../domain/task/completion-history";
 import {
+  type CalendarDate,
   hasStatusAnomaly,
   type TaskId,
   type TaskStatus,
@@ -21,7 +24,13 @@ export type ChangeStatusResult =
    * The task already was in that status, and the notes hold it; nothing was
    * written.
    */
-  | { kind: "unchanged" };
+  | { kind: "unchanged" }
+  /**
+   * A recurring task was completed and advanced (GLOSSARY: 进入下一次): a
+   * completion recorded, back to todo, its dates on `next`. `completedOn` is
+   * the logical day of the completion, for showing `next` beside it.
+   */
+  | { kind: "advanced"; next: CalendarDate; completedOn: CalendarDate };
 
 /**
  * The task's completion history holds something this plugin cannot read
@@ -30,6 +39,18 @@ export type ChangeStatusResult =
  */
 export class CompletionHistoryUnreadableError extends Error {
   override name = "CompletionHistoryUnreadableError";
+}
+
+/**
+ * The task's recurrence rule holds something this plugin cannot read (an
+ * unknown version, a missing field, a value out of range), so it cannot be
+ * set to done: whether and where it advances is unknown. Nothing was written.
+ */
+export class RecurrenceUnreadableError extends Error {
+  override name = "RecurrenceUnreadableError";
+  constructor(readonly reason: string) {
+    super(`the recurrence rule cannot be read (${reason})`);
+  }
 }
 
 /**
@@ -59,6 +80,9 @@ export function createChangeStatus(deps: {
       await deps.repository.updateTask(id, { status });
       return { kind: "changed" };
     }
+    if (task.recurrence.kind === "unreadable") {
+      throw new RecurrenceUnreadableError(task.recurrence.reason);
+    }
     const read = await deps.repository.readCompletionHistory(id);
     if (read.kind === "unreadable") {
       throw new CompletionHistoryUnreadableError(
@@ -66,14 +90,31 @@ export function createChangeStatus(deps: {
       );
     }
     const now = deps.clock.now();
+    const completion = {
+      at: now,
+      day: logicalDay(now, deps.dayBoundary.current()),
+    };
+    if (task.recurrence.kind === "rule") {
+      // A recurring task advances (GLOSSARY: 进入下一次): status, dates and
+      // history in one write, so one undo.
+      const plan = planAdvance(
+        task.recurrence.rule,
+        task,
+        read.history,
+        completion,
+      );
+      await deps.repository.updateTask(id, plan.changes, plan.history);
+      return {
+        kind: "advanced",
+        next: plan.next,
+        completedOn: completion.day,
+      };
+    }
     const history = historyAfterStatusChange(
       read.history,
       task.status,
       status,
-      {
-        at: now,
-        day: logicalDay(now, deps.dayBoundary.current()),
-      },
+      completion,
     );
     await deps.repository.updateTask(id, { status }, history);
     return { kind: "changed" };

@@ -104,6 +104,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     dependencies: [],
     dependencyMode: "all",
     dependencyDelay: 0,
+    recurrence: { kind: "none" },
     anomalies: [],
   };
 }
@@ -404,6 +405,22 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       refuseUnreadableMyDay(block, id);
       write(() => {
         block.myDay = { kind: "readable", entries: [...entries] };
+      });
+    },
+
+    async writeRecurrence(id, rule) {
+      const block = taskToWrite(id);
+      // A rule this plugin cannot read is never overwritten.
+      if (block.task.recurrence.kind === "unreadable") {
+        throw new Error(
+          `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
+        );
+      }
+      write(() => {
+        block.task = {
+          ...block.task,
+          recurrence: rule ? { kind: "rule", rule } : { kind: "none" },
+        };
       });
     },
 

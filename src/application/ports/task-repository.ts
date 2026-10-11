@@ -1,5 +1,6 @@
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
+import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
@@ -165,6 +166,16 @@ export interface TaskRepository {
    * block's ID writes to its source block.
    */
   writeMyDay(id: TaskId, entries: MyDayEntries): Promise<void>;
+
+  /**
+   * Writes the task's recurrence rule (GLOSSARY: 重复规则), replacing what it
+   * holds; `null` removes it, writing no rule with the property kept. The
+   * task's other properties and its dates are left as they are. The user
+   * undoes it with one undo. Fails, writing nothing, when the block is not a
+   * task, its rule reads as unreadable, or the write fails. A mirror block's
+   * ID writes to its source block.
+   */
+  writeRecurrence(id: TaskId, rule: RecurrenceRule | null): Promise<void>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

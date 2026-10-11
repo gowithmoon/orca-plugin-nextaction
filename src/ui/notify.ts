@@ -7,6 +7,7 @@ import {
 import {
   type ChangeStatus,
   CompletionHistoryUnreadableError,
+  RecurrenceUnreadableError,
 } from "../application/usecases/change-status";
 import {
   DependencyCycleError,
@@ -16,7 +17,7 @@ import { MyDayUnreadableError } from "../application/usecases/my-day-unreadable-
 import type { TaskId, TaskStatus } from "../domain/task/task";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
-import { shownText } from "./components/format";
+import { formatDate, shownText } from "./components/format";
 
 export type Notify = (
   type: "info" | "success" | "warn" | "error",
@@ -105,8 +106,9 @@ export function notifyActionFailure(
 
 /**
  * Changes the status and reports a failure; success says nothing (the icon
- * changes). Never throws. Shared by the task menu, the task card and the
- * task panel.
+ * changes), except for a recurring task that advanced: its icon shows todo
+ * again, so the next occurrence is told (#95). Never throws. Shared by the
+ * task menu, the task card and the task panel.
  */
 export async function changeStatusReporting(
   changeStatus: ChangeStatus,
@@ -115,8 +117,26 @@ export async function changeStatusReporting(
   status: TaskStatus,
 ): Promise<void> {
   try {
-    await changeStatus(id, status);
+    const result = await changeStatus(id, status);
+    if (result.kind === "advanced") {
+      notify(
+        "success",
+        t("Next: ${date}", {
+          date: formatDate(result.next, result.completedOn),
+        }),
+      );
+    }
   } catch (error) {
+    if (error instanceof RecurrenceUnreadableError) {
+      notify(
+        "error",
+        t(
+          "Could not mark the task done: its recurrence rule cannot be read (${reason}) and is kept as it is.",
+          { reason: error.reason },
+        ),
+      );
+      return;
+    }
     if (error instanceof CompletionHistoryUnreadableError) {
       notify(
         "error",

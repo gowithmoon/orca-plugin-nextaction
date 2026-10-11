@@ -393,6 +393,11 @@ export const componentCss = `
 }
 
 /* Blocked (#65): a tag in the danger colour, like "overdue". */
+/* A recurring task (#95): only the icon, muted; the rule on hover. */
+.nextaction-property-recurrence {
+  color: var(--orca-color-text-2);
+}
+
 .nextaction-property-blocked {
   padding: 0 var(--orca-spacing-xs);
   border-radius: var(--orca-radius-sm);

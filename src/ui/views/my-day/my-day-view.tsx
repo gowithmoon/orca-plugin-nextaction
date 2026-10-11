@@ -183,6 +183,8 @@ function UnscheduledList(props: {
             menuPlace={menuPlace}
             onOpen={(open) => selectTask(open.id)}
             selected={item.task.id === selectedTaskId}
+            // Completed today but advanced to todo (#95).
+            doneToday={item.done && item.task.status !== "done"}
             buttons={<ScheduleButton onClick={() => onSchedule(item)} />}
           />
         </UnscheduledItem>

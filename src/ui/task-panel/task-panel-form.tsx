@@ -38,6 +38,7 @@ import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
+import type { OpenRecurrencePopup } from "./recurrence-popup";
 import {
   DateField,
   DependencyDelayField,
@@ -45,6 +46,7 @@ import {
   Field,
   NoteField,
   RatingField,
+  RecurrenceField,
   SequentialField,
   StatusField,
 } from "./task-panel-fields";
@@ -65,6 +67,8 @@ export interface TaskPanelFormDeps {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /** Opens the recurrence rule popup for the task (#95). */
+  openRecurrencePopup: OpenRecurrencePopup;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -145,6 +149,8 @@ function Fields(props: {
   notNextActionReasons: React.ReactNode;
   /** The dependencies list and search to add (#57). */
   dependencies: React.ReactNode;
+  /** Opens the recurrence rule popup (#95). */
+  onOpenRecurrence: () => void;
 }) {
   const { task, today, idPrefix, actions } = props;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -201,6 +207,13 @@ function Fields(props: {
           today={today}
           overdue={isOverdue(task, today)}
           onChange={(due) => void actions.edit({ due })}
+        />
+      </Field>
+      <Field label={t("Repeat")} labelId={id("recurrence")}>
+        <RecurrenceField
+          labelId={id("recurrence")}
+          recurrence={task.recurrence}
+          onOpen={props.onOpenRecurrence}
         />
       </Field>
       <Field label={t("Context")} labelId={id("contexts")}>
@@ -310,6 +323,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         actions={actions}
         saveOnLeave={saveOnLeave}
         candidates={candidates}
+        onOpenRecurrence={() => deps.openRecurrencePopup(state.task)}
         notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use
           // case returns none for the rest, so the row stays hidden.

@@ -11,6 +11,7 @@ import {
 } from "../../../application/ports/task-repository";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
+import type { RecurrenceRule } from "../../../domain/recurrence/recurrence";
 import type { CompletionHistory } from "../../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
@@ -31,6 +32,7 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
+import { planRecurrenceWrite } from "../codec/recurrence-codec";
 import {
   decodeTask,
   findTaskTagRef,
@@ -600,6 +602,26 @@ export function createOrcaTaskRepository(
       // Planned before anything is written: a value this plugin cannot read
       // fails the write, writing nothing.
       const property = plannedWrite(block, planMyDayWrite(block, entries));
+      // setProperties replaces a property of the same name and keeps the
+      // others (block-properties-json J2); one command in one group, one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [block.id],
+          [property],
+        );
+      });
+    },
+
+    async writeRecurrence(
+      id: TaskId,
+      rule: RecurrenceRule | null,
+    ): Promise<void> {
+      // Mirrors resolve to their source blocks (block-properties-json M3).
+      const block = await taskBlockToWrite(id, currentTag());
+      // Planned before anything is written: a value this plugin cannot read
+      // fails the write, writing nothing.
+      const property = plannedWrite(block, planRecurrenceWrite(block, rule));
       // setProperties replaces a property of the same name and keeps the
       // others (block-properties-json J2); one command in one group, one undo.
       await writeTo(block, async () => {

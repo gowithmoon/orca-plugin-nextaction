@@ -2,6 +2,7 @@
 // seven-cell ratings, dates and the note. Each change is one write. Verified
 // by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { RecurrenceRead } from "../../domain/recurrence/recurrence";
 import type {
   CalendarDate,
   DependencyMode,
@@ -12,6 +13,7 @@ import { defaultRating, taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
 import { usePopupLayer } from "../components/popup-layer";
+import { recurrenceText } from "../components/recurrence-text";
 import { statusLabel } from "../components/status-label";
 import { statusIcons } from "../task-menu/status-icons";
 
@@ -302,6 +304,36 @@ export function NoteField(props: {
           {t("Saved")}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Repeat (GLOSSARY: 重复规则, #95): the rule's summary ("每 2 周 · 按日程", or
+ * "不重复"), as a button that opens the recurrence rule popup.
+ */
+export function RecurrenceField(props: {
+  labelId: string;
+  recurrence: RecurrenceRead;
+  onOpen: () => void;
+}) {
+  const { Button } = orca.components;
+  const valueId = `${props.labelId}-value`;
+  return (
+    <div className="nextaction-recurrence-field">
+      <Button
+        id={valueId}
+        className="nextaction-recurrence-button"
+        variant="outline"
+        aria-labelledby={`${props.labelId} ${valueId}`}
+        aria-haspopup="dialog"
+        data-empty={props.recurrence.kind === "none" || undefined}
+        data-unreadable={props.recurrence.kind === "unreadable" || undefined}
+        onClick={props.onOpen}
+      >
+        <i className="ti ti-repeat" aria-hidden="true" />
+        {recurrenceText(props.recurrence)}
+      </Button>
     </div>
   );
 }

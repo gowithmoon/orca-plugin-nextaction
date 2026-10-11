@@ -256,6 +256,38 @@ const zhCN: Record<string, string> = {
   Unschedule: "取消排期",
   "${text}, ${times}": "${text}，${times}",
   "Now, ${time}": "现在，${time}",
+  Repeat: "重复",
+  "Does not repeat": "不重复",
+  "Cannot be read (${reason})": "无法读取（${reason}）",
+  "Every day": "每天",
+  "Every ${n} days": "每 ${n} 天",
+  "Every week": "每周",
+  "Every ${n} weeks": "每 ${n} 周",
+  "Every month": "每月",
+  "Every ${n} months": "每 ${n} 个月",
+  "Every year": "每年",
+  "Every ${n} years": "每 ${n} 年",
+  Days: "天",
+  Weeks: "周",
+  Months: "月",
+  Years: "年",
+  "Fixed schedule": "按日程",
+  "After completion": "按完成",
+  "${period} · ${basis}": "${period} · ${basis}",
+  "Repeats: ${rule}": "重复：${rule}",
+  "Done today": "今天已完成",
+  "Next: ${date}": "下一次：${date}",
+  "Could not mark the task done: its recurrence rule cannot be read (${reason}) and is kept as it is.":
+    "无法完成任务：它的重复规则无法读取（${reason}），已原样保留。",
+  "This task's recurrence rule cannot be read (${reason}). It is kept as it is and cannot be changed here.":
+    "这个任务的重复规则无法读取（${reason}），已原样保留，无法在这里修改。",
+  Every: "每",
+  "Next occurrence counts from": "下一次发生的起算",
+  "From the task's due date (or start date), whenever it is done.":
+    "从任务的截止日期（没有时取开始日期）往后排，与哪天完成无关。",
+  "From the day it is done.": "从完成的那天往后排。",
+  "Remove rule": "移除规则",
+  Save: "保存",
 };
 
 export default zhCN;

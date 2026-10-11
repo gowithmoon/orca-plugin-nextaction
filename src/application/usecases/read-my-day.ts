@@ -12,6 +12,7 @@ import {
 } from "../../domain/task/my-day";
 import { isOverdue } from "../../domain/task/overdue";
 import type { Task, TaskId } from "../../domain/task/task";
+import { compareDays } from "../../domain/time/calendar-days";
 import {
   type LogicalDayRange,
   logicalDay,
@@ -25,6 +26,11 @@ import type { TaskRepository } from "../ports/task-repository";
 /** A task in today's My Day. */
 export interface MyDayItem {
   readonly task: Task;
+  /**
+   * Done today: the task is done, or it is a recurring task completed today
+   * that has advanced already (GLOSSARY: 我的一天), its status todo.
+   */
+  readonly done: boolean;
   /** Still not done after its due day (GLOSSARY: 截止日期). */
   readonly overdue: boolean;
   /**
@@ -76,6 +82,7 @@ export function createReadMyDay(deps: {
     });
     const inToday: TaskGraphEntry[] = [];
     const schedules = new Map<TaskId, MyDaySchedule>();
+    const done = new Set<TaskId>();
     for (const item of snapshot.tasks) {
       if (item.myDay?.kind !== "readable") continue;
       const todays = todayEntry(item.myDay.entries, now, boundary);
@@ -83,6 +90,16 @@ export function createReadMyDay(deps: {
       const entry = graph.entry(item.task.id);
       if (!entry) continue;
       inToday.push(entry);
+      // A recurring task completed today has advanced to todo, but today it
+      // counts as done (GLOSSARY: 我的一天).
+      if (
+        item.task.status === "done" ||
+        (item.task.recurrence.kind === "rule" &&
+          item.lastCompletion !== undefined &&
+          compareDays(item.lastCompletion.day, today) === 0)
+      ) {
+        done.add(item.task.id);
+      }
       // One outside today's range reads as unscheduled (ADR 0020).
       if (todays.schedule && scheduleWithin(todays.schedule, range)) {
         schedules.set(item.task.id, todays.schedule);
@@ -90,10 +107,11 @@ export function createReadMyDay(deps: {
     }
     const ranked = rankByScore(inToday, today);
     const ordered = [
-      ...ranked.filter((entry) => entry.task.status !== "done"),
-      ...ranked.filter((entry) => entry.task.status === "done"),
+      ...ranked.filter((entry) => !done.has(entry.task.id)),
+      ...ranked.filter((entry) => done.has(entry.task.id)),
     ].map((entry, unscheduledOrder) => ({
       task: entry.task,
+      done: done.has(entry.task.id),
       overdue: isOverdue(entry.task, today),
       unscheduledOrder,
     }));

@@ -9,6 +9,7 @@ import { taskStatuses } from "../../domain/task/task";
 import {
   CompletionHistoryUnreadableError,
   createChangeStatus,
+  RecurrenceUnreadableError,
 } from "./change-status";
 
 /** The completion recorded at the clock of `deps`. */
@@ -231,5 +232,96 @@ describe("change status: completion history", () => {
 
     expect((await repository.getTask(47))?.status).toBe("todo");
     expect(await repository.readCompletionHistory(47)).toEqual(stored);
+  });
+});
+
+describe("change status: recurring tasks", () => {
+  const weekly = {
+    kind: "rule",
+    rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+  } as const;
+
+  it("completing a recurring task advances it in one write and returns the next occurrence", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 60,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: weekly,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(60, "done")).toEqual({
+      kind: "advanced",
+      next: { year: 2026, month: 10, day: 12 },
+      completedOn: { year: 2026, month: 10, day: 8 },
+    });
+
+    const task = await repository.getTask(60);
+    expect(task?.status).toBe("todo");
+    expect(task?.due).toEqual({ year: 2026, month: 10, day: 12 });
+    expect(await repository.readCompletionHistory(60)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    // Status, date and history in one write, so one undo.
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("completing a recurring task in progress also goes back to todo", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 61,
+      status: "doing",
+      start: { year: 2026, month: 10, day: 8 },
+      recurrence: weekly,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(61, "done");
+
+    const task = await repository.getTask(61);
+    expect(task?.status).toBe("todo");
+    expect(task?.start).toEqual({ year: 2026, month: 10, day: 15 });
+  });
+
+  it("fails to complete a task whose rule is unreadable, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 62,
+      status: "todo",
+      recurrence: { kind: "unreadable", reason: "unknown version 2" },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(62, "done")).rejects.toBeInstanceOf(
+      RecurrenceUnreadableError,
+    );
+
+    expect((await repository.getTask(62))?.status).toBe("todo");
+    expect(await repository.readCompletionHistory(62)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("fails to complete a recurring task whose history is unreadable, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 5 };
+    repository.addTask(
+      { id: 63, status: "todo", due, recurrence: weekly },
+      {
+        completionHistory: { kind: "unreadable", reason: "unknown version 2" },
+      },
+    );
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(63, "done")).rejects.toBeInstanceOf(
+      CompletionHistoryUnreadableError,
+    );
+
+    expect(await repository.getTask(63)).toMatchObject({ status: "todo", due });
+    expect(repository.writeCount()).toBe(0);
   });
 });

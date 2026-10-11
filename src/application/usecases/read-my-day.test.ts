@@ -213,4 +213,46 @@ describe("read today's My Day", () => {
       [4, false],
     ]);
   });
+
+  it("shows a recurring task completed today as done, after the others, though it has advanced to todo", async () => {
+    const { repository, readMyDay } = setup();
+    const weekly = {
+      kind: "rule",
+      rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+    } as const;
+    const completedToday = {
+      kind: "readable",
+      history: [{ at: at("09T08:00:00"), day: oct9 }],
+    } as const;
+    const completedYesterday = {
+      kind: "readable",
+      history: [{ at: at("08T20:00:00"), day: oct8 }],
+    } as const;
+    repository.addTask(
+      { id: 1, status: "todo", importance: 7, recurrence: weekly },
+      { ...myDay({ day: oct9 }), completionHistory: completedToday },
+    );
+    repository.addTask(
+      { id: 2, status: "todo", importance: 2, recurrence: weekly },
+      { ...myDay({ day: oct9 }), completionHistory: completedYesterday },
+    );
+    repository.addTask(
+      { id: 3, status: "done", importance: 1 },
+      myDay({ day: oct9 }),
+    );
+
+    const read = await readMyDay();
+
+    expect(
+      read.unscheduled.map((item) => [
+        item.task.id,
+        item.task.status,
+        item.done,
+      ]),
+    ).toEqual([
+      [2, "todo", false],
+      [1, "todo", true],
+      [3, "done", true],
+    ]);
+  });
 });

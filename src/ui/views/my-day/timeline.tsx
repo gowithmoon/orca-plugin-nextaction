@@ -122,7 +122,8 @@ export function TimelineCard(props: {
       style={style}
       data-nextaction-timeline-card={task.id}
       data-compact={compact || undefined}
-      data-done={task.status === "done" || undefined}
+      // Done today, a recurring task that advanced included (#95).
+      data-done={item.done || undefined}
       data-selected={selected || undefined}
       aria-current={selected || undefined}
       aria-label={t("${text}, ${times}", { text: text.text, times })}

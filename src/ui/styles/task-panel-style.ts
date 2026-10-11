@@ -465,4 +465,125 @@ button.nextaction-dependency-task:hover {
   background-color: color-mix(in srgb, var(--orca-color-dangerous-5) 10%, transparent);
   color: var(--orca-color-dangerous-5);
 }
+
+/* Repeat (#95): the rule's summary as a button reading like a field. */
+.nextaction-recurrence-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 18rem;
+}
+
+.nextaction-recurrence-field .nextaction-recurrence-button {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  font-weight: var(--orca-fontweight-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nextaction-recurrence-button > .ti {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-recurrence-field .nextaction-recurrence-button[data-empty] {
+  color: var(--orca-color-placeholder, var(--orca-color-text-2));
+}
+
+.nextaction-recurrence-field .nextaction-recurrence-button[data-unreadable] {
+  color: var(--orca-color-dangerous-5);
+}
+
+/* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
+.nextaction-recurrence-popup {
+  --nextaction-window-width: 26rem;
+}
+
+.nextaction-recurrence-popup-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--orca-spacing-sm);
+  flex: 0 0 auto;
+  padding: var(--orca-spacing-md) var(--orca-spacing-md) 0 var(--orca-spacing-lg);
+}
+
+.nextaction-recurrence-popup-heading {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--orca-spacing-xs) / 2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nextaction-recurrence-popup-title {
+  font-size: var(--orca-fontsize-md);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+.nextaction-recurrence-popup-task {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-recurrence-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  padding: var(--orca-spacing-md) var(--orca-spacing-lg) var(--orca-spacing-lg);
+  overflow-y: auto;
+}
+
+.nextaction-recurrence-popup-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+}
+
+.nextaction-recurrence-popup-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-recurrence-popup-period > :first-child {
+  width: 5rem;
+}
+
+.nextaction-recurrence-popup-label {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-recurrence-popup-hint {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-recurrence-popup-warning {
+  color: var(--orca-color-dangerous-5);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-recurrence-popup-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  flex: 0 0 auto;
+  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
+  border-top: var(--orca-border-separator);
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-recurrence-popup-spacer {
+  flex: 1 1 auto;
+}
 `;

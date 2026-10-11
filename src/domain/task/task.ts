@@ -1,5 +1,6 @@
 // The task model and the rules for interpreting what the notes hold
 // (GLOSSARY: Status, Importance, Urgency, Effort, Start, Due). Pure; no Orca types.
+import type { RecurrenceRead } from "../recurrence/recurrence";
 
 /** Identifies a task. It is the ID of the task's (source) block. */
 export type TaskId = number;
@@ -83,6 +84,11 @@ export interface Task {
   readonly dependencyDelay: number;
   /** When the block was created; read-only, it orders the inbox. */
   readonly created: Date;
+  /**
+   * Its recurrence rule as read (GLOSSARY: 重复规则): none, a rule (a
+   * recurring task), or one this plugin cannot read.
+   */
+  readonly recurrence: RecurrenceRead;
   readonly anomalies: readonly DataAnomaly[];
 }
 
@@ -117,6 +123,7 @@ export interface TaskInNotes {
   /** A number, or `null` when the notes hold none. */
   dependencyDelay: number | null;
   created: Date;
+  recurrence: RecurrenceRead;
 }
 
 /** Importance, urgency and effort default to 4 (GLOSSARY). */
@@ -170,6 +177,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     dependencyMode: input.dependencyMode,
     dependencyDelay: delayDays(input.dependencyDelay),
     created: input.created,
+    recurrence: input.recurrence,
     anomalies,
   };
 }
