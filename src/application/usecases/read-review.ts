@@ -6,8 +6,10 @@ import {
   analyzeTaskGraph,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
+import { isDueSoon } from "../../domain/review/due-steps";
 import { isDueForReview, reviewDueDay } from "../../domain/review/review";
 import { rankByScore } from "../../domain/scoring/score";
+import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import { compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
@@ -27,18 +29,44 @@ export type ReviewStepKey = keyof ReadReviewResult["steps"];
  */
 export type ReviewKeep =
   | {
-      readonly step: "dueForReview";
+      readonly step: DatedReviewStepKey;
       /**
-       * Each with the review due day it was listed under
-       * (`DueForReviewItem.dueOn`).
+       * Each with the day it was listed under: its review due day
+       * (`DueForReviewItem.dueOn`) or its due date before it was changed.
        */
       readonly tasks: ReadonlyMap<TaskId, CalendarDate>;
     }
   | {
-      readonly step: Exclude<ReviewStepKey, "dueForReview">;
+      readonly step: Exclude<ReviewStepKey, DatedReviewStepKey>;
       /** Placed by capture or by score, as the step orders its own. */
       readonly tasks: ReadonlySet<TaskId>;
     };
+
+/**
+ * The steps ordered by a day, whose kept tasks keep the day they were
+ * listed under: the tasks due for review, the overdue tasks and the ones due
+ * in the next 7 days.
+ */
+export const datedReviewStepKeys = [
+  "dueForReview",
+  "overdue",
+  "dueSoon",
+] as const;
+export type DatedReviewStepKey = (typeof datedReviewStepKeys)[number];
+
+/** Whether `step` keeps its tasks with the day they were listed under. */
+export function isDatedReviewStep(
+  step: ReviewStepKey,
+): step is DatedReviewStepKey {
+  return (datedReviewStepKeys as readonly string[]).includes(step);
+}
+
+/** Whether `keep` keeps its tasks with the day they were listed under. */
+function isDatedKeep(
+  keep: ReviewKeep,
+): keep is Extract<ReviewKeep, { step: DatedReviewStepKey }> {
+  return isDatedReviewStep(keep.step);
+}
 
 export interface ReadReviewOptions {
   readonly keep?: ReviewKeep;
@@ -56,6 +84,15 @@ export interface ReviewStepRead<Item extends ReviewItem = ReviewItem> {
   readonly items: readonly Item[];
   /** How many tasks belong to the step; kept ones are not counted. */
   readonly total: number;
+}
+
+/** A task in a step ordered by its due date (the overdue tasks, due soon). */
+export interface DatedReviewItem extends ReviewItem {
+  /**
+   * Its due date, which the list is ordered by; for a kept task, the due
+   * date it was listed under before it was changed.
+   */
+  readonly dueOn: CalendarDate;
 }
 
 /** A task in the list of tasks due for review. */
@@ -82,6 +119,13 @@ export interface ReadReviewResult {
     readonly waiting: ReviewStepRead;
     /** The someday tasks (GLOSSARY: 将来/也许), the highest score first. */
     readonly someday: ReviewStepRead;
+    /** The overdue tasks (GLOSSARY: 截止日期), the earliest due date first. */
+    readonly overdue: ReviewStepRead<DatedReviewItem>;
+    /**
+     * The tasks due in the next 7 days (GLOSSARY: 完整回顾): due today to
+     * today plus 6, not overdue, the earliest due date first.
+     */
+    readonly dueSoon: ReviewStepRead<DatedReviewItem>;
     /**
      * The tasks due for review (GLOSSARY: 需要回顾), the earliest due first;
      * its total is the navigation's count.
@@ -117,9 +161,13 @@ export function createReadReview(deps: {
     const keep = options.keep;
     /** The tasks kept in `step`; none for any other step. */
     const keptIn = (step: ReviewStepKey): ReadonlySet<TaskId> =>
-      keep?.step === step && keep.step !== "dueForReview"
-        ? keep.tasks
-        : new Set();
+      keep?.step === step && !isDatedKeep(keep) ? keep.tasks : new Set();
+    /** The day `id` was listed under in `step`, when kept there. */
+    const keptOnDay = (
+      step: DatedReviewStepKey,
+      id: TaskId,
+    ): CalendarDate | undefined =>
+      keep?.step === step && isDatedKeep(keep) ? keep.tasks.get(id) : undefined;
     const items: DueForReviewItem[] = [];
     let total = 0;
     // Only tasks in the snapshot: a block that is no longer a task is not
@@ -134,8 +182,7 @@ export function createReadReview(deps: {
         items.push({ task, kept: false, dueOn });
         continue;
       }
-      const keptOn =
-        keep?.step === "dueForReview" ? keep.tasks.get(task.id) : undefined;
+      const keptOn = keptOnDay("dueForReview", task.id);
       if (keptOn) items.push({ task, kept: true, dueOn: keptOn });
     }
     // Stable: the same day keeps the notes' order.
@@ -163,6 +210,31 @@ export function createReadReview(deps: {
         total: entries.filter(belongs).length,
       };
     };
+    /**
+     * A step ordered by due date: the tasks `belongs` lets in, and the ones
+     * kept in `step` that it no longer does, each by the due date it was
+     * listed under; the earliest first, the same day keeping the notes'
+     * order. Only tasks in the snapshot: a block that is no longer a task is
+     * not listed, kept or not.
+     */
+    const byDue = (
+      step: Exclude<DatedReviewStepKey, "dueForReview">,
+      belongs: (task: Task) => boolean,
+    ): ReviewStepRead<DatedReviewItem> => {
+      const listed: DatedReviewItem[] = [];
+      let count = 0;
+      for (const { task } of tasks) {
+        if (task.due && belongs(task)) {
+          count++;
+          listed.push({ task, kept: false, dueOn: task.due });
+          continue;
+        }
+        const keptOn = keptOnDay(step, task.id);
+        if (keptOn) listed.push({ task, kept: true, dueOn: keptOn });
+      }
+      listed.sort((a, b) => compareDays(a.dueOn, b.dueOn));
+      return { items: listed, total: count };
+    };
     const keptInInbox = keptIn("inbox");
     const inbox = tasks
       .map((entry) => entry.task)
@@ -180,6 +252,8 @@ export function createReadReview(deps: {
         nextActions: byScore("nextActions", (entry) => entry.nextAction),
         waiting: byScore("waiting", (entry) => entry.task.status === "waiting"),
         someday: byScore("someday", (entry) => entry.task.status === "someday"),
+        overdue: byDue("overdue", (task) => isOverdue(task, today)),
+        dueSoon: byDue("dueSoon", (task) => isDueSoon(task, today)),
         dueForReview: { items, total },
       },
     };

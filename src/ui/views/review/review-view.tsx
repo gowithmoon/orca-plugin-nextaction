@@ -13,11 +13,12 @@ import type {
   CanMarkReviewed,
   MarkReviewed,
 } from "../../../application/usecases/mark-reviewed";
-import type {
-  ReadReview,
-  ReadReviewResult,
-  ReviewKeep,
-  ReviewStepKey,
+import {
+  isDatedReviewStep,
+  type ReadReview,
+  type ReadReviewResult,
+  type ReviewKeep,
+  type ReviewStepKey,
 } from "../../../application/usecases/read-review";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -462,7 +463,7 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
   /** What the read keeps: the step shown's tasks. */
   const keepOption = (): ReviewKeep | undefined => {
     if (keeping === undefined) return undefined;
-    if (keeping === "dueForReview") {
+    if (isDatedReviewStep(keeping)) {
       const tasks = new Map<TaskId, CalendarDate>();
       for (const [id, on] of keep) if (on) tasks.set(id, on);
       return { step: keeping, tasks };
@@ -472,8 +473,8 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
   /** Remembers where each task still in the step is listed, while keeping. */
   const remember = (read: ReadReviewResult) => {
     if (keeping === undefined) return;
-    if (keeping === "dueForReview") {
-      for (const item of read.steps.dueForReview.items) {
+    if (isDatedReviewStep(keeping)) {
+      for (const item of read.steps[keeping].items) {
         if (!item.kept) keep.set(item.task.id, item.dueOn);
       }
       return;

@@ -272,6 +272,69 @@ describe("read review", () => {
     });
   });
 
+  describe("overdue tasks", () => {
+    it("lists the overdue tasks, the earliest due date first", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "todo", due: october(12) });
+      // Due today: not overdue.
+      repository.addTask({ id: 2, status: "todo", due: october(14) });
+      repository.addTask({ id: 3, status: "waiting", due: october(3) });
+      repository.addTask({ id: 4, status: "done", due: october(1) });
+      repository.addTask({ id: 5, status: "someday", due: october(13) });
+      repository.addTask({ id: 6, status: "todo" });
+
+      const read = await readReview();
+
+      expect(ids(read.steps.overdue.items)).toEqual([3, 1, 5]);
+      expect(read.steps.overdue.total).toBe(3);
+    });
+
+    it("still lists a kept task after it was rescheduled to tomorrow, in the place its old due date gave it, marked as kept", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "todo", due: october(3) });
+      // Listed under October 8, then rescheduled to tomorrow.
+      repository.addTask({ id: 2, status: "todo", due: october(15) });
+      repository.addTask({ id: 3, status: "todo", due: october(12) });
+
+      const read = await readReview({
+        keep: { step: "overdue", tasks: new Map([[2, october(8)]]) },
+      });
+
+      expect(
+        read.steps.overdue.items.map((item) => [item.task.id, item.kept]),
+      ).toEqual([
+        [1, false],
+        [2, true],
+        [3, false],
+      ]);
+      expect(read.steps.overdue.total).toBe(2);
+      // It shows its new due date, and is due soon now.
+      expect(read.steps.overdue.items[1]?.task.due).toEqual(october(15));
+      expect(read.steps.dueSoon.items).toEqual([
+        expect.objectContaining({ kept: false }),
+      ]);
+    });
+  });
+
+  describe("due in the next 7 days", () => {
+    it("lists the tasks due from today to today plus 6, the earliest due date first", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "todo", due: october(20) });
+      // Overdue: in the overdue step only.
+      repository.addTask({ id: 2, status: "todo", due: october(13) });
+      repository.addTask({ id: 3, status: "waiting", due: october(14) });
+      // Today plus 7.
+      repository.addTask({ id: 4, status: "todo", due: october(21) });
+      repository.addTask({ id: 5, status: "done", due: october(15) });
+      repository.addTask({ id: 6, status: "someday", due: october(16) });
+
+      const read = await readReview();
+
+      expect(ids(read.steps.dueSoon.items)).toEqual([3, 6, 1]);
+      expect(read.steps.dueSoon.total).toBe(3);
+    });
+  });
+
   describe("tasks in several steps", () => {
     it("lists a task in every step it belongs to", async () => {
       const { repository, readReview } = setup();
