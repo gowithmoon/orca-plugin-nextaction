@@ -243,7 +243,9 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
     }
   };
   const query = createViewQuery(async () => {
-    const read = await deps.readReview({ keep });
+    const read = await deps.readReview({
+      keep: { step: "dueForReview", tasks: keep },
+    });
     remember(read);
     return read;
   }, deps.changes);

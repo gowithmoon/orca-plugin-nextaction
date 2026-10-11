@@ -187,7 +187,10 @@ export function createPanelFeature(deps: {
   );
   views.register(
     createReviewView({
-      readReview: createReadReview(myDayDeps),
+      readReview: createReadReview({
+        ...myDayDeps,
+        startPreviewDays: deps.startPreviewDays,
+      }),
       markReviewed: createMarkReviewed(myDayDeps),
       canMarkReviewed: createCanMarkReviewed(),
       openReviewPopup: deps.openReviewPopup,
