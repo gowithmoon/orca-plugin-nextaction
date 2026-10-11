@@ -1,18 +1,21 @@
 // Use case: read the review (GLOSSARY: 回顾), for the review view: one read
 // of the task graph gives every step's list: the inbox, the next actions,
-// waiting, someday (#99) and the tasks due for review (#98). Later issues
-// append the other steps to `steps`, and the summary's numbers, beside it.
+// waiting, someday (#99) and the tasks due for review (#98), and the
+// summary's numbers with the moment the last full review was completed
+// (#101). Later issues append the other steps to `steps`.
 import {
   analyzeTaskGraph,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
 import { isDueForReview, reviewDueDay } from "../../domain/review/review";
 import { rankByScore } from "../../domain/scoring/score";
+import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
-import { compareDays } from "../../domain/time/calendar-days";
+import { compareDays, daysBetween } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
+import type { LastFullReviewStore } from "../ports/last-full-review";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
@@ -88,6 +91,24 @@ export interface ReadReviewResult {
      */
     readonly dueForReview: ReviewStepRead<DueForReviewItem>;
   };
+  /** The summary's numbers: how the system stands now. */
+  readonly summary: {
+    /** The tasks left in the inbox. */
+    readonly inbox: number;
+    /** The overdue tasks. */
+    readonly overdue: number;
+    /** The tasks due for review. */
+    readonly dueForReview: number;
+  };
+  /**
+   * When the last full review (GLOSSARY: 完整回顾) was completed, and how
+   * many logical days ago: 0 on the same logical day. `null` when none was
+   * completed or its moment is lost (it is discardable).
+   */
+  readonly lastFullReview: {
+    readonly at: Date;
+    readonly daysAgo: number;
+  } | null;
 }
 
 /** Reads the review. Errors are thrown as they are. */
@@ -105,10 +126,15 @@ export function createReadReview(deps: {
   clock: Clock;
   dayBoundary: DayBoundarySetting;
   startPreviewDays: StartPreviewDaysSetting;
+  lastFullReview: LastFullReviewStore;
 }): ReadReview {
   return async (options = {}) => {
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const snapshot = await deps.repository.readTaskGraph();
+    const boundary = deps.dayBoundary.current();
+    const today = logicalDay(deps.clock.now(), boundary);
+    const [snapshot, lastFullReviewAt] = await Promise.all([
+      deps.repository.readTaskGraph(),
+      deps.lastFullReview.read(),
+    ]);
     const { tasks } = snapshot;
     const graph = analyzeTaskGraph(snapshot, {
       today,
@@ -168,6 +194,7 @@ export function createReadReview(deps: {
       .map((entry) => entry.task)
       .filter((task) => task.status === "inbox" || keptInInbox.has(task.id))
       .sort(byCapture);
+    const inboxTotal = inbox.filter((task) => task.status === "inbox").length;
     return {
       steps: {
         inbox: {
@@ -175,12 +202,21 @@ export function createReadReview(deps: {
             task,
             kept: task.status !== "inbox",
           })),
-          total: inbox.filter((task) => task.status === "inbox").length,
+          total: inboxTotal,
         },
         nextActions: byScore("nextActions", (entry) => entry.nextAction),
         waiting: byScore("waiting", (entry) => entry.task.status === "waiting"),
         someday: byScore("someday", (entry) => entry.task.status === "someday"),
         dueForReview: { items, total },
+      },
+      summary: {
+        inbox: inboxTotal,
+        overdue: tasks.filter(({ task }) => isOverdue(task, today)).length,
+        dueForReview: total,
+      },
+      lastFullReview: lastFullReviewAt && {
+        at: lastFullReviewAt,
+        daysAgo: daysBetween(logicalDay(lastFullReviewAt, boundary), today),
       },
     };
   };
