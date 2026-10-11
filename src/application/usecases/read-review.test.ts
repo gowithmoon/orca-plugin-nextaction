@@ -375,7 +375,10 @@ describe("read review", () => {
       const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
       repository.addTask(
         { id: 1, status: "done" },
-        history(recorded("2026-10-08T10:00:00"), recorded("2026-10-12T10:00:00")),
+        history(
+          recorded("2026-10-08T10:00:00"),
+          recorded("2026-10-12T10:00:00"),
+        ),
       );
       repository.addTask(
         { id: 2, status: "todo" },
@@ -387,13 +390,13 @@ describe("read review", () => {
 
       const { lookBack } = (await readReview()).steps;
 
-      expect(
-        lookBack.entries.map((item) => [item.task.id, item.kind]),
-      ).toEqual([
-        [2, "completion"],
-        [1, "completion"],
-        [2, "skip"],
-      ]);
+      expect(lookBack.entries.map((item) => [item.task.id, item.kind])).toEqual(
+        [
+          [2, "completion"],
+          [1, "completion"],
+          [2, "skip"],
+        ],
+      );
     });
 
     it("lists the tasks planned but not done since the last full review", async () => {
@@ -424,13 +427,19 @@ describe("read review", () => {
       const { lookBack } = (await readReview()).steps;
 
       expect(lookBack.entries.map((item) => item.task.id)).toEqual([2]);
+      expect(lookBack.since).toEqual(new Date("2026-10-07T09:00:00+08:00"));
     });
 
     it("skips a completion history it cannot read", async () => {
       const { repository, readReview } = setup(null);
       repository.addTask(
         { id: 1, status: "done" },
-        { completionHistory: { kind: "unreadable", reason: "unknown version 2" } },
+        {
+          completionHistory: {
+            kind: "unreadable",
+            reason: "unknown version 2",
+          },
+        },
       );
 
       const { lookBack } = (await readReview()).steps;

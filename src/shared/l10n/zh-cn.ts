@@ -436,6 +436,12 @@ const zhCN: Record<string, string> = {
   "Complete review": "完成回顾",
   "Review completed": "回顾已完成",
   "Could not complete the review: ${reason}": "无法完成回顾：${reason}",
+  "Completed in look back": "回看过去中完成的",
+  "Since ${moment}": "从 ${moment} 起",
+  "Completed and skipped": "完成与跳过",
+  "Nothing completed or skipped": "这段时间没有完成或跳过的任务",
+  "Planned but not done": "排了没做",
+  "Nothing planned was left undone": "排进我的一天的任务都做了",
 };
 
 export default zhCN;

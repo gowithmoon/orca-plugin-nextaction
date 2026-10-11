@@ -109,6 +109,8 @@ export interface DatedReviewItem extends ReviewItem {
  * yesterday, and still not done since; in note order, kept ones included.
  */
 export interface LookBackStepRead extends ReviewStepRead {
+  /** Where look back starts: the last full review, or 7 days ago. */
+  readonly since: Date;
   /**
    * Every completion and skip since the start, one each, the latest first.
    * A history that cannot be read lists none.
@@ -292,6 +294,7 @@ export function createReadReview(deps: {
       .filter((task) => task.status === "inbox" || keptInInbox.has(task.id))
       .sort(byCapture);
     const inboxTotal = inbox.filter((task) => task.status === "inbox").length;
+    const since = lookBackStart(lastFullReviewAt, deps.clock.now());
     const looked = lookBack(
       tasks.map((item) => ({
         task: item.task,
@@ -299,11 +302,7 @@ export function createReadReview(deps: {
         // Unreadable entries are none here, as for My Day's candidates.
         myDay: item.myDay?.kind === "readable" ? item.myDay.entries : [],
       })),
-      {
-        start: lookBackStart(lastFullReviewAt, deps.clock.now()),
-        today,
-        boundary,
-      },
+      { start: since, today, boundary },
     );
     // Kept ones (done since, through the status menu) stay in their place.
     const notDone = new Set(looked.plannedNotDone.map((task) => task.id));
@@ -325,6 +324,7 @@ export function createReadReview(deps: {
         waiting: byScore("waiting", (entry) => entry.task.status === "waiting"),
         someday: byScore("someday", (entry) => entry.task.status === "someday"),
         lookBack: {
+          since,
           entries: looked.entries,
           items: plannedNotDone,
           total: notDone.size,

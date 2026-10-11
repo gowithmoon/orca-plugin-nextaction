@@ -26,6 +26,7 @@ import { quickDueDate } from "../../../domain/review/due-steps";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
+import { formatClock, formatDate, shownText } from "../../components/format";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
@@ -397,6 +398,77 @@ function lastFullReviewText(last: ReadReviewResult["lastFullReview"]): string {
 }
 
 /**
+ * Look back's completions and skips (#102), above its tasks planned but not
+ * done: one row each, the latest first, saying which it was and when. A
+ * click on a row opens the task panel; a task can show in several rows.
+ */
+function LookBackHistory(props: {
+  query: ViewQuery<ReadReviewResult>;
+  deps: ReviewViewDeps;
+}) {
+  const state = useViewQuery(props.query);
+  const { selectedTaskId, selectTask } = usePanel();
+  // The list below says what loading or a failure looks like.
+  if (state.kind !== "loaded") return null;
+  const { since, entries } = state.data.steps.lookBack;
+  const today = props.deps.today();
+  /** A moment as its local date and time: "10/9 Fri 23:30". */
+  const moment = (at: Date) =>
+    `${formatDate(toCalendarDate(at), today)} ${formatClock(at)}`;
+  const sinceText = t("Since ${moment}", { moment: moment(since) });
+  return (
+    <section className="nextaction-review-look-back">
+      <div className="nextaction-review-start-status">{sinceText}</div>
+      <h3 className="nextaction-review-group-title">
+        {t("Completed and skipped")}
+      </h3>
+      {entries.length === 0 ? (
+        <div className="nextaction-review-look-back-empty">
+          {t("Nothing completed or skipped")}
+        </div>
+      ) : (
+        <ul className="nextaction-review-look-back-list">
+          {entries.map((entry) => {
+            const skipped = entry.kind === "skip";
+            const kind = skipped ? t("Skipped") : t("Done");
+            const when = moment(entry.at);
+            return (
+              <li key={`${entry.task.id}-${entry.at.getTime()}-${entry.kind}`}>
+                <button
+                  type="button"
+                  className="nextaction-review-look-back-entry"
+                  data-kind={entry.kind}
+                  aria-current={entry.task.id === selectedTaskId || undefined}
+                  onClick={() => selectTask(entry.task.id)}
+                >
+                  <i
+                    className={
+                      skipped
+                        ? "ti ti-player-skip-forward"
+                        : "ti ti-circle-check"
+                    }
+                    aria-hidden="true"
+                  />
+                  <span className="nextaction-review-look-back-kind">
+                    {kind}
+                  </span>
+                  <span className="nextaction-review-look-back-text">
+                    {shownText(entry.task).text}
+                  </span>
+                  <span className="nextaction-review-look-back-when">
+                    {when}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
  * The summary (#101): how the system stands now, the steps not opened in
  * this full review (a reminder only), and "Complete review".
  */
@@ -438,6 +510,11 @@ function SummaryPage(props: {
       label: t("Overdue tasks"),
       count: summary.overdue,
       icon: "ti ti-alert-circle",
+    },
+    {
+      label: t("Completed in look back"),
+      count: summary.completedInLookBack,
+      icon: "ti ti-circle-check",
     },
     {
       label: t("Tasks due for review"),
@@ -645,6 +722,14 @@ function FullReviewPage(props: {
         <ViewHeader title={step.label()} count={total} countInEveryTier />
         <CaptureButton onClick={deps.openQuickCapture} />
       </div>
+      {page.step === "lookBack" && (
+        <LookBackHistory query={query} deps={deps} />
+      )}
+      {page.step === "lookBack" && (
+        <h3 className="nextaction-review-group-title">
+          {t("Planned but not done")}
+        </h3>
+      )}
       {step.list && <StepList query={query} deps={deps} list={step.list} />}
       {page.step === "summary" && (
         <SummaryPage

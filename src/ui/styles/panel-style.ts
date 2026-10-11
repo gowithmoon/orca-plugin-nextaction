@@ -351,6 +351,89 @@ export const panelCss = `
   list-style: none;
 }
 
+/*
+ * Look back (#102): its two groups' titles, and the completions and skips as
+ * one compact row each: which it was, the task's text cut to a line, when.
+ */
+.nextaction-review-look-back {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  margin-bottom: var(--orca-spacing-md);
+}
+
+.nextaction-review-group-title {
+  margin: 0 0 var(--orca-spacing-xs);
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+  font-weight: var(--orca-fontweight-lg);
+  line-height: var(--orca-lineheight-sm);
+}
+
+.nextaction-review-look-back-empty {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-review-look-back-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-review-look-back-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  width: 100%;
+  min-width: 0;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: none;
+  border-radius: var(--orca-radius-md);
+  background: transparent;
+  color: var(--orca-color-text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-review-look-back-entry:hover,
+.nextaction-review-look-back-entry[aria-current] {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-review-look-back-entry:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-review-look-back-entry > .ti {
+  flex: 0 0 auto;
+  color: var(--orca-color-text-green, var(--orca-color-primary-5));
+}
+
+.nextaction-review-look-back-entry[data-kind="skip"] > .ti {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-review-look-back-kind,
+.nextaction-review-look-back-when {
+  flex: 0 0 auto;
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-review-look-back-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A card's "Drop" turns the dangerous colour on hover. */
 .nextaction-task-card-extra[data-dangerous]:hover {
   color: var(--orca-color-dangerous-5);

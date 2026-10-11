@@ -1,9 +1,9 @@
 // The full review's steps (GLOSSARY: 回顾, 完整回顾), in the glossary's order:
 // the one list the step bar, "Previous / Next" and each step's page follow.
-// A step with neither `list` nor `ownPage` is not built yet (look back:
-// #102): the step bar shows it
-// unavailable and "Previous / Next" pass over it. Those issues give it its
-// `list` (or their own page) here. The summary has its own page (#101).
+// A step with neither `list` nor `ownPage` is not built yet: the step bar
+// shows it unavailable and "Previous / Next" pass over it. The summary has
+// its own page (#101); look back's list is the tasks planned but not done,
+// the view adding its completions and skips above it (#102).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReviewStepKey } from "../../../application/usecases/read-review";
 import { t } from "../../../shared/l10n/l10n";
@@ -89,7 +89,19 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("Inbox is clear"),
     },
   },
-  { id: "lookBack", label: () => t("Look back") },
+  {
+    id: "lookBack",
+    label: () => t("Look back"),
+    // The tasks planned but not done; the view shows the completions and
+    // skips above them (#102).
+    list: {
+      key: "lookBack",
+      actions: ["addToMyDay"],
+      keptStatusShown: true,
+      emptyIcon: "ti ti-sun",
+      empty: () => t("Nothing planned was left undone"),
+    },
+  },
   {
     id: "overdue",
     label: () => t("Overdue tasks"),
