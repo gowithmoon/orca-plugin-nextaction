@@ -5,6 +5,11 @@ import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import { createReadNotNextActionReasons } from "./read-not-next-action-reasons";
 
+const weekly = {
+  kind: "rule",
+  rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+} as const;
+
 function setup() {
   const repository = createInMemoryTaskRepository();
   const startPreviewDays = createFixedStartPreviewDays();
@@ -35,7 +40,11 @@ describe("read not-next-action reasons", () => {
     expect(read.reasons).toEqual([
       { kind: "doneAncestor", source: 2, waitingFor: [] },
     ]);
-    expect(read.tasks.get(2)).toEqual({ id: 2, text: "Pack" });
+    expect(read.tasks.get(2)).toEqual({
+      id: 2,
+      text: "Pack",
+      recurring: false,
+    });
   });
 
   it("says it is in a parked subtree, naming the nearest waiting or someday ancestor task", async () => {
@@ -55,7 +64,11 @@ describe("read not-next-action reasons", () => {
     expect(read.reasons).toEqual([
       { kind: "parked", source: 2, waitingFor: [] },
     ]);
-    expect(read.tasks.get(2)).toEqual({ id: 2, text: "Find a teacher" });
+    expect(read.tasks.get(2)).toEqual({
+      id: 2,
+      text: "Find a teacher",
+      recurring: false,
+    });
   });
 
   it("says it has not reached its start, naming the ancestor task whose start it is and the day", async () => {
@@ -87,7 +100,11 @@ describe("read not-next-action reasons", () => {
         startsOn: { year: 2026, month: 10, day: 20 },
       },
     ]);
-    expect(read.tasks.get(1)).toEqual({ id: 1, text: "Trip" });
+    expect(read.tasks.get(1)).toEqual({
+      id: 1,
+      text: "Trip",
+      recurring: false,
+    });
   });
 
   it("does not say it has not reached its start when the start preview days already let it in", async () => {
@@ -205,12 +222,21 @@ describe("read not-next-action reasons", () => {
     expect(read.reasons).toEqual([
       { kind: "subtasks", source: 1, waitingFor: [2, 3] },
     ]);
-    expect(read.tasks.get(1)).toEqual({ id: 1, text: "Write the paper" });
+    expect(read.tasks.get(1)).toEqual({
+      id: 1,
+      text: "Write the paper",
+      recurring: false,
+    });
     expect(read.tasks.get(2)).toEqual({
       id: 2,
       text: "Write the introduction",
+      recurring: false,
     });
-    expect(read.tasks.get(3)).toEqual({ id: 3, text: "Collect the data" });
+    expect(read.tasks.get(3)).toEqual({
+      id: 3,
+      text: "Collect the data",
+      recurring: false,
+    });
   });
 
   it("returns a dependency delay with its release day and the text of the task it counts from", async () => {
@@ -249,8 +275,16 @@ describe("read not-next-action reasons", () => {
         releasedOn: { year: 2026, month: 10, day: 11 },
       },
     ]);
-    expect(read.tasks.get(1)).toEqual({ id: 1, text: "Hang the lamp" });
-    expect(read.tasks.get(2)).toEqual({ id: 2, text: "Paint the wall" });
+    expect(read.tasks.get(1)).toEqual({
+      id: 1,
+      text: "Hang the lamp",
+      recurring: false,
+    });
+    expect(read.tasks.get(2)).toEqual({
+      id: 2,
+      text: "Paint the wall",
+      recurring: false,
+    });
   });
 
   it("returns no reasons for a task nothing blocks", async () => {
@@ -275,10 +309,10 @@ describe("read not-next-action reasons", () => {
     const read = await readNotNextActionReasons(1);
 
     expect(read.dependencies).toEqual([
-      { id: 2, text: "Collect the data", stale: false },
-      { id: 7, text: null, stale: true },
-      { id: 3, text: "Ask Wang", stale: false },
-      { id: 8, text: null, stale: true },
+      { id: 2, text: "Collect the data", stale: false, recurring: false },
+      { id: 7, text: null, stale: true, recurring: false },
+      { id: 3, text: "Ask Wang", stale: false, recurring: false },
+      { id: 8, text: null, stale: true, recurring: false },
     ]);
   });
 
@@ -298,5 +332,40 @@ describe("read not-next-action reasons", () => {
     repository.addBlock(1);
 
     expect((await readNotNextActionReasons(1)).reasons).toEqual([]);
+  });
+
+  it("says which of the task's own dependencies are recurring tasks (ADR 0021)", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addTask({ id: 1, dependencies: [2, 3] });
+    repository.addTask({ id: 2, text: "Weekly review", recurrence: weekly });
+    repository.addTask({ id: 3, text: "Ask Wang" });
+
+    const read = await readNotNextActionReasons(1);
+
+    expect(read.dependencies.map((d) => [d.id, d.recurring])).toEqual([
+      [2, true],
+      [3, false],
+    ]);
+  });
+
+  it("says a recurring earlier sibling under a sequential parent is one (ADR 0021)", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addTask({ id: 1, text: "Run the shop", sequential: true });
+    repository.addTask(
+      { id: 2, text: "Weekly stocktake", status: "todo", recurrence: weekly },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, text: "Close the shop", status: "todo" },
+      { parentId: 1 },
+    );
+
+    const read = await readNotNextActionReasons(3);
+
+    expect(read.reasons).toEqual([
+      { kind: "sequential", source: 3, waitingFor: [2] },
+    ]);
+    expect(read.tasks.get(2)?.recurring).toBe(true);
+    expect(read.tasks.get(3)?.recurring).toBe(false);
   });
 });

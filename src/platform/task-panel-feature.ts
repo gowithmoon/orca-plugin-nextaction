@@ -1,6 +1,7 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createAdvanceStuckDone } from "../application/usecases/advance-stuck-done";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
 import { createPreviewNextOccurrence } from "../application/usecases/preview-next-occurrence";
@@ -80,6 +81,11 @@ export function createTaskPanelFeature(deps: {
       },
       // Into the load's root; nothing outside a load.
       render: (node) => renderRecurrencePopup(node),
+    }),
+    advanceStuckDone: createAdvanceStuckDone({
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
     }),
     actions: deps.taskActions,
     changes: deps.changes,

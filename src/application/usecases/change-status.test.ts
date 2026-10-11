@@ -358,3 +358,77 @@ describe("change status: recurring tasks", () => {
     });
   });
 });
+
+describe("change status: the descendant tasks of a recurring task", () => {
+  const weekly = {
+    kind: "rule",
+    rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+  } as const;
+  const due = { year: 2026, month: 10, day: 5 };
+
+  it("completing a recurring task resets its done descendant tasks in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    // 每周大扫除 > 拖地 (done), 擦窗 (doing), and below a plain block 倒垃圾 (done).
+    repository.addTask({ id: 70, status: "todo", due, recurrence: weekly });
+    repository.addTask(
+      { id: 71, status: "done", due: { year: 2026, month: 10, day: 4 } },
+      { parentId: 70 },
+    );
+    repository.addTask({ id: 72, status: "doing" }, { parentId: 70 });
+    repository.addBlock(73, { parentId: 70 });
+    repository.addTask({ id: 74, status: "done" }, { parentId: 73 });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(70, "done")).toMatchObject({ kind: "advanced" });
+
+    expect(await repository.getTask(71)).toMatchObject({
+      status: "todo",
+      due: { year: 2026, month: 10, day: 11 },
+    });
+    expect((await repository.getTask(72))?.status).toBe("doing");
+    expect((await repository.getTask(74))?.status).toBe("todo");
+    // No completion is recorded for a reset descendant task.
+    expect(await repository.readCompletionHistory(71)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    // The task and its descendant tasks in one write, so one undo.
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("fails to complete a recurring task when a done descendant task's rule cannot be read, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 75, status: "todo", due, recurrence: weekly });
+    repository.addTask({ id: 76, status: "done" }, { parentId: 75 });
+    repository.addTask(
+      {
+        id: 77,
+        status: "done",
+        recurrence: { kind: "unreadable", reason: "unknown version 2" },
+      },
+      { parentId: 75 },
+    );
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(75, "done")).rejects.toBeInstanceOf(
+      RecurrenceUnreadableError,
+    );
+
+    expect(await repository.getTask(75)).toMatchObject({ status: "todo", due });
+    expect((await repository.getTask(76))?.status).toBe("done");
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("fails to complete a recurring task when a descendant task's write fails, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 78, status: "todo", due, recurrence: weekly });
+    repository.addTask({ id: 79, status: "done" }, { parentId: 78 });
+    repository.failWrites(new Error("plugin block property unreadable"));
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(78, "done")).rejects.toThrow();
+
+    expect(await repository.getTask(78)).toMatchObject({ status: "todo", due });
+    expect((await repository.getTask(79))?.status).toBe("done");
+  });
+});
