@@ -9,6 +9,7 @@
 import {
   type ReviewInterval,
   type ReviewPlan,
+  type ReviewRead,
   type ReviewUnit,
   reviewUnits,
 } from "../../../domain/review/review";
@@ -106,4 +107,16 @@ export function planReviewWrite(
     ...(plan.lastReviewed && { lastReviewed: formatDay(plan.lastReviewed) }),
     ...(plan.reviewOn && { reviewOn: formatDay(plan.reviewOn) }),
   });
+}
+
+/**
+ * A block's review plan as a task carries it: what `readReview` found,
+ * without the raw value. An unreadable one is kept as it is and reported
+ * when it is to be written, not on every read.
+ */
+export function reviewOf(block: BlockWithProperties): ReviewRead {
+  const read = readReview(block);
+  return read.kind === "unreadable"
+    ? { kind: "unreadable", reason: read.reason }
+    : read;
 }

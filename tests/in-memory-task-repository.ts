@@ -110,6 +110,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     dependencyMode: "all",
     dependencyDelay: 0,
     recurrence: { kind: "none" },
+    review: { kind: "none" },
     anomalies: [],
   };
 }

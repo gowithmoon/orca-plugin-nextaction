@@ -15,6 +15,7 @@ import {
   type PropertyKey,
 } from "./names";
 import { recurrenceOf } from "./recurrence-codec";
+import { reviewOf } from "./review-codec";
 
 /** What the codec needs to know about the task tag. */
 export interface TaskTagContext {
@@ -147,6 +148,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       dependencyDelay: numberValue(values.get("dependencyDelay")),
       created: createdValue(block.id, block.created),
       recurrence: recurrenceOf(block),
+      review: reviewOf(block),
     }),
   };
 }

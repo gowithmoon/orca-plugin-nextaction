@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ReviewPlan } from "../../../domain/review/review";
 import { planReviewWrite, readReview } from "./review-codec";
 
 // A task block's `properties` as get-blocks returns them: plugin block
@@ -79,15 +80,18 @@ describe("readReview and planReviewWrite", () => {
           { interval: { every: 3, unit }, lastReviewed: "2026-10-01" },
         ] as const,
     ),
-  ])("reads back a plan with %s", (_, plan, stored) => {
-    const write = planReviewWrite(taskBlockWith(), plan);
-    if (write.kind !== "write") throw new Error("refused");
-    expect(write.property.value).toEqual({ v: 1, ...stored });
-    expect(readReview(taskBlockWith(write.property))).toEqual({
-      kind: "plan",
-      plan,
-    });
-  });
+  ] as [string, ReviewPlan, Record<string, unknown>][])(
+    "reads back a plan with %s",
+    (_, plan, stored) => {
+      const write = planReviewWrite(taskBlockWith(), plan);
+      if (write.kind !== "write") throw new Error("refused");
+      expect(write.property.value).toEqual({ v: 1, ...stored });
+      expect(readReview(taskBlockWith(write.property))).toEqual({
+        kind: "plan",
+        plan,
+      });
+    },
+  );
 
   it("reads a task without nextaction.review as no plan", () => {
     expect(readReview(taskBlockWith())).toEqual({ kind: "none" });

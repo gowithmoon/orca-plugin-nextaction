@@ -41,6 +41,7 @@ describe("convert to task", () => {
       // The block's own creation time, however long ago it was written (#35).
       created: new Date("2026-03-02T08:00:00.000Z"),
       recurrence: { kind: "none" },
+      review: { kind: "none" },
       anomalies: [],
     });
   });

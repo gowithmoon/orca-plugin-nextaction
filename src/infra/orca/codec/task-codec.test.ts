@@ -55,6 +55,7 @@ describe("decodeTask", () => {
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:00:00.000Z"),
       recurrence: { kind: "none" },
+      review: { kind: "none" },
       anomalies: [],
     });
   });
@@ -78,6 +79,7 @@ describe("decodeTask", () => {
       dependencyDelay: 0,
       created: new Date("2026-10-06T08:00:00.000Z"),
       recurrence: { kind: "none" },
+      review: { kind: "none" },
       anomalies: [],
     });
   });
@@ -102,6 +104,7 @@ describe("decodeTask", () => {
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:10:00.000Z"),
       recurrence: { kind: "none" },
+      review: { kind: "none" },
       anomalies: [],
     });
   });
@@ -125,6 +128,7 @@ describe("decodeTask", () => {
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:20:00.000Z"),
       recurrence: { kind: "none" },
+      review: { kind: "none" },
       anomalies: [{ property: "status", value: null }],
     });
   });
@@ -557,6 +561,46 @@ describe("decodeTask", () => {
       reason: "orphan",
     });
   });
+
+  describe("review plan", () => {
+    const withReview = (value: unknown) => ({
+      ...blocks.zhFilled,
+      properties: [
+        ...blocks.zhFilled.properties,
+        { name: "nextaction.review", type: 0, value },
+      ],
+    });
+
+    it("reads a task without nextaction.review as no review plan", () => {
+      expect(decodedTask(blocks.zhFilled).review).toEqual({ kind: "none" });
+    });
+
+    it("reads the review plan stored in nextaction.review", () => {
+      expect(
+        decodedTask(
+          withReview({
+            v: 1,
+            interval: { every: 1, unit: "month" },
+            lastReviewed: "2026-10-01",
+          }),
+        ).review,
+      ).toEqual({
+        kind: "plan",
+        plan: {
+          interval: { every: 1, unit: "month" },
+          lastReviewed: { year: 2026, month: 10, day: 1 },
+          reviewOn: null,
+        },
+      });
+    });
+
+    it("reads a review plan it cannot read as unreadable, with the reason", () => {
+      expect(decodedTask(withReview({ v: 2 })).review).toEqual({
+        kind: "unreadable",
+        reason: "unknown version 2",
+      });
+    });
+  });
 });
 
 describe("decodeTask with values of the wrong kind", () => {
@@ -610,6 +654,7 @@ describe("decodeTask with values of the wrong kind", () => {
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:10:00.000Z"),
       recurrence: { kind: "none" },
+      review: { kind: "none" },
       anomalies: [{ property: "status", value: ["待开始"] }],
     });
   });
