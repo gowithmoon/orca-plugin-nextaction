@@ -4,6 +4,7 @@
 // pane. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { Candidates } from "../../application/ports/task-repository";
+import type { AdvanceStuckDone } from "../../application/usecases/advance-stuck-done";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
@@ -13,6 +14,7 @@ import type { ReadTask } from "../../application/usecases/read-task";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
+import { isStuckDone } from "../../domain/recurrence/recurrence";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
@@ -49,6 +51,7 @@ import {
   RecurrenceField,
   SequentialField,
   StatusField,
+  StuckDoneNotice,
 } from "./task-panel-fields";
 
 export interface TaskPanelFormDeps {
@@ -69,6 +72,8 @@ export interface TaskPanelFormDeps {
   setDependencyMode: SetDependencyMode;
   /** Opens the recurrence rule popup for the task (#95). */
   openRecurrencePopup: OpenRecurrencePopup;
+  /** Advances a recurring task stuck in done (#93). */
+  advanceStuckDone: AdvanceStuckDone;
   /** Status change, "open in notes" and notices, shared with the task card (#39). */
   actions: TaskActionsDeps;
   /** Tasks may have changed: the task is read again. */
@@ -167,6 +172,9 @@ function Fields(props: {
           onChange={(status) => void actions.changeStatus(status)}
         />
       </Field>
+      {isStuckDone(task) && (
+        <StuckDoneNotice onAdvance={() => void actions.advanceStuckDone()} />
+      )}
       {props.notNextActionReasons}
       <Field label={t("Importance")} labelId={id("importance")}>
         <RatingField

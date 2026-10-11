@@ -2,12 +2,15 @@
 // 行动): read only, shown only while a task to do or in progress is not a
 // next action, e.g. "Subtasks: Write the introduction, Collect the data" or
 // "Not started yet: Trip starts on 10/20 Tue"; the use case gives no reasons
-// otherwise. Each task name switches the task panel to that task. Verified by
-// hand in Orca (docs/ARCHITECTURE.md §5).
+// otherwise. Each task name switches the task panel to that task. A recurring
+// task holding the task back under a sequential parent is marked, with a hint
+// that it keeps doing so until it no longer recurs (#94, ADR 0021). Verified
+// by hand in Orca (docs/ARCHITECTURE.md §5).
 import {
   isNotBlocking,
   type NotNextActionReason,
   type ReadNotNextActionReasons,
+  type RelatedTask,
 } from "../../application/usecases/read-not-next-action-reasons";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { daysBetween } from "../../domain/time/calendar-days";
@@ -54,6 +57,20 @@ function releaseText(releasedOn: CalendarDate, today: CalendarDate): string {
         date,
         days: String(days),
       });
+}
+
+/**
+ * A sequential reason waiting for a recurring sibling (ADR 0021): it never
+ * stays done, so it keeps holding back the subtasks after it.
+ */
+function waitsForRecurring(
+  reason: NotNextActionReason,
+  tasks: ReadonlyMap<TaskId, RelatedTask>,
+): boolean {
+  return (
+    reason.kind === "sequential" &&
+    reason.waitingFor.some((id) => tasks.get(id)?.recurring)
+  );
 }
 
 /** Dependencies in mode "any": waiting for one of them, not all. */
@@ -169,9 +186,25 @@ export function NotNextActionReasonsField(props: {
                   >
                     {text.text}
                   </button>
+                  {related.recurring && reason.kind === "sequential" && (
+                    <span
+                      className="nextaction-not-next-action-reason-recurring"
+                      role="img"
+                      aria-label={t("Recurring task")}
+                    >
+                      <i className="ti ti-repeat" aria-hidden="true" />
+                    </span>
+                  )}
                 </span>
               );
             })}
+            {waitsForRecurring(reason, tasks) && (
+              <div className="nextaction-not-next-action-reason-hint">
+                {t(
+                  "A recurring task advances to its next occurrence each time it is completed, so it holds back the subtasks after it until it no longer recurs.",
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>

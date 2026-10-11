@@ -339,6 +339,28 @@ export function RecurrenceField(props: {
 }
 
 /**
+ * A recurring task stuck in done (GLOSSARY: 进入下一次, #93): it was marked
+ * done outside the plugin and did not advance. "Advance" moves it to the
+ * next occurrence in one undo, recording no completion.
+ */
+export function StuckDoneNotice(props: { onAdvance: () => void }) {
+  const { Button } = orca.components;
+  return (
+    <div className="nextaction-stuck-done" role="status">
+      <i className="ti ti-alert-triangle" aria-hidden="true" />
+      <span className="nextaction-stuck-done-text">
+        {t(
+          "Marked done outside the plugin, so this recurring task did not advance.",
+        )}
+      </span>
+      <Button variant="outline" onClick={props.onAdvance}>
+        {t("Advance")}
+      </Button>
+    </div>
+  );
+}
+
+/**
  * Sequential (GLOSSARY: 顺序执行): Orca's switch, with what it does beside it.
  * Each change is one write, undone in Orca.
  */

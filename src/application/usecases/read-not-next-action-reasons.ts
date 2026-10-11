@@ -8,6 +8,7 @@ import {
   statusAllowsNextAction,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
+import { recurs } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
@@ -115,6 +116,11 @@ export interface RelatedTask {
   readonly id: TaskId;
   /** As the notes hold it; may be empty. */
   readonly text: string;
+  /**
+   * It is a recurring task (GLOSSARY: 重复任务): it never stays done, so the
+   * tasks it holds back wait until it no longer recurs (ADR 0021).
+   */
+  readonly recurring: boolean;
 }
 
 export interface NotNextActionReasonsRead {
@@ -145,6 +151,12 @@ export interface DependencyRead {
    * task. It counts as met; it is cleared on the next dependency edit.
    */
   readonly stale: boolean;
+  /**
+   * Its target is a recurring task (GLOSSARY: 重复任务): the dependency stays
+   * unmet until it no longer recurs and is done at last (ADR 0021). False
+   * for a stale dependency.
+   */
+  readonly recurring: boolean;
 }
 
 /**
@@ -175,7 +187,13 @@ export function createReadNotNextActionReasons(deps: {
       if (reason.kind === "dependencyDelay") named.push(reason.countedFrom);
       for (const related of named) {
         const entry = graph.entry(related);
-        if (entry) tasks.set(related, { id: related, text: entry.task.text });
+        if (entry) {
+          tasks.set(related, {
+            id: related,
+            text: entry.task.text,
+            recurring: recurs(entry.task.recurrence),
+          });
+        }
       }
     }
     // A target not among the snapshot's tasks is stale, as the task graph
@@ -184,8 +202,13 @@ export function createReadNotNextActionReasons(deps: {
       (target): DependencyRead => {
         const entry = graph.entry(target);
         return entry
-          ? { id: target, text: entry.task.text, stale: false }
-          : { id: target, text: null, stale: true };
+          ? {
+              id: target,
+              text: entry.task.text,
+              stale: false,
+              recurring: recurs(entry.task.recurrence),
+            }
+          : { id: target, text: null, stale: true, recurring: false };
       },
     );
     return { reasons, tasks, dependencies };

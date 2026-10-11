@@ -208,6 +208,11 @@ const zhCN: Record<string, string> = {
   Dependencies: "依赖",
   "(No longer a task)": "（已不是任务）",
   Stale: "已失效",
+  "Recurring task": "重复任务",
+  "A recurring task advances to its next occurrence each time it is completed; the dependency is met only once it no longer recurs and is done at last.":
+    "重复任务每次完成后都会进入下一次，要到它不再重复、最终完成时这条依赖才满足",
+  "A recurring task advances to its next occurrence each time it is completed, so it holds back the subtasks after it until it no longer recurs.":
+    "重复任务每次完成后都会进入下一次，在它不再重复、最终完成之前，会一直挡住排在它后面的子任务",
   "Remove dependency": "移除依赖",
   "Search tasks": "搜索任务",
   "Clear search": "清除搜索",
@@ -288,6 +293,13 @@ const zhCN: Record<string, string> = {
   "From the day it is done.": "从完成的那天往后排。",
   "Remove rule": "移除规则",
   Save: "保存",
+  "Did not advance": "停在已完成",
+  "Marked done outside the plugin, so it did not advance. Open the task panel to advance it.":
+    "在插件之外改成了已完成，没有进入下一次。打开任务属性面板可以让它进入下一次。",
+  "Marked done outside the plugin, so this recurring task did not advance.":
+    "这个重复任务在插件之外改成了已完成，没有进入下一次。",
+  Advance: "进入下一次",
+  "Could not advance the task: ${reason}": "无法进入下一次：${reason}",
 };
 
 export default zhCN;
