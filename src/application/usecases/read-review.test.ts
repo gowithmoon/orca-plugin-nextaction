@@ -474,7 +474,7 @@ describe("read review", () => {
       expect((await readReview()).summary.completedInLookBack).toBe(2);
     });
 
-    it("counts the tasks left in the inbox, the overdue tasks and the tasks due for review", async () => {
+    it("reads the tasks left in the inbox, the overdue tasks and the tasks due for review from their steps' totals", async () => {
       const { repository, readReview } = setup();
       repository.addTask({ id: 1, status: "inbox" });
       repository.addTask({ id: 2, status: "inbox", due: october(1) });
@@ -497,11 +497,11 @@ describe("read review", () => {
         review: plan(1),
       });
 
-      const { summary } = await readReview();
+      const { steps } = await readReview();
 
-      expect(summary.inbox).toBe(2);
-      expect(summary.overdue).toBe(3);
-      expect(summary.dueForReview).toBe(1);
+      expect(steps.inbox.total).toBe(2);
+      expect(steps.overdue.total).toBe(3);
+      expect(steps.dueForReview.total).toBe(1);
     });
 
     it("gives when the last full review was completed and how many logical days ago", async () => {

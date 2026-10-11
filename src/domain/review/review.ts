@@ -14,6 +14,7 @@ import {
   compareDays,
   dayOfWeek,
   daysInMonth,
+  monthsAfter,
 } from "../time/calendar-days";
 
 /** The units a review interval counts in. */
@@ -180,7 +181,7 @@ export function isDueForReview(
   today: CalendarDate,
 ): boolean {
   // Done tasks never are; every other status is, waiting and someday
-  // included, and so are tasks in an on-hold subtree.
+  // included, and so are tasks in a parked subtree (GLOSSARY: 搁置子树).
   if (task.status === "done" || task.review.kind !== "plan") return false;
   const day = reviewDueDay(task.review.plan);
   return day !== null && compareDays(day, today) <= 0;
@@ -229,9 +230,11 @@ export function nextReviewDay(plan: ReviewPlan): CalendarDate | null {
           reviewDayInMonth(year, month, placement),
         );
       }
-      const months = lastReviewed.month - 1 + interval.every;
-      const year = lastReviewed.year + Math.floor(months / 12);
-      const month = (months % 12) + 1;
+      const { year, month } = monthsAfter(
+        lastReviewed.year,
+        lastReviewed.month,
+        interval.every,
+      );
       // A month without that day takes its last day (January 31 → February 28).
       return {
         year,

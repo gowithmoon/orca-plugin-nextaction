@@ -1,11 +1,11 @@
 // Which page of the review view shows (GLOSSARY: 回顾视图, #98), and a full
-// review's progress (#99): its step, the steps opened and when it started.
+// review's progress (#99): its step and the steps opened.
 // It lives in the plugin instance's memory, as the views' filters:
 // switching views and closing the plugin panel keep it; unloading clears it
 // (platform/panel-feature.ts), and it is never written with
 // `plugins.setData`.
+import type { FullReviewStepId } from "../../../domain/review/review-steps";
 import { createMemoryStore } from "../../components/memory-store";
-import type { FullReviewStepId } from "./review-steps";
 
 export type ReviewPage =
   /** The entries: a full review, or only the tasks due for review. */
@@ -19,8 +19,6 @@ export type ReviewPage =
       readonly step: FullReviewStepId;
       /** Every step shown so far in this full review, the current one too. */
       readonly opened: readonly FullReviewStepId[];
-      /** When it started. */
-      readonly startedAt: Date;
     };
 
 const start: ReviewPage = { kind: "start" };

@@ -214,7 +214,6 @@ export function createPanelFeature(deps: {
       editTask: createEditTask({ repository }),
       openQuickCapture: deps.openQuickCapture,
       today: deps.today,
-      now: () => systemClock.now(),
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,

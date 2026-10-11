@@ -1,9 +1,10 @@
 // Look back (GLOSSARY: 回看过去): what was done, skipped, and planned but not
 // done since the last full review. Pure: the current time and logical day
 // are passed in.
-import type {
-  CompletionHistory,
-  CompletionKind,
+import {
+  type CompletionHistory,
+  type CompletionKind,
+  entryKind,
 } from "../task/completion-history";
 import type { MyDayEntries } from "../task/my-day";
 import type { CalendarDate, Task } from "../task/task";
@@ -82,7 +83,7 @@ export function lookBack<T extends Pick<Task, "id" | "status">>(
       if (recorded.at.getTime() <= options.start.getTime()) continue;
       entries.push({
         task,
-        kind: recorded.kind ?? "completion",
+        kind: entryKind(recorded),
         at: recorded.at,
       });
     }
@@ -100,7 +101,7 @@ export function lookBack<T extends Pick<Task, "id" | "status">>(
             // A recurring task completed then has advanced: it was done.
             !history.some(
               (recorded) =>
-                (recorded.kind ?? "completion") === "completion" &&
+                entryKind(recorded) === "completion" &&
                 compareDays(recorded.day, day) >= 0,
             ),
         ),

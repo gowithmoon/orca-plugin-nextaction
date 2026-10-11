@@ -1,23 +1,20 @@
-// The full review's steps (GLOSSARY: 回顾, 完整回顾), in the glossary's order:
-// the one list the step bar, "Previous / Next" and each step's page follow.
+// How the full review's steps show (GLOSSARY: 回顾, 完整回顾): each step's
+// label, list or own page, and card actions, keyed by the step ids. Their
+// order is the domain's (domain/review/review-steps.ts): the one list the
+// step bar, "Previous / Next" and each step's page follow.
 // A step with neither `list` nor `ownPage` is not built yet: the step bar
 // shows it unavailable and "Previous / Next" pass over it. The summary has
 // its own page (#101); look back's list is the tasks planned but not done,
 // the view adding its completions and skips above it (#102).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReviewStepKey } from "../../../application/usecases/read-review";
+import {
+  type FullReviewStepId,
+  fullReviewStepIds,
+} from "../../../domain/review/review-steps";
 import { t } from "../../../shared/l10n/l10n";
 
-export type FullReviewStepId =
-  | "inbox"
-  | "lookBack"
-  | "overdue"
-  | "dueSoon"
-  | "nextActions"
-  | "waiting"
-  | "someday"
-  | "dueForReview"
-  | "summary";
+export type { FullReviewStepId };
 
 /** A card's own action in a step, an icon button beside "open in notes". */
 export type ReviewCardAction =
@@ -75,9 +72,11 @@ export function isAvailable(step: FullReviewStep): boolean {
   return step.list !== undefined || step.ownPage === true;
 }
 
-export const fullReviewSteps: readonly FullReviewStep[] = [
-  {
-    id: "inbox",
+/** Each step's display, by step id. */
+const stepDisplays: Readonly<
+  Record<FullReviewStepId, Omit<FullReviewStep, "id">>
+> = {
+  inbox: {
     label: () => t("Inbox"),
     list: {
       key: "inbox",
@@ -89,8 +88,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("Inbox is clear"),
     },
   },
-  {
-    id: "lookBack",
+  lookBack: {
     label: () => t("Look back"),
     // The tasks planned but not done; the view shows the completions and
     // skips above them (#102).
@@ -102,8 +100,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("Nothing planned was left undone"),
     },
   },
-  {
-    id: "overdue",
+  overdue: {
     label: () => t("Overdue tasks"),
     list: {
       key: "overdue",
@@ -115,8 +112,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("No overdue tasks"),
     },
   },
-  {
-    id: "dueSoon",
+  dueSoon: {
     label: () => t("Due in the next 7 days"),
     list: {
       key: "dueSoon",
@@ -127,8 +123,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("Nothing due in the next 7 days"),
     },
   },
-  {
-    id: "nextActions",
+  nextActions: {
     label: () => t("Next actions"),
     list: {
       key: "nextActions",
@@ -138,8 +133,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("Nothing to do right now"),
     },
   },
-  {
-    id: "waiting",
+  waiting: {
     label: () => t("Waiting"),
     list: {
       key: "waiting",
@@ -149,8 +143,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("No waiting tasks"),
     },
   },
-  {
-    id: "someday",
+  someday: {
     label: () => t("Someday"),
     list: {
       key: "someday",
@@ -160,13 +153,17 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
       empty: () => t("No someday tasks"),
     },
   },
-  {
-    id: "dueForReview",
+  dueForReview: {
     label: () => t("Tasks due for review"),
     list: dueForReviewList(),
   },
-  { id: "summary", label: () => t("Summary"), ownPage: true },
-];
+  summary: { label: () => t("Summary"), ownPage: true },
+};
+
+/** The full review's steps, in the domain's order. */
+export const fullReviewSteps: readonly FullReviewStep[] = fullReviewStepIds.map(
+  (id) => ({ id, ...stepDisplays[id] }),
+);
 
 /**
  * The tasks due for review: the full review's step, and the list "only the

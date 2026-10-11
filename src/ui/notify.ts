@@ -208,18 +208,15 @@ export function notifyMarkReviewedFailure(
     );
     return;
   }
-  if (error instanceof ReviewUnreadableError) {
-    notify(
-      "error",
+  notifyReviewFailure(
+    notify,
+    error,
+    (reason) =>
       t(
         "Could not mark reviewed: its review plan cannot be read (${reason}) and is kept as it is.",
-        { reason: error.reason },
+        { reason },
       ),
-    );
-    return;
-  }
-  notifyActionFailure(notify, error, (reason) =>
-    t("Could not mark reviewed: ${reason}", { reason }),
+    (reason) => t("Could not mark reviewed: ${reason}", { reason }),
   );
 }
 
@@ -228,19 +225,34 @@ export function notifyMarkReviewedFailure(
  * `notifyActionFailure` does.
  */
 export function notifySetReviewFailure(notify: Notify, error: unknown): void {
-  if (error instanceof ReviewUnreadableError) {
-    notify(
-      "error",
+  notifyReviewFailure(
+    notify,
+    error,
+    (reason) =>
       t(
         "Could not save the review: its review plan cannot be read (${reason}) and is kept as it is.",
-        { reason: error.reason },
+        { reason },
       ),
-    );
+    (reason) => t("Could not save the change: ${reason}", { reason }),
+  );
+}
+
+/**
+ * The review notifiers' shared part: a review plan that cannot be read is
+ * told with `unreadable`, anything else as `notifyActionFailure` does with
+ * `failed`.
+ */
+function notifyReviewFailure(
+  notify: Notify,
+  error: unknown,
+  unreadable: (reason: string) => string,
+  failed: (reason: string) => string,
+): void {
+  if (error instanceof ReviewUnreadableError) {
+    notify("error", unreadable(error.reason));
     return;
   }
-  notifyActionFailure(notify, error, (reason) =>
-    t("Could not save the change: ${reason}", { reason }),
-  );
+  notifyActionFailure(notify, error, failed);
 }
 
 /**

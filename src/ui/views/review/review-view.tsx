@@ -89,8 +89,6 @@ export interface ReviewViewDeps {
   openQuickCapture: () => void;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
-  /** The current time, for when a full review starts. */
-  now: () => Date;
   /** Tasks may have changed: the review is read again. */
   changes: ChangeSignalSource;
   /** The cards' status menu, "open in notes" and notices. */
@@ -493,7 +491,7 @@ function SummaryPage(props: {
       />
     );
   }
-  const { summary, lastFullReview } = state.data;
+  const { steps, summary, lastFullReview } = state.data;
   const notOpened = fullReviewSteps.filter(
     (step) =>
       step.id !== "summary" &&
@@ -503,22 +501,22 @@ function SummaryPage(props: {
   const rows: readonly { label: string; count: number; icon: string }[] = [
     {
       label: t("Left in the inbox"),
-      count: summary.inbox,
+      count: steps.inbox.total,
       icon: "ti ti-inbox",
     },
     {
       label: t("Overdue tasks"),
-      count: summary.overdue,
+      count: steps.overdue.total,
       icon: "ti ti-alert-circle",
     },
     {
-      label: t("Completed in look back"),
+      label: t("Completions in look back"),
       count: summary.completedInLookBack,
       icon: "ti ti-circle-check",
     },
     {
       label: t("Tasks due for review"),
-      count: summary.dueForReview,
+      count: steps.dueForReview.total,
       icon: "ti ti-list-check",
     },
   ];
@@ -896,12 +894,7 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
         query={query}
         onFullReview={() => {
           const step = firstStep();
-          deps.page.set({
-            kind: "full",
-            step,
-            opened: [step],
-            startedAt: deps.now(),
-          });
+          deps.page.set({ kind: "full", step, opened: [step] });
         }}
         onDueForReview={() => deps.page.set({ kind: "dueForReview" })}
       />

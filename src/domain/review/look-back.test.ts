@@ -15,7 +15,6 @@ const october = (day: number) => ({ year: 2026, month: 10, day });
 const today = october(14);
 
 describe("look back's start", () => {
-
   it("is when the last full review was completed", () => {
     const last = new Date("2026-10-09T23:30:00+08:00");
 

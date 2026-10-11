@@ -14,6 +14,7 @@ import {
   dayOfWeek,
   daysBetween,
   daysInMonth,
+  monthsAfter,
 } from "../time/calendar-days";
 
 /**
@@ -466,9 +467,7 @@ export function nextInMonths(
   daysIn: (year: number, month: number) => readonly CalendarDate[],
 ): CalendarDate {
   return firstAfter(from, (step) => {
-    const months = from.month - 1 + step * interval;
-    const year = from.year + Math.floor(months / 12);
-    const month = (months % 12) + 1;
+    const { year, month } = monthsAfter(from.year, from.month, step * interval);
     return daysIn(year, month);
   });
 }

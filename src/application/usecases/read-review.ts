@@ -160,16 +160,17 @@ export interface ReadReviewResult {
      */
     readonly dueForReview: ReviewStepRead<DueForReviewItem>;
   };
-  /** The summary's numbers: how the system stands now. */
+  /**
+   * The summary's numbers besides the steps' totals (the tasks left in the
+   * inbox, the overdue tasks, the tasks due for review), which it reads
+   * from `steps`.
+   */
   readonly summary: {
-    /** The completions in look back (skips not counted). */
+    /**
+     * The completions in look back, one per completion recorded (a
+     * recurring task completed 3 times counts 3); skips not counted.
+     */
     readonly completedInLookBack: number;
-    /** The tasks left in the inbox. */
-    readonly inbox: number;
-    /** The overdue tasks. */
-    readonly overdue: number;
-    /** The tasks due for review. */
-    readonly dueForReview: number;
   };
   /**
    * When the last full review (GLOSSARY: 完整回顾) was completed, and how
@@ -221,25 +222,6 @@ export function createReadReview(deps: {
       id: TaskId,
     ): CalendarDate | undefined =>
       keep?.step === step && isDatedKeep(keep) ? keep.tasks.get(id) : undefined;
-    const items: DueForReviewItem[] = [];
-    let total = 0;
-    // Only tasks in the snapshot: a block that is no longer a task is not
-    // listed, kept or not.
-    for (const { task } of tasks) {
-      const dueOn =
-        isDueForReview(task, today) && task.review.kind === "plan"
-          ? reviewDueDay(task.review.plan)
-          : null;
-      if (dueOn) {
-        total++;
-        items.push({ task, kept: false, dueOn });
-        continue;
-      }
-      const keptOn = keptOnDay("dueForReview", task.id);
-      if (keptOn) items.push({ task, kept: true, dueOn: keptOn });
-    }
-    // Stable: the same day keeps the notes' order.
-    items.sort((a, b) => compareDays(a.dueOn, b.dueOn));
     /**
      * A step ordered by score: the graph entries `belongs` lets in, and the
      * ones kept in `step` that it no longer does, each in its place by score.
@@ -264,30 +246,37 @@ export function createReadReview(deps: {
       };
     };
     /**
-     * A step ordered by due date: the tasks `belongs` lets in, and the ones
-     * kept in `step` that it no longer does, each by the due date it was
-     * listed under; the earliest first, the same day keeping the notes'
-     * order. Only tasks in the snapshot: a block that is no longer a task is
-     * not listed, kept or not.
+     * A step ordered by a day: the tasks `dayOf` gives a day, and the ones
+     * kept in `step` it no longer does, each by the day it was listed
+     * under; the earliest first, the same day keeping the notes' order.
+     * Only tasks in the snapshot: a block that is no longer a task is not
+     * listed, kept or not.
      */
-    const byDue = (
-      step: Exclude<DatedReviewStepKey, "dueForReview">,
-      belongs: (task: Task) => boolean,
+    const byDay = (
+      step: DatedReviewStepKey,
+      dayOf: (task: Task) => CalendarDate | null,
     ): ReviewStepRead<DatedReviewItem> => {
       const listed: DatedReviewItem[] = [];
       let count = 0;
       for (const { task } of tasks) {
-        if (task.due && belongs(task)) {
+        const dueOn = dayOf(task);
+        if (dueOn) {
           count++;
-          listed.push({ task, kept: false, dueOn: task.due });
+          listed.push({ task, kept: false, dueOn });
           continue;
         }
         const keptOn = keptOnDay(step, task.id);
         if (keptOn) listed.push({ task, kept: true, dueOn: keptOn });
       }
+      // Stable: the same day keeps the notes' order.
       listed.sort((a, b) => compareDays(a.dueOn, b.dueOn));
       return { items: listed, total: count };
     };
+    /** The task's due date when `belongs` lets it in. */
+    const dueWhen =
+      (belongs: (task: Task) => boolean) =>
+      (task: Task): CalendarDate | null =>
+        belongs(task) ? task.due : null;
     const keptInInbox = keptIn("inbox");
     const inbox = tasks
       .map((entry) => entry.task)
@@ -329,17 +318,24 @@ export function createReadReview(deps: {
           items: plannedNotDone,
           total: notDone.size,
         },
-        overdue: byDue("overdue", (task) => isOverdue(task, today)),
-        dueSoon: byDue("dueSoon", (task) => isDueSoon(task, today)),
-        dueForReview: { items, total },
+        overdue: byDay(
+          "overdue",
+          dueWhen((task) => isOverdue(task, today)),
+        ),
+        dueSoon: byDay(
+          "dueSoon",
+          dueWhen((task) => isDueSoon(task, today)),
+        ),
+        dueForReview: byDay("dueForReview", (task) =>
+          isDueForReview(task, today) && task.review.kind === "plan"
+            ? reviewDueDay(task.review.plan)
+            : null,
+        ),
       },
       summary: {
         completedInLookBack: looked.entries.filter(
           (entry) => entry.kind === "completion",
         ).length,
-        inbox: inboxTotal,
-        overdue: tasks.filter(({ task }) => isOverdue(task, today)).length,
-        dueForReview: total,
       },
       lastFullReview: lastFullReviewAt && {
         at: lastFullReviewAt,

@@ -37,6 +37,19 @@ export function dayOfWeek(date: CalendarDate): 1 | 2 | 3 | 4 | 5 | 6 | 7 {
   return (sundayFirst === 0 ? 7 : sundayFirst) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
 }
 
+/** The year and month (1–12) `months` months after `month` of `year`. */
+export function monthsAfter(
+  year: number,
+  month: number,
+  months: number,
+): { readonly year: number; readonly month: number } {
+  const index = month - 1 + months;
+  return {
+    year: year + Math.floor(index / 12),
+    month: (index % 12) + 1,
+  };
+}
+
 /** The number of days in a month (1–12) of a year. */
 export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
