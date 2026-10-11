@@ -10,6 +10,7 @@ import * as React from "react";
 import type { AddToMyDay } from "../../../application/usecases/add-to-my-day";
 import type { CompleteFullReview } from "../../../application/usecases/complete-full-review";
 import type { DropTask } from "../../../application/usecases/drop-task";
+import type { EditTask } from "../../../application/usecases/edit-task";
 import type {
   CanMarkReviewed,
   MarkReviewed,
@@ -21,6 +22,7 @@ import {
   type ReviewKeep,
   type ReviewStepKey,
 } from "../../../application/usecases/read-review";
+import { quickDueDate } from "../../../domain/review/due-steps";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
@@ -48,6 +50,10 @@ import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import type { OpenReviewPopup } from "../../task-panel/review-popup";
+import {
+  toCalendarDate,
+  toLocalDate,
+} from "../../task-panel/task-panel-fields";
 import type { ReviewPage, ReviewPageStore } from "./review-page-store";
 import {
   adjacentStep,
@@ -76,6 +82,8 @@ export interface ReviewViewDeps {
   addToMyDay: AddToMyDay;
   /** A card's "Drop" (someday). */
   dropTask: DropTask;
+  /** A card's "Change due date" (overdue, #100). */
+  editTask: EditTask;
   /** Every step's "Create task": the quick capture popup. */
   openQuickCapture: () => void;
   /** The current logical day, for dates and overdue. */
@@ -119,6 +127,100 @@ function CardButton(props: {
   );
 }
 
+/**
+ * The overdue step's "Change due date" (#100): one button like the others,
+ * opening a menu of tomorrow, next Monday, a day picked and none. Picking a
+ * day opens Orca's date picker beside the button.
+ */
+function RescheduleButton(props: {
+  task: Task;
+  today: CalendarDate;
+  onChoose: (due: CalendarDate | null) => void;
+}) {
+  const { task, today, onChoose } = props;
+  const { ContextMenu, DatePicker, MenuText, Tooltip } = orca.components;
+  const [picking, setPicking] = React.useState(false);
+  // A wrapper element anchors the picker: whether Orca's components forward
+  // a ref is unknown.
+  const anchor = React.useRef<HTMLSpanElement>(null);
+  const label = t("Change due date");
+  return (
+    <span ref={anchor} className="nextaction-review-reschedule">
+      <ContextMenu
+        menu={(close) => (
+          <>
+            <MenuText
+              title={t("Tomorrow")}
+              preIcon="ti ti-sunrise"
+              onClick={() => {
+                close();
+                onChoose(quickDueDate("tomorrow", today));
+              }}
+            />
+            <MenuText
+              title={t("Next Monday")}
+              preIcon="ti ti-calendar-week"
+              onClick={() => {
+                close();
+                onChoose(quickDueDate("nextMonday", today));
+              }}
+            />
+            <MenuText
+              title={t("Pick a date…")}
+              preIcon="ti ti-calendar"
+              onClick={() => {
+                close();
+                setPicking(true);
+              }}
+            />
+            <MenuText
+              title={t("Clear due date")}
+              preIcon="ti ti-calendar-off"
+              onClick={() => {
+                close();
+                onChoose(null);
+              }}
+            />
+          </>
+        )}
+      >
+        {(open, _close, shown) => (
+          <Tooltip text={label}>
+            <button
+              type="button"
+              className="nextaction-task-card-button nextaction-task-card-extra"
+              aria-label={label}
+              aria-haspopup="menu"
+              aria-expanded={shown}
+              onClick={(event) => {
+                // Not a click on the card: that opens the task panel.
+                event.stopPropagation();
+                open(event);
+              }}
+            >
+              <i className="ti ti-calendar-time" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+      </ContextMenu>
+      {picking && (
+        <DatePicker
+          mode="date"
+          // The picker needs a date: it starts on the task's due date.
+          value={toLocalDate(task.due ?? today)}
+          refElement={anchor}
+          visible={true}
+          onClose={() => setPicking(false)}
+          onChange={(picked) => {
+            setPicking(false);
+            if (picked instanceof Date) onChoose(toCalendarDate(picked));
+          }}
+        />
+      )}
+    </span>
+  );
+}
+
 /** What each card action does, and when a card offers it. */
 function useCardActionButtons(deps: ReviewViewDeps) {
   const actions = useTaskActions(deps.taskActions);
@@ -129,6 +231,7 @@ function useCardActionButtons(deps: ReviewViewDeps) {
   const review = useReviewCardActions({
     addToMyDay: deps.addToMyDay,
     dropTask: deps.dropTask,
+    editTask: deps.editTask,
     notify: deps.taskActions.notify,
   });
   /** The button for `action` on `task`; `null` when it is not offered. */
@@ -189,6 +292,16 @@ function useCardActionButtons(deps: ReviewViewDeps) {
             label={t("Change review interval")}
             icon="ti ti-calendar"
             onClick={() => deps.openReviewPopup(task)}
+          />
+        );
+      // A kept card can be rescheduled again: the user may change their mind.
+      case "reschedule":
+        return (
+          <RescheduleButton
+            key={action}
+            task={task}
+            today={deps.today()}
+            onChoose={(due) => review.reschedule(task.id, due)}
           />
         );
     }

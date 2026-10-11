@@ -119,7 +119,7 @@ export function RatingField(props: {
   );
 }
 
-function toCalendarDate(date: Date): CalendarDate {
+export function toCalendarDate(date: Date): CalendarDate {
   // The picker gives a local date; only its local year, month and day count (ADR 0012).
   return {
     year: date.getFullYear(),
@@ -128,7 +128,7 @@ function toCalendarDate(date: Date): CalendarDate {
   };
 }
 
-function toLocalDate(date: CalendarDate): Date {
+export function toLocalDate(date: CalendarDate): Date {
   return new Date(date.year, date.month - 1, date.day);
 }
 

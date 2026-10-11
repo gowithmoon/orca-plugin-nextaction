@@ -1,7 +1,7 @@
 // The full review's steps (GLOSSARY: 回顾, 完整回顾), in the glossary's order:
 // the one list the step bar, "Previous / Next" and each step's page follow.
-// A step with neither `list` nor `ownPage` is not built yet (look back,
-// overdue, due in the next 7 days: #100, #102): the step bar shows it
+// A step with neither `list` nor `ownPage` is not built yet (look back:
+// #102): the step bar shows it
 // unavailable and "Previous / Next" pass over it. Those issues give it its
 // `list` (or their own page) here. The summary has its own page (#101).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
@@ -32,7 +32,12 @@ export type ReviewCardAction =
   /** Drops the task (GLOSSARY: 放弃). */
   | "drop"
   /** Opens the review popup (#103). */
-  | "changeReviewInterval";
+  | "changeReviewInterval"
+  /**
+   * A menu of quick due dates: tomorrow, next Monday, a day picked, none
+   * (the overdue step, #100).
+   */
+  | "reschedule";
 
 /** What a step that lists tasks shows. */
 export interface ReviewStepList {
@@ -85,8 +90,31 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
     },
   },
   { id: "lookBack", label: () => t("Look back") },
-  { id: "overdue", label: () => t("Overdue tasks") },
-  { id: "dueSoon", label: () => t("Due in the next 7 days") },
+  {
+    id: "overdue",
+    label: () => t("Overdue tasks"),
+    list: {
+      key: "overdue",
+      actions: ["reschedule", "addToMyDay"],
+      // Only faded: a new due date leaves the status as it was, and the
+      // card shows the new date itself.
+      keptStatusShown: false,
+      emptyIcon: "ti ti-calendar-check",
+      empty: () => t("No overdue tasks"),
+    },
+  },
+  {
+    id: "dueSoon",
+    label: () => t("Due in the next 7 days"),
+    list: {
+      key: "dueSoon",
+      actions: ["addToMyDay"],
+      // A task leaves by its due date as often as by its status.
+      keptStatusShown: false,
+      emptyIcon: "ti ti-calendar",
+      empty: () => t("Nothing due in the next 7 days"),
+    },
+  },
   {
     id: "nextActions",
     label: () => t("Next actions"),

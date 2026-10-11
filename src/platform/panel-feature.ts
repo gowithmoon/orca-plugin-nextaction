@@ -4,6 +4,7 @@ import type { TaskRepository } from "../application/ports/task-repository";
 import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createCompleteFullReview } from "../application/usecases/complete-full-review";
 import { createDropTask } from "../application/usecases/drop-task";
+import { createEditTask } from "../application/usecases/edit-task";
 import {
   createCanMarkReviewed,
   createMarkReviewed,
@@ -210,6 +211,7 @@ export function createPanelFeature(deps: {
       openReviewPopup: deps.openReviewPopup,
       addToMyDay: createAddToMyDay(myDayDeps),
       dropTask: createDropTask({ repository }),
+      editTask: createEditTask({ repository }),
       openQuickCapture: deps.openQuickCapture,
       today: deps.today,
       now: () => systemClock.now(),
