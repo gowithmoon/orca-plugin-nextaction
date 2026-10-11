@@ -480,6 +480,19 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async writeReview(id, plan) {
+      const block = taskToWrite(id);
+      // A review plan this plugin cannot read is never overwritten.
+      if (block.task.review.kind === "unreadable") {
+        throw new Error(
+          `the review plan of block ${id} holds a value this plugin cannot read (${block.task.review.reason})`,
+        );
+      }
+      write(() => {
+        block.task = { ...block.task, review: { kind: "plan", plan } };
+      });
+    },
+
     async convertToTask(id): Promise<ConvertToTaskResult> {
       const block = blocks.get(id);
       if (!block) throw new Error(`no block ${id}`);

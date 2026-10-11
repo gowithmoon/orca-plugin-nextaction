@@ -13,6 +13,7 @@ import {
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { RecurrenceRule } from "../../../domain/recurrence/recurrence";
+import type { ReviewPlan } from "../../../domain/review/review";
 import {
   type CompletionHistory,
   lastCompletion as lastCompletionIn,
@@ -38,6 +39,7 @@ import {
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
 import { planRecurrenceWrite } from "../codec/recurrence-codec";
+import { planReviewWrite } from "../codec/review-codec";
 import {
   decodeTask,
   findTaskTagRef,
@@ -683,6 +685,22 @@ export function createOrcaTaskRepository(
       const property = plannedWrite(block, planRecurrenceWrite(block, rule));
       // setProperties replaces a property of the same name and keeps the
       // others (block-properties-json J2); one command in one group, one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [block.id],
+          [property],
+        );
+      });
+    },
+
+    async writeReview(id: TaskId, plan: ReviewPlan): Promise<void> {
+      // Mirrors resolve to their source blocks (block-properties-json M3).
+      const block = await taskBlockToWrite(id, currentTag());
+      // Planned before anything is written: a value this plugin cannot read
+      // fails the write, writing nothing.
+      const property = plannedWrite(block, planReviewWrite(block, plan));
+      // As for the recurrence rule: one setProperties in one group, one undo.
       await writeTo(block, async () => {
         await invokeEditorCommand(
           "core.editor.setProperties",
