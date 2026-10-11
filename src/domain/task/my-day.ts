@@ -215,6 +215,25 @@ export function moveSchedule(
 }
 
 /**
+ * `schedule` with its start moved to `start` on the logical day whose range
+ * is `day`, keeping its end (GLOSSARY: 排期; dragging a card's top edge on
+ * the timeline): the start snaps to 15 minutes, no later than 15 minutes
+ * before the end and no earlier than the day boundary.
+ */
+export function resizeScheduleStart(
+  schedule: MyDaySchedule,
+  start: Date,
+  day: LogicalDayRange,
+): MyDaySchedule {
+  const end = schedule.end.getTime();
+  const snapped = Math.min(
+    Math.max(snapToStep(start).getTime(), day.start.getTime()),
+    end - scheduleStepMinutes * minuteMs,
+  );
+  return { start: new Date(snapped), end: schedule.end };
+}
+
+/**
  * Whether `schedule` holds on the logical day whose range is `day`: it lies
  * within it, from the day boundary to the next one. One outside reads as
  * unscheduled, e.g. after the user moved the day boundary (ADR 0020); the

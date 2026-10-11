@@ -1,7 +1,10 @@
 // The My Day view (#83): its layout shell, which puts the unscheduled area
 // and the timeline side by side once the view itself is wide enough, one
 // above the other otherwise. The view's own width decides, not the plugin
-// panel's tier: the side pane takes part of the panel. Thresholds are tuned
+// panel's tier: the side pane takes part of the panel. The shell fills the
+// view's height and each area scrolls by itself, so the timeline takes all
+// the room there is (one above the other, the unscheduled area takes at most
+// a share of it). Thresholds are tuned
 // after use in Orca; changing them is not a design change. Only Orca's theme
 // variables; verified by hand in Orca (docs/ARCHITECTURE.md §5).
 
@@ -11,6 +14,11 @@ export const myDaySideBySideWidth = 640;
 export const myDayCss = `
 .nextaction-my-day {
   container: nextaction-my-day / inline-size;
+  display: flex;
+  flex-direction: column;
+  /* The view's height; below this the plugin panel's view scrolls instead. */
+  height: 100%;
+  min-height: 26rem;
   min-width: 0;
 }
 
@@ -18,7 +26,9 @@ export const myDayCss = `
   display: flex;
   flex-direction: column;
   gap: var(--orca-spacing-lg);
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 
 .nextaction-my-day-unscheduled,
@@ -27,9 +37,39 @@ export const myDayCss = `
   flex-direction: column;
   gap: var(--orca-spacing-md);
   min-width: 0;
+  min-height: 0;
+}
+
+/* One above the other: the unscheduled area as tall as it needs, up to a share. */
+.nextaction-my-day-unscheduled {
+  flex: 0 1 auto;
+  max-height: 40%;
+}
+
+.nextaction-my-day-timeline {
+  flex: 1 1 0;
+}
+
+.nextaction-my-day-section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* The title, and beside it (the unscheduled area) the search box. */
+.nextaction-my-day-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: var(--orca-height-segmented);
 }
 
 .nextaction-my-day-section-title {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-sm);
@@ -37,11 +77,26 @@ export const myDayCss = `
   line-height: var(--orca-lineheight-sm);
 }
 
-.nextaction-my-day-search,
+.nextaction-my-day-search {
+  flex: 0 1 14em;
+  min-width: 8em;
+}
+
 .nextaction-my-day-search > * {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+
+/*
+ * A press anywhere on a card in My Day starts a drag (#85): its text is not
+ * selectable here, as in the all tasks view's handle; the task panel shows
+ * the text to copy.
+ */
+.nextaction-my-day-unscheduled-item,
+.nextaction-my-day-unscheduled-item .nextaction-task-card-text,
+.nextaction-timeline-card {
+  user-select: none;
 }
 
 .nextaction-my-day-all-scheduled {
@@ -51,13 +106,14 @@ export const myDayCss = `
 }
 
 /*
- * The timeline (#84): it scrolls by itself, a fixed share of the screen
- * high, so the current time can be scrolled to and the unscheduled area
- * stays in view beside or above it. 48 px an hour (timeline-geometry.ts);
- * the hours' labels in a gutter on the left, the cards in the track.
+ * The timeline (#84): it scrolls by itself, filling the room its area has,
+ * so the current time can be scrolled to and the unscheduled area stays in
+ * view beside or above it. 48 px an hour (timeline-geometry.ts); the hours'
+ * labels in a gutter on the left, the cards in the track.
  */
 .nextaction-timeline-scroll {
-  height: clamp(240px, 65vh, 900px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
@@ -134,6 +190,8 @@ export const myDayCss = `
   background-color: color-mix(in srgb, var(--orca-color-primary-5) 10%, var(--orca-color-bg-1));
   color: var(--orca-color-text-1);
   cursor: pointer;
+  /* Its edges and buttons stack within it, never over a menu. */
+  isolation: isolate;
 }
 
 .nextaction-timeline-card:hover {
@@ -156,7 +214,7 @@ export const myDayCss = `
   opacity: 0.55;
 }
 
-/* Everything but the bottom edge: what dragging the card moves (#85). */
+/* Everything but the edges: what dragging the card moves (#85). */
 .nextaction-timeline-card-body {
   display: flex;
   align-items: flex-start;
@@ -225,10 +283,43 @@ export const myDayCss = `
   flex: 0 0 auto;
 }
 
-/* The bottom edge: where dragging changes the length (#85). */
-.nextaction-timeline-card-resize {
-  flex: 0 0 auto;
-  height: 4px;
+/*
+ * The top and bottom edges: where dragging changes the start or the end
+ * (#85). Laid over the card's rim, so a short card keeps its body; over the
+ * body's buttons, which sit away from the rim.
+ */
+.nextaction-timeline-card-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.nextaction-timeline-card-edge[data-edge="start"] {
+  top: 0;
+}
+
+.nextaction-timeline-card-edge[data-edge="end"] {
+  bottom: 0;
+}
+
+/* The edge under the pointer shows where to grab. */
+.nextaction-timeline-card-edge:hover {
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 35%, transparent);
+}
+
+/* A short card keeps most of its height for its body. */
+.nextaction-timeline-card[data-compact] .nextaction-timeline-card-edge {
+  height: 3px;
+}
+
+/* The buttons stay above the edges. */
+.nextaction-timeline-card .nextaction-task-card-button {
+  position: relative;
+  z-index: 2;
 }
 
 /*
@@ -239,17 +330,13 @@ export const myDayCss = `
   position: relative;
 }
 
-.nextaction-timeline-card-resize {
-  cursor: ns-resize;
-  touch-action: none;
-}
-
 .nextaction-my-day-layout[data-dragging] {
   user-select: none;
   cursor: grabbing;
 }
 
-.nextaction-my-day-layout[data-dragging="resize"] {
+.nextaction-my-day-layout[data-dragging="resize-start"],
+.nextaction-my-day-layout[data-dragging="resize-end"] {
   cursor: ns-resize;
 }
 
@@ -421,14 +508,13 @@ export const myDayCss = `
 @container nextaction-my-day (min-width: ${myDaySideBySideWidth}px) {
   .nextaction-my-day-layout {
     flex-direction: row;
-    align-items: flex-start;
   }
   .nextaction-my-day-unscheduled {
     flex: 1 1 0;
+    max-height: none;
   }
   .nextaction-my-day-timeline {
     flex: 1.2 1 0;
-    align-self: stretch;
   }
 }
 `;

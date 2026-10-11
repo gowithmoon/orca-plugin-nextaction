@@ -1,15 +1,16 @@
 // Scheduling by dragging in the My Day view (#85): an unscheduled card onto
 // the timeline schedules it at the moment it is dropped (60 minutes); a
-// timeline card's body moves its start, keeping its length; its bottom edge
-// changes its length; a timeline card onto the unscheduled area unschedules
-// it. The domain snaps every one (`normalizeSchedule`, `moveSchedule`).
+// timeline card's body moves its start, keeping its length; its top edge
+// changes its start, keeping its end; its bottom edge changes its end; a
+// timeline card onto the unscheduled area unschedules it. The domain snaps
+// every one (`normalizeSchedule`, `moveSchedule`, `resizeScheduleStart`).
 //
 // As the all tasks view's dragging (task-drag.tsx): pointer events with
 // pointer capture, not the browser's drag and drop (move-blocks 64c); a
-// press only turns into a drag once the pointer has gone a few pixels, so a
-// click, the buttons and the right-click menu stay as they are; on an
-// unscheduled card's text a press selects text, and turns into a drag only
-// once the pointer leaves the card. The timeline (or else the panel) scrolls
+// press anywhere on a card but its buttons only turns into a drag once the
+// pointer has gone a few pixels, so a click, the buttons and the right-click
+// menu stay as they are. The cards' text cannot be selected (my-day-style.ts):
+// a press on it is the start of a drag. The timeline (or else the panel) scrolls
 // near its top and bottom edges; letting go outside the view cancels.
 //
 // Smooth by design: while dragging only two small parts re-render, the
@@ -24,6 +25,7 @@ import {
   type MyDaySchedule,
   moveSchedule,
   normalizeSchedule,
+  resizeScheduleStart,
 } from "../../../domain/task/my-day";
 import type { Task } from "../../../domain/task/task";
 import { minuteMs } from "../../../domain/time/durations";
@@ -53,17 +55,16 @@ const overAttribute = "data-drop-over";
 const draggingAttribute = "data-dragging";
 /** Presses on these are their own, never a drag. */
 const ownPress = "button, a, input, textarea, select, [contenteditable]";
-/** Text a press selects, unless the pointer leaves the card. */
-const selectableText = ".nextaction-task-card-text";
 
 /**
  * What is dragged: an unscheduled task onto the timeline (`add`), or a
- * scheduled one by its body (`move`) or its bottom edge (`resize`).
+ * scheduled one by its body (`move`), its top edge (`resize-start`) or its
+ * bottom edge (`resize-end`).
  */
 export type DragSubject =
   | { readonly kind: "add"; readonly task: Task }
   | {
-      readonly kind: "move" | "resize";
+      readonly kind: "move" | "resize-start" | "resize-end";
       readonly task: Task;
       readonly schedule: MyDaySchedule;
     };
@@ -140,6 +141,10 @@ function sameSchedule(
   );
 }
 
+/** Whether the drag is of a card's top or bottom edge. */
+const isEdge = (subject: DragSubject) =>
+  subject.kind === "resize-start" || subject.kind === "resize-end";
+
 const trackOf = (root: HTMLElement) =>
   root.querySelector<HTMLElement>(`.${trackClass}`);
 
@@ -182,7 +187,9 @@ function previewAt(drag: Under, y: number): MyDaySchedule | null {
         momentAtY(range, at - drag.grab),
         range,
       );
-    case "resize": {
+    case "resize-start":
+      return resizeScheduleStart(subject.schedule, momentAtY(range, at), range);
+    case "resize-end": {
       const end = momentAtY(range, at).getTime();
       return normalizeSchedule(
         {
@@ -212,15 +219,14 @@ export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
     if (!drag) return;
     const { x, y } = point;
     const last = drag.snapshot;
-    // The edge only changes the length: anywhere in the view it goes by the
+    // An edge only changes the length: anywhere in the view it goes by the
     // pointer's height, so straying sideways off the narrow timeline does
     // not lose it; outside the view it cancels.
-    const over =
-      last.subject.kind === "resize"
-        ? withinRoot(drag.root, x, y)
-          ? "timeline"
-          : null
-        : placeAt(drag.root, x, y);
+    const over = isEdge(last.subject)
+      ? withinRoot(drag.root, x, y)
+        ? "timeline"
+        : null
+      : placeAt(drag.root, x, y);
     const preview = over === "timeline" ? previewAt(drag, y) : null;
     if (last.over === over && sameSchedule(last.preview, preview)) return;
     under = { ...drag, snapshot: { ...last, over, preview } };
@@ -280,7 +286,7 @@ export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
     move(x, y) {
       if (!under) return;
       point = { x, y };
-      // A press on text may have begun selecting it; dragging is not selecting.
+      // Text elsewhere may have been selected before; dragging is not selecting.
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) selection.removeAllRanges();
       update();
@@ -351,12 +357,6 @@ function useDragSnapshot(drag: MyDayDrag | undefined): DragSnapshot | null {
   );
 }
 
-/** Whether the point lies outside the element's box. */
-function outside(element: Element, x: number, y: number): boolean {
-  const box = element.getBoundingClientRect();
-  return x < box.left || x > box.right || y < box.top || y > box.bottom;
-}
-
 /**
  * The pointer handlers that make an element a drag source; `pick` says what
  * a press on `target` drags (`null`: nothing). Renders nothing while
@@ -371,8 +371,6 @@ export function useDragSource(
     readonly x: number;
     readonly y: number;
     readonly subject: DragSubject;
-    /** On selectable text: a drag only once the pointer leaves the card. */
-    readonly onText: boolean;
   } | null>(null);
   const dragging = React.useRef(false);
   if (!drag) return {};
@@ -392,12 +390,7 @@ export function useDragSource(
       const subject = pick(target);
       if (!subject) return;
       // Not prevented: clicks, double-click selection and focus stay as they are.
-      press.current = {
-        x: event.clientX,
-        y: event.clientY,
-        subject,
-        onText: target.closest(selectableText) !== null,
-      };
+      press.current = { x: event.clientX, y: event.clientY, subject };
     },
     onPointerMove(event) {
       const start = press.current;
@@ -409,10 +402,7 @@ export function useDragSource(
           return;
         }
         const { clientX: x, clientY: y } = event;
-        const far = start.onText
-          ? outside(event.currentTarget, x, y)
-          : Math.hypot(x - start.x, y - start.y) >= dragThreshold;
-        if (!far) return;
+        if (Math.hypot(x - start.x, y - start.y) < dragThreshold) return;
         dragging.current = true;
         event.currentTarget.setPointerCapture(event.pointerId);
         drag.begin(start.subject, event.currentTarget, x, y);
@@ -483,7 +473,7 @@ export function DragChip() {
   const shown =
     snapshot !== null &&
     snapshot.over !== "timeline" &&
-    snapshot.subject.kind !== "resize";
+    !isEdge(snapshot.subject);
   React.useLayoutEffect(() => {
     if (shown) drag?.placeChip(chip.current);
   });

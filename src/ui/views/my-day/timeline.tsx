@@ -8,8 +8,10 @@
 // Built for dragging (#85): the track (`data-nextaction-my-day-drop=
 // "timeline"`) is where pointers turn into moments (timeline-geometry.ts
 // `momentAtY`); each card (`data-nextaction-timeline-card`) has its body to
-// drag and a bottom edge (`.nextaction-timeline-card-resize`) to change the
-// length; the unscheduled area is the other drop target (my-day-view.tsx).
+// drag, and a top and a bottom edge (`.nextaction-timeline-card-edge`) to
+// change its start or its end; the unscheduled area is the other drop target
+// (my-day-view.tsx). A card is positioned, so its menu goes into the view's
+// areas instead of the card, which would clip it.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ScheduledMyDayItem } from "../../../application/usecases/read-my-day";
@@ -48,6 +50,8 @@ export interface TimelineCardActions {
   readonly onOpen: (item: ScheduledMyDayItem) => void;
   /** Opens the schedule popup. */
   readonly onSchedule: (item: ScheduledMyDayItem) => void;
+  /** Where the task menu goes: the view's areas, not the card. */
+  readonly menuContainer: React.RefObject<HTMLElement>;
 }
 
 /** The button that opens the schedule popup, on every card in My Day. */
@@ -85,15 +89,23 @@ export function TimelineCard(props: {
   const compact = box.height < compactBelowPx;
   const text = shownText(task);
   const times = formatTimeRange(item.schedule);
-  // The body moves it, the bottom edge changes its length (#85); done
-  // cards too, as the timeline records the day.
-  const drag = useDragSource((target) => ({
-    kind: target.closest(".nextaction-timeline-card-resize")
-      ? "resize"
-      : "move",
-    task,
-    schedule: item.schedule,
-  }));
+  // The body moves it, the top edge changes its start, the bottom edge its
+  // end (#85); done cards too, as the timeline records the day.
+  const drag = useDragSource((target) => {
+    const edge = target
+      .closest(".nextaction-timeline-card-edge")
+      ?.getAttribute("data-edge");
+    return {
+      kind:
+        edge === "start"
+          ? "resize-start"
+          : edge === "end"
+            ? "resize-end"
+            : "move",
+      task,
+      schedule: item.schedule,
+    };
+  });
   const style = {
     top: `${box.top}px`,
     height: `${box.height}px`,
@@ -135,7 +147,7 @@ export function TimelineCard(props: {
         })
       }
     >
-      {/* What dragging moves (#85): everything but the buttons and the edge. */}
+      {/* What dragging moves (#85): everything but the buttons and the edges. */}
       <div className="nextaction-timeline-card-body">
         {!compact && (
           <div className="nextaction-timeline-card-status">
@@ -170,8 +182,17 @@ export function TimelineCard(props: {
         )}
         <ScheduleButton onClick={() => card.onSchedule(item)} />
       </div>
-      {/* The bottom edge, for changing the length by dragging (#85). */}
-      <div className="nextaction-timeline-card-resize" aria-hidden="true" />
+      {/* The edges, for changing the start or the end by dragging (#85). */}
+      <div
+        className="nextaction-timeline-card-edge"
+        data-edge="start"
+        aria-hidden="true"
+      />
+      <div
+        className="nextaction-timeline-card-edge"
+        data-edge="end"
+        aria-hidden="true"
+      />
     </article>
   );
 
@@ -179,6 +200,7 @@ export function TimelineCard(props: {
   const menuItems = card.menuItems;
   return (
     <ContextMenu
+      container={card.menuContainer}
       menu={(close) => (
         <TaskMenu
           items={menuItems}

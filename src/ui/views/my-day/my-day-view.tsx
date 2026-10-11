@@ -1,8 +1,9 @@
 // The My Day view (GLOSSARY: 我的一天视图, #83): the tasks in today's My Day,
-// the unscheduled ones in the unscheduled area, with a search box on top to
-// add more, the scheduled ones on the timeline (GLOSSARY: 时间轴, #84). The
-// layout shell holds the two side by side or one above the other, by the
-// view's own width (not the plugin panel's tier). Every card has a button for
+// the unscheduled ones in the unscheduled area, with a search box beside its
+// title to add more, the scheduled ones on the timeline (GLOSSARY: 时间轴,
+// #84). The layout shell holds the two side by side or one above the other,
+// by the view's own width (not the plugin panel's tier), and fills the view's
+// height: each area scrolls by itself. Every card has a button for
 // the schedule popup (#84). Between the next actions and all tasks in the
 // navigation, with no count there. It reads when the plugin panel opens and
 // again on every task change signal (ADR 0007); open across the day boundary,
@@ -122,9 +123,9 @@ function candidateOptions(
 }
 
 /**
- * The search box: part of a task's text finds it, choosing it adds it to
- * today's My Day, unscheduled. Orca's `Select` matches the text typed
- * anywhere in the label (and its pinyin).
+ * The search box beside the unscheduled area's title: part of a task's text
+ * finds it, choosing it adds it to today's My Day, unscheduled. Orca's
+ * `Select` matches the text typed anywhere in the label (and its pinyin).
  */
 function AddSearch(props: { deps: MyDayViewDeps }) {
   const { deps } = props;
@@ -142,10 +143,10 @@ function AddSearch(props: { deps: MyDayViewDeps }) {
         options={candidateOptions(candidates)}
         filter={true}
         filterPlaceholder={t("Search tasks")}
-        placeholder={t("Add a task to My Day")}
+        placeholder={t("Search to add")}
         width="100%"
-        alignment="left"
-        pre={<i className="ti ti-plus" aria-hidden="true" />}
+        alignment="right"
+        pre={<i className="ti ti-search" aria-hidden="true" />}
         onChange={(selected) => {
           const picked = Number(selected[0]);
           if (!Number.isInteger(picked)) return;
@@ -174,7 +175,7 @@ function UnscheduledList(props: {
         icon="ti ti-sun"
         title={t("Nothing in My Day yet")}
         detail={t(
-          "Search above to add a task, or choose “Add to My Day” in a task's menu.",
+          "Search beside the title to add a task, or choose “Add to My Day” in a task's menu.",
         )}
       />
     );
@@ -224,8 +225,9 @@ function TimelineArea(props: {
   read: TodaysMyDay;
   deps: MyDayViewDeps;
   onSchedule: (item: ScheduleTarget) => void;
+  menuContainer: React.RefObject<HTMLElement>;
 }) {
-  const { read, deps, onSchedule } = props;
+  const { read, deps, onSchedule, menuContainer } = props;
   const now = useNow(deps.now);
   const actions = useTaskActions(deps.taskActions);
   const menuItems = deps.menuItems();
@@ -237,8 +239,9 @@ function TimelineArea(props: {
       menuPlace: { selectTask },
       onOpen: (item: ScheduledMyDayItem) => selectTask(item.task.id),
       onSchedule,
+      menuContainer,
     }),
-    [actions, menuItems, selectTask, onSchedule],
+    [actions, menuItems, selectTask, onSchedule, menuContainer],
   );
   return (
     <Timeline
@@ -295,6 +298,7 @@ function MyDayAreas(props: {
     [range, deps],
   );
 
+  let search: React.ReactNode;
   let unscheduled: React.ReactNode;
   if (state.kind === "loading") unscheduled = <Placeholder />;
   else if (state.kind === "paused") unscheduled = <PausedNotice />;
@@ -307,16 +311,14 @@ function MyDayAreas(props: {
       />
     );
   } else {
+    search = <AddSearch deps={deps} />;
     unscheduled = (
-      <>
-        <AddSearch deps={deps} />
-        <UnscheduledList
-          read={state.data}
-          today={today}
-          deps={deps}
-          onSchedule={onSchedule}
-        />
-      </>
+      <UnscheduledList
+        read={state.data}
+        today={today}
+        deps={deps}
+        onSchedule={onSchedule}
+      />
     );
   }
 
@@ -324,10 +326,16 @@ function MyDayAreas(props: {
     <MyDayDragProvider value={drag.current}>
       <div className="nextaction-my-day-layout" ref={root}>
         <MyDaySections
+          search={search}
           unscheduled={unscheduled}
           timeline={
             read && (
-              <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
+              <TimelineArea
+                read={read}
+                deps={deps}
+                onSchedule={onSchedule}
+                menuContainer={root}
+              />
             )
           }
         />
@@ -340,6 +348,7 @@ function MyDayAreas(props: {
 
 /** The two areas, side by side or one above the other (my-day-style.ts). */
 function MyDaySections(props: {
+  search: React.ReactNode;
   unscheduled: React.ReactNode;
   timeline: React.ReactNode;
 }) {
@@ -351,14 +360,23 @@ function MyDaySections(props: {
         aria-label={t("Unscheduled")}
         data-nextaction-my-day-drop="unscheduled"
       >
-        <h3 className="nextaction-my-day-section-title">{t("Unscheduled")}</h3>
-        {props.unscheduled}
+        <div className="nextaction-my-day-section-header">
+          <h3 className="nextaction-my-day-section-title">
+            {t("Unscheduled")}
+          </h3>
+          {props.search}
+        </div>
+        <div className="nextaction-my-day-section-body">
+          {props.unscheduled}
+        </div>
       </section>
       <section
         className="nextaction-my-day-timeline"
         aria-label={t("Timeline")}
       >
-        <h3 className="nextaction-my-day-section-title">{t("Timeline")}</h3>
+        <div className="nextaction-my-day-section-header">
+          <h3 className="nextaction-my-day-section-title">{t("Timeline")}</h3>
+        </div>
         {props.timeline}
       </section>
     </>

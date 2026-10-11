@@ -7,6 +7,7 @@ import {
   newScheduleStart,
   normalizeSchedule,
   removeToday,
+  resizeScheduleStart,
   scheduleToday,
   scheduleWithin,
   todayEntry,
@@ -292,6 +293,34 @@ describe("moving a schedule", () => {
     expect(moveSchedule(ninetyMinutes, at("08T03:00:00"), day)).toEqual({
       start: at("08T05:00:00"),
       end: at("08T06:30:00"),
+    });
+  });
+});
+
+describe("resizing a schedule's start", () => {
+  const oct8 = { year: 2026, month: 10, day: 8 };
+  const day = logicalDayRange(oct8, five);
+  const at = (time: string) => new Date(`2026-10-${time}+08:00`);
+  const nineToTen = { start: at("08T09:00:00"), end: at("08T10:00:00") };
+
+  it("starts it at the new time, snapped to 15 minutes, keeping its end", () => {
+    expect(resizeScheduleStart(nineToTen, at("08T08:22:00"), day)).toEqual({
+      start: at("08T08:15:00"),
+      end: at("08T10:00:00"),
+    });
+  });
+
+  it("leaves it 15 minutes long at the shortest", () => {
+    expect(resizeScheduleStart(nineToTen, at("08T09:58:00"), day)).toEqual({
+      start: at("08T09:45:00"),
+      end: at("08T10:00:00"),
+    });
+  });
+
+  it("starts at today's day boundary at the earliest", () => {
+    expect(resizeScheduleStart(nineToTen, at("08T03:00:00"), day)).toEqual({
+      start: at("08T05:00:00"),
+      end: at("08T10:00:00"),
     });
   });
 });
