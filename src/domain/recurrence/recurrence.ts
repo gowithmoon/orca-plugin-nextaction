@@ -93,7 +93,8 @@ export interface AdvancePlan {
 
 /**
  * Advancing a recurring task once it is completed (GLOSSARY: 进入下一次):
- * the task itself only; its descendants are left to #90.
+ * the task itself only; its descendant tasks are planned by
+ * `planDescendantResets` (descendant-reset.ts).
  */
 export function planAdvance(
   rule: RecurrenceRule,
