@@ -9,25 +9,38 @@ import type { DayBoundary } from "../time/logical-day";
 import { type LookBackTask, lookBack, lookBackStart } from "./look-back";
 
 // Runs in UTC+8 (pinned in vitest.config.ts); the times below are local.
-const now = new Date("2026-10-14T09:00:00+08:00");
-
-describe("look back's start", () => {
-  it("is when the last full review was completed", () => {
-    const last = new Date("2026-10-09T23:30:00+08:00");
-
-    expect(lookBackStart(last, now)).toEqual(last);
-  });
-
-  it("is 7 days before now when no full review was completed or its moment is lost", () => {
-    expect(lookBackStart(null, now)).toEqual(
-      new Date("2026-10-07T09:00:00+08:00"),
-    );
-  });
-});
 
 const boundary: DayBoundary = { hours: 5, minutes: 0 };
 const october = (day: number) => ({ year: 2026, month: 10, day });
 const today = october(14);
+
+describe("look back's start", () => {
+
+  it("is when the last full review was completed", () => {
+    const last = new Date("2026-10-09T23:30:00+08:00");
+
+    expect(lookBackStart(last, today, boundary)).toEqual(last);
+  });
+
+  it("is the start of the logical day 7 days before today when no full review was completed or its moment is lost", () => {
+    expect(lookBackStart(null, today, boundary)).toEqual(
+      new Date("2026-10-07T05:00:00+08:00"),
+    );
+  });
+
+  it("follows the day boundary the user set", () => {
+    expect(lookBackStart(null, today, { hours: 0, minutes: 30 })).toEqual(
+      new Date("2026-10-07T00:30:00+08:00"),
+    );
+  });
+
+  it("counts calendar days across a month's end", () => {
+    expect(
+      lookBackStart(null, { year: 2026, month: 3, day: 3 }, boundary),
+    ).toEqual(new Date("2026-02-24T05:00:00+08:00"));
+  });
+});
+
 /** Look back from October 9, 23:30 (the logical day October 9). */
 const start = new Date("2026-10-09T23:30:00+08:00");
 

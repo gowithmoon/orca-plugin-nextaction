@@ -294,7 +294,7 @@ export function createReadReview(deps: {
       .filter((task) => task.status === "inbox" || keptInInbox.has(task.id))
       .sort(byCapture);
     const inboxTotal = inbox.filter((task) => task.status === "inbox").length;
-    const since = lookBackStart(lastFullReviewAt, deps.clock.now());
+    const since = lookBackStart(lastFullReviewAt, today, boundary);
     const looked = lookBack(
       tasks.map((item) => ({
         task: item.task,

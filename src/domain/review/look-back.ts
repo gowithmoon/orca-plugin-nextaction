@@ -7,18 +7,30 @@ import type {
 } from "../task/completion-history";
 import type { MyDayEntries } from "../task/my-day";
 import type { CalendarDate, Task } from "../task/task";
-import { compareDays } from "../time/calendar-days";
-import { type DayBoundary, logicalDay } from "../time/logical-day";
+import { addDays, compareDays } from "../time/calendar-days";
+import {
+  type DayBoundary,
+  logicalDay,
+  logicalDayRange,
+} from "../time/logical-day";
 
-/** How far look back reaches without a last full review: 7 days. */
-const fallbackMs = 7 * 24 * 60 * 60 * 1000;
+/** How far look back reaches without a last full review, in logical days. */
+const fallbackDays = 7;
 
 /**
  * Where look back starts: when the last full review was completed (GLOSSARY:
- * 完整回顾), or 7 days before `now` when there is none or it is lost.
+ * 完整回顾), or, when there is none or it is lost, the start of the logical
+ * day 7 days before `today` (its day boundary).
  */
-export function lookBackStart(lastFullReview: Date | null, now: Date): Date {
-  return lastFullReview ?? new Date(now.getTime() - fallbackMs);
+export function lookBackStart(
+  lastFullReview: Date | null,
+  today: CalendarDate,
+  boundary: DayBoundary,
+): Date {
+  return (
+    lastFullReview ??
+    logicalDayRange(addDays(today, -fallbackDays), boundary).start
+  );
 }
 
 /** A task with what look back reads of it. */

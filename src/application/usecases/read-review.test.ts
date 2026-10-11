@@ -412,22 +412,22 @@ describe("read review", () => {
       expect(lookBack.total).toBe(1);
     });
 
-    it("starts 7 days ago when no full review was completed", async () => {
+    it("starts at the logical day 7 days ago when no full review was completed", async () => {
       const { repository, readReview } = setup(null);
-      // Seven days ago is October 7, 09:00.
+      // Today is October 14; the logical day October 7 starts at 05:00.
       repository.addTask(
         { id: 1, status: "done" },
-        history(recorded("2026-10-07T08:00:00")),
+        history(recorded("2026-10-07T04:30:00")),
       );
       repository.addTask(
         { id: 2, status: "done" },
-        history(recorded("2026-10-07T10:00:00")),
+        history(recorded("2026-10-07T05:30:00")),
       );
 
       const { lookBack } = (await readReview()).steps;
 
       expect(lookBack.entries.map((item) => item.task.id)).toEqual([2]);
-      expect(lookBack.since).toEqual(new Date("2026-10-07T09:00:00+08:00"));
+      expect(lookBack.since).toEqual(new Date("2026-10-07T05:00:00+08:00"));
     });
 
     it("skips a completion history it cannot read", async () => {
