@@ -25,7 +25,7 @@ export type SetRecurrenceResult =
   | { kind: "set" }
   /**
    * The rule of a done task was resumed and the task advanced (GLOSSARY:
-   * 进入下一次): back to todo, its dates on `next`, nothing recorded.
+   * 安排下一次): back to todo, its dates on `next`, nothing recorded.
    * `resumedOn` is the logical day of the resume, for showing `next` beside
    * it.
    */

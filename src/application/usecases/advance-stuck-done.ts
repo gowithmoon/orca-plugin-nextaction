@@ -1,4 +1,4 @@
-// Use case: advance a recurring task stuck in done (GLOSSARY: 进入下一次),
+// Use case: advance a recurring task not advanced (GLOSSARY: 未自动重复, 安排下一次),
 // from the task panel's notice (#93). The task was marked done in Orca's own
 // interface, so the plugin never advanced it.
 import { isStuckDone, planRepair } from "../../domain/recurrence/recurrence";

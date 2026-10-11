@@ -1,4 +1,4 @@
-// Use case: preview the next occurrence (GLOSSARY: 下一次发生) of a rule being
+// Use case: preview the next occurrence (GLOSSARY: 下次日期) of a rule being
 // edited in the recurrence rule popup (#88), as if the task were completed
 // today. Nothing is read or written.
 import {

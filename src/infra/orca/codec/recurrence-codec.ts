@@ -4,7 +4,7 @@
 // null }` once the rule is removed (the property is kept, so there is one
 // write path, as for the My Day entries in ADR 0020). `interval` is a whole
 // number from 1 up, `unit` one of `day` / `week` / `month` / `year` /
-// `weekday`, `basis` `schedule` (按日程) or `completion` (按完成). An optional
+// `weekday`, `basis` `schedule` (按固定日程) or `completion` (按完成日期). An optional
 // `period.placement` (#88) says where in the unit the period falls: for a
 // week `{ kind: "daysOfWeek", days: [1–7, …] }` (at least one, Monday 1);
 // for a month `{ kind: "dayOfMonth", day: 1–31 }`, `{ kind: "lastDayOfMonth" }`

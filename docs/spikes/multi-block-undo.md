@@ -4,7 +4,7 @@
 
 ## 问题
 
-进入下一次时，插件在一个 `invokeGroup` 里依次写父任务（`setRefData` 改状态和日期、`setProperties` 写完成历史）和每个被重置的后代任务（`setRefData` 改状态和日期）。需要确认：
+安排下一次时，插件在一个 `invokeGroup` 里依次写父任务（`setRefData` 改状态和日期、`setProperties` 写完成历史）和每个被重置的后代任务（`setRefData` 改状态和日期）。需要确认：
 
 - M1 一次 Ctrl+Z 是否把父任务和全部子任务一起还原（状态、日期、`nextaction.completions`）
 - M2 写入顺序（先父后子 / 先子后父）是否影响写入结果和撤销
@@ -109,4 +109,4 @@
 
 ## 对后续步骤的影响
 
-进入下一次的多块写入（`updateTasks`）按现在的做法保留，不需要改。
+安排下一次的多块写入（`updateTasks`）按现在的做法保留，不需要改。

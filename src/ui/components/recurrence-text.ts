@@ -1,5 +1,5 @@
-// How a recurrence rule reads in the plugin (GLOSSARY: 重复规则, 重复基准):
-// "每 2 周 周一、周三 · 按日程", "每月最后一个周五 · 按完成". Display only.
+// How a recurrence rule reads in the plugin (GLOSSARY: 重复规则, 重复方式):
+// "每 2 周 周一、周三 · 按固定日程", "每月最后一个周五 · 按完成日期". Display only.
 import type {
   DayOfWeek,
   MonthPlacement,
@@ -142,7 +142,7 @@ export function unitName(unit: RecurrenceUnit): string {
   }
 }
 
-/** "按日程", "按完成". */
+/** "按固定日程", "按完成日期". */
 export function basisName(basis: RecurrenceBasis): string {
   return basis === "schedule" ? t("Fixed schedule") : t("After completion");
 }
@@ -168,7 +168,7 @@ export function endText(end: RecurrenceEnd): string {
 }
 
 /**
- * "每 2 周 · 按日程", with the end condition: "每周 · 按日程 · 共 5 次，剩 3 次"
+ * "每 2 周 · 按固定日程", with the end condition: "每周 · 按固定日程 · 共 5 次，剩 3 次"
  * (#89), and "· 已暂停" while paused (#92).
  */
 export function ruleText(rule: RecurrenceRule): string {
