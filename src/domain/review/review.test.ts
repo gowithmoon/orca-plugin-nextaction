@@ -344,3 +344,136 @@ describe("marking reviewed (GLOSSARY: 标记已回顾)", () => {
     ).toEqual({ kind: "refused", reason: "done" });
   });
 });
+
+describe("next review day on a review placement (GLOSSARY: 回顾周期)", () => {
+  // October 12, 2026 is a Monday.
+  const next = (
+    interval: NonNullable<ReviewPlan["interval"]>,
+    lastReviewed: ReturnType<typeof day>,
+  ) => nextReviewDay({ interval, lastReviewed, reviewOn: null });
+  const on = (...days: (1 | 2 | 3 | 4 | 5 | 6 | 7)[]) =>
+    ({ kind: "daysOfWeek", days }) as const;
+
+  it("set on a Monday to every Thursday, is the Thursday of that week", () => {
+    expect(
+      next({ every: 1, unit: "week", placement: on(4) }, day(2026, 10, 12)),
+    ).toEqual(day(2026, 10, 15));
+  });
+
+  it("marked a day late, on Friday, is still the next Thursday: the days do not drift", () => {
+    expect(
+      next({ every: 1, unit: "week", placement: on(4) }, day(2026, 10, 16)),
+    ).toEqual(day(2026, 10, 22));
+  });
+
+  it("is strictly after the last reviewed day: reviewed on a Thursday, it is the next Thursday", () => {
+    expect(
+      next({ every: 1, unit: "week", placement: on(4) }, day(2026, 10, 15)),
+    ).toEqual(day(2026, 10, 22));
+  });
+
+  it("on some days of the week, is the next of them in the same week, then across weeks", () => {
+    const mondayAndThursday = {
+      every: 1,
+      unit: "week",
+      placement: on(1, 4),
+    } as const;
+    // Tuesday October 13: Thursday the 15th of that week.
+    expect(next(mondayAndThursday, day(2026, 10, 13))).toEqual(
+      day(2026, 10, 15),
+    );
+    // Thursday October 15: Monday the 19th of the next week.
+    expect(next(mondayAndThursday, day(2026, 10, 15))).toEqual(
+      day(2026, 10, 19),
+    );
+  });
+
+  it("every 2 weeks on Thursday, set on a Monday, is that Thursday, then every other one", () => {
+    const fortnightly = { every: 2, unit: "week", placement: on(4) } as const;
+    expect(next(fortnightly, day(2026, 10, 12))).toEqual(day(2026, 10, 15));
+    expect(next(fortnightly, day(2026, 10, 15))).toEqual(day(2026, 10, 29));
+  });
+
+  it("on a day of the month, is that day of the same month when still to come, else of the next", () => {
+    const on20th = {
+      every: 1,
+      unit: "month",
+      placement: { kind: "dayOfMonth", day: 20 },
+    } as const;
+    expect(next(on20th, day(2026, 10, 12))).toEqual(day(2026, 10, 20));
+    expect(next(on20th, day(2026, 10, 20))).toEqual(day(2026, 11, 20));
+  });
+
+  it("on the 31st, skips the months without one", () => {
+    const on31st = {
+      every: 1,
+      unit: "month",
+      placement: { kind: "dayOfMonth", day: 31 },
+    } as const;
+    // January 31, 2027: February and its 28 days are skipped.
+    expect(next(on31st, day(2027, 1, 31))).toEqual(day(2027, 3, 31));
+  });
+
+  it("on the last day of the month, lands in every month", () => {
+    const lastDay = {
+      every: 1,
+      unit: "month",
+      placement: { kind: "lastDayOfMonth" },
+    } as const;
+    expect(next(lastDay, day(2027, 1, 31))).toEqual(day(2027, 2, 28));
+    expect(next(lastDay, day(2028, 1, 31))).toEqual(day(2028, 2, 29));
+  });
+
+  it.each([
+    // Friday October 30: the 31st is a Saturday.
+    ["a Saturday", day(2026, 10, 12), day(2026, 10, 30)],
+    // Friday May 29: the 31st is a Sunday.
+    ["a Sunday", day(2026, 5, 1), day(2026, 5, 29)],
+    // Monday August 31.
+    ["a weekday", day(2026, 8, 1), day(2026, 8, 31)],
+  ])(
+    "on the last weekday of the month, when the month ends on %s",
+    (_, lastReviewed, expected) => {
+      expect(
+        next(
+          {
+            every: 1,
+            unit: "month",
+            placement: { kind: "lastWeekdayOfMonth" },
+          },
+          lastReviewed,
+        ),
+      ).toEqual(expected);
+    },
+  );
+
+  it("on the last weekday of the month, reviewed on it, is that of the next month", () => {
+    expect(
+      next(
+        { every: 1, unit: "month", placement: { kind: "lastWeekdayOfMonth" } },
+        day(2026, 10, 30),
+      ),
+    ).toEqual(day(2026, 11, 30));
+  });
+
+  it("every 3 months on the 15th, counts from the month of the last review", () => {
+    const quarterly = {
+      every: 3,
+      unit: "month",
+      placement: { kind: "dayOfMonth", day: 15 },
+    } as const;
+    // Before the 15th: that month's.
+    expect(next(quarterly, day(2026, 10, 12))).toEqual(day(2026, 10, 15));
+    // After it: three months on.
+    expect(next(quarterly, day(2026, 10, 16))).toEqual(day(2027, 1, 15));
+  });
+
+  it("without a placement, keeps counting one whole interval from the last review", () => {
+    expect(next({ every: 1, unit: "week" }, day(2026, 10, 16))).toEqual(
+      day(2026, 10, 23),
+    );
+    expect(next({ every: 1, unit: "month" }, day(2027, 1, 31))).toEqual(
+      day(2027, 2, 28),
+    );
+  });
+});

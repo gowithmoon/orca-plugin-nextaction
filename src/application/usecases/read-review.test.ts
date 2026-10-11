@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
+import { createInMemoryLastFullReview } from "../../../tests/in-memory-last-full-review";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import type { ReviewRead } from "../../domain/review/review";
 import { createReadReview } from "./read-review";
@@ -22,16 +23,18 @@ const plan = (last: number | null, on: number | null = null): ReviewRead => ({
   },
 });
 
-function setup() {
+function setup(lastFullReviewAt: string | null = null) {
   const repository = createInMemoryTaskRepository();
+  const lastFullReview = createInMemoryLastFullReview(lastFullReviewAt);
   const readReview = createReadReview({
     repository,
     // Wednesday October 14, 2026, 09:00 in UTC+8: the logical day October 14.
     clock: createFixedClock("2026-10-14T09:00:00+08:00"),
     dayBoundary: createFixedDayBoundary(),
     startPreviewDays: createFixedStartPreviewDays(),
+    lastFullReview,
   });
-  return { repository, readReview };
+  return { repository, lastFullReview, readReview };
 }
 
 /** The listed tasks' IDs, in order. */
@@ -348,6 +351,61 @@ describe("read review", () => {
       expect(ids(read.steps.nextActions.items)).toEqual([1]);
       expect(ids(read.steps.waiting.items)).toEqual([2]);
       expect(ids(read.steps.dueForReview.items)).toEqual([2, 1]);
+    });
+  });
+
+  describe("summary", () => {
+    it("counts the tasks left in the inbox, the overdue tasks and the tasks due for review", async () => {
+      const { repository, readReview } = setup();
+      repository.addTask({ id: 1, status: "inbox" });
+      repository.addTask({ id: 2, status: "inbox", due: october(1) });
+      // Overdue: due yesterday.
+      repository.addTask({ id: 3, status: "todo", due: october(13) });
+      // Not overdue: due today.
+      repository.addTask({ id: 4, status: "todo", due: october(14) });
+      // Done: neither overdue nor due for review.
+      repository.addTask({
+        id: 5,
+        status: "done",
+        due: october(2),
+        review: plan(1),
+      });
+      // Overdue and due for review.
+      repository.addTask({
+        id: 6,
+        status: "someday",
+        due: october(10),
+        review: plan(1),
+      });
+
+      const { summary } = await readReview();
+
+      expect(summary.inbox).toBe(2);
+      expect(summary.overdue).toBe(3);
+      expect(summary.dueForReview).toBe(1);
+    });
+
+    it("gives when the last full review was completed and how many logical days ago", async () => {
+      // October 9, 23:30 in UTC+8: the logical day October 9.
+      const { readReview } = setup("2026-10-09T23:30:00+08:00");
+
+      const { lastFullReview } = await readReview();
+
+      expect(lastFullReview?.at).toEqual(new Date("2026-10-09T15:30:00Z"));
+      expect(lastFullReview?.daysAgo).toBe(5);
+    });
+
+    it("counts a full review completed before the day boundary toward the logical day before", async () => {
+      // October 14, 03:00 in UTC+8: still the logical day October 13.
+      const { readReview } = setup("2026-10-14T03:00:00+08:00");
+
+      expect((await readReview()).lastFullReview?.daysAgo).toBe(1);
+    });
+
+    it("gives no last full review when none was completed or its moment is lost", async () => {
+      const { readReview } = setup(null);
+
+      expect((await readReview()).lastFullReview).toBeNull();
     });
   });
 });

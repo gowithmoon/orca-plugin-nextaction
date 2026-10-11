@@ -1,9 +1,10 @@
 // The full review's steps (GLOSSARY: 回顾, 完整回顾), in the glossary's order:
 // the one list the step bar, "Previous / Next" and each step's page follow.
-// A step without `list` is not built yet (look back, overdue, due in the
-// next 7 days, the summary: #100–#102): the step bar shows it unavailable
-// and "Previous / Next" pass over it. Those issues give it its `list` (or
-// their own page) here. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// A step with neither `list` nor `ownPage` is not built yet (look back,
+// overdue, due in the next 7 days: #100, #102): the step bar shows it
+// unavailable and "Previous / Next" pass over it. Those issues give it its
+// `list` (or their own page) here. The summary has its own page (#101).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReviewStepKey } from "../../../application/usecases/read-review";
 import { t } from "../../../shared/l10n/l10n";
 
@@ -58,8 +59,15 @@ export interface ReviewStepList {
 export interface FullReviewStep {
   readonly id: FullReviewStepId;
   readonly label: () => string;
-  /** Absent while the step is not built. */
+  /** Absent while the step is not built, or when it has its own page. */
   readonly list?: ReviewStepList;
+  /** The step shows its own page rather than a list (the summary, #101). */
+  readonly ownPage?: true;
+}
+
+/** Whether the step can be opened: it lists tasks or has its own page. */
+export function isAvailable(step: FullReviewStep): boolean {
+  return step.list !== undefined || step.ownPage === true;
 }
 
 export const fullReviewSteps: readonly FullReviewStep[] = [
@@ -117,7 +125,7 @@ export const fullReviewSteps: readonly FullReviewStep[] = [
     label: () => t("Tasks due for review"),
     list: dueForReviewList(),
   },
-  { id: "summary", label: () => t("Summary") },
+  { id: "summary", label: () => t("Summary"), ownPage: true },
 ];
 
 /**
@@ -169,12 +177,12 @@ export function adjacentStep(
     index += direction
   ) {
     const step = fullReviewSteps[index];
-    if (step?.list) return step;
+    if (step && isAvailable(step)) return step;
   }
   return undefined;
 }
 
 /** Where a full review starts: the first step that can be opened. */
 export function firstStep(): FullReviewStepId {
-  return fullReviewSteps.find((step) => step.list)?.id ?? "inbox";
+  return fullReviewSteps.find(isAvailable)?.id ?? "inbox";
 }
