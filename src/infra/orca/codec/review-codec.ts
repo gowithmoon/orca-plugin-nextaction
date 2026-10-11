@@ -1,13 +1,24 @@
 // The review plan (GLOSSARY: 回顾周期, 指定回顾日, 标记已回顾) as stored in the
 // plugin block property `nextaction.review`: `{ v: 1, interval?: { every,
-// unit }, lastReviewed?: "YYYY-MM-DD", reviewOn?: "YYYY-MM-DD" }`. `every` is
-// a whole number from 1 up, `unit` one of `day` / `week` / `month`; the days
-// are logical days. Each field is optional; a plan with none of them is
+// unit, placement? }, lastReviewed?: "YYYY-MM-DD", reviewOn?: "YYYY-MM-DD" }`.
+// `every` is a whole number from 1 up, `unit` one of `day` / `week` /
+// `month`; the days are logical days. The optional `placement` (回顾落点,
+// #105; added within v1, ADR 0008) is, for a week, `{ kind: "daysOfWeek",
+// days: [1–7, …] }` (at least one, Monday 1); for a month `{ kind:
+// "dayOfMonth", day: 1–31 }`, `{ kind: "lastDayOfMonth" }` or `{ kind:
+// "lastWeekdayOfMonth" }`. Days have none; a placement out of range, or not
+// one the unit can have, reads as unreadable. Each field is optional; a plan with none of them is
 // written as `{ v: 1 }`, the property kept (one write path, as for the
 // recurrence rule). The version number is added and checked by the plugin
 // block property codec.
 import {
+  type DayOfWeek,
+  daysOfWeek,
+  type WeekPlacement,
+} from "../../../domain/recurrence/recurrence";
+import {
   type ReviewInterval,
+  type ReviewMonthPlacement,
   type ReviewPlan,
   type ReviewRead,
   type ReviewUnit,
@@ -50,7 +61,58 @@ function parseInterval(value: unknown): ReviewInterval | string {
   if (!reviewUnits.includes(unit as ReviewUnit)) {
     return "the review interval's unit is not one this plugin knows";
   }
-  return { every, unit: unit as ReviewUnit };
+  const known = unit as ReviewUnit;
+  if (value.placement === undefined) return { every, unit: known };
+  const placement = parsePlacement(known, value.placement);
+  if (typeof placement === "string") return placement;
+  return { every, unit: known, placement } as ReviewInterval;
+}
+
+const isDayOfWeek = (value: unknown): value is DayOfWeek =>
+  daysOfWeek.includes(value as DayOfWeek);
+
+/** The review placement stored for `unit` (#105), or why it cannot be read. */
+function parsePlacement(
+  unit: ReviewUnit,
+  value: unknown,
+): WeekPlacement | ReviewMonthPlacement | string {
+  if (!isObject(value)) return "the review placement is not an object";
+  switch (unit) {
+    case "week": {
+      const { days } = value;
+      if (value.kind !== "daysOfWeek" || !Array.isArray(days)) {
+        return "the review placement is not one a week can have";
+      }
+      if (days.length === 0 || !days.every(isDayOfWeek)) {
+        return "the days of the week are not at least one of Monday (1) to Sunday (7)";
+      }
+      // Ascending without repeats, as the domain expects.
+      return {
+        kind: "daysOfWeek",
+        days: [...new Set(days)].sort((a, b) => a - b),
+      };
+    }
+    case "month":
+      switch (value.kind) {
+        case "dayOfMonth": {
+          const { day } = value;
+          return typeof day === "number" &&
+            Number.isInteger(day) &&
+            day >= 1 &&
+            day <= 31
+            ? { kind: "dayOfMonth", day }
+            : "the day of the month is not from 1 to 31";
+        }
+        case "lastDayOfMonth":
+          return { kind: "lastDayOfMonth" };
+        case "lastWeekdayOfMonth":
+          return { kind: "lastWeekdayOfMonth" };
+        default:
+          return "the review placement is not one a month can have";
+      }
+    case "day":
+      return "a review interval in days has no placement";
+  }
 }
 
 /** A stored day, `null` when absent, or why it cannot be read. */
@@ -102,7 +164,12 @@ export function planReviewWrite(
   }
   return planPluginPropertyWrite(block, key, {
     ...(plan.interval && {
-      interval: { every: plan.interval.every, unit: plan.interval.unit },
+      interval: {
+        every: plan.interval.every,
+        unit: plan.interval.unit,
+        ...("placement" in plan.interval &&
+          plan.interval.placement && { placement: plan.interval.placement }),
+      },
     }),
     ...(plan.lastReviewed && { lastReviewed: formatDay(plan.lastReviewed) }),
     ...(plan.reviewOn && { reviewOn: formatDay(plan.reviewOn) }),
