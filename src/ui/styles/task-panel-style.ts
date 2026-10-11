@@ -436,6 +436,19 @@ button.nextaction-dependency-task:hover {
   color: var(--orca-color-text-2);
 }
 
+.nextaction-dependency-recurring,
+.nextaction-not-next-action-reason-recurring {
+  margin-inline-start: var(--orca-spacing-xs);
+  color: var(--orca-color-text-2);
+}
+
+/* Recurring tasks (#94, ADR 0021): why the dependency or order stays unmet. */
+.nextaction-dependency-hint,
+.nextaction-not-next-action-reason-hint {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
 .nextaction-dependency-stale {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
