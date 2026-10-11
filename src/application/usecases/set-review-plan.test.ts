@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import {
   createInMemoryTaskRepository,
   type InMemoryTaskRepository,
@@ -91,9 +92,12 @@ describe("set a task's review plan", () => {
       reviewOn: null,
     });
     const dueOn = async (time: string) =>
-      (await createReadReview(at(time))()).steps.dueForReview.items.map(
-        (item) => item.task.id,
-      );
+      (
+        await createReadReview({
+          ...at(time),
+          startPreviewDays: createFixedStartPreviewDays(),
+        })()
+      ).steps.dueForReview.items.map((item) => item.task.id);
 
     // Wednesday: not yet. Thursday: due, a week before an interval without
     // a placement would be.
