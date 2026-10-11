@@ -140,7 +140,7 @@ export function isDueForReview(
  * day, whichever is earlier (neither puts the other off). None without
  * either.
  */
-function reviewDueDay(plan: ReviewPlan): CalendarDate | null {
+export function reviewDueDay(plan: ReviewPlan): CalendarDate | null {
   const next = nextReviewDay(plan);
   const on = plan.reviewOn;
   if (next === null) return on;
