@@ -64,11 +64,21 @@ function selectsText(): boolean {
 }
 
 /** The status icon that opens the status menu; shared with My Day's timeline cards. */
-export function StatusButton(props: { task: Task; actions: TaskActions }) {
-  const { task, actions } = props;
+export function StatusButton(props: {
+  task: Task;
+  actions: TaskActions;
+  /**
+   * Where the status menu goes. Without it Orca puts it into the button's
+   * `offsetParent` (orca-popup-container): a positioned card that clips its
+   * content (My Day's timeline cards) would clip the menu.
+   */
+  menuContainer?: React.RefObject<HTMLElement>;
+}) {
+  const { task, actions, menuContainer } = props;
   const { ContextMenu } = orca.components;
   return (
     <ContextMenu
+      container={menuContainer}
       menu={(close) => (
         <StatusMenu
           current={markedStatus(task)}

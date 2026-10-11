@@ -10,8 +10,10 @@
 // `momentAtY`); each card (`data-nextaction-timeline-card`) has its body to
 // drag, and a top and a bottom edge (`.nextaction-timeline-card-edge`) to
 // change its start or its end; the unscheduled area is the other drop target
-// (my-day-view.tsx). A card is positioned, so its menu goes into the view's
-// areas instead of the card, which would clip it.
+// (my-day-view.tsx). A card is positioned and clips its content, so its
+// menus (the task menu, the status menu) go into the view's areas instead:
+// Orca puts a popup without a container into its anchor's `offsetParent`,
+// the card (orca-popup-container).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ScheduledMyDayItem } from "../../../application/usecases/read-my-day";
@@ -50,7 +52,7 @@ export interface TimelineCardActions {
   readonly onOpen: (item: ScheduledMyDayItem) => void;
   /** Opens the schedule popup. */
   readonly onSchedule: (item: ScheduledMyDayItem) => void;
-  /** Where the task menu goes: the view's areas, not the card. */
+  /** Where the card's menus go: the view's areas, not the card. */
   readonly menuContainer: React.RefObject<HTMLElement>;
 }
 
@@ -151,7 +153,11 @@ export function TimelineCard(props: {
       <div className="nextaction-timeline-card-body">
         {!compact && (
           <div className="nextaction-timeline-card-status">
-            <StatusButton task={task} actions={card.actions} />
+            <StatusButton
+              task={task}
+              actions={card.actions}
+              menuContainer={card.menuContainer}
+            />
           </div>
         )}
         <div className="nextaction-timeline-card-main">
