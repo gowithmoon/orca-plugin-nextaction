@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
+import { createInMemoryLastFullReview } from "../../../tests/in-memory-last-full-review";
 import {
   createInMemoryTaskRepository,
   type InMemoryTaskRepository,
@@ -96,6 +97,7 @@ describe("set a task's review plan", () => {
         await createReadReview({
           ...at(time),
           startPreviewDays: createFixedStartPreviewDays(),
+          lastFullReview: createInMemoryLastFullReview(),
         })()
       ).steps.dueForReview.items.map((item) => item.task.id);
 
