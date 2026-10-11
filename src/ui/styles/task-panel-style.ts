@@ -356,6 +356,23 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   font-style: italic;
 }
 
+/* A recurring task stuck in done (#93): a warning line with its fix. */
+.nextaction-stuck-done {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border-radius: var(--orca-radius-md);
+  background-color: color-mix(in srgb, var(--orca-color-text-yellow) 12%, transparent);
+  color: var(--orca-color-text-yellow);
+}
+
+.nextaction-stuck-done-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .nextaction-sequential-field {
   display: flex;
   align-items: center;

@@ -288,6 +288,13 @@ const zhCN: Record<string, string> = {
   "From the day it is done.": "从完成的那天往后排。",
   "Remove rule": "移除规则",
   Save: "保存",
+  "Did not advance": "停在已完成",
+  "Marked done outside the plugin, so it did not advance. Open the task panel to advance it.":
+    "在插件之外改成了已完成，没有进入下一次。打开任务属性面板可以让它进入下一次。",
+  "Marked done outside the plugin, so this recurring task did not advance.":
+    "这个重复任务在插件之外改成了已完成，没有进入下一次。",
+  Advance: "进入下一次",
+  "Could not advance the task: ${reason}": "无法进入下一次：${reason}",
 };
 
 export default zhCN;
