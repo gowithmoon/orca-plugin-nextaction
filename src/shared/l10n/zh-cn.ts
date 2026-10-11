@@ -369,7 +369,17 @@ const zhCN: Record<string, string> = {
   "Review on": "指定回顾日",
   "Next review: ${date}": "下次回顾：${date}",
   "No review": "不回顾",
-  "Last reviewed: ${date}": "上次回顾：${date}",
+  "${every} · next ${date}": "${every} · 下次 ${date}",
+  "Review on ${date}": "${date}回顾",
+  "${every} · ${on}": "${every} · ${on}",
+  "Review interval": "回顾周期",
+  "A one-off day; cleared once the task is marked reviewed.":
+    "只用一次，标记已回顾后清除。",
+  "Last reviewed": "上次回顾",
+  "Not yet": "还没有",
+  "Remove review": "移除回顾",
+  "This task's review plan cannot be read (${reason}). It is kept as it is and cannot be changed here.":
+    "这个任务的回顾计划读取失败（${reason}），保持原样，这里不能修改。",
   "Mark reviewed": "标记已回顾",
   "Marked reviewed": "已标记回顾",
   "Not marked reviewed: the task is done.": "没有标记：任务已完成。",

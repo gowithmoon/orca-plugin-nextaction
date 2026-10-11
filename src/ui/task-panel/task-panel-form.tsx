@@ -17,7 +17,6 @@ import type { ReadTask } from "../../application/usecases/read-task";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
-import type { SetReviewPlan } from "../../application/usecases/set-review-plan";
 import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isNotAdvanced } from "../../domain/recurrence/recurrence";
 import { isOverdue } from "../../domain/task/overdue";
@@ -47,6 +46,7 @@ import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
 import { ReviewField } from "./review-field";
+import type { OpenReviewPopup } from "./review-popup";
 import {
   DateField,
   DependencyDelayField,
@@ -80,8 +80,8 @@ export interface TaskPanelFormDeps {
   openRecurrencePopup: OpenRecurrencePopup;
   /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
   repairNotAdvanced: RepairNotAdvanced;
-  /** Sets the review interval and review-on day (#103). */
-  setReviewPlan: SetReviewPlan;
+  /** Opens the review popup for the task (#103). */
+  openReviewPopup: OpenReviewPopup;
   /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
   markReviewed: MarkReviewed;
   /** Whether "Mark reviewed" shows for the task. */
@@ -168,6 +168,8 @@ function Fields(props: {
   dependencies: React.ReactNode;
   /** Opens the recurrence rule popup (#95). */
   onOpenRecurrence: () => void;
+  /** Opens the review popup (#103). */
+  onOpenReview: () => void;
   /** Whether "Mark reviewed" shows (#103). */
   canMarkReviewed: boolean;
 }) {
@@ -244,7 +246,7 @@ function Fields(props: {
           review={task.review}
           today={today}
           canMark={props.canMarkReviewed}
-          onSet={(setting) => void actions.setReviewPlan(setting)}
+          onOpen={props.onOpenReview}
           onMark={() => void actions.markReviewed()}
         />
       </Field>
@@ -356,6 +358,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         saveOnLeave={saveOnLeave}
         candidates={candidates}
         onOpenRecurrence={() => deps.openRecurrencePopup(state.task)}
+        onOpenReview={() => deps.openReviewPopup(state.task)}
         canMarkReviewed={deps.canMarkReviewed(state.task)}
         notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use
