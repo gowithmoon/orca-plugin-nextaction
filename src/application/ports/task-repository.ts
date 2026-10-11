@@ -1,5 +1,6 @@
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
+import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
@@ -92,6 +93,17 @@ export type InitialProperties = Pick<
   readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
 };
 
+/** One task's part of a write to several tasks (`updateTasks`). */
+export interface TaskWrite {
+  readonly id: TaskId;
+  /** The properties to write; those absent are left as they are. */
+  readonly changes: TaskChanges;
+  /** Replaces the task's completion history; absent leaves it. */
+  readonly completionHistory?: CompletionHistory;
+  /** Replaces the task's recurrence rule, `null` removes it; absent leaves it. */
+  readonly recurrence?: RecurrenceRule | null;
+}
+
 /**
  * Where tasks are read from and written to. Implementations hide every Orca
  * detail: mirror blocks, orphans, note-facing names and error conversion.
@@ -145,6 +157,17 @@ export interface TaskRepository {
   ): Promise<void>;
 
   /**
+   * Writes several tasks as `updateTask` writes one, each as its `TaskWrite`
+   * says, and with `recurrence` also replaces its recurrence rule (`null`
+   * removes it, the property kept, as `writeRecurrence` does). The user
+   * undoes every task's write with one undo. Fails, writing nothing at all,
+   * when any block is not a task, a property is invalidated, or a completion
+   * history or recurrence rule to be replaced reads as unreadable. A mirror
+   * block's ID writes to its source block.
+   */
+  updateTasks(writes: readonly TaskWrite[]): Promise<void>;
+
+  /**
    * The completion history of a task. A block that is not a task reads as an
    * empty history, even if it still holds one.
    */
@@ -165,6 +188,16 @@ export interface TaskRepository {
    * block's ID writes to its source block.
    */
   writeMyDay(id: TaskId, entries: MyDayEntries): Promise<void>;
+
+  /**
+   * Writes the task's recurrence rule (GLOSSARY: 重复规则), replacing what it
+   * holds; `null` removes it, writing no rule with the property kept. The
+   * task's other properties and its dates are left as they are. The user
+   * undoes it with one undo. Fails, writing nothing, when the block is not a
+   * task, its rule reads as unreadable, or the write fails. A mirror block's
+   * ID writes to its source block.
+   */
+  writeRecurrence(id: TaskId, rule: RecurrenceRule | null): Promise<void>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

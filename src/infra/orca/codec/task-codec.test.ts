@@ -54,6 +54,7 @@ describe("decodeTask", () => {
       dependencyMode: "all",
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:00:00.000Z"),
+      recurrence: { kind: "none" },
       anomalies: [],
     });
   });
@@ -76,6 +77,7 @@ describe("decodeTask", () => {
       dependencyMode: "all",
       dependencyDelay: 0,
       created: new Date("2026-10-06T08:00:00.000Z"),
+      recurrence: { kind: "none" },
       anomalies: [],
     });
   });
@@ -99,6 +101,7 @@ describe("decodeTask", () => {
       dependencyMode: "all",
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:10:00.000Z"),
+      recurrence: { kind: "none" },
       anomalies: [],
     });
   });
@@ -121,6 +124,7 @@ describe("decodeTask", () => {
       dependencyMode: "all",
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:20:00.000Z"),
+      recurrence: { kind: "none" },
       anomalies: [{ property: "status", value: null }],
     });
   });
@@ -605,6 +609,7 @@ describe("decodeTask with values of the wrong kind", () => {
       dependencyMode: "all",
       dependencyDelay: 0,
       created: new Date("2026-10-05T01:10:00.000Z"),
+      recurrence: { kind: "none" },
       anomalies: [{ property: "status", value: ["待开始"] }],
     });
   });

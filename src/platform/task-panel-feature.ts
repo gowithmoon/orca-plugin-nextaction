@@ -3,17 +3,21 @@ import type { StartPreviewDaysSetting } from "../application/ports/start-preview
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createPreviewNextOccurrence } from "../application/usecases/preview-next-occurrence";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
 import { createReadTask } from "../application/usecases/read-task";
+import { createRepairNotAdvanced } from "../application/usecases/repair-not-advanced";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
+import { createSetRecurrence } from "../application/usecases/set-recurrence";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
+import { createRecurrencePopup } from "../ui/task-panel/recurrence-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import {
   createTaskPanelPopup,
@@ -48,6 +52,8 @@ export function createTaskPanelFeature(deps: {
   const { repository } = deps;
   // Until a load says otherwise, writing on leaving is allowed.
   let releasing = () => false;
+  // The recurrence rule popup's root (#95) exists only while loaded.
+  let renderRecurrencePopup: (node: React.ReactNode) => void = () => {};
   const formDeps: TaskPanelFormDeps = {
     readTask: createReadTask({ repository }),
     editTask: createEditTask({ repository }),
@@ -63,6 +69,28 @@ export function createTaskPanelFeature(deps: {
     readDependencyCandidates: createReadDependencyCandidates({ repository }),
     setDependencies: createSetDependencies({ repository }),
     setDependencyMode: createSetDependencyMode({ repository }),
+    openRecurrencePopup: createRecurrencePopup({
+      deps: {
+        setRecurrence: createSetRecurrence({
+          repository,
+          clock: systemClock,
+          dayBoundary: deps.dayBoundary,
+        }),
+        previewNextOccurrence: createPreviewNextOccurrence({
+          clock: systemClock,
+          dayBoundary: deps.dayBoundary,
+        }),
+        today: deps.today,
+        notify: deps.taskActions.notify,
+      },
+      // Into the load's root; nothing outside a load.
+      render: (node) => renderRecurrencePopup(node),
+    }),
+    repairNotAdvanced: createRepairNotAdvanced({
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
+    }),
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,
@@ -73,6 +101,13 @@ export function createTaskPanelFeature(deps: {
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
     releasing = context.releasing;
+    // Its own root, created before the task panel's so it is released after
+    // it: a rule popup opened from the task panel goes with the load.
+    const recurrenceRoot = registry.reactRoot("recurrencePopup", null);
+    renderRecurrencePopup = recurrenceRoot.render;
+    registry.add(`${pluginName}.recurrencePopupOpen`, () => {
+      renderRecurrencePopup = () => {};
+    });
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;
     const open = createTaskPanelPopup({

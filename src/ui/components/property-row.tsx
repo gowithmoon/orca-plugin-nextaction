@@ -6,6 +6,7 @@
 // the level's name: faded at the default, importance and urgency bold from
 // "high" up, the full wording as tooltip and accessible name. The others only show with a value. Items are told apart by
 // spacing and their own icon or background, not separators.
+import { isNotAdvanced } from "../../domain/recurrence/recurrence";
 import { isOverdue } from "../../domain/task/overdue";
 import {
   type CalendarDate,
@@ -22,6 +23,7 @@ import {
   importanceName,
   urgencyName,
 } from "./format";
+import { ruleText } from "./recurrence-text";
 import { statusLabel } from "./status-label";
 
 function anomalyText(anomaly: DataAnomaly): string {
@@ -68,8 +70,19 @@ export function PropertyRow(props: {
   kept?: boolean;
   /** Marked blocked (#65), right after a new status. */
   blocked?: boolean;
+  /**
+   * A recurring task completed today that has advanced already (My Day,
+   * #95): it says so, as its status icon shows todo again.
+   */
+  doneToday?: boolean;
+  /**
+   * A recurring task skipped today that has advanced already (My Day, #91):
+   * it says so, as its status icon shows todo again.
+   */
+  skippedToday?: boolean;
 }) {
-  const { task, today, kept, blocked } = props;
+  const { task, today, kept, blocked, doneToday, skippedToday } = props;
+  const { Tooltip } = orca.components;
   const overdue = isOverdue(task, today);
   const importance = importanceName(task.importance);
   const urgency = urgencyName(task.urgency);
@@ -79,6 +92,16 @@ export function PropertyRow(props: {
       {kept && (
         <span className="nextaction-property nextaction-property-kept">
           {t("Changed to ${status}", { status: statusLabel(task.status) })}
+        </span>
+      )}
+      {doneToday && (
+        <span className="nextaction-property nextaction-property-kept">
+          {t("Done today")}
+        </span>
+      )}
+      {skippedToday && (
+        <span className="nextaction-property nextaction-property-kept">
+          {t("Skipped")}
         </span>
       )}
       {blocked && (
@@ -96,6 +119,42 @@ export function PropertyRow(props: {
           {anomalyText(anomaly)}
         </span>
       ))}
+      {/* A recurring task (#95): an icon, the rule on hover; another icon,
+          fainter, while paused (#92). */}
+      {task.recurrence.kind === "rule" && (
+        <Tooltip text={ruleText(task.recurrence.rule)}>
+          <span
+            className="nextaction-property nextaction-property-recurrence"
+            data-paused={task.recurrence.rule.paused || undefined}
+            role="img"
+            aria-label={t("Repeats: ${rule}", {
+              rule: ruleText(task.recurrence.rule),
+            })}
+          >
+            <i
+              className={
+                task.recurrence.rule.paused
+                  ? "ti ti-repeat-off"
+                  : "ti ti-repeat"
+              }
+              aria-hidden="true"
+            />
+          </span>
+        </Tooltip>
+      )}
+      {/* Marked done in Orca, so it did not advance (#93). */}
+      {isNotAdvanced(task) && (
+        <Tooltip
+          text={t(
+            "Marked done outside the plugin, so it did not advance. Open the task panel to advance it.",
+          )}
+        >
+          <span className="nextaction-property nextaction-property-not-advanced">
+            <i className="ti ti-alert-triangle" aria-hidden="true" />
+            {t("Did not advance")}
+          </span>
+        </Tooltip>
+      )}
       {task.due && (
         <span
           className="nextaction-property nextaction-property-due"

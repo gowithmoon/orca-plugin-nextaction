@@ -56,6 +56,8 @@ function withDrops(
     } else if (drop === null) {
       unscheduled.push({
         task: item.task,
+        done: item.done,
+        skipped: item.skipped,
         overdue: item.overdue,
         unscheduledOrder: item.unscheduledOrder,
       });

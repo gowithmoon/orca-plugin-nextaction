@@ -22,6 +22,7 @@ function task(set: Partial<Task> = {}): Task {
     dependencyMode: "all",
     dependencyDelay: 0,
     created: new Date("2026-01-01T00:00:00Z"),
+    recurrence: { kind: "none" },
     anomalies: [],
     ...set,
   };

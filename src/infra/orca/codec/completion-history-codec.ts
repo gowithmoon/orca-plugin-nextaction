@@ -1,7 +1,9 @@
 // The completion history (GLOSSARY: 完成历史) as stored in the plugin block
-// property `nextaction.completions`: `{ v: 1, entries: [{ at, day }] }`, `at`
-// the completion time as a UTC ISO string, `day` its logical day as
-// `YYYY-MM-DD`, oldest first; `at` reads back from Orca as a `Date`. The
+// property `nextaction.completions`: `{ v: 1, entries: [{ at, day, kind }] }`,
+// `at` the time as a UTC ISO string, `day` its logical day as `YYYY-MM-DD`,
+// `kind` `completion` or `skip` (#91; absent, as written before skipping
+// existed, reads as `completion`), oldest first; `at` reads back from Orca as
+// a `Date`. The
 // version number is added and checked by the plugin block property codec.
 import type {
   CompletionEntry,
@@ -30,10 +32,16 @@ export type StoredCompletionHistory =
 
 function parseEntry(value: unknown): CompletionEntry | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { at, day } = value as Record<string, unknown>;
+  const { at, day, kind } = value as Record<string, unknown>;
   const time = parseTime(at);
   const logicalDay = parseDay(day);
-  return time && logicalDay ? { at: time, day: logicalDay } : undefined;
+  if (!time || !logicalDay) return undefined;
+  if (kind === "skip") return { at: time, day: logicalDay, kind };
+  // Absent: recorded before skipping existed (#91), a completion.
+  if (kind === undefined || kind === "completion") {
+    return { at: time, day: logicalDay };
+  }
+  return undefined;
 }
 
 /**
@@ -75,6 +83,7 @@ export function planCompletionHistoryWrite(
     entries: history.map((entry) => ({
       at: entry.at.toISOString(),
       day: formatDay(entry.day),
+      kind: entry.kind ?? "completion",
     })),
   });
 }

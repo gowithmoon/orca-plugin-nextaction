@@ -8,10 +8,16 @@ import {
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
+  type TaskWrite,
 } from "../../../application/ports/task-repository";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
-import type { CompletionHistory } from "../../../domain/task/completion-history";
+import type { RecurrenceRule } from "../../../domain/recurrence/recurrence";
+import {
+  type CompletionHistory,
+  lastCompletion as lastCompletionIn,
+  lastSkip as lastSkipIn,
+} from "../../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -31,6 +37,7 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
+import { planRecurrenceWrite } from "../codec/recurrence-codec";
 import {
   decodeTask,
   findTaskTagRef,
@@ -342,13 +349,20 @@ export function createOrcaTaskRepository(
     return {
       tasks: tasks.map((task) => {
         const place = places.get(task.id);
-        // The last completion, from the block already read. An unreadable
-        // history reads as none here, without a warning on every read; it is
-        // reported where it is read for writing (readCompletionHistory).
+        // The last completion (skips passed over, #91), from the block already
+        // read. An unreadable history reads as none here, without a warning
+        // on every read; it is reported where it is read for writing
+        // (readCompletionHistory).
         const block = blocks.get(task.id);
         const history = block ? readCompletionHistory(block) : undefined;
         const lastCompletion =
-          history?.kind === "readable" ? history.history.at(-1) : undefined;
+          history?.kind === "readable"
+            ? lastCompletionIn(history.history)
+            : undefined;
+        const lastSkip =
+          history?.kind === "readable"
+            ? lastSkipIn(history.history)
+            : undefined;
         // The My Day entries, from the same block. Unreadable ones are marked
         // so, without a warning on every read; readMyDay warns when they are
         // read by ID.
@@ -358,6 +372,7 @@ export function createOrcaTaskRepository(
           parentId: place?.parentId ?? null,
           position: place?.position ?? Number.MAX_SAFE_INTEGER,
           ...(lastCompletion && { lastCompletion }),
+          ...(lastSkip && { lastSkip }),
           ...(myDay && { myDay }),
           // A page has an alias; with no parent block it sits at the top of
           // the notes, where only pages are tasks (ADR 0013, move-blocks P2).
@@ -398,6 +413,135 @@ export function createOrcaTaskRepository(
       if (plan.kind === "add") writes.push(plan.definition);
     }
     return writes;
+  };
+
+  /**
+   * Plans a write to one task: everything is read, encoded and checked
+   * before any command runs, so a write that cannot be done fails having
+   * written nothing. Returns the block and the commands to run in a group;
+   * `undefined` when there is nothing to write.
+   */
+  const planTaskWrite = async (
+    state: ReadyTag,
+    write: TaskWrite,
+  ): Promise<{ block: Block; run: () => Promise<void> } | undefined> => {
+    // Encoded first: an invalidated property fails before anything is read
+    // or written.
+    const items = encodeTaskChanges(write.changes, {
+      language: state.language,
+      invalidated: state.invalidated,
+    });
+    const block = await taskBlockToWrite(write.id, {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    });
+    // The completion history is planned before anything is written: a
+    // value this plugin cannot read fails the whole write.
+    const properties = [
+      ...(write.completionHistory
+        ? [
+            plannedWrite(
+              block,
+              planCompletionHistoryWrite(block, write.completionHistory),
+            ),
+          ]
+        : []),
+      // The recurrence rule likewise: one that cannot be read is kept.
+      ...(write.recurrence !== undefined
+        ? [plannedWrite(block, planRecurrenceWrite(block, write.recurrence))]
+        : []),
+    ];
+    // Dependency targets are block IDs coming in: mirrors resolve to their
+    // sources first, as every block ID does (block-properties-json M3).
+    const dependencyPlan =
+      write.changes.dependencies === undefined
+        ? undefined
+        : planDependencyWrite(
+            block,
+            state.tagBlockId,
+            write.changes.dependencies.length === 0
+              ? []
+              : resolveDependencyTargets(
+                  write.changes.dependencies,
+                  await getBlocks(write.changes.dependencies),
+                ),
+          );
+    if (
+      items.length === 0 &&
+      properties.length === 0 &&
+      dependencyPlan === undefined
+    ) {
+      return undefined;
+    }
+    const ref = findTaskTagRef(block.refs, state.tagBlockId);
+    if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
+    // Values missing from the tag's choices are stored but not shown
+    // (multi-choices-created): the whole list is checked every write, so
+    // values stored earlier without a choice show again too.
+    const choiceWrites = await planChoiceWrites(state, write.changes);
+    const run = async () => {
+      // The choices first, in the same group: one undo takes back both
+      // (multi-choices-created §3–4).
+      if (choiceWrites.length > 0) {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [state.tagBlockId],
+          choiceWrites,
+        );
+      }
+      // setRefData takes the whole reference object and changes only the
+      // items passed (tag-operations, round 1 steps 05–06).
+      if (items.length > 0) {
+        await invokeEditorCommand("core.editor.setRefData", ref, items);
+      }
+      // Dependencies (#57): a reference is created for each new target,
+      // then the value is written as reference IDs, never block IDs
+      // (tag-operations A2). Reference IDs left out are removed with their
+      // references (A4, A5). One group, so one undo.
+      if (dependencyPlan !== undefined) {
+        const refIds: number[] = [];
+        for (const item of dependencyPlan) {
+          if (item.kind === "existing") {
+            refIds.push(item.refId);
+            continue;
+          }
+          const refId = await invokeEditorCommand(
+            "core.editor.createRef",
+            block.id,
+            item.target,
+            3,
+          );
+          if (typeof refId !== "number") {
+            throw new OrcaError(`createRef returned ${JSON.stringify(refId)}`);
+          }
+          refIds.push(refId);
+        }
+        // The spikes read the block again after createRef before
+        // setRefData; done the same here rather than reuse the old ref.
+        const current =
+          refIds.length > 0 && dependencyPlan.some((i) => i.kind === "new")
+            ? (await getBlocks([block.id])).get(block.id)
+            : block;
+        const tagRef =
+          current && findTaskTagRef(current.refs, state.tagBlockId);
+        if (!tagRef) {
+          throw new OrcaError(`block ${block.id} lost its task tag`);
+        }
+        await invokeEditorCommand("core.editor.setRefData", tagRef, [
+          encodeDependencies(refIds, { language: state.language }),
+        ]);
+      }
+      // setProperties replaces a property of the same name and keeps the
+      // others (block-properties-json J2).
+      if (properties.length > 0) {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [block.id],
+          properties,
+        );
+      }
+    };
+    return { block, run };
   };
 
   return {
@@ -449,119 +593,36 @@ export function createOrcaTaskRepository(
       changes: TaskChanges,
       completionHistory?: CompletionHistory,
     ): Promise<void> {
+      const plan = await planTaskWrite(readyTag(), {
+        id,
+        changes,
+        ...(completionHistory && { completionHistory }),
+      });
+      if (plan) await writeTo(plan.block, plan.run);
+    },
+
+    async updateTasks(writes: readonly TaskWrite[]): Promise<void> {
       const state = readyTag();
-      // Encoded first: an invalidated property fails before anything is read
-      // or written.
-      const items = encodeTaskChanges(changes, {
-        language: state.language,
-        invalidated: state.invalidated,
-      });
-      const block = await taskBlockToWrite(id, {
-        tagBlockId: state.tagBlockId,
-        invalidated: state.invalidated,
-      });
-      // The completion history is planned before anything is written: a
-      // value this plugin cannot read fails the whole write.
-      const properties = completionHistory
-        ? [
-            plannedWrite(
-              block,
-              planCompletionHistoryWrite(block, completionHistory),
-            ),
-          ]
-        : [];
-      // Dependency targets are block IDs coming in: mirrors resolve to their
-      // sources first, as every block ID does (block-properties-json M3).
-      const dependencyPlan =
-        changes.dependencies === undefined
-          ? undefined
-          : planDependencyWrite(
-              block,
-              state.tagBlockId,
-              changes.dependencies.length === 0
-                ? []
-                : resolveDependencyTargets(
-                    changes.dependencies,
-                    await getBlocks(changes.dependencies),
-                  ),
-            );
-      if (
-        items.length === 0 &&
-        properties.length === 0 &&
-        dependencyPlan === undefined
-      ) {
-        return;
+      // Every task is planned before anything is written: one that cannot be
+      // written fails them all, writing nothing.
+      const plans: NonNullable<Awaited<ReturnType<typeof planTaskWrite>>>[] =
+        [];
+      for (const write of writes) {
+        const plan = await planTaskWrite(state, write);
+        if (plan) plans.push(plan);
       }
-      const ref = findTaskTagRef(block.refs, state.tagBlockId);
-      if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
-      // Values missing from the tag's choices are stored but not shown
-      // (multi-choices-created): the whole list is checked every write, so
-      // values stored earlier without a choice show again too.
-      const choiceWrites = await planChoiceWrites(state, changes);
-      await writeTo(block, async () => {
-        // The choices first, in the same group: one undo takes back both
-        // (multi-choices-created §3–4).
-        if (choiceWrites.length > 0) {
-          await invokeEditorCommand(
-            "core.editor.setProperties",
-            [state.tagBlockId],
-            choiceWrites,
-          );
-        }
-        // setRefData takes the whole reference object and changes only the
-        // items passed (tag-operations, round 1 steps 05–06).
-        if (items.length > 0) {
-          await invokeEditorCommand("core.editor.setRefData", ref, items);
-        }
-        // Dependencies (#57): a reference is created for each new target,
-        // then the value is written as reference IDs, never block IDs
-        // (tag-operations A2). Reference IDs left out are removed with their
-        // references (A4, A5). One group, so one undo.
-        if (dependencyPlan !== undefined) {
-          const refIds: number[] = [];
-          for (const item of dependencyPlan) {
-            if (item.kind === "existing") {
-              refIds.push(item.refId);
-              continue;
-            }
-            const refId = await invokeEditorCommand(
-              "core.editor.createRef",
-              block.id,
-              item.target,
-              3,
-            );
-            if (typeof refId !== "number") {
-              throw new OrcaError(
-                `createRef returned ${JSON.stringify(refId)}`,
-              );
-            }
-            refIds.push(refId);
-          }
-          // The spikes read the block again after createRef before
-          // setRefData; done the same here rather than reuse the old ref.
-          const current =
-            refIds.length > 0 && dependencyPlan.some((i) => i.kind === "new")
-              ? (await getBlocks([block.id])).get(block.id)
-              : block;
-          const tagRef =
-            current && findTaskTagRef(current.refs, state.tagBlockId);
-          if (!tagRef) {
-            throw new OrcaError(`block ${block.id} lost its task tag`);
-          }
-          await invokeEditorCommand("core.editor.setRefData", tagRef, [
-            encodeDependencies(refIds, { language: state.language }),
-          ]);
-        }
-        // setProperties replaces a property of the same name and keeps the
-        // others (block-properties-json J2).
-        if (properties.length > 0) {
-          await invokeEditorCommand(
-            "core.editor.setProperties",
-            [block.id],
-            properties,
-          );
-        }
-      });
+      if (plans.length === 0) return;
+      try {
+        // One group for every task, so one undo, from a note panel or the
+        // plugin panel alike; the order of the blocks does not matter
+        // (docs/spikes/multi-block-undo, M1–M3). The task advanced comes
+        // first, as `writes` is ordered.
+        await invokeGroup(async () => {
+          for (const plan of plans) await plan.run();
+        });
+      } finally {
+        for (const plan of plans) onWritten(plan.block.id);
+      }
     },
 
     async readCompletionHistory(id: TaskId): Promise<CompletionHistoryRead> {
@@ -600,6 +661,26 @@ export function createOrcaTaskRepository(
       // Planned before anything is written: a value this plugin cannot read
       // fails the write, writing nothing.
       const property = plannedWrite(block, planMyDayWrite(block, entries));
+      // setProperties replaces a property of the same name and keeps the
+      // others (block-properties-json J2); one command in one group, one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [block.id],
+          [property],
+        );
+      });
+    },
+
+    async writeRecurrence(
+      id: TaskId,
+      rule: RecurrenceRule | null,
+    ): Promise<void> {
+      // Mirrors resolve to their source blocks (block-properties-json M3).
+      const block = await taskBlockToWrite(id, currentTag());
+      // Planned before anything is written: a value this plugin cannot read
+      // fails the write, writing nothing.
+      const property = plannedWrite(block, planRecurrenceWrite(block, rule));
       // setProperties replaces a property of the same name and keeps the
       // others (block-properties-json J2); one command in one group, one undo.
       await writeTo(block, async () => {

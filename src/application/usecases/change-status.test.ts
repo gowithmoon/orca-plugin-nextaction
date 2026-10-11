@@ -6,10 +6,9 @@ import {
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
 import { taskStatuses } from "../../domain/task/task";
-import {
-  CompletionHistoryUnreadableError,
-  createChangeStatus,
-} from "./change-status";
+import { createChangeStatus } from "./change-status";
+import { CompletionHistoryUnreadableError } from "./completion-history-unreadable-error";
+import { RecurrenceUnreadableError } from "./recurrence-unreadable-error";
 
 /** The completion recorded at the clock of `deps`. */
 const nineOClockOct8 = {
@@ -231,5 +230,289 @@ describe("change status: completion history", () => {
 
     expect((await repository.getTask(47))?.status).toBe("todo");
     expect(await repository.readCompletionHistory(47)).toEqual(stored);
+  });
+});
+
+describe("change status: recurring tasks", () => {
+  const weekly = {
+    kind: "rule",
+    rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+  } as const;
+
+  it("completing a recurring task advances it in one write and returns the next occurrence", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 60,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: weekly,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(60, "done")).toEqual({
+      kind: "advanced",
+      next: { year: 2026, month: 10, day: 12 },
+      completedOn: { year: 2026, month: 10, day: 8 },
+    });
+
+    const task = await repository.getTask(60);
+    expect(task?.status).toBe("todo");
+    expect(task?.due).toEqual({ year: 2026, month: 10, day: 12 });
+    expect(await repository.readCompletionHistory(60)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    // Status, date and history in one write, so one undo.
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("completing a recurring task in progress also goes back to todo", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 61,
+      status: "doing",
+      start: { year: 2026, month: 10, day: 8 },
+      recurrence: weekly,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(61, "done");
+
+    const task = await repository.getTask(61);
+    expect(task?.status).toBe("todo");
+    expect(task?.start).toEqual({ year: 2026, month: 10, day: 15 });
+  });
+
+  it("completing the last occurrence ends the recurrence: done, the rule removed, in one write", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 5 };
+    repository.addTask({
+      id: 64,
+      status: "todo",
+      due,
+      recurrence: {
+        kind: "rule",
+        rule: {
+          ...weekly.rule,
+          end: { kind: "count", total: 3, remaining: 1 },
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(64, "done")).toEqual({ kind: "ended" });
+
+    expect(await repository.getTask(64)).toMatchObject({
+      status: "done",
+      due,
+      recurrence: { kind: "none" },
+    });
+    expect(await repository.readCompletionHistory(64)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("completing a recurring task with occurrences left uses one up, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 65,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: {
+        kind: "rule",
+        rule: {
+          ...weekly.rule,
+          end: { kind: "count", total: 3, remaining: 3 },
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(65, "done")).toMatchObject({ kind: "advanced" });
+
+    expect((await repository.getTask(65))?.recurrence).toEqual({
+      kind: "rule",
+      rule: { ...weekly.rule, end: { kind: "count", total: 3, remaining: 2 } },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("fails to complete a task whose rule is unreadable, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 62,
+      status: "todo",
+      recurrence: { kind: "unreadable", reason: "unknown version 2" },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(62, "done")).rejects.toBeInstanceOf(
+      RecurrenceUnreadableError,
+    );
+
+    expect((await repository.getTask(62))?.status).toBe("todo");
+    expect(await repository.readCompletionHistory(62)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("fails to complete a recurring task whose history is unreadable, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 5 };
+    repository.addTask(
+      { id: 63, status: "todo", due, recurrence: weekly },
+      {
+        completionHistory: { kind: "unreadable", reason: "unknown version 2" },
+      },
+    );
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(63, "done")).rejects.toBeInstanceOf(
+      CompletionHistoryUnreadableError,
+    );
+
+    expect(await repository.getTask(63)).toMatchObject({ status: "todo", due });
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("completing a recurring task with a placement puts its date on the placement (#88)", async () => {
+    const repository = createInMemoryTaskRepository();
+    // Every month on the last Friday, after completion: done on Thursday
+    // October 8, 2026, so next is Friday October 30.
+    repository.addTask({
+      id: 64,
+      status: "todo",
+      due: { year: 2026, month: 9, day: 25 },
+      recurrence: {
+        kind: "rule",
+        rule: {
+          period: {
+            interval: 1,
+            unit: "month",
+            placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+          },
+          basis: "completion",
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(64, "done")).toMatchObject({
+      kind: "advanced",
+      next: { year: 2026, month: 10, day: 30 },
+    });
+    expect((await repository.getTask(64))?.due).toEqual({
+      year: 2026,
+      month: 10,
+      day: 30,
+    });
+  });
+});
+
+describe("change status: a paused rule (#92)", () => {
+  it("completing a task whose rule is paused leaves it done like a plain task, recording the completion", async () => {
+    const repository = createInMemoryTaskRepository();
+    const due = { year: 2026, month: 10, day: 5 };
+    repository.addTask({
+      id: 70,
+      status: "todo",
+      due,
+      recurrence: {
+        kind: "rule",
+        rule: {
+          period: { interval: 1, unit: "week" },
+          basis: "schedule",
+          paused: true,
+        },
+      },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(70, "done")).toEqual({ kind: "changed" });
+
+    expect(await repository.getTask(70)).toMatchObject({ status: "done", due });
+    expect(await repository.readCompletionHistory(70)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+});
+
+describe("change status: the descendant tasks of a recurring task", () => {
+  const weekly = {
+    kind: "rule",
+    rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+  } as const;
+  const due = { year: 2026, month: 10, day: 5 };
+
+  it("completing a recurring task brings its done descendant tasks back to todo in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    // 每周大扫除 > 拖地 (done), 擦窗 (doing), and below a plain block 倒垃圾 (done).
+    repository.addTask({ id: 70, status: "todo", due, recurrence: weekly });
+    repository.addTask(
+      { id: 71, status: "done", due: { year: 2026, month: 10, day: 4 } },
+      { parentId: 70 },
+    );
+    repository.addTask({ id: 72, status: "doing" }, { parentId: 70 });
+    repository.addBlock(73, { parentId: 70 });
+    repository.addTask({ id: 74, status: "done" }, { parentId: 73 });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(70, "done")).toMatchObject({ kind: "advanced" });
+
+    expect(await repository.getTask(71)).toMatchObject({
+      status: "todo",
+      due: { year: 2026, month: 10, day: 11 },
+    });
+    expect((await repository.getTask(72))?.status).toBe("doing");
+    expect((await repository.getTask(74))?.status).toBe("todo");
+    // No completion is recorded for a descendant task brought back to todo.
+    expect(await repository.readCompletionHistory(71)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    // The task and its descendant tasks in one write, so one undo.
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("fails to complete a recurring task when a done descendant task's rule cannot be read, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 75, status: "todo", due, recurrence: weekly });
+    repository.addTask({ id: 76, status: "done" }, { parentId: 75 });
+    repository.addTask(
+      {
+        id: 77,
+        status: "done",
+        recurrence: { kind: "unreadable", reason: "unknown version 2" },
+      },
+      { parentId: 75 },
+    );
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(75, "done")).rejects.toBeInstanceOf(
+      RecurrenceUnreadableError,
+    );
+
+    expect(await repository.getTask(75)).toMatchObject({ status: "todo", due });
+    expect((await repository.getTask(76))?.status).toBe("done");
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("fails to complete a recurring task when a descendant task's write fails, writing nothing", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 78, status: "todo", due, recurrence: weekly });
+    repository.addTask({ id: 79, status: "done" }, { parentId: 78 });
+    repository.failWrites(new Error("plugin block property unreadable"));
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await expect(changeStatus(78, "done")).rejects.toThrow();
+
+    expect(await repository.getTask(78)).toMatchObject({ status: "todo", due });
+    expect((await repository.getTask(79))?.status).toBe("done");
   });
 });

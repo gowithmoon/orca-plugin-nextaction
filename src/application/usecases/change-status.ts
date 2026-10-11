@@ -1,18 +1,23 @@
 // Use case: change a task's status from the task menu (GLOSSARY: 状态), and
 // record a completion when the task enters done (GLOSSARY: 完成历史).
+
+import { activeRule, planAdvance } from "../../domain/recurrence/recurrence";
 import {
   historyAfterStatusChange,
   recordsCompletion,
 } from "../../domain/task/completion-history";
 import {
+  type CalendarDate,
   hasStatusAnomaly,
   type TaskId,
   type TaskStatus,
 } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import { advanceWrites, eventNow } from "./advance-writes";
+import { CompletionHistoryUnreadableError } from "./completion-history-unreadable-error";
+import { RecurrenceUnreadableError } from "./recurrence-unreadable-error";
 
 /** What changing the status did. */
 export type ChangeStatusResult =
@@ -21,16 +26,18 @@ export type ChangeStatusResult =
    * The task already was in that status, and the notes hold it; nothing was
    * written.
    */
-  | { kind: "unchanged" };
-
-/**
- * The task's completion history holds something this plugin cannot read
- * (an unknown version, or damaged), so it cannot be set to done: the history
- * would be overwritten. Nothing was written.
- */
-export class CompletionHistoryUnreadableError extends Error {
-  override name = "CompletionHistoryUnreadableError";
-}
+  | { kind: "unchanged" }
+  /**
+   * A recurring task was completed and advanced (GLOSSARY: 安排下一次): a
+   * completion recorded, back to todo, its dates on `next`. `completedOn` is
+   * the logical day of the completion, for showing `next` beside it.
+   */
+  | { kind: "advanced"; next: CalendarDate; completedOn: CalendarDate }
+  /**
+   * A recurring task's last occurrence was completed (GLOSSARY: 重复规则): a
+   * completion recorded, the task stays done and its rule is removed.
+   */
+  | { kind: "ended" };
 
 /**
  * Sets the status of task `id` to `status` in one undo; entering done from
@@ -59,21 +66,38 @@ export function createChangeStatus(deps: {
       await deps.repository.updateTask(id, { status });
       return { kind: "changed" };
     }
+    if (task.recurrence.kind === "unreadable") {
+      throw new RecurrenceUnreadableError(task.recurrence.reason);
+    }
     const read = await deps.repository.readCompletionHistory(id);
     if (read.kind === "unreadable") {
-      throw new CompletionHistoryUnreadableError(
-        `the completion history of task ${id} cannot be read (${read.reason})`,
-      );
+      throw new CompletionHistoryUnreadableError(id, read.reason);
     }
-    const now = deps.clock.now();
+    const completion = eventNow(deps);
+    // A paused rule does not apply (GLOSSARY: 暂停重复, #92): the task is
+    // completed like a plain task, its completion still recorded.
+    const rule = activeRule(task.recurrence);
+    if (rule) {
+      // A recurring task advances (GLOSSARY: 安排下一次): status, dates,
+      // history, the rule (one occurrence used up, #89) and its done
+      // descendant tasks back to todo (#90), in one write, so one undo. On
+      // the last occurrence (#89) it stays done and its rule is removed.
+      const plan = planAdvance(rule, task, read.history, completion);
+      await deps.repository.updateTasks(
+        await advanceWrites(deps.repository, task, plan),
+      );
+      if (plan.next === null) return { kind: "ended" };
+      return {
+        kind: "advanced",
+        next: plan.next,
+        completedOn: completion.day,
+      };
+    }
     const history = historyAfterStatusChange(
       read.history,
       task.status,
       status,
-      {
-        at: now,
-        day: logicalDay(now, deps.dayBoundary.current()),
-      },
+      completion,
     );
     await deps.repository.updateTask(id, { status }, history);
     return { kind: "changed" };

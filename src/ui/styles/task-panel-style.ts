@@ -356,6 +356,23 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   font-style: italic;
 }
 
+/* A recurring task not advanced (GLOSSARY: 未自动重复, #93): a warning line with its fix. */
+.nextaction-not-advanced {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border-radius: var(--orca-radius-md);
+  background-color: color-mix(in srgb, var(--orca-color-text-yellow) 12%, transparent);
+  color: var(--orca-color-text-yellow);
+}
+
+.nextaction-not-advanced-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .nextaction-sequential-field {
   display: flex;
   align-items: center;
@@ -436,6 +453,19 @@ button.nextaction-dependency-task:hover {
   color: var(--orca-color-text-2);
 }
 
+.nextaction-dependency-recurring,
+.nextaction-not-next-action-reason-recurring {
+  margin-inline-start: var(--orca-spacing-xs);
+  color: var(--orca-color-text-2);
+}
+
+/* Recurring tasks (#94, ADR 0021): why the dependency or order stays unmet. */
+.nextaction-dependency-hint,
+.nextaction-not-next-action-reason-hint {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
 .nextaction-dependency-stale {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
@@ -464,5 +494,179 @@ button.nextaction-dependency-task:hover {
 .nextaction-task-panel-footer .nextaction-task-drop:focus-visible {
   background-color: color-mix(in srgb, var(--orca-color-dangerous-5) 10%, transparent);
   color: var(--orca-color-dangerous-5);
+}
+
+/* Repeat (#95): the rule's summary as a button reading like a field. */
+.nextaction-recurrence-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 18rem;
+}
+
+.nextaction-recurrence-field .nextaction-recurrence-button {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  font-weight: var(--orca-fontweight-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nextaction-recurrence-button > .ti {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-recurrence-field .nextaction-recurrence-button[data-empty] {
+  color: var(--orca-color-placeholder, var(--orca-color-text-2));
+}
+
+.nextaction-recurrence-field .nextaction-recurrence-button[data-unreadable] {
+  color: var(--orca-color-dangerous-5);
+}
+
+/* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
+.nextaction-recurrence-popup {
+  --nextaction-window-width: 26rem;
+}
+
+.nextaction-recurrence-popup-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--orca-spacing-sm);
+  flex: 0 0 auto;
+  padding: var(--orca-spacing-md) var(--orca-spacing-md) 0 var(--orca-spacing-lg);
+}
+
+.nextaction-recurrence-popup-heading {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--orca-spacing-xs) / 2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nextaction-recurrence-popup-title {
+  font-size: var(--orca-fontsize-md);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+.nextaction-recurrence-popup-task {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-recurrence-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  padding: var(--orca-spacing-md) var(--orca-spacing-lg) var(--orca-spacing-lg);
+  overflow-y: auto;
+}
+
+.nextaction-recurrence-popup-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+}
+
+.nextaction-recurrence-popup-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-recurrence-popup-period > :first-child {
+  width: 5rem;
+}
+
+.nextaction-recurrence-popup-label {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-recurrence-popup-hint {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+}
+
+/* Pause (#92): the switch, what it does beside it. */
+.nextaction-recurrence-popup-pause {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-recurrence-popup-warning {
+  color: var(--orca-color-dangerous-5);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-recurrence-popup-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  flex: 0 0 auto;
+  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
+  border-top: var(--orca-border-separator);
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-recurrence-popup-spacer {
+  flex: 1 1 auto;
+}
+
+/* The days of a weekly placement (#88): seven toggles in a row. */
+.nextaction-recurrence-popup-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.nextaction-recurrence-popup-day {
+  padding: var(--orca-spacing-xs) 0;
+  border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  border-radius: var(--orca-radius-md);
+  background-color: transparent;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  cursor: pointer;
+}
+
+.nextaction-recurrence-popup-day:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-recurrence-popup-day[data-chosen] {
+  border-color: var(--orca-color-primary-5);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 12%, var(--orca-color-bg-1));
+  color: var(--orca-color-text-1);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+/* One dropdown of a placement (a day of the month, a month, an ordinal). */
+.nextaction-recurrence-popup-choice {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+/* The next occurrence of the rule being edited (#88). */
+.nextaction-recurrence-popup-preview {
+  color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-sm);
 }
 `;

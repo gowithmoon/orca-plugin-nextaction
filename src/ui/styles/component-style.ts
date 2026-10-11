@@ -393,6 +393,21 @@ export const componentCss = `
 }
 
 /* Blocked (#65): a tag in the danger colour, like "overdue". */
+/* A recurring task (#95): only the icon, muted; the rule on hover. */
+.nextaction-property-recurrence {
+  color: var(--orca-color-text-2);
+}
+
+/* Paused (#92): the crossed-out icon, fainter. */
+.nextaction-property-recurrence[data-paused] {
+  opacity: 0.55;
+}
+
+/* A recurring task not advanced (GLOSSARY: 未自动重复, #93): a warning, like an unknown status. */
+.nextaction-property-not-advanced {
+  color: var(--orca-color-text-yellow);
+}
+
 .nextaction-property-blocked {
   padding: 0 var(--orca-spacing-xs);
   border-radius: var(--orca-radius-sm);

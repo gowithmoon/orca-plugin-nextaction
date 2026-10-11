@@ -55,6 +55,16 @@ export interface TaskCardProps {
    * also open the task panel.
    */
   buttons?: React.ReactNode;
+  /**
+   * A recurring task completed today that has advanced already (My Day,
+   * #95): faded as done, saying so.
+   */
+  doneToday?: boolean;
+  /**
+   * A recurring task skipped today that has advanced already (My Day, #91):
+   * faded as done, saying so.
+   */
+  skippedToday?: boolean;
 }
 
 /** A click that selected text is not a click on the card. */
@@ -159,6 +169,8 @@ export function TaskCard(props: TaskCardProps) {
     parentText,
     blocked,
     buttons,
+    doneToday,
+    skippedToday,
   } = props;
   const { ContextMenu } = orca.components;
   const text = shownText(task);
@@ -168,7 +180,7 @@ export function TaskCard(props: TaskCardProps) {
       className="nextaction-task-card"
       data-clickable={onOpen ? true : undefined}
       data-selected={selected || undefined}
-      data-kept={kept || undefined}
+      data-kept={kept || doneToday || skippedToday || undefined}
       aria-current={selected || undefined}
       onClick={
         onOpen &&
@@ -220,6 +232,8 @@ export function TaskCard(props: TaskCardProps) {
           today={today}
           kept={kept && keptStatusShown}
           blocked={blocked}
+          doneToday={doneToday}
+          skippedToday={skippedToday}
         />
       </div>
       {buttons}

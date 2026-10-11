@@ -5,6 +5,7 @@
 import * as React from "react";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
+import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
@@ -14,7 +15,11 @@ import type {
   TaskStatus,
 } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { changeStatusReporting, notifyActionFailure } from "../notify";
+import {
+  changeStatusReporting,
+  notifyActionFailure,
+  notifyAdvanced,
+} from "../notify";
 import type { TaskActionsDeps } from "./use-task-actions";
 
 export interface TaskPanelWrites {
@@ -25,6 +30,8 @@ export interface TaskPanelWrites {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
+  repairNotAdvanced: RepairNotAdvanced;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -46,6 +53,7 @@ export function useTaskPanelActions(
   setSequential(sequential: boolean): Promise<boolean>;
   setDependencies(dependencies: readonly TaskId[]): Promise<boolean>;
   setDependencyMode(mode: DependencyMode): Promise<boolean>;
+  repairNotAdvanced(): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -95,6 +103,20 @@ export function useTaskPanelActions(
         run(
           () => writes.setDependencyMode(id, mode),
           (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
+      // Its icon shows todo again, so the next occurrence is told (#93).
+      repairNotAdvanced: () =>
+        run(
+          async () => {
+            const result = await writes.repairNotAdvanced(id);
+            notifyAdvanced(
+              notify,
+              result.next === null
+                ? result
+                : { next: result.next, on: result.repairedOn },
+            );
+          },
+          (reason) => t("Could not advance the task: ${reason}", { reason }),
         ),
     };
   }, [writes, id]);
