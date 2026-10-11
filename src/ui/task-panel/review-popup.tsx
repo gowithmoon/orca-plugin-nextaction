@@ -12,9 +12,12 @@ import type {
   MarkReviewed,
 } from "../../application/usecases/mark-reviewed";
 import type { SetReviewPlan } from "../../application/usecases/set-review-plan";
+import type { DayOfWeek } from "../../domain/recurrence/recurrence";
 import {
   nextReviewDay,
   planSetReview,
+  type ReviewInterval,
+  type ReviewMonthPlacement,
   type ReviewSetting,
   type ReviewUnit,
   reviewUnits,
@@ -23,13 +26,17 @@ import type { CalendarDate, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate, shownText } from "../components/format";
 import { PopupLayer } from "../components/popup-layer";
-import { reviewUnitName } from "../components/review-text";
+import {
+  reviewMonthPlacementText,
+  reviewUnitName,
+} from "../components/review-text";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import {
   type Notify,
   notifyMarkReviewedFailure,
   notifySetReviewFailure,
 } from "../notify";
+import { Choice, DaysOfWeekPicker } from "./recurrence-placement-field";
 import { DateField } from "./task-panel-fields";
 
 export interface ReviewPopupDeps {
@@ -50,6 +57,179 @@ export type OpenReviewPopup = (task: Task) => void;
 /** The interval's unit as chosen, or no interval. */
 type UnitChoice = ReviewUnit | "none";
 const unitChoices: readonly UnitChoice[] = ["none", ...reviewUnits];
+
+/** The month placement as chosen (回顾落点, #105), or none. */
+type MonthChoice = ReviewMonthPlacement["kind"] | "none";
+const monthChoices: readonly MonthChoice[] = [
+  "none",
+  "dayOfMonth",
+  "lastDayOfMonth",
+  "lastWeekdayOfMonth",
+];
+
+/** What the popup holds for each unit's placement while it is edited. */
+interface PlacementDraft {
+  /** None chosen: no placement. */
+  readonly weekDays: readonly DayOfWeek[];
+  readonly month: MonthChoice;
+  readonly monthDay: number;
+}
+
+/** The draft the popup starts with: the interval's placement, if any. */
+function placementDraftOf(
+  interval: ReviewInterval | null | undefined,
+  today: CalendarDate,
+): PlacementDraft {
+  const draft: PlacementDraft = {
+    weekDays: [],
+    month: "none",
+    monthDay: today.day,
+  };
+  if (!interval || interval.unit === "day" || !interval.placement) {
+    return draft;
+  }
+  const { placement } = interval;
+  switch (placement.kind) {
+    case "daysOfWeek":
+      return { ...draft, weekDays: placement.days };
+    case "dayOfMonth":
+      return { ...draft, month: "dayOfMonth", monthDay: placement.day };
+    default:
+      return { ...draft, month: placement.kind };
+  }
+}
+
+/** The interval the popup saves: `every` units, on the draft's placement. */
+function intervalOf(
+  every: number,
+  unit: ReviewUnit,
+  draft: PlacementDraft,
+): ReviewInterval {
+  switch (unit) {
+    case "day":
+      return { every, unit };
+    case "week":
+      return draft.weekDays.length === 0
+        ? { every, unit }
+        : {
+            every,
+            unit,
+            placement: {
+              kind: "daysOfWeek",
+              days: [...draft.weekDays].sort((a, b) => a - b),
+            },
+          };
+    case "month":
+      switch (draft.month) {
+        case "none":
+          return { every, unit };
+        case "dayOfMonth":
+          return {
+            every,
+            unit,
+            placement: { kind: "dayOfMonth", day: draft.monthDay },
+          };
+        default:
+          return { every, unit, placement: { kind: draft.month } };
+      }
+  }
+}
+
+/** Whether two intervals (or none) are the same, placement included. */
+const sameInterval = (
+  a: ReviewInterval | null,
+  b: ReviewInterval | null,
+): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+const range = (from: number, to: number): number[] =>
+  Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+/** The placement choices for `unit` (回顾落点); nothing for days. */
+function ReviewPlacementField(props: {
+  labelId: string;
+  unit: UnitChoice;
+  draft: PlacementDraft;
+  onChange: (draft: PlacementDraft) => void;
+}) {
+  const { Segmented } = orca.components;
+  const { labelId, unit, draft, onChange } = props;
+  if (unit !== "week" && unit !== "month") return null;
+  const label = (
+    <span className="nextaction-recurrence-popup-label" id={labelId}>
+      {t("Review on days")}
+    </span>
+  );
+  if (unit === "week") {
+    return (
+      <div className="nextaction-recurrence-popup-field">
+        {label}
+        <DaysOfWeekPicker
+          labelId={labelId}
+          days={draft.weekDays}
+          onChange={(weekDays) => onChange({ ...draft, weekDays })}
+        />
+        {draft.weekDays.length === 0 && (
+          <div className="nextaction-recurrence-popup-hint">
+            {t("None chosen: a whole interval after the last review.")}
+          </div>
+        )}
+      </div>
+    );
+  }
+  const choiceName = (choice: MonthChoice): string => {
+    switch (choice) {
+      case "none":
+        return t("None");
+      case "dayOfMonth":
+        return t("Day of the month");
+      case "lastDayOfMonth":
+        return t("Last day");
+      case "lastWeekdayOfMonth":
+        return reviewMonthPlacementText({ kind: "lastWeekdayOfMonth" });
+    }
+  };
+  return (
+    <div className="nextaction-recurrence-popup-field">
+      {label}
+      <Segmented
+        role="group"
+        aria-labelledby={labelId}
+        selected={draft.month}
+        options={monthChoices.map((value) => ({
+          value,
+          label: choiceName(value),
+        }))}
+        onChange={(value) => {
+          const chosen = monthChoices.find((c) => c === value);
+          if (chosen) onChange({ ...draft, month: chosen });
+        }}
+      />
+      {draft.month === "none" && (
+        <div className="nextaction-recurrence-popup-hint">
+          {t("None chosen: a whole interval after the last review.")}
+        </div>
+      )}
+      {draft.month === "dayOfMonth" && (
+        <div className="nextaction-recurrence-popup-period">
+          <Choice
+            labelId={labelId}
+            value={draft.monthDay}
+            options={range(1, 31)}
+            label={(day) => t("day ${day}", { day: String(day) })}
+            onChange={(monthDay) => onChange({ ...draft, monthDay })}
+          />
+        </div>
+      )}
+      {draft.month === "dayOfMonth" && draft.monthDay > 28 && (
+        <div className="nextaction-recurrence-popup-hint">
+          {t(
+            "Months without that day are skipped. To review every month, choose the last day.",
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** A whole number from 1 up typed into the interval field, or `undefined`. */
 function typedEvery(text: string): number | undefined {
@@ -81,6 +261,9 @@ function ReviewPopup(props: {
     plan?.interval?.unit ?? "none",
   );
   const [every, setEvery] = React.useState(String(plan?.interval?.every ?? 1));
+  const [placement, setPlacement] = React.useState<PlacementDraft>(() =>
+    placementDraftOf(plan?.interval, deps.today()),
+  );
   const [reviewOn, setReviewOn] = React.useState<CalendarDate | null>(
     plan?.reviewOn ?? null,
   );
@@ -100,7 +283,7 @@ function ReviewPopup(props: {
       ? { interval: null, reviewOn }
       : typed === undefined
         ? undefined
-        : { interval: { every: typed, unit }, reviewOn };
+        : { interval: intervalOf(typed, unit, placement), reviewOn };
   // The next review day the draft would give, by the rule saving applies.
   const next =
     setting && task.review.kind !== "unreadable"
@@ -108,8 +291,7 @@ function ReviewPopup(props: {
       : null;
   const unchanged =
     setting !== undefined &&
-    (setting.interval?.every ?? null) === (plan?.interval?.every ?? null) &&
-    (setting.interval?.unit ?? null) === (plan?.interval?.unit ?? null) &&
+    sameInterval(setting.interval, plan?.interval ?? null) &&
     sameDay(setting.reviewOn, plan?.reviewOn ?? null);
   const markable = !unreadable && deps.canMarkReviewed(task);
 
@@ -246,6 +428,12 @@ function ReviewPopup(props: {
                 />
               </div>
             </div>
+            <ReviewPlacementField
+              labelId={id("placement")}
+              unit={unit}
+              draft={placement}
+              onChange={setPlacement}
+            />
             <div className="nextaction-recurrence-popup-field">
               <span className="nextaction-recurrence-popup-label" id={id("on")}>
                 {t("Review on")}

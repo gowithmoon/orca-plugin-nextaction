@@ -212,7 +212,11 @@ export function nextReviewDay(plan: ReviewPlan): CalendarDate | null {
     case "week":
       if (interval.placement) {
         return nextOccurrence(
-          { interval: interval.every, unit: "week", placement: interval.placement },
+          {
+            interval: interval.every,
+            unit: "week",
+            placement: interval.placement,
+          },
           lastReviewed,
         );
       }

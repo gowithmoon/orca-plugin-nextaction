@@ -1,14 +1,17 @@
 // How a review plan reads in the plugin (GLOSSARY: 回顾周期, 指定回顾日):
-// "每 2 周 · 下次 10月20日", "10月15日回顾", both joined, or "不回顾".
+// "每 2 周 · 下次 10月20日", "每周 周四 · 下次 10月15日", "10月15日回顾", both
+// joined, or "不回顾".
 // Display only.
 import {
   nextReviewDay,
   type ReviewInterval,
+  type ReviewMonthPlacement,
   type ReviewRead,
   type ReviewUnit,
 } from "../../domain/review/review";
 import type { CalendarDate } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { dayOfWeekName } from "./recurrence-text";
 
 /** The name of a unit, as the review popup offers it. */
 export function reviewUnitName(unit: ReviewUnit): string {
@@ -22,8 +25,8 @@ export function reviewUnitName(unit: ReviewUnit): string {
   }
 }
 
-/** "每 2 周", "每天". */
-export function reviewIntervalText(interval: ReviewInterval): string {
+/** "每 2 周", "每天": the interval and unit, without the placement. */
+function everyText(interval: ReviewInterval): string {
   const n = String(interval.every);
   const one = interval.every === 1;
   switch (interval.unit) {
@@ -33,6 +36,46 @@ export function reviewIntervalText(interval: ReviewInterval): string {
       return one ? t("Every week") : t("Every ${n} weeks", { n });
     case "month":
       return one ? t("Every month") : t("Every ${n} months", { n });
+  }
+}
+
+/** "15 日", "最后一天", "最后一个工作日". */
+export function reviewMonthPlacementText(
+  placement: ReviewMonthPlacement,
+): string {
+  switch (placement.kind) {
+    case "dayOfMonth":
+      return t("day ${day}", { day: String(placement.day) });
+    case "lastDayOfMonth":
+      return t("the last day");
+    case "lastWeekdayOfMonth":
+      return t("the last weekday");
+  }
+}
+
+/**
+ * "每 2 周", "每周 周四", "每月 最后一个工作日": the interval with its review
+ * placement (#105), worded as a recurrence rule's period.
+ */
+export function reviewIntervalText(interval: ReviewInterval): string {
+  const every = everyText(interval);
+  switch (interval.unit) {
+    case "week":
+      return interval.placement
+        ? t("${every} on ${days}", {
+            every,
+            days: interval.placement.days.map(dayOfWeekName).join(t(", ")),
+          })
+        : every;
+    case "month":
+      return interval.placement
+        ? t("${every} on ${placement}", {
+            every,
+            placement: reviewMonthPlacementText(interval.placement),
+          })
+        : every;
+    case "day":
+      return every;
   }
 }
 

@@ -96,7 +96,11 @@ describe("readReview and planReviewWrite", () => {
   it.each([
     [
       "some days of the week",
-      { every: 2, unit: "week", placement: { kind: "daysOfWeek", days: [1, 4] } },
+      {
+        every: 2,
+        unit: "week",
+        placement: { kind: "daysOfWeek", days: [1, 4] },
+      },
     ],
     [
       "a day of the month",
