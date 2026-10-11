@@ -187,7 +187,13 @@ export const myDayCss = `
   border: 1px solid color-mix(in srgb, var(--orca-color-primary-5) 35%, transparent);
   border-left: 3px solid var(--orca-color-primary-5);
   border-radius: var(--orca-radius-sm);
-  background-color: color-mix(in srgb, var(--orca-color-primary-5) 10%, var(--orca-color-bg-1));
+  /* Over the current time line, which shows through it, faintly. */
+  z-index: 1;
+  background-color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--orca-color-primary-5) 10%, var(--orca-color-bg-1)) 78%,
+    transparent
+  );
   color: var(--orca-color-text-1);
   cursor: pointer;
   /* Its edges and buttons stack within it, never over a menu. */
@@ -195,7 +201,11 @@ export const myDayCss = `
 }
 
 .nextaction-timeline-card:hover {
-  background-color: color-mix(in srgb, var(--orca-color-primary-5) 16%, var(--orca-color-bg-1));
+  background-color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--orca-color-primary-5) 16%, var(--orca-color-bg-1)) 78%,
+    transparent
+  );
 }
 
 .nextaction-timeline-card:focus-visible {
@@ -411,7 +421,7 @@ export const myDayCss = `
   pointer-events: none;
 }
 
-/* The current time: a line across the track, with a dot at its start. */
+/* The current time: a line across the track, with a dot at its start; under the cards. */
 .nextaction-timeline-now {
   position: absolute;
   left: -4px;
@@ -419,7 +429,7 @@ export const myDayCss = `
   height: 0;
   border-top: 2px solid var(--orca-color-dangerous-5);
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
 }
 
 .nextaction-timeline-now::before {
