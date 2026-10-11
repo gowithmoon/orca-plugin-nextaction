@@ -13,7 +13,11 @@ import {
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { RecurrenceRule } from "../../../domain/recurrence/recurrence";
-import type { CompletionHistory } from "../../../domain/task/completion-history";
+import {
+  type CompletionHistory,
+  lastCompletion as lastCompletionIn,
+  lastSkip as lastSkipIn,
+} from "../../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -345,13 +349,20 @@ export function createOrcaTaskRepository(
     return {
       tasks: tasks.map((task) => {
         const place = places.get(task.id);
-        // The last completion, from the block already read. An unreadable
-        // history reads as none here, without a warning on every read; it is
-        // reported where it is read for writing (readCompletionHistory).
+        // The last completion (skips passed over, #91), from the block already
+        // read. An unreadable history reads as none here, without a warning
+        // on every read; it is reported where it is read for writing
+        // (readCompletionHistory).
         const block = blocks.get(task.id);
         const history = block ? readCompletionHistory(block) : undefined;
         const lastCompletion =
-          history?.kind === "readable" ? history.history.at(-1) : undefined;
+          history?.kind === "readable"
+            ? lastCompletionIn(history.history)
+            : undefined;
+        const lastSkip =
+          history?.kind === "readable"
+            ? lastSkipIn(history.history)
+            : undefined;
         // The My Day entries, from the same block. Unreadable ones are marked
         // so, without a warning on every read; readMyDay warns when they are
         // read by ID.
@@ -361,6 +372,7 @@ export function createOrcaTaskRepository(
           parentId: place?.parentId ?? null,
           position: place?.position ?? Number.MAX_SAFE_INTEGER,
           ...(lastCompletion && { lastCompletion }),
+          ...(lastSkip && { lastSkip }),
           ...(myDay && { myDay }),
           // A page has an alias; with no parent block it sits at the top of
           // the notes, where only pages are tasks (ADR 0013, move-blocks P2).

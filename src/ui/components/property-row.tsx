@@ -75,8 +75,13 @@ export function PropertyRow(props: {
    * #95): it says so, as its status icon shows todo again.
    */
   doneToday?: boolean;
+  /**
+   * A recurring task skipped today that has advanced already (My Day, #91):
+   * it says so, as its status icon shows todo again.
+   */
+  skippedToday?: boolean;
 }) {
-  const { task, today, kept, blocked, doneToday } = props;
+  const { task, today, kept, blocked, doneToday, skippedToday } = props;
   const { Tooltip } = orca.components;
   const overdue = isOverdue(task, today);
   const importance = importanceName(task.importance);
@@ -92,6 +97,11 @@ export function PropertyRow(props: {
       {doneToday && (
         <span className="nextaction-property nextaction-property-kept">
           {t("Done today")}
+        </span>
+      )}
+      {skippedToday && (
+        <span className="nextaction-property nextaction-property-kept">
+          {t("Skipped")}
         </span>
       )}
       {blocked && (

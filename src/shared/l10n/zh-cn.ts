@@ -351,6 +351,19 @@ const zhCN: Record<string, string> = {
     "这个重复任务是在插件外标记完成的，没有自动重复。",
   Advance: "安排下一次",
   "Could not advance the task: ${reason}": "无法安排下一次：${reason}",
+  "Skip this time": "跳过这次",
+  "Skipped, next: ${date}": "已跳过，下次：${date}",
+  Skipped: "已跳过",
+  "Not skipped: this task does not repeat.": "没有跳过：这个任务不重复。",
+  "Not skipped: its recurrence is paused.": "没有跳过：它的重复已暂停。",
+  "Not skipped: the task is done.": "没有跳过：任务已经完成了。",
+  "Not skipped: this is the last time. To stop repeating, remove the rule.":
+    "没有跳过：这是最后一次。不想再重复的话，移除重复规则即可。",
+  "Could not skip: its recurrence rule cannot be read (${reason}) and is kept as it is.":
+    "无法跳过：它的重复规则无法读取（${reason}），已原样保留。",
+  "Could not skip: its completion history cannot be read and is kept as it is.":
+    "无法跳过：它的完成历史无法读取，已原样保留。",
+  "Could not skip: ${reason}": "无法跳过：${reason}",
 };
 
 export default zhCN;

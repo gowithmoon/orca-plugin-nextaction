@@ -6,6 +6,10 @@ import { createDropTask } from "../application/usecases/drop-task";
 import { createReadMyDayStatus } from "../application/usecases/read-my-day-status";
 import { createReadTask } from "../application/usecases/read-task";
 import { createRemoveFromMyDay } from "../application/usecases/remove-from-my-day";
+import {
+  createCanSkipOccurrence,
+  createSkipOccurrence,
+} from "../application/usecases/skip-occurrence";
 import type { TaskId } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
@@ -14,6 +18,7 @@ import {
   type TaskMenuItems,
 } from "../ui/task-menu/menu-items";
 import { registerMyDayMenuItem } from "../ui/task-menu/my-day-menu-item";
+import { registerSkipMenuItem } from "../ui/task-menu/skip-menu-item";
 import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
@@ -58,6 +63,11 @@ export function createTaskMenuFeature(deps: {
       readMyDayStatus: createReadMyDayStatus(myDayDeps),
       addToMyDay: createAddToMyDay(myDayDeps),
       removeFromMyDay: createRemoveFromMyDay(myDayDeps),
+      pluginName,
+    });
+    registerSkipMenuItem(items, {
+      canSkipOccurrence: createCanSkipOccurrence(myDayDeps),
+      skipOccurrence: createSkipOccurrence(myDayDeps),
       pluginName,
     });
     registerTaskPanelMenuItem(items, deps.openTaskPanel);

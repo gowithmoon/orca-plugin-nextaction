@@ -287,6 +287,74 @@ describe("read not-next-action reasons", () => {
     });
   });
 
+  it("counts a dependency delay from the last completion, not a later skip (#91)", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    // Today is the logical day 2026-10-09.
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      dependencies: [2],
+      dependencyDelay: 3,
+    });
+    repository.addTask(
+      { id: 2, status: "done" },
+      {
+        completionHistory: {
+          kind: "readable",
+          history: [
+            {
+              at: new Date("2026-10-07T12:00:00+08:00"),
+              day: { year: 2026, month: 10, day: 7 },
+            },
+            {
+              at: new Date("2026-10-08T12:00:00+08:00"),
+              day: { year: 2026, month: 10, day: 8 },
+              kind: "skip",
+            },
+          ],
+        },
+      },
+    );
+
+    const read = await readNotNextActionReasons(1);
+
+    expect(read.reasons).toEqual([
+      {
+        kind: "dependencyDelay",
+        source: 1,
+        waitingFor: [],
+        countedFrom: 2,
+        releasedOn: { year: 2026, month: 10, day: 10 },
+      },
+    ]);
+  });
+
+  it("still waits for a recurring dependency that was skipped (#91)", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addTask({ id: 1, status: "todo", dependencies: [2] });
+    repository.addTask(
+      { id: 2, status: "todo", recurrence: weekly },
+      {
+        completionHistory: {
+          kind: "readable",
+          history: [
+            {
+              at: new Date("2026-10-09T09:00:00+08:00"),
+              day: { year: 2026, month: 10, day: 9 },
+              kind: "skip",
+            },
+          ],
+        },
+      },
+    );
+
+    const read = await readNotNextActionReasons(1);
+
+    expect(read.reasons).toEqual([
+      { kind: "dependencies", source: 1, waitingFor: [2], mode: "all" },
+    ]);
+  });
+
   it("returns no reasons for a task nothing blocks", async () => {
     const { repository, readNotNextActionReasons } = setup();
     repository.addTask({ id: 1 });

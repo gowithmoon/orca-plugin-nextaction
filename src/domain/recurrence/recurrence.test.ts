@@ -8,6 +8,7 @@ import {
   planAdvance,
   planRepair,
   planResume,
+  planSkip,
   type RecurrenceRule,
   recurs,
 } from "./recurrence";
@@ -705,5 +706,99 @@ describe("pausing and resuming the rule (#92)", () => {
       resume,
     );
     expect(plan.changes).toEqual({ status: "todo", start: day(2026, 10, 21) });
+  });
+});
+
+describe("skipping an occurrence (#91)", () => {
+  // Skipped on Wednesday October 14.
+  const skip = {
+    at: new Date("2026-10-14T01:00:00.000Z"),
+    day: day(2026, 10, 14),
+  };
+  const weekly = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+  const earlier = {
+    at: new Date("2026-10-07T01:00:00.000Z"),
+    day: day(2026, 10, 7),
+  };
+
+  it("records a skip after the entries already recorded", () => {
+    const plan = planSkip(
+      weekly,
+      { status: "todo", start: null, due: day(2026, 10, 12) },
+      [earlier],
+      skip,
+    );
+    expect(plan.history).toEqual([earlier, { ...skip, kind: "skip" }]);
+  });
+
+  it("goes back to todo from any status not done, the dates moved to the next occurrence", () => {
+    for (const status of [
+      "inbox",
+      "todo",
+      "doing",
+      "waiting",
+      "someday",
+    ] as const) {
+      const plan = planSkip(
+        weekly,
+        { status, start: day(2026, 10, 9), due: day(2026, 10, 12) },
+        [],
+        skip,
+      );
+      expect(plan).toMatchObject({
+        last: false,
+        next: day(2026, 10, 19),
+        changes: {
+          status: "todo",
+          start: day(2026, 10, 16),
+          due: day(2026, 10, 19),
+        },
+      });
+    }
+  });
+
+  it("after completion counts from the day it is skipped", () => {
+    const plan = planSkip(
+      { period: { interval: 3, unit: "month" }, basis: "completion" },
+      { status: "todo", start: null, due: day(2026, 9, 1) },
+      [],
+      skip,
+    );
+    expect(plan.next).toEqual(day(2027, 1, 14));
+  });
+
+  it("uses up one of the remaining occurrences", () => {
+    const plan = planSkip(
+      { ...weekly, end: { kind: "count", total: 5, remaining: 3 } },
+      { status: "todo", start: null, due: day(2026, 10, 12) },
+      [],
+      skip,
+    );
+    expect(plan.recurrence).toEqual({
+      ...weekly,
+      end: { kind: "count", total: 5, remaining: 2 },
+    });
+  });
+
+  it("resuming a done task after completion counts from the last completion, not a later skip", () => {
+    const completedSep20 = {
+      at: new Date("2026-09-20T01:00:00.000Z"),
+      day: day(2026, 9, 20),
+    };
+    const skippedOct1 = {
+      at: new Date("2026-10-01T01:00:00.000Z"),
+      day: day(2026, 10, 1),
+      kind: "skip" as const,
+    };
+    const plan = planResume(
+      { period: { interval: 3, unit: "day" }, basis: "completion" },
+      { status: "done", start: null, due: day(2026, 9, 18) },
+      [completedSep20, skippedOct1],
+      skip,
+    );
+    expect(plan.next).toEqual(day(2026, 9, 23));
   });
 });
