@@ -11,10 +11,12 @@
 // or `{ kind: "weekdayOfMonth", ordinal: 1–5 | "last", weekday: 1–7 }`; for a
 // year `{ kind: "dayOfYear", month: 1–12, day }` (a day that month can have,
 // February 29 included). Days and weekdays have none; a placement out of
-// range, or not one the unit can have, reads as unreadable. End conditions
-// (`rule.end`) and pausing (`rule.paused`) go inside `rule` in later tickets
-// of step 8 (#89, #92); fields this version does not know are not read yet.
-// The version number is added and checked by the plugin block property codec.
+// range, or not one the unit can have, reads as unreadable. `rule.paused:
+// true` while the rule is paused (GLOSSARY: 暂停重复, #92); absent reads as
+// not paused, and it is written only while paused. End conditions
+// (`rule.end`) go inside `rule` in a later ticket of step 8 (#89); fields
+// this version does not know are not read yet. The version number is added
+// and checked by the plugin block property codec.
 import {
   type DayOfWeek,
   daysOfWeek,
@@ -165,7 +167,15 @@ function parseRule(value: unknown): RecurrenceRule | string {
   if (!recurrenceBases.includes(value.basis as RecurrenceBasis)) {
     return "the basis is not one this plugin knows";
   }
-  return { period, basis: value.basis as RecurrenceBasis };
+  const basis = value.basis as RecurrenceBasis;
+  // Paused (#92): absent reads as not paused; anything but true or false is
+  // a value this plugin cannot read.
+  if (value.paused !== undefined && typeof value.paused !== "boolean") {
+    return "the paused flag is neither true nor false";
+  }
+  return value.paused === true
+    ? { period, basis, paused: true }
+    : { period, basis };
 }
 
 /**
@@ -218,6 +228,8 @@ export function planRecurrenceWrite(
     rule: rule && {
       period: storedPeriod(rule.period),
       basis: rule.basis,
+      // Written only while paused (#92): a rule without it is not paused.
+      ...(rule.paused && { paused: true }),
     },
   });
 }

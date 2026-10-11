@@ -146,12 +146,13 @@ export function basisName(basis: RecurrenceBasis): string {
   return basis === "schedule" ? t("Fixed schedule") : t("After completion");
 }
 
-/** "每 2 周 · 按日程". */
+/** "每 2 周 · 按日程", "每 2 周 · 按日程 · 已暂停" while paused (#92). */
 export function ruleText(rule: RecurrenceRule): string {
-  return t("${period} · ${basis}", {
+  const text = t("${period} · ${basis}", {
     period: periodText(rule.period),
     basis: basisName(rule.basis),
   });
+  return rule.paused ? t("${rule} · Paused", { rule: text }) : text;
 }
 
 /** What the task panel's row shows for a task's rule as read. */

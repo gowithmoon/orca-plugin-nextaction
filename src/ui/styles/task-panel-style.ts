@@ -598,6 +598,13 @@ button.nextaction-dependency-task:hover {
   font-size: var(--orca-fontsize-xs);
 }
 
+/* Pause (#92): the switch, what it does beside it. */
+.nextaction-recurrence-popup-pause {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
 .nextaction-recurrence-popup-warning {
   color: var(--orca-color-dangerous-5);
   font-size: var(--orca-fontsize-sm);

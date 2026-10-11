@@ -5,6 +5,8 @@ import {
   nextOccurrence,
   planAdvance,
   planRepair,
+  planResume,
+  recurs,
 } from "./recurrence";
 
 const day = (year: number, month: number, date: number) => ({
@@ -502,5 +504,79 @@ describe("advancing a recurring task stuck in done (repairing it)", () => {
       repair,
     );
     expect(plan).not.toHaveProperty("history");
+  });
+});
+
+describe("pausing and resuming the rule (#92)", () => {
+  const weekly = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+  const paused = { kind: "rule", rule: { ...weekly, paused: true } } as const;
+
+  it("a task whose rule is paused is not a recurring task", () => {
+    expect(recurs(paused)).toBe(false);
+  });
+
+  it("a done task whose rule is paused is not stuck in done: it is done like a plain task", () => {
+    expect(isStuckDone({ status: "done", recurrence: paused })).toBe(false);
+  });
+
+  // Resumed on Wednesday October 14, back from a trip.
+  const resume = {
+    at: new Date("2026-10-14T01:00:00.000Z"),
+    day: day(2026, 10, 14),
+  };
+  const everyThreeDaysAfterCompletion = {
+    period: { interval: 3, unit: "day" },
+    basis: "completion",
+  } as const;
+
+  it("resuming a done task after completion advances it from the last completion, recording nothing", () => {
+    const history = [
+      { at: new Date("2026-09-01T01:00:00.000Z"), day: day(2026, 9, 1) },
+      { at: new Date("2026-09-20T01:00:00.000Z"), day: day(2026, 9, 20) },
+    ];
+    const plan = planResume(
+      everyThreeDaysAfterCompletion,
+      { status: "done", start: null, due: day(2026, 9, 18) },
+      history,
+      resume,
+    );
+    expect(plan).toEqual({
+      changes: { status: "todo", due: day(2026, 9, 23) },
+      next: day(2026, 9, 23),
+    });
+  });
+
+  it("resuming a done task after completion without a completion recorded counts from the day it is resumed", () => {
+    const plan = planResume(
+      everyThreeDaysAfterCompletion,
+      { status: "done", start: null, due: day(2026, 9, 18) },
+      [],
+      resume,
+    );
+    expect(plan.next).toEqual(day(2026, 10, 17));
+  });
+
+  it("resuming a done task on a fixed schedule counts from its current date, not the completion", () => {
+    // Due Monday October 12, every week: next is Monday October 19.
+    const plan = planResume(
+      weekly,
+      { status: "done", start: null, due: day(2026, 10, 12) },
+      [{ at: new Date("2026-09-20T01:00:00.000Z"), day: day(2026, 9, 20) }],
+      resume,
+    );
+    expect(plan.changes).toEqual({ status: "todo", due: day(2026, 10, 19) });
+  });
+
+  it("resuming a done task on a fixed schedule without dates counts from the day it is resumed", () => {
+    const plan = planResume(
+      weekly,
+      { status: "done", start: null, due: null },
+      [{ at: new Date("2026-09-20T01:00:00.000Z"), day: day(2026, 9, 20) }],
+      resume,
+    );
+    expect(plan.changes).toEqual({ status: "todo", start: day(2026, 10, 21) });
   });
 });
