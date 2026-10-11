@@ -354,15 +354,15 @@ const zhCN: Record<string, string> = {
   "Skip this time": "跳过这次",
   "Skipped, next: ${date}": "已跳过，下次：${date}",
   Skipped: "已跳过",
-  "Not skipped: this task does not repeat.": "没有跳过：这个任务不重复。",
-  "Not skipped: its recurrence is paused.": "没有跳过：它的重复已暂停。",
-  "Not skipped: the task is done.": "没有跳过：任务已经完成了。",
+  "Not skipped: this task does not repeat.": "无法跳过：这个任务不重复。",
+  "Not skipped: its recurrence is paused.": "无法跳过：重复已暂停。",
+  "Not skipped: the task is done.": "无法跳过：任务已经完成。",
   "Not skipped: this is the last time. To stop repeating, remove the rule.":
-    "没有跳过：这是最后一次。不想再重复的话，移除重复规则即可。",
+    "无法跳过：这是最后一次。不想再重复的话，去掉重复规则就行。",
   "Could not skip: its recurrence rule cannot be read (${reason}) and is kept as it is.":
-    "无法跳过：它的重复规则无法读取（${reason}），已原样保留。",
+    "无法跳过：重复规则读取失败（${reason}），规则没有改动。",
   "Could not skip: its completion history cannot be read and is kept as it is.":
-    "无法跳过：它的完成历史无法读取，已原样保留。",
+    "无法跳过：完成历史读取失败，没有做任何改动。",
   "Could not skip: ${reason}": "无法跳过：${reason}",
 };
 
