@@ -19,6 +19,8 @@ export const taskMenuGroups = {
   status: 10,
   /** "Skip this occurrence" (#91), right after the statuses. */
   skip: 20,
+  /** "Mark reviewed" (#103). */
+  review: 25,
   myDay: 30,
   taskPanel: 50,
   drop: 100,

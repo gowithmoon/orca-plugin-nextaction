@@ -3,6 +3,10 @@ import type { StartPreviewDaysSetting } from "../application/ports/start-preview
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import {
+  createCanMarkReviewed,
+  createMarkReviewed,
+} from "../application/usecases/mark-reviewed";
 import { createPreviewNextOccurrence } from "../application/usecases/preview-next-occurrence";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
@@ -12,12 +16,17 @@ import { createRepairNotAdvanced } from "../application/usecases/repair-not-adva
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
 import { createSetRecurrence } from "../application/usecases/set-recurrence";
+import { createSetReviewPlan } from "../application/usecases/set-review-plan";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import { createRecurrencePopup } from "../ui/task-panel/recurrence-popup";
+import {
+  createReviewPopup,
+  type OpenReviewPopup,
+} from "../ui/task-panel/review-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import {
   createTaskPanelPopup,
@@ -30,7 +39,8 @@ import type { FeatureModule } from "./bootstrap";
  * its style sheets come from the popup styles feature. `open` is what the task menu and the plugin panel call
  * for the popup; it may be handed out before the feature loads and does
  * nothing outside a load. `formDeps` is what the form needs wherever it shows
- * (the popup, the plugin panel's side pane).
+ * (the popup, the plugin panel's side pane). `openReviewPopup` opens the
+ * review popup (#103) for a task, for any view that offers it.
  */
 export function createTaskPanelFeature(deps: {
   repository: TaskRepository;
@@ -48,12 +58,33 @@ export function createTaskPanelFeature(deps: {
   feature: FeatureModule;
   open: OpenTaskPanelPopup;
   formDeps: TaskPanelFormDeps;
+  openReviewPopup: OpenReviewPopup;
 } {
   const { repository } = deps;
   // Until a load says otherwise, writing on leaving is allowed.
   let releasing = () => false;
   // The recurrence rule popup's root (#95) exists only while loaded.
   let renderRecurrencePopup: (node: React.ReactNode) => void = () => {};
+  // The review popup's root (#103), likewise.
+  let renderReviewPopup: (node: React.ReactNode) => void = () => {};
+  const clockDeps = {
+    repository,
+    clock: systemClock,
+    dayBoundary: deps.dayBoundary,
+  };
+  const markReviewed = createMarkReviewed(clockDeps);
+  const canMarkReviewed = createCanMarkReviewed();
+  const openReviewPopup = createReviewPopup({
+    deps: {
+      setReviewPlan: createSetReviewPlan(clockDeps),
+      markReviewed,
+      canMarkReviewed,
+      today: deps.today,
+      notify: deps.taskActions.notify,
+    },
+    // Into the load's root; nothing outside a load.
+    render: (node) => renderReviewPopup(node),
+  });
   const formDeps: TaskPanelFormDeps = {
     readTask: createReadTask({ repository }),
     editTask: createEditTask({ repository }),
@@ -91,6 +122,9 @@ export function createTaskPanelFeature(deps: {
       clock: systemClock,
       dayBoundary: deps.dayBoundary,
     }),
+    openReviewPopup,
+    markReviewed,
+    canMarkReviewed,
     actions: deps.taskActions,
     changes: deps.changes,
     today: deps.today,
@@ -107,6 +141,12 @@ export function createTaskPanelFeature(deps: {
     renderRecurrencePopup = recurrenceRoot.render;
     registry.add(`${pluginName}.recurrencePopupOpen`, () => {
       renderRecurrencePopup = () => {};
+    });
+    // The review popup's root, also before the task panel's (#103).
+    const reviewRoot = registry.reactRoot("reviewPopup", null);
+    renderReviewPopup = reviewRoot.render;
+    registry.add(`${pluginName}.reviewPopupOpen`, () => {
+      renderReviewPopup = () => {};
     });
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;
@@ -132,5 +172,6 @@ export function createTaskPanelFeature(deps: {
     open: (taskId, onClose, onSelect) =>
       current?.(taskId, onClose, onSelect) ?? (() => {}),
     formDeps,
+    openReviewPopup,
   };
 }

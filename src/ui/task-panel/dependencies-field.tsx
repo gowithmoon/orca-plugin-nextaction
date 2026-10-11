@@ -15,7 +15,7 @@ import type { SelectOption } from "../../orca.d.ts";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
-import { usePopupLayer } from "../components/popup-layer";
+import { Select } from "../components/popup-controls";
 import { useDependencyCandidates } from "../hooks/use-dependency-candidates";
 import { useNotNextActionReasons } from "../hooks/use-not-next-action-reasons";
 import type { Notify } from "../notify";
@@ -57,8 +57,7 @@ export function DependenciesField(props: {
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
 }) {
-  const { Button, Select, Tooltip } = orca.components;
-  const popupLayer = usePopupLayer();
+  const { Button, Tooltip } = orca.components;
   // The text and staleness of each dependency come with why the task is not
   // a next action: both are what the task graph says about the task.
   const { dependencies: shown } = useNotNextActionReasons(
@@ -175,8 +174,6 @@ export function DependenciesField(props: {
         placeholder={t("Add a dependency")}
         width="100%"
         alignment="left"
-        // Inside a window the menu would be cut off by it (popup-layer.tsx).
-        menuContainer={popupLayer}
         onChange={(selected) => {
           const picked = Number(selected[0]);
           if (!Number.isInteger(picked) || current.includes(picked)) return;

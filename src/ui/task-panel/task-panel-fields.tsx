@@ -12,7 +12,7 @@ import type {
 import { defaultRating, taskStatuses } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
-import { usePopupLayer } from "../components/popup-layer";
+import { DatePicker } from "../components/popup-controls";
 import { recurrenceText } from "../components/recurrence-text";
 import { statusLabel } from "../components/status-label";
 import { statusIcons } from "../task-menu/status-icons";
@@ -119,7 +119,7 @@ export function RatingField(props: {
   );
 }
 
-function toCalendarDate(date: Date): CalendarDate {
+export function toCalendarDate(date: Date): CalendarDate {
   // The picker gives a local date; only its local year, month and day count (ADR 0012).
   return {
     year: date.getFullYear(),
@@ -128,7 +128,7 @@ function toCalendarDate(date: Date): CalendarDate {
   };
 }
 
-function toLocalDate(date: CalendarDate): Date {
+export function toLocalDate(date: CalendarDate): Date {
   return new Date(date.year, date.month - 1, date.day);
 }
 
@@ -143,8 +143,7 @@ export function DateField(props: {
   overdue?: boolean;
   onChange: (date: CalendarDate | null) => void;
 }) {
-  const { Button, DatePicker } = orca.components;
-  const popupLayer = usePopupLayer();
+  const { Button } = orca.components;
   const [picking, setPicking] = React.useState(false);
   // A wrapper element anchors the picker: whether Orca's Button forwards a ref is unknown.
   const anchor = React.useRef<HTMLSpanElement>(null);
@@ -189,8 +188,6 @@ export function DateField(props: {
           // The picker needs a date: an empty value starts on today.
           value={toLocalDate(value ?? props.today)}
           refElement={anchor}
-          // Inside a window the picker would be cut off by it (popup-layer.tsx).
-          menuContainer={popupLayer}
           visible={true}
           onClose={() => setPicking(false)}
           onChange={(picked) => {

@@ -528,6 +528,30 @@ button.nextaction-dependency-task:hover {
   color: var(--orca-color-dangerous-5);
 }
 
+/* Review (#103): the plan's summary as a button reading like a field, as
+   Repeat's; "Mark reviewed" as an icon beside it. */
+.nextaction-review-field {
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-review-field > :not(.nextaction-recurrence-button) {
+  flex: 0 0 auto;
+}
+
+/* The review popup (review-popup.tsx), in the recurrence popup's look: the
+   "every" and the number (shown only with a unit), then the units with
+   "none" first. The number is picked by place, as the recurrence popup's. */
+.nextaction-review-popup-interval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-review-popup-interval > :nth-child(2):not(:last-child) {
+  width: 5rem;
+}
+
 /* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
 .nextaction-recurrence-popup {
   --nextaction-window-width: 26rem;

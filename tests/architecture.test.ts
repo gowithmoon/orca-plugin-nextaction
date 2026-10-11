@@ -11,7 +11,8 @@ import {
 // `notChecked` with the reason. Change both together. The register*, CSS
 // injection, DOM listener and global React usage rules come from section 4
 // ("注册与清理", "React"); the editor command rule from section 4 ("读写
-// Orca") and ADR 0014.
+// Orca") and ADR 0014; the Select/DatePicker rule from section 4 ("Orca
+// 行为约束", 弹出层) and docs/spikes/orca-popup-container.md.
 const rules: ArchitectureRules = {
   layers: {
     domain: {
@@ -103,6 +104,15 @@ const rules: ArchitectureRules = {
       forbiddenIn: ["domain", "application", "infra", "ui", "shared"],
       allowed:
         "listen through platform/registry.ts so unload removes the listener",
+    },
+    {
+      name: "takes Select or DatePicker from orca.components",
+      pattern:
+        /\{[^{}]*\b(?:Select|DatePicker)\b[^{}]*\}\s*=\s*orca\s*\.\s*components\b|\borca\s*\.\s*components\s*\.\s*(?:Select|DatePicker)\b/,
+      forbiddenIn: ["ui"],
+      exceptIn: ["src/ui/components/popup-controls.tsx"],
+      allowed:
+        "use Select and DatePicker from src/ui/components/popup-controls.tsx, which put their popups in the window's popup layer (docs/spikes/orca-popup-container.md)",
     },
     {
       name: "uses the global React",
@@ -218,6 +228,13 @@ describe("architecture rules", () => {
         "ui injects CSS directly",
         "ui injects CSS directly",
         "ui adds a DOM event listener directly",
+      ],
+    ],
+    [
+      "src/ui/takes-popup-controls-from-orca.ts",
+      [
+        "ui takes Select or DatePicker from orca.components",
+        "ui takes Select or DatePicker from orca.components",
       ],
     ],
     [

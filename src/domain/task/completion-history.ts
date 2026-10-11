@@ -21,6 +21,11 @@ export interface CompletionEntry {
   readonly kind?: CompletionKind;
 }
 
+/** What `entry` records: a completion when it has no kind. */
+export function entryKind(entry: CompletionEntry): CompletionKind {
+  return entry.kind ?? "completion";
+}
+
 /** A task's completions and skips, oldest first. */
 export type CompletionHistory = readonly CompletionEntry[];
 
@@ -31,9 +36,7 @@ export type CompletionHistory = readonly CompletionEntry[];
 export function lastCompletion(
   history: CompletionHistory,
 ): CompletionEntry | undefined {
-  return history.findLast(
-    (entry) => (entry.kind ?? "completion") === "completion",
-  );
+  return history.findLast((entry) => entryKind(entry) === "completion");
 }
 
 /** The last skip recorded (GLOSSARY: 跳过); `undefined` without one. */

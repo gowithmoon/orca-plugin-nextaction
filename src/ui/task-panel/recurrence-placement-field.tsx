@@ -13,6 +13,7 @@ import {
 } from "../../domain/recurrence/recurrence";
 import type { CalendarDate } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
+import { Select } from "../components/popup-controls";
 import {
   dayOfWeekName,
   monthName,
@@ -151,15 +152,50 @@ function longestMonth(month: number): number {
 const range = (from: number, to: number): number[] =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
+/**
+ * Monday to Sunday as toggle buttons, any number chosen; shared with the
+ * review popup's placement (#105).
+ */
+export function DaysOfWeekPicker(props: {
+  labelId: string;
+  days: readonly DayOfWeek[];
+  onChange: (days: readonly DayOfWeek[]) => void;
+}) {
+  const { labelId, days, onChange } = props;
+  return (
+    <fieldset
+      className="nextaction-recurrence-popup-days"
+      aria-labelledby={labelId}
+    >
+      {daysOfWeek.map((day) => {
+        const chosen = days.includes(day);
+        return (
+          <button
+            key={day}
+            type="button"
+            aria-pressed={chosen}
+            className="nextaction-recurrence-popup-day"
+            data-chosen={chosen || undefined}
+            onClick={() =>
+              onChange(chosen ? days.filter((d) => d !== day) : [...days, day])
+            }
+          >
+            {dayOfWeekName(day)}
+          </button>
+        );
+      })}
+    </fieldset>
+  );
+}
+
 /** A single-choice Orca Select over numbers or keys, labelled by `labelId`. */
-function Choice<V extends string | number>(props: {
+export function Choice<V extends string | number>(props: {
   labelId: string;
   value: V;
   options: readonly V[];
   label: (value: V) => string;
   onChange: (value: V) => void;
 }) {
-  const { Select } = orca.components;
   return (
     <fieldset
       className="nextaction-recurrence-popup-choice"
@@ -201,33 +237,11 @@ export function RecurrencePlacementField(props: {
     return (
       <div className="nextaction-recurrence-popup-field">
         {label}
-        <fieldset
-          className="nextaction-recurrence-popup-days"
-          aria-labelledby={labelId}
-        >
-          {daysOfWeek.map((day) => {
-            const chosen = draft.weekDays.includes(day);
-            return (
-              <button
-                key={day}
-                type="button"
-                aria-pressed={chosen}
-                className="nextaction-recurrence-popup-day"
-                data-chosen={chosen || undefined}
-                onClick={() =>
-                  onChange({
-                    ...draft,
-                    weekDays: chosen
-                      ? draft.weekDays.filter((d) => d !== day)
-                      : [...draft.weekDays, day],
-                  })
-                }
-              >
-                {dayOfWeekName(day)}
-              </button>
-            );
-          })}
-        </fieldset>
+        <DaysOfWeekPicker
+          labelId={labelId}
+          days={draft.weekDays}
+          onChange={(weekDays) => onChange({ ...draft, weekDays })}
+        />
         <div className="nextaction-recurrence-popup-hint">
           {t("None chosen: the weekday of the task's date.")}
         </div>

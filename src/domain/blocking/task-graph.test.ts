@@ -48,6 +48,7 @@ function task(
     dependencyMode: setup.dependencyMode ?? "all",
     dependencyDelay: setup.dependencyDelay ?? 0,
     recurrence: { kind: "none" },
+    review: { kind: "none" },
     anomalies: [],
   };
   return {

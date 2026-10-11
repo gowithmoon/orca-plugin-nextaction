@@ -5,6 +5,7 @@
 import * as React from "react";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
+import type { MarkReviewed } from "../../application/usecases/mark-reviewed";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
@@ -19,6 +20,7 @@ import {
   changeStatusReporting,
   notifyActionFailure,
   notifyAdvanced,
+  notifyMarkReviewedFailure,
 } from "../notify";
 import type { TaskActionsDeps } from "./use-task-actions";
 
@@ -32,6 +34,8 @@ export interface TaskPanelWrites {
   setDependencyMode: SetDependencyMode;
   /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
   repairNotAdvanced: RepairNotAdvanced;
+  /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
+  markReviewed: MarkReviewed;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -54,6 +58,7 @@ export function useTaskPanelActions(
   setDependencies(dependencies: readonly TaskId[]): Promise<boolean>;
   setDependencyMode(mode: DependencyMode): Promise<boolean>;
   repairNotAdvanced(): Promise<boolean>;
+  markReviewed(): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -118,6 +123,17 @@ export function useTaskPanelActions(
           },
           (reason) => t("Could not advance the task: ${reason}", { reason }),
         ),
+      async markReviewed() {
+        try {
+          await writes.markReviewed(id);
+          notify("success", t("Marked reviewed"));
+          return true;
+        } catch (error) {
+          notifyMarkReviewedFailure(notify, error);
+          failed.current();
+          return false;
+        }
+      },
     };
   }, [writes, id]);
 }

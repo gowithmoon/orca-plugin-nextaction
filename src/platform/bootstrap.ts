@@ -162,6 +162,8 @@ export function createNextActionPlugin(): Plugin {
     taskActions: taskActions.taskActions,
     menuItems: taskMenu.items,
     taskPanel: { openPopup: taskPanel.open, formDeps: taskPanel.formDeps },
+    openReviewPopup: taskPanel.openReviewPopup,
+    openQuickCapture: taskTag.openQuickCapture,
     // The task tag block exists whenever tasks can be written.
     editorHost: {
       current: taskTag.taskTagBlockId,

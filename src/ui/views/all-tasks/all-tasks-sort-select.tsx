@@ -4,6 +4,7 @@
 import type { AllTasksSort } from "../../../application/usecases/read-all-tasks";
 import type { SelectOption } from "../../../orca.d.ts";
 import { t } from "../../../shared/l10n/l10n";
+import { Select } from "../../components/popup-controls";
 import type { AllTasksSortState } from "./all-tasks-sort-store";
 
 /** The sorts in the order offered, each with its label. */
@@ -61,7 +62,6 @@ export function AllTasksSortSelect(props: {
   state: AllTasksSortState;
   onChange: (state: AllTasksSortState) => void;
 }) {
-  const { Select } = orca.components;
   const { state } = props;
   return (
     <>

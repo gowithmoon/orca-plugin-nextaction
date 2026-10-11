@@ -1,7 +1,10 @@
 // The task graph (GLOSSARY: 下一步行动, 阻塞, 搁置子树, 开始日期): which tasks
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
-import type { CompletionEntry } from "../task/completion-history";
+import type {
+  CompletionEntry,
+  CompletionHistory,
+} from "../task/completion-history";
 import type { MyDayRead } from "../task/my-day";
 import type {
   AncestorRatings,
@@ -33,6 +36,12 @@ export interface SnapshotTask {
    * read.
    */
   readonly lastSkip?: CompletionEntry;
+  /**
+   * Its whole completion history (GLOSSARY: 完成历史), oldest first, for the
+   * review's look back (GLOSSARY: 回看过去, #102); absent when it has none,
+   * or the history cannot be read.
+   */
+  readonly completionHistory?: CompletionHistory;
   /**
    * Its My Day entries (GLOSSARY: 我的一天记录), every logical day's; absent
    * when it has none. Unreadable ones are marked so, not read as none.
