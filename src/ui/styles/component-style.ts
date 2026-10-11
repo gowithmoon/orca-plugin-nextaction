@@ -403,8 +403,8 @@ export const componentCss = `
   opacity: 0.55;
 }
 
-/* A recurring task stuck in done (#93): a warning, like an unknown status. */
-.nextaction-property-stuck-done {
+/* A recurring task not advanced (GLOSSARY: 未自动重复, #93): a warning, like an unknown status. */
+.nextaction-property-not-advanced {
   color: var(--orca-color-text-yellow);
 }
 

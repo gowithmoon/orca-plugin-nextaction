@@ -343,12 +343,12 @@ export function RecurrenceField(props: {
  * done outside the plugin and did not advance. "Advance" moves it to the
  * next occurrence in one undo, recording no completion.
  */
-export function StuckDoneNotice(props: { onAdvance: () => void }) {
+export function NotAdvancedNotice(props: { onAdvance: () => void }) {
   const { Button } = orca.components;
   return (
-    <div className="nextaction-stuck-done" role="status">
+    <div className="nextaction-not-advanced" role="status">
       <i className="ti ti-alert-triangle" aria-hidden="true" />
-      <span className="nextaction-stuck-done-text">
+      <span className="nextaction-not-advanced-text">
         {t(
           "Marked done outside the plugin, so this recurring task did not advance.",
         )}

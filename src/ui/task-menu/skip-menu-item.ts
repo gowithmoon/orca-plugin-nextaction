@@ -3,10 +3,6 @@
 // occurrence), right after the status group. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import {
-  CompletionHistoryUnreadableError,
-  RecurrenceUnreadableError,
-} from "../../application/usecases/change-status";
-import {
   type CanSkipOccurrence,
   NotSkippableError,
   type NotSkippableReason,
@@ -14,7 +10,7 @@ import {
 } from "../../application/usecases/skip-occurrence";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
-import { createNotify, notifyActionFailure } from "../notify";
+import { createNotify, notifyAdvanceFailure } from "../notify";
 import { taskMenuGroups } from "./builtin-items";
 import type { TaskMenuItems } from "./menu-items";
 
@@ -63,26 +59,20 @@ export function registerSkipMenuItem(
       } catch (error) {
         if (error instanceof NotSkippableError) {
           notify("warn", refusedText(error.reason));
-        } else if (error instanceof RecurrenceUnreadableError) {
-          notify(
-            "error",
+          return;
+        }
+        notifyAdvanceFailure(notify, error, {
+          recurrenceUnreadable: (reason) =>
             t(
               "Could not skip: its recurrence rule cannot be read (${reason}) and is kept as it is.",
-              { reason: error.reason },
+              { reason },
             ),
-          );
-        } else if (error instanceof CompletionHistoryUnreadableError) {
-          notify(
-            "error",
+          historyUnreadable: () =>
             t(
               "Could not skip: its completion history cannot be read and is kept as it is.",
             ),
-          );
-        } else {
-          notifyActionFailure(notify, error, (reason) =>
-            t("Could not skip: ${reason}", { reason }),
-          );
-        }
+          failed: (reason) => t("Could not skip: ${reason}", { reason }),
+        });
       }
     },
   });

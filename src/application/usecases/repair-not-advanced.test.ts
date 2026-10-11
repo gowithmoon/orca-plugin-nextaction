@@ -6,9 +6,9 @@ import {
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
 import {
-  createAdvanceStuckDone,
-  NotStuckDoneError,
-} from "./advance-stuck-done";
+  createRepairNotAdvanced,
+  NothingToAdvanceError,
+} from "./repair-not-advanced";
 
 const weekly = {
   period: { interval: 1, unit: "week" },
@@ -27,7 +27,7 @@ const deps = (repository: InMemoryTaskRepository) => ({
   dayBoundary: createFixedDayBoundary(),
 });
 
-describe("advance a recurring task stuck in done: end conditions (#89)", () => {
+describe("repair a recurring task not advanced: end conditions (#89)", () => {
   it("uses up one of the remaining occurrences, in the same write", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({
@@ -39,7 +39,7 @@ describe("advance a recurring task stuck in done: end conditions (#89)", () => {
         rule: { ...weekly, end: { kind: "count", total: 5, remaining: 3 } },
       },
     });
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     expect(await advance(11)).toMatchObject({
       next: { year: 2026, month: 10, day: 19 },
@@ -64,7 +64,7 @@ describe("advance a recurring task stuck in done: end conditions (#89)", () => {
         rule: { ...weekly, end: { kind: "count", total: 5, remaining: 1 } },
       },
     });
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     expect(await advance(12)).toEqual({ next: null });
 
@@ -81,7 +81,7 @@ describe("advance a recurring task stuck in done: end conditions (#89)", () => {
   });
 });
 
-describe("advance a recurring task stuck in done", () => {
+describe("repair a recurring task not advanced", () => {
   it("advances it in one write, recording no completion", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask(
@@ -93,7 +93,7 @@ describe("advance a recurring task stuck in done", () => {
       },
       { completionHistory: { kind: "readable", history: [earlier] } },
     );
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     expect(await advance(1)).toEqual({
       next: { year: 2026, month: 10, day: 19 },
@@ -123,7 +123,7 @@ describe("advance a recurring task stuck in done", () => {
         rule: { period: { interval: 3, unit: "day" }, basis: "completion" },
       },
     });
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     await advance(2);
 
@@ -157,23 +157,23 @@ describe("advance a recurring task stuck in done", () => {
   ] as const)("refuses a task that %s, writing nothing", async (_, task) => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 3, ...task });
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
-    await expect(advance(3)).rejects.toBeInstanceOf(NotStuckDoneError);
+    await expect(advance(3)).rejects.toBeInstanceOf(NothingToAdvanceError);
     expect(repository.writeCount()).toBe(0);
   });
 
   it("refuses a block that is not a task, writing nothing", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addBlock(4);
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
-    await expect(advance(4)).rejects.toBeInstanceOf(NotStuckDoneError);
+    await expect(advance(4)).rejects.toBeInstanceOf(NothingToAdvanceError);
     expect(repository.writeCount()).toBe(0);
   });
 });
 
-describe("advance a recurring task stuck in done: its descendant tasks", () => {
+describe("repair a recurring task not advanced: its descendant tasks", () => {
   it("brings its done descendant tasks back to todo, their dates moved as far as the task's, in the same write", async () => {
     const repository = createInMemoryTaskRepository();
     // 每周大扫除 > 拖地 (done), 擦窗 (doing), and below a plain block 倒垃圾 (done).
@@ -190,7 +190,7 @@ describe("advance a recurring task stuck in done: its descendant tasks", () => {
     repository.addTask({ id: 22, status: "doing" }, { parentId: 20 });
     repository.addBlock(23, { parentId: 20 });
     repository.addTask({ id: 24, status: "done" }, { parentId: 23 });
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     await advance(20);
 
@@ -227,7 +227,7 @@ describe("advance a recurring task stuck in done: its descendant tasks", () => {
       },
       { parentId: 30 },
     );
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     await advance(30);
 
@@ -253,7 +253,7 @@ describe("advance a recurring task stuck in done: its descendant tasks", () => {
       { id: 41, status: "done", due: childDue },
       { parentId: 40 },
     );
-    const advance = createAdvanceStuckDone(deps(repository));
+    const advance = createRepairNotAdvanced(deps(repository));
 
     expect(await advance(40)).toEqual({ next: null });
 

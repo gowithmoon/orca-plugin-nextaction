@@ -184,7 +184,7 @@ describe("set recurrence", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
-  it("resuming the rule of a done task resets its done descendant tasks in the same write", async () => {
+  it("resuming the rule of a done task brings its done descendant tasks back to todo in the same write", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({
       id: 6,

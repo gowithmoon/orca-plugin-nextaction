@@ -4,17 +4,15 @@ import {
   NoNotePanelError,
   TaskFeaturesPausedError,
 } from "../application/ports/task-repository";
-import {
-  type ChangeStatus,
-  CompletionHistoryUnreadableError,
-  RecurrenceUnreadableError,
-} from "../application/usecases/change-status";
+import type { ChangeStatus } from "../application/usecases/change-status";
+import { CompletionHistoryUnreadableError } from "../application/usecases/completion-history-unreadable-error";
 import {
   DependencyCycleError,
   type RefusedCycle,
 } from "../application/usecases/dependency-cycle-error";
 import { MyDayUnreadableError } from "../application/usecases/my-day-unreadable-error";
-import type { TaskId, TaskStatus } from "../domain/task/task";
+import { RecurrenceUnreadableError } from "../application/usecases/recurrence-unreadable-error";
+import type { CalendarDate, TaskId, TaskStatus } from "../domain/task/task";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
 import { formatDate, shownText } from "./components/format";
@@ -105,11 +103,57 @@ export function notifyActionFailure(
 }
 
 /**
+ * Tells where a recurring task went once it advanced (GLOSSARY: 安排下一次):
+ * its icon shows todo again, so the next occurrence is told (#95), beside
+ * `on`, the logical day it advanced. `next` being `null`, this was its last
+ * occurrence (#89): the task stays done, its rule removed. Shared by
+ * completing, resuming and the repair of a task not advanced.
+ */
+export function notifyAdvanced(
+  notify: Notify,
+  advance:
+    | { readonly next: CalendarDate; readonly on: CalendarDate }
+    | { readonly next: null },
+): void {
+  if (advance.next === null) {
+    notify("success", t("Recurrence ended"));
+    return;
+  }
+  notify(
+    "success",
+    t("Next: ${date}", { date: formatDate(advance.next, advance.on) }),
+  );
+}
+
+/**
+ * Tells the user why advancing a recurring task failed: its rule or its
+ * completion history cannot be read (kept as they are), each with its own
+ * text, else as `notifyActionFailure` does. Shared by completing and
+ * skipping.
+ */
+export function notifyAdvanceFailure(
+  notify: Notify,
+  error: unknown,
+  texts: {
+    recurrenceUnreadable: (reason: string) => string;
+    historyUnreadable: () => string;
+    failed: (reason: string) => string;
+  },
+): void {
+  if (error instanceof RecurrenceUnreadableError) {
+    notify("error", texts.recurrenceUnreadable(error.reason));
+  } else if (error instanceof CompletionHistoryUnreadableError) {
+    notify("error", texts.historyUnreadable());
+  } else {
+    notifyActionFailure(notify, error, texts.failed);
+  }
+}
+
+/**
  * Changes the status and reports a failure; success says nothing (the icon
- * changes), except for a recurring task that advanced: its icon shows todo
- * again, so the next occurrence is told (#95); on its last occurrence, that
- * the recurrence ended (#89). Never throws. Shared by the
- * task menu, the task card and the task panel.
+ * changes), except for a recurring task that advanced or ended
+ * (`notifyAdvanced`). Never throws. Shared by the task menu, the task card
+ * and the task panel.
  */
 export async function changeStatusReporting(
   changeStatus: ChangeStatus,
@@ -120,39 +164,24 @@ export async function changeStatusReporting(
   try {
     const result = await changeStatus(id, status);
     if (result.kind === "advanced") {
-      notify(
-        "success",
-        t("Next: ${date}", {
-          date: formatDate(result.next, result.completedOn),
-        }),
-      );
+      notifyAdvanced(notify, { next: result.next, on: result.completedOn });
     } else if (result.kind === "ended") {
-      // The last occurrence (#89): the task stays done, its rule removed.
-      notify("success", t("Recurrence ended"));
+      notifyAdvanced(notify, { next: null });
     }
   } catch (error) {
-    if (error instanceof RecurrenceUnreadableError) {
-      notify(
-        "error",
+    notifyAdvanceFailure(notify, error, {
+      recurrenceUnreadable: (reason) =>
         t(
           "Could not mark the task done: its recurrence rule cannot be read (${reason}) and is kept as it is.",
-          { reason: error.reason },
+          { reason },
         ),
-      );
-      return;
-    }
-    if (error instanceof CompletionHistoryUnreadableError) {
-      notify(
-        "error",
+      historyUnreadable: () =>
         t(
           "Could not mark the task done: its completion history cannot be read and is kept as it is.",
         ),
-      );
-      return;
-    }
-    notifyActionFailure(notify, error, (reason) =>
-      t("Could not change the status: ${reason}", { reason }),
-    );
+      failed: (reason) =>
+        t("Could not change the status: ${reason}", { reason }),
+    });
   }
 }
 

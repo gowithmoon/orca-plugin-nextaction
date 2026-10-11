@@ -200,12 +200,11 @@ export interface AdvancingTask extends TaskDates {
 }
 
 /**
- * What advancing a recurring task writes, in one undo. `last`: this was the
- * last occurrence (the next one would fall outside the end condition), so
- * the task stays done and the rule is removed (GLOSSARY: 重复规则).
+ * What advancing a recurring task writes, in one undo. On the last
+ * occurrence (the next one would fall outside the end condition) the task
+ * stays done and the rule is removed (GLOSSARY: 重复规则).
  */
 export interface AdvancePlan {
-  readonly last: boolean;
   /**
    * The task's properties: back to todo with its dates moved, or done on
    * the last occurrence.
@@ -224,6 +223,12 @@ export interface AdvancePlan {
    */
   readonly recurrence?: RecurrenceRule | null;
 }
+
+/**
+ * What an advance that records no completion writes (未自动重复's repair,
+ * resuming a paused rule), in one undo.
+ */
+export type UnrecordedAdvancePlan = Omit<AdvancePlan, "history">;
 
 /**
  * The end condition "`total` times" as the rule popup saves it: all `total`
@@ -277,7 +282,7 @@ function afterOccurrence(rule: RecurrenceRule): RecurrenceRule | undefined {
 /**
  * Advancing a recurring task once it is completed (GLOSSARY: 安排下一次):
  * the task itself only; its descendant tasks are planned by
- * `planDescendantResets` (descendant-reset.ts).
+ * `planDescendantAdvances` (descendants-advance.ts).
  */
 export function planAdvance(
   rule: RecurrenceRule,
@@ -291,7 +296,6 @@ export function planAdvance(
   );
   if (endsBefore(rule.end, next)) {
     return {
-      last: true,
       changes: { status: "done" },
       history: [...history, completion],
       next: null,
@@ -314,7 +318,6 @@ export function planAdvance(
         // becoming overdue.
         { status: "todo", start: next };
   return {
-    last: false,
     changes,
     history: [...history, completion],
     next,
@@ -338,12 +341,9 @@ export function planSkip(
   return planAdvance(rule, task, history, { ...skip, kind: "skip" });
 }
 
-/** What repairing a task stuck in done writes, in one undo. */
-export type RepairPlan = Omit<AdvancePlan, "history">;
-
 /**
- * Advancing a recurring task stuck in done (GLOSSARY: 安排下一次), on the
- * user's request at `repair`. No completion is recorded: when it was
+ * Advancing a recurring task not advanced (GLOSSARY: 未自动重复, 安排下一次),
+ * on the user's request at `repair`. No completion is recorded: when it was
  * completed in Orca is unknown, so after completion it counts from the
  * logical day of the repair; on a fixed schedule from its current dates, as
  * any advance does.
@@ -352,15 +352,12 @@ export function planRepair(
   rule: RecurrenceRule,
   task: AdvancingTask,
   repair: CompletionEntry,
-): RepairPlan {
+): UnrecordedAdvancePlan {
   // The same advance, its completion left out; it uses up an occurrence as
   // any advance does (#89).
   const { history: _, ...plan } = planAdvance(rule, task, [], repair);
   return plan;
 }
-
-/** What resuming a done recurring task writes, in one undo. */
-export type ResumePlan = Omit<AdvancePlan, "history">;
 
 /**
  * Advancing a done task as its paused rule is resumed (GLOSSARY: 暂停重复,
@@ -375,7 +372,7 @@ export function planResume(
   task: AdvancingTask,
   history: CompletionHistory,
   resume: CompletionEntry,
-): ResumePlan {
+): UnrecordedAdvancePlan {
   // After completion it counts from the last completion, skips passed over
   // (#91); on a fixed schedule
   // from the task's dates, or without dates from the day it is resumed.
@@ -491,10 +488,62 @@ function dayInMonth(
  * and did not advance. A rule that cannot be read does not count: whether it
  * would have advanced is unknown.
  */
-export function isStuckDone(task: {
-  readonly status: TaskStatus;
-  readonly recurrence: RecurrenceRead;
-}): boolean {
+export function isNotAdvanced<
+  T extends {
+    readonly status: TaskStatus;
+    readonly recurrence: RecurrenceRead;
+  },
+>(
+  task: T,
+): task is T & {
+  readonly recurrence: { readonly kind: "rule"; readonly rule: RecurrenceRule };
+} {
   // A paused rule does not apply (#92): the task is done like a plain task.
   return task.status === "done" && recurs(task.recurrence);
+}
+
+/** Why a task cannot be skipped (GLOSSARY: 跳过). */
+export type NotSkippableReason = "not-recurring" | "paused" | "done" | "last";
+
+/**
+ * Whether a task can be skipped on the logical day `today` (GLOSSARY: 跳过),
+ * with the rule that applies when it can: it holds a rule, not paused, it is
+ * not done, and this is not its last occurrence (a skipped last occurrence
+ * would leave it neither done nor recurring). A rule this plugin cannot read
+ * is refused as not recurring here; the caller reports it as unreadable.
+ */
+export function skippable(
+  task: AdvancingTask & { readonly recurrence: RecurrenceRead },
+  today: CalendarDate,
+):
+  | { readonly kind: "skippable"; readonly rule: RecurrenceRule }
+  | { readonly kind: "refused"; readonly reason: NotSkippableReason } {
+  if (task.recurrence.kind !== "rule") {
+    return { kind: "refused", reason: "not-recurring" };
+  }
+  const rule = activeRule(task.recurrence);
+  if (!rule) return { kind: "refused", reason: "paused" };
+  if (task.status === "done") return { kind: "refused", reason: "done" };
+  if (isLastOccurrence(rule, task, today)) {
+    return { kind: "refused", reason: "last" };
+  }
+  return { kind: "skippable", rule };
+}
+
+/**
+ * Whether writing `rule` over a task's rule resumes it (GLOSSARY: 暂停重复,
+ * #92): the task is done, its rule is paused, and `rule` applies. Such a
+ * write also advances the task.
+ */
+export function isResume(
+  task: { readonly status: TaskStatus; readonly recurrence: RecurrenceRead },
+  rule: RecurrenceRule | null,
+): rule is RecurrenceRule {
+  return (
+    task.status === "done" &&
+    task.recurrence.kind === "rule" &&
+    task.recurrence.rule.paused === true &&
+    rule !== null &&
+    !rule.paused
+  );
 }

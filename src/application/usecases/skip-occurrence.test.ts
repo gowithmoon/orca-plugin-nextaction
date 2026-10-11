@@ -6,10 +6,8 @@ import {
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
 import type { Task } from "../../domain/task/task";
-import {
-  CompletionHistoryUnreadableError,
-  RecurrenceUnreadableError,
-} from "./change-status";
+import { CompletionHistoryUnreadableError } from "./completion-history-unreadable-error";
+import { RecurrenceUnreadableError } from "./recurrence-unreadable-error";
 import {
   createCanSkipOccurrence,
   createSkipOccurrence,
@@ -58,7 +56,7 @@ describe("skip this occurrence of a recurring task (#91)", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
-  it("uses up one of the remaining occurrences and resets done descendant tasks, in the same write", async () => {
+  it("uses up one of the remaining occurrences and brings done descendant tasks back to todo, in the same write", async () => {
     const repository = createInMemoryTaskRepository();
     const rule = {
       ...weekly,

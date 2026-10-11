@@ -1,7 +1,6 @@
 // Use case: change a task's status from the task menu (GLOSSARY: 状态), and
 // record a completion when the task enters done (GLOSSARY: 完成历史).
 
-import { planDescendantResets } from "../../domain/recurrence/descendant-reset";
 import { activeRule, planAdvance } from "../../domain/recurrence/recurrence";
 import {
   historyAfterStatusChange,
@@ -13,10 +12,12 @@ import {
   type TaskId,
   type TaskStatus,
 } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import { advanceWrites, eventNow } from "./advance-writes";
+import { CompletionHistoryUnreadableError } from "./completion-history-unreadable-error";
+import { RecurrenceUnreadableError } from "./recurrence-unreadable-error";
 
 /** What changing the status did. */
 export type ChangeStatusResult =
@@ -37,27 +38,6 @@ export type ChangeStatusResult =
    * completion recorded, the task stays done and its rule is removed.
    */
   | { kind: "ended" };
-
-/**
- * The task's completion history holds something this plugin cannot read
- * (an unknown version, or damaged), so it cannot be set to done: the history
- * would be overwritten. Nothing was written.
- */
-export class CompletionHistoryUnreadableError extends Error {
-  override name = "CompletionHistoryUnreadableError";
-}
-
-/**
- * The task's recurrence rule holds something this plugin cannot read (an
- * unknown version, a missing field, a value out of range), so it cannot be
- * set to done: whether and where it advances is unknown. Nothing was written.
- */
-export class RecurrenceUnreadableError extends Error {
-  override name = "RecurrenceUnreadableError";
-  constructor(readonly reason: string) {
-    super(`the recurrence rule cannot be read (${reason})`);
-  }
-}
 
 /**
  * Sets the status of task `id` to `status` in one undo; entering done from
@@ -91,55 +71,22 @@ export function createChangeStatus(deps: {
     }
     const read = await deps.repository.readCompletionHistory(id);
     if (read.kind === "unreadable") {
-      throw new CompletionHistoryUnreadableError(
-        `the completion history of task ${id} cannot be read (${read.reason})`,
-      );
+      throw new CompletionHistoryUnreadableError(id, read.reason);
     }
-    const now = deps.clock.now();
-    const completion = {
-      at: now,
-      day: logicalDay(now, deps.dayBoundary.current()),
-    };
+    const completion = eventNow(deps);
     // A paused rule does not apply (GLOSSARY: 暂停重复, #92): the task is
     // completed like a plain task, its completion still recorded.
     const rule = activeRule(task.recurrence);
     if (rule) {
       // A recurring task advances (GLOSSARY: 安排下一次): status, dates,
       // history, the rule (one occurrence used up, #89) and its done
-      // descendant tasks back to todo (#90), in one write, so one undo.
+      // descendant tasks back to todo (#90), in one write, so one undo. On
+      // the last occurrence (#89) it stays done and its rule is removed.
       const plan = planAdvance(rule, task, read.history, completion);
-      if (plan.next === null) {
-        // The last occurrence (#89): the task stays done and its rule is
-        // removed; it does not advance, so its descendants are left as they
-        // are.
-        await deps.repository.updateTasks([
-          {
-            id,
-            changes: plan.changes,
-            completionHistory: plan.history,
-            recurrence: null,
-          },
-        ]);
-        return { kind: "ended" };
-      }
-      const graph = await deps.repository.readTaskGraph();
-      const descendants = planDescendantResets(task, plan.next, graph.tasks);
-      if (descendants.kind === "unreadable") {
-        throw new RecurrenceUnreadableError(
-          `descendant task ${descendants.id}: ${descendants.reason}`,
-        );
-      }
-      await deps.repository.updateTasks([
-        {
-          id,
-          changes: plan.changes,
-          completionHistory: plan.history,
-          ...(plan.recurrence !== undefined && {
-            recurrence: plan.recurrence,
-          }),
-        },
-        ...descendants.resets,
-      ]);
+      await deps.repository.updateTasks(
+        await advanceWrites(deps.repository, task, plan),
+      );
+      if (plan.next === null) return { kind: "ended" };
       return {
         kind: "advanced",
         next: plan.next,
