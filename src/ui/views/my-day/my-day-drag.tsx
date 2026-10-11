@@ -391,6 +391,14 @@ export function useDragSource(
       if (!subject) return;
       // Not prevented: clicks, double-click selection and focus stay as they are.
       press.current = { x: event.clientX, y: event.clientY, subject };
+      // An edge is a thin strip on the card's rim: dragged outwards, the
+      // pointer leaves the card before it has gone far enough to be a drag,
+      // and the card would hear no more of it. Held from the press, it does.
+      // Only edges: held, a click lands on this element, not on the card
+      // inside it (an unscheduled card would no longer open the task panel).
+      if (isEdge(subject)) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
     },
     onPointerMove(event) {
       const start = press.current;
