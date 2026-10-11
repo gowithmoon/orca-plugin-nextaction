@@ -6,6 +6,7 @@
 // the level's name: faded at the default, importance and urgency bold from
 // "high" up, the full wording as tooltip and accessible name. The others only show with a value. Items are told apart by
 // spacing and their own icon or background, not separators.
+import { isStuckDone } from "../../domain/recurrence/recurrence";
 import { isOverdue } from "../../domain/task/overdue";
 import {
   type CalendarDate,
@@ -119,6 +120,19 @@ export function PropertyRow(props: {
             })}
           >
             <i className="ti ti-repeat" aria-hidden="true" />
+          </span>
+        </Tooltip>
+      )}
+      {/* Marked done in Orca, so it did not advance (#93). */}
+      {isStuckDone(task) && (
+        <Tooltip
+          text={t(
+            "Marked done outside the plugin, so it did not advance. Open the task panel to advance it.",
+          )}
+        >
+          <span className="nextaction-property nextaction-property-stuck-done">
+            <i className="ti ti-alert-triangle" aria-hidden="true" />
+            {t("Did not advance")}
           </span>
         </Tooltip>
       )}

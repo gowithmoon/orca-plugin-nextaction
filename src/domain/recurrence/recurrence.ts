@@ -131,6 +131,26 @@ export function planAdvance(
   return { changes, history: [...history, completion], next };
 }
 
+/** What repairing a task stuck in done writes, in one undo. */
+export type RepairPlan = Omit<AdvancePlan, "history">;
+
+/**
+ * Advancing a recurring task stuck in done (GLOSSARY: 进入下一次), on the
+ * user's request at `repair`. No completion is recorded: when it was
+ * completed in Orca is unknown, so after completion it counts from the
+ * logical day of the repair; on a fixed schedule from its current dates, as
+ * any advance does.
+ */
+export function planRepair(
+  rule: RecurrenceRule,
+  task: AdvancingTask,
+  repair: CompletionEntry,
+): RepairPlan {
+  // The same advance, its completion left out.
+  const { changes, next } = planAdvance(rule, task, [], repair);
+  return { changes, next };
+}
+
 /**
  * The next occurrence (GLOSSARY: 下一次发生): the first day the period lays
  * out strictly after `from`.
@@ -182,4 +202,17 @@ function firstExisting(
 /** Whether the date is a day of the calendar (not e.g. February 30). */
 function exists(date: CalendarDate): boolean {
   return addDays(date, 0).day === date.day;
+}
+
+/**
+ * A recurring task stuck in done (GLOSSARY: 进入下一次): it holds a rule and
+ * is done, so it was completed outside the plugin (in Orca's own interface)
+ * and did not advance. A rule that cannot be read does not count: whether it
+ * would have advanced is unknown.
+ */
+export function isStuckDone(task: {
+  readonly status: TaskStatus;
+  readonly recurrence: RecurrenceRead;
+}): boolean {
+  return task.status === "done" && task.recurrence.kind === "rule";
 }
