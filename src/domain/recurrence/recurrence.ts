@@ -56,6 +56,15 @@ export type RecurrenceRead =
 /** No rule: what a task reads as without one. */
 export const noRecurrence: RecurrenceRead = { kind: "none" };
 
+/**
+ * Whether the task recurs (GLOSSARY: 重复任务): it holds a rule this plugin
+ * reads. Such a task never stays done, so a dependency on it, or a sequential
+ * sibling after it, stays unmet until the rule ends (ADR 0021).
+ */
+export function recurs(recurrence: RecurrenceRead): boolean {
+  return recurrence.kind === "rule";
+}
+
 /** A task's dates, as the next occurrence needs them. */
 export interface TaskDates {
   readonly start: CalendarDate | null;
