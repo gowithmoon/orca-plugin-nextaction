@@ -57,6 +57,7 @@ function withDrops(
       unscheduled.push({
         task: item.task,
         done: item.done,
+        skipped: item.skipped,
         overdue: item.overdue,
         unscheduledOrder: item.unscheduledOrder,
       });

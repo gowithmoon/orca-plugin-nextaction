@@ -17,6 +17,8 @@ import { statusIcons } from "./status-icons";
 /** Menu groups, lowest first. Gaps leave room for later steps. */
 export const taskMenuGroups = {
   status: 10,
+  /** "Skip this occurrence" (#91), right after the statuses. */
+  skip: 20,
   myDay: 30,
   taskPanel: 50,
   drop: 100,

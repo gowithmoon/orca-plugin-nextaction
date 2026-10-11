@@ -22,10 +22,17 @@ export interface SnapshotTask {
   /** Its place in the notes (document preorder): lower comes first. */
   readonly position: number;
   /**
-   * The last entry of its completion history (GLOSSARY: 完成历史); absent
-   * when it has none, or the history cannot be read.
+   * The last completion of its completion history (GLOSSARY: 完成历史),
+   * skips passed over (#91); absent when it has none, or the history cannot
+   * be read.
    */
   readonly lastCompletion?: CompletionEntry;
+  /**
+   * The last skip of its completion history (GLOSSARY: 跳过, #91), for My
+   * Day's "skipped today"; absent when it has none, or the history cannot be
+   * read.
+   */
+  readonly lastSkip?: CompletionEntry;
   /**
    * Its My Day entries (GLOSSARY: 我的一天记录), every logical day's; absent
    * when it has none. Unreadable ones are marked so, not read as none.

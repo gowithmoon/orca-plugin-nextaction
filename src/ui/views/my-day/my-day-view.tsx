@@ -185,6 +185,8 @@ function UnscheduledList(props: {
             selected={item.task.id === selectedTaskId}
             // Completed today but advanced to todo (#95).
             doneToday={item.done && item.task.status !== "done"}
+            // Skipped today and advanced to todo (#91).
+            skippedToday={item.skipped}
             buttons={<ScheduleButton onClick={() => onSchedule(item)} />}
           />
         </UnscheduledItem>

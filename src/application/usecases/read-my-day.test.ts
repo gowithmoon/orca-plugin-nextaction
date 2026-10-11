@@ -255,4 +255,50 @@ describe("read today's My Day", () => {
       [3, "done", true],
     ]);
   });
+
+  it("shows a recurring task skipped today as skipped, after the others with the done ones (#91)", async () => {
+    const { repository, readMyDay } = setup();
+    const weekly = {
+      kind: "rule",
+      rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+    } as const;
+    const skippedToday = {
+      kind: "readable",
+      history: [{ at: at("09T08:00:00"), day: oct9, kind: "skip" }],
+    } as const;
+    const skippedYesterday = {
+      kind: "readable",
+      history: [{ at: at("08T20:00:00"), day: oct8, kind: "skip" }],
+    } as const;
+    const completedThenSkippedToday = {
+      kind: "readable",
+      history: [
+        { at: at("09T07:00:00"), day: oct9 },
+        { at: at("09T08:00:00"), day: oct9, kind: "skip" },
+      ],
+    } as const;
+    repository.addTask(
+      { id: 1, status: "todo", importance: 7, recurrence: weekly },
+      { ...myDay({ day: oct9 }), completionHistory: skippedToday },
+    );
+    repository.addTask(
+      { id: 2, status: "todo", importance: 2, recurrence: weekly },
+      { ...myDay({ day: oct9 }), completionHistory: skippedYesterday },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", importance: 1, recurrence: weekly },
+      { ...myDay({ day: oct9 }), completionHistory: completedThenSkippedToday },
+    );
+
+    const read = await readMyDay();
+
+    expect(
+      read.unscheduled.map((item) => [item.task.id, item.done, item.skipped]),
+    ).toEqual([
+      [2, false, false],
+      [1, false, true],
+      // Completed today too: it did get done today.
+      [3, true, false],
+    ]);
+  });
 });

@@ -139,7 +139,13 @@ describe("planCompletionHistoryWrite", () => {
         type: 0,
         value: {
           v: 1,
-          entries: [{ at: "2026-10-07T18:30:00.000Z", day: "2026-10-07" }],
+          entries: [
+            {
+              at: "2026-10-07T18:30:00.000Z",
+              day: "2026-10-07",
+              kind: "completion",
+            },
+          ],
         },
       },
     });
@@ -153,6 +159,95 @@ describe("planCompletionHistoryWrite", () => {
     expect(planCompletionHistoryWrite(block, [])).toMatchObject({
       kind: "refused",
       reason: "unknown version 2",
+    });
+  });
+});
+
+describe("completion history entry kinds (#91)", () => {
+  const at = new Date("2026-10-07T18:30:00.000Z");
+  const oct7 = { year: 2026, month: 10, day: 7 };
+  const withEntry = (extra: Record<string, unknown>) =>
+    taskBlockWith({
+      name: "nextaction.completions",
+      value: {
+        v: 1,
+        entries: [
+          { at: "2026-10-07T18:30:00.000Z", day: "2026-10-07", ...extra },
+        ],
+      },
+    });
+
+  it("reads kind skip as a skip", () => {
+    expect(readCompletionHistory(withEntry({ kind: "skip" }))).toEqual({
+      kind: "readable",
+      history: [{ at, day: oct7, kind: "skip" }],
+    });
+  });
+
+  it("reads an entry without a kind, as recorded before skipping existed, and kind completion as a completion", () => {
+    expect(readCompletionHistory(withEntry({}))).toEqual({
+      kind: "readable",
+      history: [{ at, day: oct7 }],
+    });
+    expect(readCompletionHistory(withEntry({ kind: "completion" }))).toEqual({
+      kind: "readable",
+      history: [{ at, day: oct7 }],
+    });
+  });
+
+  it("keeps an entry of an unknown kind as found, unreadable", () => {
+    expect(readCompletionHistory(withEntry({ kind: "postponed" }))).toEqual({
+      kind: "unreadable",
+      raw: {
+        v: 1,
+        entries: [
+          {
+            at: "2026-10-07T18:30:00.000Z",
+            day: "2026-10-07",
+            kind: "postponed",
+          },
+        ],
+      },
+      reason: "entry 0 is not a completion",
+    });
+  });
+
+  it("writes each entry's kind, and reads back what it wrote", () => {
+    const history = [
+      { at, day: oct7 },
+      {
+        at: new Date("2026-10-14T01:00:00.000Z"),
+        day: { year: 2026, month: 10, day: 14 },
+        kind: "skip" as const,
+      },
+    ];
+    const plan = planCompletionHistoryWrite(taskBlockWith(), history);
+    expect(plan).toEqual({
+      kind: "write",
+      property: {
+        name: "nextaction.completions",
+        type: 0,
+        value: {
+          v: 1,
+          entries: [
+            {
+              at: "2026-10-07T18:30:00.000Z",
+              day: "2026-10-07",
+              kind: "completion",
+            },
+            { at: "2026-10-14T01:00:00.000Z", day: "2026-10-14", kind: "skip" },
+          ],
+        },
+      },
+    });
+    if (plan.kind !== "write") throw new Error("not written");
+    const written = taskBlockWith({
+      name: "nextaction.completions",
+      value: plan.property.value,
+    });
+    expect(readCompletionHistory(written)).toEqual({
+      kind: "readable",
+      history,
     });
   });
 });

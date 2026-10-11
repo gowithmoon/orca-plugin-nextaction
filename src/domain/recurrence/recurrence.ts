@@ -1,9 +1,10 @@
 // Recurring tasks (GLOSSARY: 重复任务, 重复规则, 重复基准, 下一次发生, 进入下一次;
 // ADR 0006). Pure: the event's time and logical day are passed in; whole-day
 // arithmetic comes from `domain/time`.
-import type {
-  CompletionEntry,
-  CompletionHistory,
+import {
+  type CompletionEntry,
+  type CompletionHistory,
+  lastCompletion,
 } from "../task/completion-history";
 import type { CalendarDate, TaskStatus } from "../task/task";
 import type { TaskChanges } from "../task/task-changes";
@@ -321,6 +322,22 @@ export function planAdvance(
   };
 }
 
+/**
+ * Skipping this occurrence of a recurring task (GLOSSARY: 跳过, #91), at
+ * `skip`: a skip is recorded, and the task advances as on a completion (back
+ * to todo, its dates moved, one of the remaining occurrences used up); after
+ * completion it counts from the logical day of the skip. The last occurrence
+ * cannot be skipped (`isLastOccurrence`): the caller refuses it first.
+ */
+export function planSkip(
+  rule: RecurrenceRule,
+  task: AdvancingTask,
+  history: CompletionHistory,
+  skip: Omit<CompletionEntry, "kind">,
+): AdvancePlan {
+  return planAdvance(rule, task, history, { ...skip, kind: "skip" });
+}
+
 /** What repairing a task stuck in done writes, in one undo. */
 export type RepairPlan = Omit<AdvancePlan, "history">;
 
@@ -350,7 +367,7 @@ export type ResumePlan = Omit<AdvancePlan, "history">;
  * 进入下一次), at `resume`. No completion is recorded: the task was completed
  * while paused, and that completion is in the history already. After
  * completion it counts from the logical day of the last completion
- * recorded, or of the resume without one; on a fixed schedule from the
+ * recorded (a skip is no completion, #91), or of the resume without one; on a fixed schedule from the
  * task's current dates, as any advance does.
  */
 export function planResume(
@@ -359,10 +376,11 @@ export function planResume(
   history: CompletionHistory,
   resume: CompletionEntry,
 ): ResumePlan {
-  // After completion it counts from the last completion; on a fixed schedule
+  // After completion it counts from the last completion, skips passed over
+  // (#91); on a fixed schedule
   // from the task's dates, or without dates from the day it is resumed.
   const from =
-    rule.basis === "completion" ? (history.at(-1) ?? resume) : resume;
+    rule.basis === "completion" ? (lastCompletion(history) ?? resume) : resume;
   // The same advance, its completion left out; it uses up an occurrence, or
   // ends the recurrence on the last, as any advance does (#89).
   const { history: _, ...plan } = planAdvance(rule, task, [], from);

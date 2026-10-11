@@ -14,7 +14,11 @@ import type {
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { TaskMove } from "../src/domain/blocking/task-move";
-import type { CompletionEntry } from "../src/domain/task/completion-history";
+import {
+  type CompletionEntry,
+  lastCompletion as lastCompletionIn,
+  lastSkip as lastSkipIn,
+} from "../src/domain/task/completion-history";
 import type { MyDayRead } from "../src/domain/task/my-day";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
@@ -407,12 +411,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         if (!block.task) continue;
         const stored = block.completionHistory;
         const lastCompletion =
-          stored?.kind === "readable" ? stored.history.at(-1) : undefined;
+          stored?.kind === "readable"
+            ? lastCompletionIn(stored.history)
+            : undefined;
+        const lastSkip =
+          stored?.kind === "readable" ? lastSkipIn(stored.history) : undefined;
         tasks.push({
           task: block.task,
           parentId: parentTaskOf(id),
           position: block.position,
           ...(lastCompletion && { lastCompletion }),
+          ...(lastSkip && { lastSkip }),
           ...(block.myDay && { myDay: block.myDay }),
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),
