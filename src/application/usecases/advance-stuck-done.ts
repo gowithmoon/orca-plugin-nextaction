@@ -1,12 +1,14 @@
 // Use case: advance a recurring task not advanced (GLOSSARY: 未自动重复, 安排下一次),
 // from the task panel's notice (#93). The task was marked done in Orca's own
 // interface, so the plugin never advanced it.
+import { planDescendantResets } from "../../domain/recurrence/descendant-reset";
 import { isStuckDone, planRepair } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import { RecurrenceUnreadableError } from "./change-status";
 
 /**
  * What advancing did: the task's dates are on `next`; or, `next` being
@@ -53,15 +55,23 @@ export function createAdvanceStuckDone(deps: {
       day: logicalDay(now, deps.dayBoundary.current()),
     };
     const plan = planRepair(task.recurrence.rule, task, repair);
-    // The rule is written with it when an occurrence is used up (#89).
-    await deps.repository.updateTasks([
-      {
-        id,
-        changes: plan.changes,
-        ...(plan.recurrence !== undefined && { recurrence: plan.recurrence }),
-      },
-    ]);
-    if (plan.next === null) return { next: null };
+    const write = {
+      id,
+      changes: plan.changes,
+      ...(plan.recurrence !== undefined && { recurrence: plan.recurrence }),
+    };
+    if (plan.next === null) {
+      await deps.repository.updateTasks([write]);
+      return { next: null };
+    }
+    const graph = await deps.repository.readTaskGraph();
+    const descendants = planDescendantResets(task, plan.next, graph.tasks);
+    if (descendants.kind === "unreadable") {
+      throw new RecurrenceUnreadableError(
+        `descendant task ${descendants.id}: ${descendants.reason}`,
+      );
+    }
+    await deps.repository.updateTasks([write, ...descendants.resets]);
     return { next: plan.next, repairedOn: repair.day };
   };
 }
