@@ -1,6 +1,7 @@
 // Use case: change a task's status from the task menu (GLOSSARY: 状态), and
 // record a completion when the task enters done (GLOSSARY: 完成历史).
 
+import { planDescendantResets } from "../../domain/recurrence/descendant-reset";
 import { planAdvance } from "../../domain/recurrence/recurrence";
 import {
   historyAfterStatusChange,
@@ -96,14 +97,25 @@ export function createChangeStatus(deps: {
     };
     if (task.recurrence.kind === "rule") {
       // A recurring task advances (GLOSSARY: 进入下一次): status, dates and
-      // history in one write, so one undo.
+      // history, and its done descendant tasks back to todo (#90), in one
+      // write, so one undo.
       const plan = planAdvance(
         task.recurrence.rule,
         task,
         read.history,
         completion,
       );
-      await deps.repository.updateTask(id, plan.changes, plan.history);
+      const graph = await deps.repository.readTaskGraph();
+      const descendants = planDescendantResets(task, plan.next, graph.tasks);
+      if (descendants.kind === "unreadable") {
+        throw new RecurrenceUnreadableError(
+          `descendant task ${descendants.id}: ${descendants.reason}`,
+        );
+      }
+      await deps.repository.updateTasks([
+        { id, changes: plan.changes, completionHistory: plan.history },
+        ...descendants.resets,
+      ]);
       return {
         kind: "advanced",
         next: plan.next,
