@@ -13,8 +13,12 @@ import type {
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
-import type { ReadTask } from "../../application/usecases/read-task";
+import type {
+  ReadTaskForPanel,
+  TaskCustomProperty,
+} from "../../application/usecases/read-task";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
+import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
@@ -43,6 +47,7 @@ import {
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import { ChoicesField } from "./choices-field";
+import { CustomPropertiesField } from "./custom-properties-field";
 import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
@@ -64,7 +69,10 @@ import {
 } from "./task-panel-fields";
 
 export interface TaskPanelFormDeps {
-  readTask: ReadTask;
+  /** The task with its custom properties (#113). */
+  readTaskForPanel: ReadTaskForPanel;
+  /** Writes one custom property (#113). */
+  setCustomProperty: SetCustomProperty;
   editTask: EditTask;
   dropTask: DropTask;
   /** Values offered for contexts and labels. */
@@ -163,6 +171,8 @@ function Header(props: {
 
 function Fields(props: {
   task: Task;
+  /** In Orca's order; shown after the built-in fields (#113). */
+  customProperties: readonly TaskCustomProperty[];
   today: CalendarDate;
   idPrefix: string;
   actions: ReturnType<typeof useTaskPanelActions>;
@@ -329,6 +339,13 @@ function Fields(props: {
           />
         </Field>
       )}
+      <CustomPropertiesField
+        idPrefix={idPrefix}
+        properties={props.customProperties}
+        today={today}
+        saveOnLeave={props.saveOnLeave}
+        onChange={actions.setCustomProperty}
+      />
     </div>
   );
 }
@@ -337,7 +354,11 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const { deps, taskId, onClose } = props;
   const { Button, Tooltip } = orca.components;
   const idPrefix = React.useId();
-  const { state, reload } = useLiveTask(deps.readTask, taskId, deps.changes);
+  const { state, reload } = useLiveTask(
+    deps.readTaskForPanel,
+    taskId,
+    deps.changes,
+  );
   const actions = useTaskPanelActions(deps, taskId, reload);
   // Read again once a minute, so a reminder passing shows as passed.
   const now = useNow(deps.now);
@@ -374,6 +395,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
     body = (
       <Fields
         task={state.task}
+        customProperties={state.customProperties}
         today={deps.today()}
         idPrefix={idPrefix}
         actions={actions}

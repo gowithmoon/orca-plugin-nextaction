@@ -173,6 +173,8 @@ const zhCN: Record<string, string> = {
   "${value} · ${name}": "${value} · ${name}",
   "Not set": "未设置",
   "Clear date": "清除日期",
+  "Custom properties": "自定义属性",
+  Clear: "清除",
   "A line about this task": "一句话补充说明",
   Saved: "已保存",
   "Drop this task": "放弃任务",

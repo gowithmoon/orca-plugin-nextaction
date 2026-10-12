@@ -105,6 +105,21 @@ export const taskPanelCss = `
   min-width: 0;
 }
 
+/* Custom properties (#113): their own group after the built-in fields. */
+.nextaction-custom-properties {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  padding-top: var(--orca-spacing-md);
+  border-top: 1px solid var(--orca-color-border);
+}
+
+.nextaction-custom-properties-heading {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+  font-weight: 600;
+}
+
 ${wideFieldsCss("nextaction-task-panel", "420px")}
 ${wideFieldsCss("nextaction-capture-fields", "300px")}
 
