@@ -25,5 +25,6 @@
 | [blockrefs-scope.md](./blockrefs-scope.md) | — | 块引用属性的搜索范围 `typeArgs.scope`，标签改名时的表现（第五步验收补测） | 第五步起的依赖属性 |
 | [move-blocks.md](./move-blocks.md) | #64 | 从插件面板移动块：目标块须在缓存中、撤销、子块、页面块、`autoMatchType`；笔记与插件面板之间的拖拽（第六步开工前） | 第六步的拖拽移动 |
 | [multi-block-undo.md](./multi-block-undo.md) | #90 | 一个 `invokeGroup` 写多个块的撤销与写入顺序 | 第八步安排下一次时重置后代任务 |
+| [custom-properties.md](./custom-properties.md) | — | 用户在 Orca 中给任务标签加的属性：各类型的定义与值、默认值、删除定义后值的去向（第十二步开工前） | 第十二步的自定义属性；"备注"的读法 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。
