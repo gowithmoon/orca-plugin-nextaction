@@ -43,7 +43,9 @@ import {
 } from "../../../domain/recurrence/recurrence";
 import {
   type BlockWithProperties,
+  type PluginPropertyDiscard,
   type PluginPropertyWrite,
+  planPluginPropertyDiscard,
   planPluginPropertyWrite,
   pluginPropertyPrefix,
   readPluginProperty,
@@ -287,6 +289,20 @@ export function readRecurrence(block: BlockWithProperties): StoredRecurrence {
   if (read.data.rule === null) return { kind: "none" };
   const rule = parseRule(read.data.rule);
   return typeof rule === "string" ? unreadable(rule) : { kind: "rule", rule };
+}
+
+/**
+ * Plans discarding a recurrence rule this plugin cannot read, writing no
+ * rule over it; a readable rule, or none, is left as it is.
+ */
+export function planRecurrenceDiscard(
+  block: BlockWithProperties,
+): PluginPropertyDiscard {
+  return planPluginPropertyDiscard(
+    readRecurrence(block).kind === "unreadable",
+    key,
+    { rule: null },
+  );
 }
 
 /**

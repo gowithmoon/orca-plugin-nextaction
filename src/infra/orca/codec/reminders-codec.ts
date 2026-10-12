@@ -11,7 +11,9 @@ import {
 } from "../../../domain/reminder/reminder";
 import {
   type BlockWithProperties,
+  type PluginPropertyDiscard,
   type PluginPropertyWrite,
+  planPluginPropertyDiscard,
   planPluginPropertyWrite,
   pluginPropertyPrefix,
   readPluginProperty,
@@ -78,6 +80,20 @@ export function planRemindersWrite(
       moment.toISOString(),
     ),
   });
+}
+
+/**
+ * Plans discarding reminders this plugin cannot read, writing an empty list
+ * over them; readable reminders, or none, are left as they are.
+ */
+export function planRemindersDiscard(
+  block: BlockWithProperties,
+): PluginPropertyDiscard {
+  return planPluginPropertyDiscard(
+    readReminders(block).kind === "unreadable",
+    key,
+    { reminders: [] },
+  );
 }
 
 /**

@@ -27,7 +27,9 @@ import {
 import type { CalendarDate } from "../../../domain/task/task";
 import {
   type BlockWithProperties,
+  type PluginPropertyDiscard,
   type PluginPropertyWrite,
+  planPluginPropertyDiscard,
   planPluginPropertyWrite,
   pluginPropertyPrefix,
   readPluginProperty,
@@ -174,6 +176,20 @@ export function planReviewWrite(
     ...(plan.lastReviewed && { lastReviewed: formatDay(plan.lastReviewed) }),
     ...(plan.reviewOn && { reviewOn: formatDay(plan.reviewOn) }),
   });
+}
+
+/**
+ * Plans discarding a review plan this plugin cannot read, writing a plan
+ * with no fields over it; a readable plan, or none, is left as it is.
+ */
+export function planReviewDiscard(
+  block: BlockWithProperties,
+): PluginPropertyDiscard {
+  return planPluginPropertyDiscard(
+    readReview(block).kind === "unreadable",
+    key,
+    {},
+  );
 }
 
 /**

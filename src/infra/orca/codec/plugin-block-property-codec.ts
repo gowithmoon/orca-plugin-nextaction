@@ -71,13 +71,40 @@ export function planPluginPropertyWrite(
   if (current.kind === "unreadable") {
     return { kind: "refused", raw: current.raw, reason: current.reason };
   }
+  return { kind: "write", property: propertyOf(key, data) };
+}
+
+/** What discarding an unreadable plugin block property should do. */
+export type PluginPropertyDiscard =
+  | {
+      kind: "write";
+      /** Pass to `core.editor.setProperties`. */
+      property: { name: string; type: number; value: Record<string, unknown> };
+    }
+  /** The value can be read, or there is none: nothing is discarded. */
+  | { kind: "nothing" };
+
+/**
+ * Plans discarding the value of the plugin block property `key`, writing
+ * `empty` over it, when `unreadable` says this plugin cannot read it. The one
+ * write that overwrites an unreadable value, and only when the user asks for
+ * it (docs/ARCHITECTURE.md §4); every other write refuses.
+ */
+export function planPluginPropertyDiscard(
+  unreadable: boolean,
+  key: string,
+  empty: Record<string, unknown>,
+): PluginPropertyDiscard {
+  return unreadable
+    ? { kind: "write", property: propertyOf(key, empty) }
+    : { kind: "nothing" };
+}
+
+function propertyOf(key: string, data: Record<string, unknown>) {
   return {
-    kind: "write",
-    property: {
-      name: prefix + key,
-      // JSON block properties (block-properties-json J1).
-      type: PropType.JSON,
-      value: { ...data, v: currentVersion },
-    },
+    name: prefix + key,
+    // JSON block properties (block-properties-json J1).
+    type: PropType.JSON,
+    value: { ...data, v: currentVersion },
   };
 }

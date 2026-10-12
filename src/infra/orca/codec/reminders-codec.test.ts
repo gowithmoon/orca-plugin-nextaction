@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { planRemindersWrite, readReminders } from "./reminders-codec";
+import {
+  planRemindersDiscard,
+  planRemindersWrite,
+  readReminders,
+} from "./reminders-codec";
 
 // A task block's `properties` as get-blocks returns them: plugin block
 // properties are JSON (type 0) next to `_tags` and `_repr`
@@ -106,5 +110,37 @@ describe("readReminders and planRemindersWrite", () => {
     const block = taskBlockWith({ name: "nextaction.reminders", value: raw });
     expect(readReminders(block)).toMatchObject({ kind: "unreadable", raw });
     expect(planRemindersWrite(block, anyReminders).kind).toBe("refused");
+  });
+});
+
+describe("planRemindersDiscard", () => {
+  it("writes an empty list over reminders it cannot read, which then read as none set", () => {
+    const block = taskBlockWith({
+      name: "nextaction.reminders",
+      value: { v: 2, reminders: ["2026-10-13T01:00:00.000Z"] },
+    });
+    const discard = planRemindersDiscard(block);
+    if (discard.kind !== "write") throw new Error("nothing to discard");
+    expect(discard.property).toEqual({
+      name: "nextaction.reminders",
+      type: 0,
+      value: { v: 1, reminders: [] },
+    });
+    expect(readReminders(taskBlockWith(discard.property))).toEqual({
+      kind: "list",
+      reminders: [],
+    });
+  });
+
+  it.each([
+    ["readable reminders", { v: 1, reminders: ["2026-10-13T01:00:00.000Z"] }],
+    ["an empty list", { v: 1, reminders: [] }],
+  ])("writes nothing over %s", (_, value) => {
+    const block = taskBlockWith({ name: "nextaction.reminders", value });
+    expect(planRemindersDiscard(block)).toEqual({ kind: "nothing" });
+  });
+
+  it("writes nothing to a task without reminders", () => {
+    expect(planRemindersDiscard(taskBlockWith())).toEqual({ kind: "nothing" });
   });
 });
