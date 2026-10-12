@@ -10,6 +10,41 @@ import {
   NothingToAdvanceError,
 } from "./repair-not-advanced";
 
+describe("repair a recurring task not advanced: reminders (GLOSSARY: 提醒)", () => {
+  it("moves the task's reminders with its dates, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 40,
+      status: "done",
+      start: { year: 2026, month: 10, day: 12 },
+      recurrence: {
+        kind: "rule",
+        rule: {
+          period: { interval: 1, unit: "week" },
+          basis: "schedule",
+        },
+      },
+      reminders: {
+        kind: "list",
+        reminders: [new Date("2026-10-12T08:00:00+08:00")],
+      },
+    });
+    const advance = createRepairNotAdvanced({
+      repository,
+      clock: createFixedClock("2026-10-14T09:00:00+08:00"),
+      dayBoundary: createFixedDayBoundary(),
+    });
+
+    await advance(40);
+
+    expect((await repository.getTask(40))?.reminders).toEqual({
+      kind: "list",
+      reminders: [new Date("2026-10-19T08:00:00+08:00")],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+});
+
 const weekly = {
   period: { interval: 1, unit: "week" },
   basis: "schedule",

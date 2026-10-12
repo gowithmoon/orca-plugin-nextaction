@@ -459,6 +459,10 @@ export function createOrcaTaskRepository(
       ...(write.recurrence !== undefined
         ? [plannedWrite(block, planRecurrenceWrite(block, write.recurrence))]
         : []),
+      // The reminders likewise: ones that cannot be read are kept.
+      ...(write.reminders !== undefined
+        ? [plannedWrite(block, planRemindersWrite(block, write.reminders))]
+        : []),
     ];
     // Dependency targets are block IDs coming in: mirrors resolve to their
     // sources first, as every block ID does (block-properties-json M3).
