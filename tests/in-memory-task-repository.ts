@@ -14,6 +14,7 @@ import type {
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
   type CompletionEntry,
   lastCompletion as lastCompletionIn,
@@ -111,6 +112,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     dependencyDelay: 0,
     recurrence: { kind: "none" },
     review: { kind: "none" },
+    reminders: { kind: "none" },
     anomalies: [],
   };
 }
@@ -494,6 +496,23 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       }
       write(() => {
         block.task = { ...block.task, review: { kind: "plan", plan } };
+      });
+    },
+
+    async writeReminders(id, reminders) {
+      const block = taskToWrite(id);
+      // Reminders this plugin cannot read are never overwritten.
+      if (block.task.reminders.kind === "unreadable") {
+        throw new Error(
+          `the reminders of block ${id} hold a value this plugin cannot read (${block.task.reminders.reason})`,
+        );
+      }
+      write(() => {
+        // Stored ascending and each once, as the codec writes them.
+        block.task = {
+          ...block.task,
+          reminders: { kind: "list", reminders: normalizeReminders(reminders) },
+        };
       });
     },
 

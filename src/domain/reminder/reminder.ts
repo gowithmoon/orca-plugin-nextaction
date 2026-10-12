@@ -110,7 +110,7 @@ export type ReminderRead =
 export const noReminders: ReminderRead = { kind: "none" };
 
 /** The reminders of a read, none for one this plugin cannot read. */
-export function remindersOf(read: ReminderRead): Reminders {
+export function remindersIn(read: ReminderRead): Reminders {
   return read.kind === "list" ? read.reminders : [];
 }
 
@@ -124,7 +124,7 @@ export function showsReminderBell(
 ): boolean {
   return (
     task.status !== "done" &&
-    upcomingReminders(remindersOf(task.reminders), now).length > 0
+    upcomingReminders(remindersIn(task.reminders), now).length > 0
   );
 }
 

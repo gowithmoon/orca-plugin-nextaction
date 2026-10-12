@@ -24,6 +24,7 @@ function task(set: Partial<Task> = {}): Task {
     created: new Date("2026-01-01T00:00:00Z"),
     recurrence: { kind: "none" },
     review: { kind: "none" },
+    reminders: { kind: "none" },
     anomalies: [],
     ...set,
   };
