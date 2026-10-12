@@ -9,6 +9,7 @@ import {
   type Task,
   taskFromNotes,
 } from "../../../domain/task/task";
+import { RefType } from "../ref-type";
 import { decodeCustomPropertyValues, textValue } from "./custom-property-codec";
 import {
   findDependencyModeKey,
@@ -103,15 +104,12 @@ export function isOrphan(block: Pick<RawBlock, "parent" | "aliases">): boolean {
   return block.parent == null && block.aliases.length === 0;
 }
 
-/** Orca `RefType.Property`: a tag reference (plugin-docs/constants/db.md). */
-const propertyRef = 2;
-
 /** The block's reference to the task tag, which holds the task's values. */
 export function findTaskTagRef<R extends RawBlock["refs"][number]>(
   refs: readonly R[],
   tagBlockId: number,
 ): R | undefined {
-  return refs.find((r) => r.type === propertyRef && r.to === tagBlockId);
+  return refs.find((r) => r.type === RefType.Property && r.to === tagBlockId);
 }
 
 export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
@@ -154,7 +152,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       labels: choicesValue(values.get("label")),
       note: textValue(values.get("note")),
       sequential: booleanValue(values.get("sequential")),
-      dependencies: dependencyTargets(block, values.get("dependencies")),
+      dependencies: refDataTargets(block.refs, values.get("dependencies")),
       dependencyMode: dependencyModeValue(values.get("dependencyMode")),
       dependencyDelay: numberValue(values.get("dependencyDelay")),
       created: createdValue(block.id, block.created),
@@ -212,22 +210,21 @@ function dependencyModeValue(value: unknown): DependencyMode {
     : "all";
 }
 
-/** Orca `RefType.RefData`: what a block reference property's value points through. */
-const refDataRef = 3;
-
 /**
- * The target block IDs of a dependencies value. The value holds reference
- * IDs, never block IDs (tag-operations A2): each is resolved through the
- * block's own `type: 3` reference of that ID to the block it points at.
+ * The target block IDs of a block reference value (dependencies, or a block
+ * reference custom property), in order. The value holds reference IDs,
+ * never block IDs (tag-operations A2): each is resolved through the block's
+ * own `type: 3` reference of that ID to the block it points at; one with no
+ * such reference is left out. Mirrors are resolved by the repository.
  */
-function dependencyTargets(
-  block: Pick<RawBlock, "refs">,
+export function refDataTargets(
+  refs: readonly { id: number; type: number; to: number }[],
   value: unknown,
 ): number[] {
   if (!Array.isArray(value)) return [];
   const targets: number[] = [];
   for (const refId of value) {
-    const ref = block.refs.find((r) => r.id === refId && r.type === refDataRef);
+    const ref = refs.find((r) => r.id === refId && r.type === RefType.RefData);
     if (ref) targets.push(ref.to);
   }
   return targets;

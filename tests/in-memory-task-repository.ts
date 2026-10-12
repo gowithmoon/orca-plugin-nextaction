@@ -388,6 +388,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return task ? withCustomProperties(task) : null;
     },
 
+    async getTaskWithDefinitions(id) {
+      const task = blocks.get(id)?.task;
+      return task
+        ? {
+            task: withCustomProperties(task),
+            definitions: [...customDefinitions],
+          }
+        : null;
+    },
+
     setCustomPropertyDefinitions(next) {
       customDefinitions = [...next];
     },

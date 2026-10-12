@@ -56,11 +56,10 @@ export function createReadTaskForPanel(deps: {
   repository: TaskRepository;
 }): ReadTaskForPanel {
   return async (id) => {
-    const [task, definitions] = await Promise.all([
-      deps.repository.getTask(id),
-      deps.repository.readCustomPropertyDefinitions(),
-    ]);
-    if (!task) return null;
+    // One read of the definitions for both the values and the rows.
+    const read = await deps.repository.getTaskWithDefinitions(id);
+    if (!read) return null;
+    const { task, definitions } = read;
     const values = definitions.map((definition) => {
       const stored = task.customProperties[definition.name];
       return {

@@ -23,6 +23,7 @@ import {
   isOrphan,
   mirrorSourceId,
   type RawBlock,
+  refDataTargets,
   resolveDependencyTargets,
   taskText,
 } from "./task-codec";
@@ -195,12 +196,13 @@ export function encodeBlockRefs(
 
 /**
  * The item to write with `setRefData` for a custom property's new value.
- * `now` is when it is written.
+ * `now` is when it is written. Block reference values are planned with
+ * `planBlockRefsWrite`, as they need references created first.
  */
 export function planCustomPropertyWrite(
   definitions: readonly CustomPropertyDefinition[],
   name: string,
-  value: CustomPropertyValue,
+  value: Exclude<CustomPropertyValue, { kind: "blockRefs" }>,
   now: Date,
 ): RefDataItem {
   checkCustomPropertyValue(definitions, name, value);
@@ -246,11 +248,6 @@ export function planCustomPropertyWrite(
     case "multi":
       // An empty list clears with null, as contexts and labels do.
       return { name, value: value.value.length > 0 ? [...value.value] : null };
-    default:
-      // Choice and block reference properties are written by #114, #115.
-      throw new Error(
-        `writing a custom property of kind ${value.kind} is not supported yet`,
-      );
   }
 }
 
@@ -344,26 +341,6 @@ export interface BlockRef {
   to: number;
 }
 
-/** Orca `RefType.RefData`: what a block reference property's value points through. */
-const refDataRef = 3;
-
-/**
- * The target block IDs of a block reference value. The value holds
- * reference IDs, never block IDs (tag-operations A2): each is resolved
- * through the block's own `type: 3` reference of that ID, as dependencies
- * are; one with no such reference is left out. Mirrors are resolved by the
- * repository, which reads the targets.
- */
-function blockRefTargets(value: unknown, refs: readonly BlockRef[]): number[] {
-  if (!Array.isArray(value)) return [];
-  const targets: number[] = [];
-  for (const refId of value) {
-    const ref = refs.find((r) => r.id === refId && r.type === refDataRef);
-    if (ref && !targets.includes(ref.to)) targets.push(ref.to);
-  }
-  return targets;
-}
-
 /** A block offered as a block reference target. */
 export interface FoundBlock {
   id: number;
@@ -437,7 +414,8 @@ export function decodeCustomPropertyValues(
     if (definition.kind === "blockRefs") {
       values[definition.name] = {
         kind: "blockRefs",
-        value: blockRefTargets(item?.value, refs),
+        // Resolved as dependencies are; each target once.
+        value: [...new Set(refDataTargets(refs, item?.value))],
       };
       continue;
     }

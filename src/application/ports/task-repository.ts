@@ -308,6 +308,17 @@ export interface TaskRepository {
   readCustomPropertyDefinitions(): Promise<CustomPropertyDefinition[]>;
 
   /**
+   * As `getTask`, with the custom property definitions its custom property
+   * values were read against: one read of them, so the two always agree
+   * (the task panel shows a row per definition, #113). `null` when the
+   * block is not a task.
+   */
+  getTaskWithDefinitions(id: TaskId): Promise<{
+    task: Task;
+    definitions: CustomPropertyDefinition[];
+  } | null>;
+
+  /**
    * The text of each of the blocks `ids` (block reference targets, #115),
    * read when asked for. A block that is gone, or deleted while still
    * referenced (left behind as an orphan, tag-operations X2), is not in the

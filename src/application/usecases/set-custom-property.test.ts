@@ -131,4 +131,26 @@ describe("set custom property", () => {
     ).rejects.toMatchObject({ property: "下发人", reason: "not-defined" });
     expect(repository.writeCount()).toBe(0);
   });
+
+  it("leaves the check to the write, which reads the definitions as they are when it writes", async () => {
+    const { repository } = setup();
+    // An earlier read missed the property the user has just added in Orca.
+    const staleRead = {
+      ...repository,
+      async readCustomPropertyDefinitions() {
+        return [];
+      },
+    };
+    const setCustomProperty = createSetCustomProperty({
+      repository: staleRead,
+      clock: createFixedClock("2026-10-12T20:00:00+08:00"),
+    });
+
+    await setCustomProperty(1, "下发人", { kind: "text", value: "张三" });
+
+    expect((await repository.getTask(1))?.customProperties.下发人).toEqual({
+      kind: "text",
+      value: "张三",
+    });
+  });
 });
