@@ -4,6 +4,7 @@ import {
   type ChoiceProperty,
   type CompletionHistoryRead,
   type ConvertToTaskResult,
+  type DiscardableData,
   type InitialProperties,
   TaskFeaturesPausedError,
   type TaskFilter,
@@ -39,9 +40,15 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
-import { planRecurrenceWrite } from "../codec/recurrence-codec";
-import { planRemindersWrite } from "../codec/reminders-codec";
-import { planReviewWrite } from "../codec/review-codec";
+import {
+  planRecurrenceDiscard,
+  planRecurrenceWrite,
+} from "../codec/recurrence-codec";
+import {
+  planRemindersDiscard,
+  planRemindersWrite,
+} from "../codec/reminders-codec";
+import { planReviewDiscard, planReviewWrite } from "../codec/review-codec";
 import {
   decodeTask,
   findTaskTagRef,
@@ -136,6 +143,13 @@ function plannedWrite(block: Block, plan: PluginPropertyWrite) {
   }
   return plan.property;
 }
+
+/** How each discardable data is discarded (`discardUnreadable`). */
+const discardPlans = {
+  recurrence: planRecurrenceDiscard,
+  review: planReviewDiscard,
+  reminders: planRemindersDiscard,
+} satisfies Record<DiscardableData, unknown>;
 
 /**
  * A block's My Day entries as the port reads them; `undefined` when it holds
@@ -736,6 +750,27 @@ export function createOrcaTaskRepository(
           "core.editor.setProperties",
           [block.id],
           [property],
+        );
+      });
+    },
+
+    async discardUnreadable(id: TaskId, data: DiscardableData): Promise<void> {
+      // Mirrors resolve to their source blocks (block-properties-json M3).
+      const block = await taskBlockToWrite(id, currentTag());
+      const plan = discardPlans[data](block);
+      // Readable, or none: nothing to discard, nothing written.
+      if (plan.kind === "nothing") return;
+      console.warn(
+        `[nextaction] block ${block.id}: an unreadable plugin block property is discarded at the user's request`,
+        block.properties.find((p) => p.name === plan.property.name)?.value,
+      );
+      // As for the other plugin block properties: one setProperties in one
+      // group, one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [block.id],
+          [plan.property],
         );
       });
     },

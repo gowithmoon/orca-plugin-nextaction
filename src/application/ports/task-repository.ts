@@ -18,6 +18,12 @@ export type CompletionHistoryRead =
   | { kind: "readable"; history: CompletionHistory }
   | { kind: "unreadable"; reason: string };
 
+/**
+ * The task data held as a versioned plugin block property that the user can
+ * discard when this plugin cannot read it (`discardUnreadable`).
+ */
+export type DiscardableData = "recurrence" | "review" | "reminders";
+
 /** Values a multi-value property (contexts, labels) must or must not hold. */
 export interface ValuesFilter {
   /** The task holds every one of these. */
@@ -226,6 +232,17 @@ export interface TaskRepository {
    * writes to its source block.
    */
   writeReminders(id: TaskId, reminders: Reminders): Promise<void>;
+
+  /**
+   * Discards the task's `data` when this plugin cannot read it, writing its
+   * empty value over it: no recurrence rule, a review plan with no fields, no
+   * reminders. The one write that overwrites unreadable data, made only when
+   * the user asks for it; every other write refuses. Readable data, or none,
+   * is left as it is, writing nothing. The user undoes it with one undo.
+   * Fails, writing nothing, when the block is not a task or the write fails.
+   * A mirror block's ID writes to its source block.
+   */
+  discardUnreadable(id: TaskId, data: DiscardableData): Promise<void>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

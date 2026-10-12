@@ -535,6 +535,23 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async discardUnreadable(id, data) {
+      const block = taskToWrite(id);
+      if (block.task[data].kind !== "unreadable") return;
+      // The empty value of each, as the codecs write it.
+      const empty = {
+        recurrence: { kind: "none" },
+        review: {
+          kind: "plan",
+          plan: { interval: null, lastReviewed: null, reviewOn: null },
+        },
+        reminders: { kind: "list", reminders: [] },
+      } as const;
+      write(() => {
+        block.task = { ...block.task, [data]: empty[data] };
+      });
+    },
+
     async convertToTask(id): Promise<ConvertToTaskResult> {
       const block = blocks.get(id);
       if (!block) throw new Error(`no block ${id}`);
