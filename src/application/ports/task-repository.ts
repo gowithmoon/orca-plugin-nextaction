@@ -328,7 +328,9 @@ export interface TaskRepository {
 
   /**
    * Writes one custom property value of a task, an empty value clearing it;
-   * the task's other properties are left as they are. `now` is when it is
+   * the task's other properties are left as they are. A single or multiple
+   * choice value's options missing from the property's choices are added to
+   * them in the same write (the only change to a definition, ADR 0023). `now` is when it is
    * written (a time of day is stored on that day). The user undoes it with
    * one undo. Fails, writing nothing, with `CustomPropertyChangedError` when
    * the property is no longer defined or its kind is not the value's, or

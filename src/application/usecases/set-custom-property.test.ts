@@ -9,6 +9,8 @@ function setup() {
   repository.setCustomPropertyDefinitions([
     { name: "下发人", kind: "text" },
     { name: "预算", kind: "number" },
+    { name: "来源", kind: "single", choices: ["客户", "内部"] },
+    { name: "涉及", kind: "multi", choices: ["x", "y"] },
   ]);
   repository.addTask({ id: 1, status: "todo", importance: 6 });
   const clock = createFixedClock("2026-10-12T20:00:00+08:00");
@@ -41,6 +43,53 @@ describe("set custom property", () => {
     expect((await repository.getTask(1))?.customProperties.预算).toEqual({
       kind: "number",
       value: null,
+    });
+  });
+
+  it("picks an existing option, adding none", async () => {
+    const { repository, setCustomProperty } = setup();
+
+    await setCustomProperty(1, "来源", { kind: "single", value: "客户" });
+
+    expect((await repository.getTask(1))?.customProperties.来源).toEqual({
+      kind: "single",
+      value: "客户",
+    });
+    expect(await repository.readCustomPropertyDefinitions()).toContainEqual({
+      name: "来源",
+      kind: "single",
+      choices: ["客户", "内部"],
+    });
+  });
+
+  it("adds an option typed in, in the same write", async () => {
+    const { repository, setCustomProperty } = setup();
+
+    await setCustomProperty(1, "涉及", { kind: "multi", value: ["x", "新项"] });
+
+    expect((await repository.getTask(1))?.customProperties.涉及).toEqual({
+      kind: "multi",
+      value: ["x", "新项"],
+    });
+    expect(await repository.readCustomPropertyDefinitions()).toContainEqual({
+      name: "涉及",
+      kind: "multi",
+      choices: ["x", "y", "新项"],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("clears a single and a multiple choice", async () => {
+    const { repository, setCustomProperty } = setup();
+    await setCustomProperty(1, "来源", { kind: "single", value: "客户" });
+    await setCustomProperty(1, "涉及", { kind: "multi", value: ["x"] });
+
+    await setCustomProperty(1, "来源", { kind: "single", value: null });
+    await setCustomProperty(1, "涉及", { kind: "multi", value: [] });
+
+    expect((await repository.getTask(1))?.customProperties).toMatchObject({
+      来源: { kind: "single", value: null },
+      涉及: { kind: "multi", value: [] },
     });
   });
 

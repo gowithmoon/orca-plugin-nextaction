@@ -423,6 +423,23 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const block = taskToWrite(id);
       checkCustomPropertyValue(customDefinitions, name, value);
       write(() => {
+        // Options typed in are added to the definition, as Orca's does.
+        if (value.kind === "single" || value.kind === "multi") {
+          const typed =
+            value.kind === "multi"
+              ? value.value
+              : value.value === null
+                ? []
+                : [value.value];
+          customDefinitions = customDefinitions.map((d) =>
+            d.name === name && (d.kind === "single" || d.kind === "multi")
+              ? {
+                  ...d,
+                  choices: [...new Set([...d.choices, ...typed])],
+                }
+              : d,
+          );
+        }
         block.task = {
           ...block.task,
           customProperties: { ...block.task.customProperties, [name]: value },
