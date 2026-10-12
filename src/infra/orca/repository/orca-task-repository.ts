@@ -32,6 +32,7 @@ import {
 } from "../codec/completion-history-codec";
 import {
   customPropertyDefinitions,
+  planCustomChoiceAdditions,
   planCustomPropertyWrite,
 } from "../codec/custom-property-codec";
 import {
@@ -198,13 +199,15 @@ export function createOrcaTaskRepository(
    * now (ADR 0023). Read on every call rather than kept (ADR 0007), so an
    * edit in Orca shows on the next read; one get-blocks.
    */
-  const readDefinitions = async (state: ReadyTag) => {
+  const readTagProperties = async (state: ReadyTag) => {
     const tag = (await getBlocks([state.tagBlockId])).get(state.tagBlockId);
     if (!tag) {
       throw new OrcaError(`the task tag block ${state.tagBlockId} is gone`);
     }
-    return customPropertyDefinitions(tag.properties);
+    return tag.properties;
   };
+  const readDefinitions = async (state: ReadyTag) =>
+    customPropertyDefinitions(await readTagProperties(state));
 
   /** As `currentTag`, with the custom property definitions, for reads. */
   const readingTag = async (): Promise<TaskTagContext> => {
@@ -968,20 +971,36 @@ export function createOrcaTaskRepository(
       now: Date,
     ): Promise<void> {
       const state = readyTag();
+      const tagProperties = await readTagProperties(state);
       // Checked against the definitions as they are now: a property just
       // deleted or changed in Orca fails, writing nothing.
       const item = planCustomPropertyWrite(
-        await readDefinitions(state),
+        customPropertyDefinitions(tagProperties),
         name,
         value,
         now,
       );
+      // Options typed in go into the property's choices first, or Orca
+      // stores them without showing them (multi-choices-created).
+      const choiceWrite =
+        value.kind === "single" || value.kind === "multi"
+          ? planCustomChoiceAdditions(tagProperties, name, value)
+          : undefined;
       const block = await taskBlockToWrite(id, currentTag());
       const ref = findTaskTagRef(block.refs, state.tagBlockId);
       if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
       // setRefData takes the whole reference object and changes only the
       // items passed (tag-operations, round 1 steps 05–06).
       await writeTo(block, async () => {
+        // The options first, in the same group: one undo takes back both
+        // (multi-choices-created §3–4).
+        if (choiceWrite) {
+          await invokeEditorCommand(
+            "core.editor.setProperties",
+            [state.tagBlockId],
+            [choiceWrite],
+          );
+        }
         await invokeEditorCommand("core.editor.setRefData", ref, [item]);
       });
     },

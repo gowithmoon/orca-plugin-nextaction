@@ -5,6 +5,7 @@ import { CustomPropertyChangedError } from "../../../domain/task/custom-property
 import {
   customPropertyDefinitions,
   decodeCustomPropertyValues,
+  planCustomChoiceAdditions,
   planCustomPropertyWrite,
 } from "./custom-property-codec";
 
@@ -252,6 +253,169 @@ describe("decodeCustomPropertyValues", () => {
   });
 });
 
+const choices: CustomPropertyDefinition[] = [
+  { name: "来源", kind: "single", choices: ["客户", "内部"] },
+  { name: "涉及", kind: "multi", choices: ["x", "y"] },
+];
+
+describe("decodeCustomPropertyValues of choice properties", () => {
+  it("reads a single choice as its option name, a multiple choice as option names", () => {
+    expect(
+      decodeCustomPropertyValues(
+        [
+          { name: "来源", value: "客户" },
+          { name: "涉及", value: ["x", "y"] },
+        ],
+        choices,
+      ),
+    ).toEqual({
+      来源: { kind: "single", value: "客户" },
+      涉及: { kind: "multi", value: ["x", "y"] },
+    });
+  });
+
+  it("reads a missing item and null as empty", () => {
+    const empty = {
+      来源: { kind: "single", value: null },
+      涉及: { kind: "multi", value: [] },
+    };
+    expect(decodeCustomPropertyValues([], choices)).toEqual(empty);
+    expect(
+      decodeCustomPropertyValues(
+        [
+          { name: "来源", value: null },
+          { name: "涉及", value: null },
+        ],
+        choices,
+      ),
+    ).toEqual(empty);
+  });
+
+  it("reads values of the wrong kind as empty, and drops what is not a string from a multiple choice", () => {
+    expect(
+      decodeCustomPropertyValues(
+        [
+          { name: "来源", value: ["客户"] },
+          { name: "涉及", value: ["x", 3, null, { n: "y" }, "z"] },
+        ],
+        choices,
+      ),
+    ).toEqual({
+      来源: { kind: "single", value: null },
+      涉及: { kind: "multi", value: ["x", "z"] },
+    });
+    expect(
+      decodeCustomPropertyValues([{ name: "涉及", value: "x" }], choices).涉及,
+    ).toEqual({ kind: "multi", value: [] });
+  });
+});
+
+describe("planCustomChoiceAdditions", () => {
+  // As Orca's interface adds it (custom-properties): pos null, string choices.
+  const fromInterface = {
+    name: "来源",
+    type: 6,
+    pos: null,
+    typeArgs: {
+      subType: "single",
+      choices: ["客户", "内部"],
+      defaultEnabled: true,
+      default: "客户",
+    },
+  };
+
+  it("changes nothing when every value is already an option, or for an empty value", () => {
+    const tag = onTag(fromInterface);
+    expect(
+      planCustomChoiceAdditions(tag, "来源", { kind: "single", value: "内部" }),
+    ).toBeUndefined();
+    expect(
+      planCustomChoiceAdditions(tag, "来源", { kind: "single", value: null }),
+    ).toBeUndefined();
+  });
+
+  it("appends a new option as a string after string options, keeping the whole typeArgs and a null pos", () => {
+    expect(
+      planCustomChoiceAdditions(onTag(fromInterface), "来源", {
+        kind: "single",
+        value: "合作方",
+      }),
+    ).toEqual({
+      name: "来源",
+      type: 6,
+      pos: null,
+      typeArgs: {
+        subType: "single",
+        choices: ["客户", "内部", "合作方"],
+        defaultEnabled: true,
+        default: "客户",
+      },
+    });
+  });
+
+  it("appends new options as objects after object options, keeping a position", () => {
+    const property = {
+      name: "涉及",
+      type: 6,
+      pos: 15,
+      typeArgs: { subType: "multi", choices: [{ n: "x", c: "#2196f3" }] },
+    };
+    expect(
+      planCustomChoiceAdditions(onTag(property), "涉及", {
+        kind: "multi",
+        value: ["y", "x", "z", "y"],
+      }),
+    ).toEqual({
+      name: "涉及",
+      type: 6,
+      pos: 15,
+      typeArgs: {
+        subType: "multi",
+        choices: [
+          { n: "x", c: "#2196f3" },
+          { n: "y", c: "" },
+          { n: "z", c: "" },
+        ],
+      },
+    });
+  });
+
+  it("adds objects to a property without options", () => {
+    const property = {
+      name: "涉及",
+      type: 6,
+      pos: null,
+      typeArgs: { subType: "multi" },
+    };
+    expect(
+      planCustomChoiceAdditions(onTag(property), "涉及", {
+        kind: "multi",
+        value: ["x"],
+      }),
+    ).toEqual({
+      name: "涉及",
+      type: 6,
+      pos: null,
+      typeArgs: { subType: "multi", choices: [{ n: "x", c: "" }] },
+    });
+  });
+
+  it("refuses a property that is no longer defined, or whose kind changed", () => {
+    expect(() =>
+      planCustomChoiceAdditions(onTag(), "来源", {
+        kind: "single",
+        value: "客户",
+      }),
+    ).toThrow(CustomPropertyChangedError);
+    expect(() =>
+      planCustomChoiceAdditions(onTag(fromInterface), "来源", {
+        kind: "multi",
+        value: ["客户"],
+      }),
+    ).toThrow(CustomPropertyChangedError);
+  });
+});
+
 describe("planCustomPropertyWrite", () => {
   /** 2026-10-12 20:00 in Asia/Shanghai. */
   const now = new Date("2026-10-12T12:00:00.000Z");
@@ -338,6 +502,40 @@ describe("planCustomPropertyWrite", () => {
       { name: "合同号", value: "HT-7" },
       { name: "预算", value: 0 },
       { name: "约见", type: 5, value: at },
+    ]);
+  });
+
+  it("writes a single choice as its option name, a multiple choice as option names, empty as null", () => {
+    expect([
+      planCustomPropertyWrite(
+        choices,
+        "来源",
+        { kind: "single", value: "客户" },
+        now,
+      ),
+      planCustomPropertyWrite(
+        choices,
+        "涉及",
+        { kind: "multi", value: ["x", "y"] },
+        now,
+      ),
+      planCustomPropertyWrite(
+        choices,
+        "来源",
+        { kind: "single", value: null },
+        now,
+      ),
+      planCustomPropertyWrite(
+        choices,
+        "涉及",
+        { kind: "multi", value: [] },
+        now,
+      ),
+    ]).toEqual([
+      { name: "来源", value: "客户" },
+      { name: "涉及", value: ["x", "y"] },
+      { name: "来源", value: null },
+      { name: "涉及", value: null },
     ]);
   });
 

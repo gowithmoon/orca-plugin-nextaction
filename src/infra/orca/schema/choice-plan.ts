@@ -34,17 +34,30 @@ function positionOf(property: BlockProperty): number {
  * `{ n, c: "" }` (tag-operations), appended after the existing ones in the
  * order of `values`; everything already there is kept as it is.
  */
-export function planChoiceAdditions(
-  property: BlockProperty,
+/**
+ * The choices `typeArgs` holds, and those of `values` not among them, in the
+ * order of `values`, each once. Choices are matched by name, string and
+ * `{ n, c }` alike.
+ */
+export function missingChoices(
+  typeArgs: Record<string, unknown>,
   values: readonly string[],
-): ChoicePlan {
-  const typeArgs: Record<string, unknown> = property.typeArgs ?? {};
+): { present: unknown[]; added: string[] } {
   const present: unknown[] = Array.isArray(typeArgs.choices)
     ? typeArgs.choices
     : [];
   const names = new Set(present.map(choiceName));
   // A value listed twice is added once.
   const added = [...new Set(values)].filter((value) => !names.has(value));
+  return { present, added };
+}
+
+export function planChoiceAdditions(
+  property: BlockProperty,
+  values: readonly string[],
+): ChoicePlan {
+  const typeArgs: Record<string, unknown> = property.typeArgs ?? {};
+  const { present, added } = missingChoices(typeArgs, values);
   if (added.length === 0) return { kind: "unchanged" };
   return {
     kind: "add",
