@@ -27,9 +27,14 @@ import { shownText } from "../components/format";
 import { DatePicker } from "../components/popup-controls";
 import { PopupLayer } from "../components/popup-layer";
 import { formatMoment, quickOptionName } from "../components/reminder-text";
+import {
+  type DiscardUnreadableDeps,
+  useDiscardUnreadable,
+} from "../hooks/use-discard-unreadable";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import { useNow } from "../hooks/use-now";
 import { type Notify, notifySetRemindersFailure } from "../notify";
+import { DiscardUnreadableField } from "./discard-unreadable-field";
 
 export interface ReminderPopupDeps {
   /** Writes the task's reminders (#107). */
@@ -41,6 +46,8 @@ export interface ReminderPopupDeps {
   /** The current logical day, for showing dates. */
   today: () => CalendarDate;
   notify: Notify;
+  /** Discards the task's data when it cannot be read (#106). */
+  discard: DiscardUnreadableDeps;
 }
 
 /** Opens the popup for `task`, replacing one already open. */
@@ -117,8 +124,10 @@ function ReminderPopup(props: {
   task: Task;
   deps: ReminderPopupDeps;
   onClose: () => void;
+  /** Shows the popup afresh for the task as read again. */
+  onReopen: (task: Task) => void;
 }) {
-  const { task, deps, onClose } = props;
+  const { task, deps, onClose, onReopen } = props;
   const { Button, ModalOverlay, Tooltip } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -133,6 +142,17 @@ function ReminderPopup(props: {
   const focus = React.useRef<HTMLDivElement>(null);
   const restoreFocus = React.useRef(true);
   useFocusInside(focus, restoreFocus);
+  // Discarded (#106): shown afresh with the empty value to edit, or closed
+  // when the block is no longer a task.
+  const discard = useDiscardUnreadable(
+    deps.discard,
+    task.id,
+    "reminders",
+    React.useCallback(
+      (read: Task | null) => (read ? onReopen(read) : onClose()),
+      [onReopen, onClose],
+    ),
+  );
 
   // Unreadable reminders cannot be overwritten (the use case refuses); the
   // popup says so instead of offering a save that would fail.
@@ -237,6 +257,12 @@ function ReminderPopup(props: {
                   { reason: task.reminders.reason },
                 )}
               </div>
+            )}
+            {unreadable && (
+              <DiscardUnreadableField
+                busy={discard.busy}
+                onDiscard={discard.discard}
+              />
             )}
             <div className="nextaction-recurrence-popup-field">
               <span
@@ -410,19 +436,23 @@ export function createReminderPopup(options: {
   render: (node: React.ReactNode) => void;
 }): OpenReminderPopup {
   let shown = 0;
-  return (task) => {
+  const open: OpenReminderPopup = (task) => {
     shown += 1;
     const mine = shown;
     options.render(
       <ReminderPopup
-        // Another task starts afresh.
+        // Another task, or the same one read again, starts afresh.
         key={mine}
         task={task}
         deps={options.deps}
         onClose={() => {
           if (mine === shown) options.render(null);
         }}
+        onReopen={(read) => {
+          if (mine === shown) open(read);
+        }}
       />,
     );
   };
+  return open;
 }

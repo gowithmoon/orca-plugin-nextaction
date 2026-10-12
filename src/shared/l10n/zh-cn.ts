@@ -414,6 +414,10 @@ const zhCN: Record<string, string> = {
   "Choose the date and time": "选择日期和时刻",
   "A reminder cannot be set in the past.": "不能把提醒设在过去的时刻。",
   "Clear all": "清除全部",
+  "Discard and reset": "丢弃并重置",
+  "It may have been written by a newer version of this plugin. Once discarded, this version cannot bring it back; you can undo it.":
+    "这份数据可能是更新版本的插件写的，丢弃后无法用这个版本恢复；可以撤销。",
+  "Could not discard: ${reason}": "无法丢弃：${reason}",
   "Could not save the reminders: they cannot be read (${reason}) and are kept as they are.":
     "无法保存提醒：提醒无法读取（${reason}），已原样保留。",
   "Has reminders": "有提醒",

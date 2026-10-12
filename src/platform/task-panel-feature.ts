@@ -2,6 +2,7 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { ReminderDefaultTimeSetting } from "../application/ports/reminder-default-time-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createDiscardUnreadable } from "../application/usecases/discard-unreadable";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
 import {
@@ -74,6 +75,13 @@ export function createTaskPanelFeature(deps: {
   let renderReviewPopup: (node: React.ReactNode) => void = () => {};
   // The reminder popup's root (#107), likewise.
   let renderReminderPopup: (node: React.ReactNode) => void = () => {};
+  const readTask = createReadTask({ repository });
+  // The popups' "Discard and reset" (#106): the task read again afterwards.
+  const discard = {
+    discardUnreadable: createDiscardUnreadable({ repository }),
+    readTask,
+    notify: deps.taskActions.notify,
+  };
   const clockDeps = {
     repository,
     clock: systemClock,
@@ -86,6 +94,7 @@ export function createTaskPanelFeature(deps: {
       now: () => systemClock.now(),
       today: deps.today,
       notify: deps.taskActions.notify,
+      discard,
     },
     // Into the load's root; nothing outside a load.
     render: (node) => renderReminderPopup(node),
@@ -99,12 +108,13 @@ export function createTaskPanelFeature(deps: {
       canMarkReviewed,
       today: deps.today,
       notify: deps.taskActions.notify,
+      discard,
     },
     // Into the load's root; nothing outside a load.
     render: (node) => renderReviewPopup(node),
   });
   const formDeps: TaskPanelFormDeps = {
-    readTask: createReadTask({ repository }),
+    readTask,
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),
@@ -131,6 +141,7 @@ export function createTaskPanelFeature(deps: {
         }),
         today: deps.today,
         notify: deps.taskActions.notify,
+        discard,
       },
       // Into the load's root; nothing outside a load.
       render: (node) => renderRecurrencePopup(node),

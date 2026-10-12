@@ -25,8 +25,13 @@ import { t } from "../../shared/l10n/l10n";
 import { formatDate, shownText } from "../components/format";
 import { PopupLayer } from "../components/popup-layer";
 import { basisName, unitName } from "../components/recurrence-text";
+import {
+  type DiscardUnreadableDeps,
+  useDiscardUnreadable,
+} from "../hooks/use-discard-unreadable";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import { type Notify, notifyActionFailure, notifyAdvanced } from "../notify";
+import { DiscardUnreadableField } from "./discard-unreadable-field";
 import {
   periodOf,
   placementDraftOf,
@@ -41,6 +46,8 @@ export interface RecurrencePopupDeps {
   /** The current logical day, for showing dates and the end day's picker. */
   today: () => CalendarDate;
   notify: Notify;
+  /** Discards the task's data when it cannot be read (#106). */
+  discard: DiscardUnreadableDeps;
 }
 
 /** The end conditions the popup offers (#89). */
@@ -73,8 +80,10 @@ function RecurrencePopup(props: {
   task: Task;
   deps: RecurrencePopupDeps;
   onClose: () => void;
+  /** Shows the popup afresh for the task as read again. */
+  onReopen: (task: Task) => void;
 }) {
-  const { task, deps, onClose } = props;
+  const { task, deps, onClose, onReopen } = props;
   const { Button, Input, ModalOverlay, Segmented, Switch, Tooltip } =
     orca.components;
   const idPrefix = React.useId();
@@ -108,6 +117,17 @@ function RecurrencePopup(props: {
   const input = React.useRef<HTMLInputElement>(null);
   const restoreFocus = React.useRef(true);
   useFocusInside(input, restoreFocus);
+  // Discarded (#106): shown afresh with the empty value to edit, or closed
+  // when the block is no longer a task.
+  const discard = useDiscardUnreadable(
+    deps.discard,
+    task.id,
+    "recurrence",
+    React.useCallback(
+      (read: Task | null) => (read ? onReopen(read) : onClose()),
+      [onReopen, onClose],
+    ),
+  );
 
   const typed = typedInterval(interval);
   const today = deps.today();
@@ -227,6 +247,12 @@ function RecurrencePopup(props: {
                   { reason: task.recurrence.reason },
                 )}
               </div>
+            )}
+            {unreadable && (
+              <DiscardUnreadableField
+                busy={discard.busy}
+                onDiscard={discard.discard}
+              />
             )}
             <div className="nextaction-recurrence-popup-field">
               <span
@@ -442,19 +468,23 @@ export function createRecurrencePopup(options: {
   render: (node: React.ReactNode) => void;
 }): OpenRecurrencePopup {
   let shown = 0;
-  return (task) => {
+  const open: OpenRecurrencePopup = (task) => {
     shown += 1;
     const mine = shown;
     options.render(
       <RecurrencePopup
-        // Another task starts afresh.
+        // Another task, or the same one read again, starts afresh.
         key={mine}
         task={task}
         deps={options.deps}
         onClose={() => {
           if (mine === shown) options.render(null);
         }}
+        onReopen={(read) => {
+          if (mine === shown) open(read);
+        }}
       />,
     );
   };
+  return open;
 }
