@@ -1,7 +1,8 @@
-// The reminder popup (GLOSSARY: 提醒, #107): the task's reminders in order,
-// each with its time to change and a delete button, the passed ones greyed;
-// the quick options (the due and start dates' days at the reminder default
-// time) and a custom date and time to add. Saving writes the list in one
+// The reminder popup (GLOSSARY: 提醒, #107): the quick options (the due and
+// start dates' days at the reminder default time) as toggles and a custom
+// date and time to add, then the task's reminders in order, each with its
+// time to change and a delete button, the passed ones greyed. The parts to
+// pick from stay put while the list grows below them. Saving writes the list in one
 // undo; "Clear all" removes every reminder. Moments not later than now
 // cannot be added. In Orca's ModalOverlay with the shared window look,
 // rendered into its own React root, as the review popup. Verified by hand in
@@ -221,7 +222,7 @@ function ReminderPopup(props: {
         <div
           ref={focus}
           tabIndex={-1}
-          className="nextaction-window nextaction-recurrence-popup"
+          className="nextaction-window nextaction-recurrence-popup nextaction-reminder-popup"
           role="dialog"
           aria-modal="true"
           aria-labelledby={id("title")}
@@ -264,6 +265,86 @@ function ReminderPopup(props: {
                 onDiscard={discard.discard}
               />
             )}
+            {/* The parts to pick from come first and keep their size; only the
+                list below grows, so picking several in a row never moves them. */}
+            {options.length > 0 && (
+              <div className="nextaction-recurrence-popup-field">
+                <span
+                  className="nextaction-recurrence-popup-label"
+                  id={id("quick")}
+                >
+                  {t("Quick add")}
+                </span>
+                <fieldset
+                  className="nextaction-reminder-options"
+                  aria-labelledby={id("quick")}
+                >
+                  {options.map((option) => {
+                    const added = has(draft, option.at);
+                    const name = quickOptionName(option);
+                    // A toggle: chosen again, it takes its reminder out. Its
+                    // text never changes, so the grid keeps its shape.
+                    return (
+                      <Tooltip
+                        key={`${option.from}:${option.daysBefore}`}
+                        text={formatMoment(option.at, today)}
+                      >
+                        <button
+                          type="button"
+                          className="nextaction-reminder-option"
+                          aria-pressed={added}
+                          data-chosen={added || undefined}
+                          disabled={!added && !option.selectable}
+                          aria-label={
+                            !added && !option.selectable
+                              ? t("${name} (passed)", { name })
+                              : name
+                          }
+                          onClick={() =>
+                            added ? remove(option.at) : add(option.at)
+                          }
+                        >
+                          <i
+                            className="ti ti-check nextaction-reminder-option-check"
+                            aria-hidden="true"
+                          />
+                          {name}
+                        </button>
+                      </Tooltip>
+                    );
+                  })}
+                </fieldset>
+              </div>
+            )}
+            <div className="nextaction-recurrence-popup-field">
+              <span
+                className="nextaction-recurrence-popup-label"
+                id={id("custom")}
+              >
+                {t("Custom")}
+              </span>
+              <div className="nextaction-reminder-custom">
+                <MomentButton
+                  at={custom}
+                  today={today}
+                  label={t("Choose the date and time")}
+                  onChange={setCustom}
+                />
+                <Button
+                  variant="outline"
+                  disabled={!later(custom, now) || has(draft, custom)}
+                  onClick={() => add(custom)}
+                >
+                  <i className="ti ti-plus" aria-hidden="true" />
+                  {t("Add")}
+                </Button>
+              </div>
+              {!later(custom, now) && (
+                <div className="nextaction-recurrence-popup-hint">
+                  {t("A reminder cannot be set in the past.")}
+                </div>
+              )}
+            </div>
             <div className="nextaction-recurrence-popup-field">
               <span
                 className="nextaction-recurrence-popup-label"
@@ -325,80 +406,6 @@ function ReminderPopup(props: {
                     );
                   })}
                 </ul>
-              )}
-            </div>
-            {options.length > 0 && (
-              <div className="nextaction-recurrence-popup-field">
-                <span
-                  className="nextaction-recurrence-popup-label"
-                  id={id("quick")}
-                >
-                  {t("Quick add")}
-                </span>
-                <fieldset
-                  className="nextaction-reminder-options"
-                  aria-labelledby={id("quick")}
-                >
-                  {options.map((option) => {
-                    const added = has(draft, option.at);
-                    const name = quickOptionName(option);
-                    return (
-                      <Tooltip
-                        key={`${option.from}:${option.daysBefore}`}
-                        text={formatMoment(option.at, today)}
-                      >
-                        <Button
-                          variant="outline"
-                          className="nextaction-reminder-option"
-                          disabled={!option.selectable || added}
-                          data-added={added || undefined}
-                          aria-label={
-                            added
-                              ? t("${name} (added)", { name })
-                              : !option.selectable
-                                ? t("${name} (passed)", { name })
-                                : name
-                          }
-                          onClick={() => add(option.at)}
-                        >
-                          {added && (
-                            <i className="ti ti-check" aria-hidden="true" />
-                          )}
-                          {added ? t("${name} (added)", { name }) : name}
-                        </Button>
-                      </Tooltip>
-                    );
-                  })}
-                </fieldset>
-              </div>
-            )}
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("custom")}
-              >
-                {t("Custom")}
-              </span>
-              <div className="nextaction-reminder-custom">
-                <MomentButton
-                  at={custom}
-                  today={today}
-                  label={t("Choose the date and time")}
-                  onChange={setCustom}
-                />
-                <Button
-                  variant="outline"
-                  disabled={!later(custom, now) || has(draft, custom)}
-                  onClick={() => add(custom)}
-                >
-                  <i className="ti ti-plus" aria-hidden="true" />
-                  {t("Add")}
-                </Button>
-              </div>
-              {!later(custom, now) && (
-                <div className="nextaction-recurrence-popup-hint">
-                  {t("A reminder cannot be set in the past.")}
-                </div>
               )}
             </div>
           </div>

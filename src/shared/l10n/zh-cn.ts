@@ -408,7 +408,6 @@ const zhCN: Record<string, string> = {
   "Delete reminder": "删除提醒",
   "Delete the reminder at ${moment}": "删除 ${moment} 的提醒",
   "Quick add": "快捷添加",
-  "${name} (added)": "${name}（已添加）",
   "${name} (passed)": "${name}（已过）",
   Custom: "自定义",
   "Choose the date and time": "选择日期和时刻",
