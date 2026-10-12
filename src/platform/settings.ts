@@ -1,6 +1,17 @@
 // The single place where plugin settings are defined.
+import {
+  type DayBoundary,
+  defaultDayBoundary,
+} from "../domain/time/logical-day";
 import type { PluginSettingsSchema } from "../orca.d.ts";
 import { t } from "../shared/l10n/l10n";
+
+/** Today at `time`, local: how a `time` setting holds a time of day. */
+function localTime({ hours, minutes }: DayBoundary): Date {
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
 
 export interface SettingDefinition {
   /**
@@ -30,8 +41,10 @@ export const settingsDefinition: SettingsDefinition = {
       type: "string",
     }),
   },
-  // No `defaultValue`: Orca leaves the item `undefined`, and the day boundary
-  // reads that as 5:00 (infra/settings-day-boundary.ts).
+  // 5:00 shows in the settings page and fills an item without a value
+  // (plugin-lifecycle-settings). A `time` item holds a whole `Date`; only its
+  // local hours and minutes mean anything. Anything else still reads as 5:00
+  // (infra/settings-day-boundary.ts).
   dayBoundary: {
     schema: () => ({
       label: t("Day boundary"),
@@ -39,6 +52,7 @@ export const settingsDefinition: SettingsDefinition = {
         "A day starts at this time. Usually set in the early morning.",
       ),
       type: "time",
+      defaultValue: localTime(defaultDayBoundary),
     }),
   },
   // Read through startPreviewDaysFrom: anything but a whole number from 0 to

@@ -25,7 +25,8 @@
 ### 设置
 
 - **第一次启用时，`setSettingsSchema` 之前 `settings` 为 `null`**；之后默认值立即生效（`setSettingsSchema` 返回后马上就能读到）。
-- 没有 `defaultValue` 的设置项，值是 `undefined`（`time` 类型的日界线）。插件要自己补上默认值。
+- 没有 `defaultValue` 的设置项，值是 `undefined`（`time` 类型的日界线），设置页显示为空。插件要自己补上默认值。
+- **`time` 类型可以用 `Date` 作 `defaultValue`。** 2026-10-12 实测：清掉已存的日界线后，带 `defaultValue: 本地 5:00 的 Date` 再调用 `setSettingsSchema`，`settings.dayBoundary` 立即补成这个 `Date`（`instanceof Date` 为 `true`，`getHours()` 5、`getMinutes()` 0），设置页显示 5:00。传给 `setSettingsSchema` 的对象要是普通对象：把 `orca.state.plugins[name].schema`（Valtio 代理）展开后直接传，会报 "An object could not be cloned"。
 - **设置在停用、启用和重启之后都会保留。** 之后每次 `load` 时，在调用 `setSettingsSchema` 之前就能读到上次的值。
 - **订阅 `orca.state.plugins[pluginName]` 能收到设置的变化**：每次修改都触发一次 `set settings`，整个 `settings` 对象被替换。面板里用 `Valtio.useSnapshot` 读取设置，修改后立即刷新（界面已确认）。
 - **文本设置在输入过程中会触发多次。** 把任务标签名从"NA验证插件标签"改成"NA验证插件标签-改名"，中途收到了"NA验证插件标签-"和"NA验证插件标签-改名"两次变化，间隔约 1 秒。所以每收到一次变化就去重命名任务标签是不行的：中间值也会被当成新名字，而且可能是空字符串，或者和已有别名冲突。
@@ -73,7 +74,7 @@
 
 
 **第三步：日界线设置**
-- 用 `time` 类型，读取时只取本地的小时和分钟（`getHours`、`getMinutes`），转换成 `domain/time` 里的"时分"值，不使用它的日期部分。没有值时默认 5:00。
+- 用 `time` 类型，读取时只取本地的小时和分钟（`getHours`、`getMinutes`），转换成 `domain/time` 里的"时分"值，不使用它的日期部分。`defaultValue` 设为本地 5:00 的 `Date`，设置页因此显示 5:00；读到的不是有效 `Date` 时仍按 5:00。
 
 ## 验证插件
 
