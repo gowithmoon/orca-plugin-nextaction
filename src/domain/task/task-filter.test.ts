@@ -8,6 +8,7 @@ function task(set: Partial<Task> = {}): Task {
   return {
     id: 1,
     text: "task",
+    searchText: "",
     status: "todo",
     importance: 4,
     urgency: 4,

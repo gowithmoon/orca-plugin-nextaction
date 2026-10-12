@@ -1,7 +1,8 @@
 // Use case: the tasks the My Day view offers to add (#83, GLOSSARY: 我的一天):
 // every task not in today's My Day, done ones included (not ones whose
-// entries cannot be read: they cannot be added), with its text for
-// searching. The text is matched in `ui`, as for the dependency candidates.
+// entries cannot be read: they cannot be added), with its text and search
+// text for searching. They are matched in `ui` with `matchesSearch` (#112),
+// as for the dependency candidates.
 import { todayEntry } from "../../domain/task/my-day";
 import type { TaskId } from "../../domain/task/task";
 import type { Clock } from "../ports/clock";
@@ -13,6 +14,8 @@ export interface MyDayCandidate {
   readonly id: TaskId;
   /** As the notes hold it; may be empty. */
   readonly text: string;
+  /** The task's search text (`Task.searchText`), for `matchesSearch`. */
+  readonly searchText: string;
 }
 
 /**
@@ -38,6 +41,10 @@ export function createReadMyDayCandidates(deps: {
         if (item.myDay.kind !== "readable") return false;
         return todayEntry(item.myDay.entries, now, boundary) === undefined;
       })
-      .map((item) => ({ id: item.task.id, text: item.task.text }));
+      .map((item) => ({
+        id: item.task.id,
+        text: item.task.text,
+        searchText: item.task.searchText,
+      }));
   };
 }

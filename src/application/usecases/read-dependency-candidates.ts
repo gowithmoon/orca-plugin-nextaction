@@ -16,6 +16,11 @@ export interface DependencyCandidate {
   /** As the notes hold it; may be empty. */
   readonly text: string;
   /**
+   * The task's search text (`Task.searchText`): `ui` matches the candidates
+   * with `matchesSearch` (#112).
+   */
+  readonly searchText: string;
+  /**
    * Why depending on it would make a dependency cycle, so it cannot be
    * picked; `null` when it would not.
    */
@@ -47,6 +52,7 @@ export function createReadDependencyCandidates(deps: {
       .map((task) => ({
         id: task.id,
         text: task.text,
+        searchText: task.searchText,
         cycle: cycles.get(task.id) ?? null,
         recurring: recurs(task.recurrence),
       }));

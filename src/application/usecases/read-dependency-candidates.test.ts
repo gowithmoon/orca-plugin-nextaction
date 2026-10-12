@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
+import { matchesSearch } from "../../domain/task/task-search";
 import { createReadDependencyCandidates } from "./read-dependency-candidates";
 
 describe("read dependency candidates", () => {
@@ -19,8 +20,20 @@ describe("read dependency candidates", () => {
     });
 
     expect(await readDependencyCandidates(1)).toEqual([
-      { id: 2, text: "Call the plumber", cycle: null, recurring: false },
-      { id: 4, text: "Clear the cupboard", cycle: null, recurring: false },
+      {
+        id: 2,
+        text: "Call the plumber",
+        searchText: "",
+        cycle: null,
+        recurring: false,
+      },
+      {
+        id: 4,
+        text: "Clear the cupboard",
+        searchText: "",
+        cycle: null,
+        recurring: false,
+      },
     ]);
   });
 
@@ -34,10 +47,12 @@ describe("read dependency candidates", () => {
       repository,
     });
 
-    expect(await readDependencyCandidates(1)).toEqual([
-      { id: 2, text: "Pack", cycle: "below", recurring: false },
-      { id: 3, text: "Book a van", cycle: "waits", recurring: false },
-      { id: 4, text: "Tell the bank", cycle: null, recurring: false },
+    const candidates = await readDependencyCandidates(1);
+
+    expect(candidates.map((c) => [c.id, c.cycle])).toEqual([
+      [2, "below"],
+      [3, "waits"],
+      [4, null],
     ]);
   });
 
@@ -63,5 +78,26 @@ describe("read dependency candidates", () => {
       [2, true],
       [3, false],
     ]);
+  });
+
+  it("offers each candidate with its search text, so a search finds the values in it as well as the text", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, text: "Send the report" });
+    repository.addTask({
+      id: 2,
+      text: "Draft the report",
+      searchText: "Draft the report #Task,Todo,Zhang San\n",
+    });
+    repository.addTask({ id: 3, text: "Ask Zhang for the report" });
+    repository.addTask({ id: 4, text: "Book a van" });
+    const readDependencyCandidates = createReadDependencyCandidates({
+      repository,
+    });
+
+    const found = (await readDependencyCandidates(1)).filter((candidate) =>
+      matchesSearch("zhang report", candidate),
+    );
+
+    expect(found.map((candidate) => candidate.id)).toEqual([2, 3]);
   });
 });
