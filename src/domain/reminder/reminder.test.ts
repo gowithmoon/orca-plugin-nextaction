@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { TaskStatus } from "../task/task";
 import {
+  dueReminders,
+  nextWakeUp,
   planSetReminders,
+  type ReminderRead,
   quickReminderOptions,
   reminderDefaultTimeFrom,
   showsReminderBell,
@@ -207,5 +211,151 @@ describe("the reminder default time setting", () => {
     ["an invalid Date", new Date("not a time")],
   ])("reads %s as 9:00", (_, value) => {
     expect(reminderDefaultTimeFrom(value)).toEqual({ hours: 9, minutes: 0 });
+  });
+});
+
+describe("due reminders (GLOSSARY: 提醒, 错过的提醒)", () => {
+  const list = (...moments: Date[]) =>
+    ({ kind: "list", reminders: moments }) as const;
+  const task = (
+    id: number,
+    reminders: ReminderRead,
+    status: TaskStatus = "todo",
+  ) => ({ id, status, reminders });
+
+  it("lists the reminders after the start, not at it, up to and at now", () => {
+    expect(
+      dueReminders(
+        [
+          task(
+            1,
+            list(
+              at("2026-10-12T09:00:00"),
+              at("2026-10-12T09:30:00"),
+              at("2026-10-12T10:00:00"),
+              at("2026-10-12T10:00:01"),
+            ),
+          ),
+        ],
+        at("2026-10-12T09:00:00"),
+        at("2026-10-12T10:00:00"),
+      ),
+    ).toEqual([
+      { taskId: 1, at: at("2026-10-12T09:30:00") },
+      { taskId: 1, at: at("2026-10-12T10:00:00") },
+    ]);
+  });
+
+  it("lists each task's reminder at the same moment once each, by moment", () => {
+    expect(
+      dueReminders(
+        [
+          task(1, list(at("2026-10-12T09:40:00"))),
+          task(2, list(at("2026-10-12T09:20:00"), at("2026-10-12T09:40:00"))),
+        ],
+        at("2026-10-12T09:00:00"),
+        at("2026-10-12T10:00:00"),
+      ),
+    ).toEqual([
+      { taskId: 2, at: at("2026-10-12T09:20:00") },
+      { taskId: 1, at: at("2026-10-12T09:40:00") },
+      { taskId: 2, at: at("2026-10-12T09:40:00") },
+    ]);
+  });
+
+  it("skips done tasks and reminders it cannot read", () => {
+    expect(
+      dueReminders(
+        [
+          task(1, list(at("2026-10-12T09:30:00")), "done"),
+          task(2, { kind: "unreadable", reason: "unknown version 2" }),
+          task(3, { kind: "none" }),
+          task(4, list(at("2026-10-12T09:30:00")), "waiting"),
+        ],
+        at("2026-10-12T09:00:00"),
+        at("2026-10-12T10:00:00"),
+      ),
+    ).toEqual([{ taskId: 4, at: at("2026-10-12T09:30:00") }]);
+  });
+
+  it("lists every reminder missed over a long time, one by one", () => {
+    expect(
+      dueReminders(
+        [
+          task(
+            1,
+            list(
+              at("2026-09-01T09:00:00"),
+              at("2026-09-20T09:00:00"),
+              at("2026-10-12T08:00:00"),
+            ),
+          ),
+          task(2, list(at("2026-10-01T09:00:00"))),
+        ],
+        at("2026-08-31T23:00:00"),
+        at("2026-10-12T10:00:00"),
+      ),
+    ).toEqual([
+      { taskId: 1, at: at("2026-09-01T09:00:00") },
+      { taskId: 1, at: at("2026-09-20T09:00:00") },
+      { taskId: 2, at: at("2026-10-01T09:00:00") },
+      { taskId: 1, at: at("2026-10-12T08:00:00") },
+    ]);
+  });
+});
+
+describe("the next wake-up", () => {
+  const list = (...moments: Date[]) =>
+    ({ kind: "list", reminders: moments }) as const;
+  const now = at("2026-10-12T10:00:00");
+
+  it("is the earliest reminder later than now among tasks not done", () => {
+    expect(
+      nextWakeUp(
+        [
+          { id: 1, status: "todo", reminders: list(at("2026-10-14T09:00:00")) },
+          {
+            id: 2,
+            status: "waiting",
+            reminders: list(
+              at("2026-10-11T09:00:00"),
+              now,
+              at("2026-10-13T09:00:00"),
+            ),
+          },
+        ],
+        now,
+      ),
+    ).toEqual(at("2026-10-13T09:00:00"));
+  });
+
+  it("does not count done tasks", () => {
+    expect(
+      nextWakeUp(
+        [
+          { id: 1, status: "done", reminders: list(at("2026-10-13T09:00:00")) },
+          { id: 2, status: "todo", reminders: list(at("2026-10-14T09:00:00")) },
+        ],
+        now,
+      ),
+    ).toEqual(at("2026-10-14T09:00:00"));
+  });
+
+  it("is none when no reminder is to come", () => {
+    expect(
+      nextWakeUp(
+        [
+          { id: 1, status: "todo", reminders: list(at("2026-10-11T09:00:00")) },
+          { id: 2, status: "done", reminders: list(at("2026-10-13T09:00:00")) },
+          {
+            id: 3,
+            status: "todo",
+            reminders: { kind: "unreadable", reason: "damaged" },
+          },
+          { id: 4, status: "todo", reminders: { kind: "none" } },
+        ],
+        now,
+      ),
+    ).toBeNull();
   });
 });
