@@ -403,6 +403,11 @@ export const componentCss = `
   opacity: 0.55;
 }
 
+/* A reminder still to come (#107): only the bell, muted, as the recurrence icon. */
+.nextaction-property-reminder {
+  color: var(--orca-color-text-2);
+}
+
 /* A recurring task not advanced (GLOSSARY: 未自动重复, #93): a warning, like an unknown status. */
 .nextaction-property-not-advanced {
   color: var(--orca-color-text-yellow);

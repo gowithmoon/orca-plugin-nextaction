@@ -1,4 +1,5 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
+import type { ReminderDefaultTimeSetting } from "../application/ports/reminder-default-time-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createDropTask } from "../application/usecases/drop-task";
@@ -16,6 +17,7 @@ import { createRepairNotAdvanced } from "../application/usecases/repair-not-adva
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
 import { createSetRecurrence } from "../application/usecases/set-recurrence";
+import { createSetReminders } from "../application/usecases/set-reminders";
 import { createSetReviewPlan } from "../application/usecases/set-review-plan";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import type { CalendarDate } from "../domain/task/task";
@@ -23,6 +25,7 @@ import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import { createRecurrencePopup } from "../ui/task-panel/recurrence-popup";
+import { createReminderPopup } from "../ui/task-panel/reminder-popup";
 import {
   createReviewPopup,
   type OpenReviewPopup,
@@ -52,6 +55,8 @@ export function createTaskPanelFeature(deps: {
   dayBoundary: DayBoundarySetting;
   /** How far ahead a start lets a task in, for why it is not a next action. */
   startPreviewDays: StartPreviewDaysSetting;
+  /** The time of day the reminder popup's quick options fall at (#107). */
+  reminderDefaultTime: ReminderDefaultTimeSetting;
   /** The plugin panel's status change, "open in notes" and notices (#39). */
   taskActions: TaskActionsDeps;
 }): {
@@ -67,11 +72,24 @@ export function createTaskPanelFeature(deps: {
   let renderRecurrencePopup: (node: React.ReactNode) => void = () => {};
   // The review popup's root (#103), likewise.
   let renderReviewPopup: (node: React.ReactNode) => void = () => {};
+  // The reminder popup's root (#107), likewise.
+  let renderReminderPopup: (node: React.ReactNode) => void = () => {};
   const clockDeps = {
     repository,
     clock: systemClock,
     dayBoundary: deps.dayBoundary,
   };
+  const openReminderPopup = createReminderPopup({
+    deps: {
+      setReminders: createSetReminders({ repository, clock: systemClock }),
+      reminderDefaultTime: deps.reminderDefaultTime,
+      now: () => systemClock.now(),
+      today: deps.today,
+      notify: deps.taskActions.notify,
+    },
+    // Into the load's root; nothing outside a load.
+    render: (node) => renderReminderPopup(node),
+  });
   const markReviewed = createMarkReviewed(clockDeps);
   const canMarkReviewed = createCanMarkReviewed();
   const openReviewPopup = createReviewPopup({
@@ -123,6 +141,8 @@ export function createTaskPanelFeature(deps: {
       dayBoundary: deps.dayBoundary,
     }),
     openReviewPopup,
+    openReminderPopup,
+    now: () => systemClock.now(),
     markReviewed,
     canMarkReviewed,
     actions: deps.taskActions,
@@ -147,6 +167,12 @@ export function createTaskPanelFeature(deps: {
     renderReviewPopup = reviewRoot.render;
     registry.add(`${pluginName}.reviewPopupOpen`, () => {
       renderReviewPopup = () => {};
+    });
+    // The reminder popup's root, also before the task panel's (#107).
+    const reminderRoot = registry.reactRoot("reminderPopup", null);
+    renderReminderPopup = reminderRoot.render;
+    registry.add(`${pluginName}.reminderPopupOpen`, () => {
+      renderReminderPopup = () => {};
     });
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;

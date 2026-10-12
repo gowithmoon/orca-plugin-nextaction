@@ -49,6 +49,7 @@ function task(
     dependencyDelay: setup.dependencyDelay ?? 0,
     recurrence: { kind: "none" },
     review: { kind: "none" },
+    reminders: { kind: "none" },
     anomalies: [],
   };
   return {

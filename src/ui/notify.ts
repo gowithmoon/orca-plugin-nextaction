@@ -13,7 +13,9 @@ import {
 import { NotMarkableError } from "../application/usecases/mark-reviewed";
 import { MyDayUnreadableError } from "../application/usecases/my-day-unreadable-error";
 import { RecurrenceUnreadableError } from "../application/usecases/recurrence-unreadable-error";
+import { RemindersUnreadableError } from "../application/usecases/reminders-unreadable-error";
 import { ReviewUnreadableError } from "../application/usecases/review-unreadable-error";
+import { PastReminderError } from "../application/usecases/set-reminders";
 import type { CalendarDate, TaskId, TaskStatus } from "../domain/task/task";
 import { describeError } from "../shared/describe-error";
 import { t } from "../shared/l10n/l10n";
@@ -234,6 +236,34 @@ export function notifySetReviewFailure(notify: Notify, error: unknown): void {
         { reason },
       ),
     (reason) => t("Could not save the change: ${reason}", { reason }),
+  );
+}
+
+/**
+ * Tells the user why saving a task's reminders (#107) failed: a reminder in
+ * the past, reminders that cannot be read, or anything else as
+ * `notifyActionFailure` does.
+ */
+export function notifySetRemindersFailure(
+  notify: Notify,
+  error: unknown,
+): void {
+  if (error instanceof PastReminderError) {
+    notify("warn", t("A reminder cannot be set in the past."));
+    return;
+  }
+  if (error instanceof RemindersUnreadableError) {
+    notify(
+      "error",
+      t(
+        "Could not save the reminders: they cannot be read (${reason}) and are kept as they are.",
+        { reason: error.reason },
+      ),
+    );
+    return;
+  }
+  notifyActionFailure(notify, error, (reason) =>
+    t("Could not save the change: ${reason}", { reason }),
   );
 }
 

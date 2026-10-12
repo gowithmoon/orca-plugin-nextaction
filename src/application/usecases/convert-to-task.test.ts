@@ -42,6 +42,7 @@ describe("convert to task", () => {
       created: new Date("2026-03-02T08:00:00.000Z"),
       recurrence: { kind: "none" },
       review: { kind: "none" },
+      reminders: { kind: "none" },
       anomalies: [],
     });
   });

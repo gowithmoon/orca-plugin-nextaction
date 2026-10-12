@@ -1,6 +1,7 @@
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
 import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
+import type { Reminders } from "../../domain/reminder/reminder";
 import type { ReviewPlan } from "../../domain/review/review";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
@@ -209,6 +210,16 @@ export interface TaskRepository {
    * ID writes to its source block.
    */
   writeReview(id: TaskId, plan: ReviewPlan): Promise<void>;
+
+  /**
+   * Writes the task's reminders (GLOSSARY: 提醒), replacing what it holds,
+   * ascending and each once; none writes an empty list, the property kept.
+   * The task's other properties are left as they are. The user undoes it
+   * with one undo. Fails, writing nothing, when the block is not a task, its
+   * reminders read as unreadable, or the write fails. A mirror block's ID
+   * writes to its source block.
+   */
+  writeReminders(id: TaskId, reminders: Reminders): Promise<void>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

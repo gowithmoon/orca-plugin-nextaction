@@ -15,6 +15,7 @@ import {
   type PropertyKey,
 } from "./names";
 import { recurrenceOf } from "./recurrence-codec";
+import { remindersOf } from "./reminders-codec";
 import { reviewOf } from "./review-codec";
 
 /** What the codec needs to know about the task tag. */
@@ -149,6 +150,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       created: createdValue(block.id, block.created),
       recurrence: recurrenceOf(block),
       review: reviewOf(block),
+      reminders: remindersOf(block),
     }),
   };
 }
