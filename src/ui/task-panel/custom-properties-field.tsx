@@ -22,22 +22,9 @@ import { BlockRefPropertyField } from "./block-ref-property-field";
 import { ChoicesField } from "./choices-field";
 import { DateField, Field, NoteField } from "./task-panel-fields";
 
-/** The kinds this group shows so far. */
-const shownKinds = new Set<CustomPropertyValue["kind"]>([
-  "text",
-  "number",
-  "boolean",
-  "date",
-  "datetime",
-  "time",
-  "single",
-  "multi",
-  "blockRefs",
-]);
-
 /**
  * The custom properties group, after the built-in fields; nothing when the
- * task tag defines none of the kinds shown.
+ * task tag defines none.
  */
 export function CustomPropertiesField(props: {
   idPrefix: string;
@@ -49,7 +36,7 @@ export function CustomPropertiesField(props: {
   /** For block reference properties (#115). */
   blockRefs?: BlockRefsDeps;
 }) {
-  const shown = props.properties.filter((p) => shownKinds.has(p.value.kind));
+  const shown = props.properties;
   if (shown.length === 0) return null;
   const headingId = `${props.idPrefix}-custom-properties`;
   return (
@@ -123,7 +110,7 @@ function CustomPropertyControl(props: {
         <NumberField
           labelId={props.labelId}
           value={value.value}
-          onSave={(number) => void onChange({ kind: "number", value: number })}
+          onSave={(number) => onChange({ kind: "number", value: number })}
         />
       );
     case "boolean":
@@ -290,7 +277,8 @@ function typedNumber(text: string): number | null | undefined {
 function NumberField(props: {
   labelId: string;
   value: number | null;
-  onSave: (value: number | null) => void;
+  /** Resolves to whether the write succeeded. */
+  onSave: (value: number | null) => Promise<boolean>;
 }) {
   const { Input } = orca.components;
   const fromNotes = props.value === null ? "" : String(props.value);
@@ -301,13 +289,17 @@ function NumberField(props: {
     if (!focused.current) setDraft(fromNotes);
   }, [fromNotes]);
 
-  const save = () => {
+  const latestFromNotes = React.useRef(fromNotes);
+  latestFromNotes.current = fromNotes;
+  const save = async () => {
     const number = typedNumber(draft);
     if (number === undefined || number === props.value) {
       setDraft(fromNotes);
       return;
     }
-    props.onSave(number);
+    // Not saved: show what the notes hold, as the note does, so the number
+    // typed is not taken for saved.
+    if (!(await props.onSave(number))) setDraft(latestFromNotes.current);
   };
 
   return (
@@ -325,12 +317,12 @@ function NumberField(props: {
       }}
       onBlur={() => {
         focused.current = false;
-        save();
+        void save();
       }}
       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.nativeEvent.isComposing || e.key !== "Enter") return;
         e.preventDefault();
-        save();
+        void save();
       }}
     />
   );

@@ -91,4 +91,32 @@ describe("read task for the task panel", () => {
       },
     ]);
   });
+
+  it("shows the rows and their values from one read of the definitions, even when Orca changes them meanwhile", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.setCustomPropertyDefinitions([{ name: "下发人", kind: "text" }]);
+    repository.addTask({
+      id: 40,
+      customProperties: { 下发人: { kind: "text", value: "张三" } },
+    });
+    // The user renames the property in Orca right after the task is read.
+    const renamedMeanwhile = {
+      ...repository,
+      async readCustomPropertyDefinitions() {
+        return [{ name: "交办人", kind: "text" as const }];
+      },
+    };
+    const readTaskForPanel = createReadTaskForPanel({
+      repository: renamedMeanwhile,
+    });
+
+    const read = await readTaskForPanel(40);
+
+    expect(read?.customProperties).toEqual([
+      {
+        definition: { name: "下发人", kind: "text" },
+        value: { kind: "text", value: "张三" },
+      },
+    ]);
+  });
 });

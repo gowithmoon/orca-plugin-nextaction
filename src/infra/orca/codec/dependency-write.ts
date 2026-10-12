@@ -4,11 +4,9 @@
 // reference created first, with `createRef(task, target, 3)`. Leaving a
 // reference ID out of the value written removes that dependency, and Orca
 // deletes the reference (A4, A5). Pure; the repository runs the plan.
+import { RefType } from "../ref-type";
 import { findPropertyKey } from "./names";
 import { findTaskTagRef, type RawBlock } from "./task-codec";
-
-/** Orca `RefType.RefData`: what a block reference property's value points through. */
-const refDataRef = 3;
 
 /** One entry of the dependencies value to write, in order. */
 export type DependencyWriteItem =
@@ -64,7 +62,7 @@ export function planBlockRefWrite(
   const items: DependencyWriteItem[] = [];
   for (const target of new Set(targets)) {
     const ref = block.refs.find(
-      (r) => r.type === refDataRef && r.to === target && current.has(r.id),
+      (r) => r.type === RefType.RefData && r.to === target && current.has(r.id),
     );
     items.push(
       ref ? { kind: "existing", refId: ref.id } : { kind: "new", target },
@@ -88,7 +86,7 @@ export function dependentsOf(block: {
 }): Map<number, Set<number>> {
   const dependents = new Map<number, Set<number>>();
   for (const ref of block.backRefs ?? []) {
-    if (ref.type !== refDataRef || ref.from === block.id) continue;
+    if (ref.type !== RefType.RefData || ref.from === block.id) continue;
     const refIds = dependents.get(ref.from) ?? new Set<number>();
     refIds.add(ref.id);
     dependents.set(ref.from, refIds);
