@@ -519,3 +519,107 @@ describe("change status: the descendant tasks of a recurring task", () => {
     expect((await repository.getTask(79))?.status).toBe("done");
   });
 });
+
+describe("change status: reminders (GLOSSARY: 提醒)", () => {
+  const reminders = (...moments: string[]) =>
+    ({
+      kind: "list",
+      reminders: moments.map((moment) => new Date(moment)),
+    }) as const;
+
+  it("completing a task clears its reminders, in the same write as the completion", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 90,
+      status: "todo",
+      reminders: reminders("2026-10-09T09:00:00+08:00"),
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(90, "done");
+
+    expect((await repository.getTask(90))?.reminders).toEqual(reminders());
+    expect(await repository.readCompletionHistory(90)).toEqual({
+      kind: "readable",
+      history: [nineOClockOct8],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  const weekly = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+
+  it("completing a task whose rule is paused clears its reminders", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 92,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: { kind: "rule", rule: { ...weekly, paused: true } },
+      reminders: reminders("2026-10-05T09:00:00+08:00"),
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(92, "done");
+
+    expect((await repository.getTask(92))?.reminders).toEqual(reminders());
+  });
+
+  it("completing the last occurrence clears the reminders, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 93,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: {
+        kind: "rule",
+        rule: { ...weekly, end: { kind: "count", total: 3, remaining: 1 } },
+      },
+      reminders: reminders("2026-10-05T09:00:00+08:00"),
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(93, "done")).toEqual({ kind: "ended" });
+
+    expect((await repository.getTask(93))?.reminders).toEqual(reminders());
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("completing a recurring task moves its reminders with its dates, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 94,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: { kind: "rule", rule: weekly },
+      reminders: reminders(
+        "2026-10-02T09:00:00+08:00",
+        "2026-10-05T18:30:00+08:00",
+      ),
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(94, "done");
+
+    expect((await repository.getTask(94))?.reminders).toEqual(
+      reminders("2026-10-09T09:00:00+08:00", "2026-10-12T18:30:00+08:00"),
+    );
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("completing a task whose reminders cannot be read completes it, the reminders kept as they are", async () => {
+    const repository = createInMemoryTaskRepository();
+    const unreadable = { kind: "unreadable", reason: "unknown version 2" };
+    repository.addTask({ id: 91, status: "todo", reminders: unreadable });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(91, "done")).toEqual({ kind: "changed" });
+
+    expect(await repository.getTask(91)).toMatchObject({
+      status: "done",
+      reminders: unreadable,
+    });
+  });
+});
