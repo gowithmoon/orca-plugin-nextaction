@@ -1,6 +1,7 @@
 // How a recurrence rule reads in the plugin (GLOSSARY: 重复规则, 重复方式):
 // "每 2 周 周一、周三 · 按固定日程", "每月最后一个周五 · 按完成日期". Display only.
 import type {
+  DayOfMonth,
   DayOfWeek,
   MonthPlacement,
   RecurrenceBasis,
@@ -78,21 +79,25 @@ export function weekdayOfMonthText(
   }
 }
 
-/** "15 日", "最后一天", "第二个周二". */
+/** "15 日", "最后一天". */
+export function dayOfMonthName(day: DayOfMonth): string {
+  return day === "last"
+    ? t("the last day")
+    : t("day ${day}", { day: String(day) });
+}
+
+/** "1 日、15 日、最后一天", "第二个周二、第四个周二". */
 function monthPlacementText(placement: MonthPlacement): string {
-  switch (placement.kind) {
-    case "dayOfMonth":
-      return t("day ${day}", { day: String(placement.day) });
-    case "lastDayOfMonth":
-      return t("the last day");
-    case "weekdayOfMonth":
-      return weekdayOfMonthText(placement.ordinal, placement.weekday);
-  }
+  return placement.kind === "daysOfMonth"
+    ? placement.days.map(dayOfMonthName).join(t(", "))
+    : placement.weekdays
+        .map((w) => weekdayOfMonthText(w.ordinal, w.weekday))
+        .join(t(", "));
 }
 
 /**
- * "每 2 周 周一、周三", "每月最后一天", "每年 3月15日", "每天": the period with its
- * placement (#88).
+ * "每 2 周 周一、周三", "每月 1 日、最后一天", "每月第二个周二、第四个周二",
+ * "每年 3/1、9/1", "每天": the period with its placement (#88).
  */
 export function periodText(period: RecurrencePeriod): string {
   const every = everyText(period);
@@ -115,10 +120,14 @@ export function periodText(period: RecurrencePeriod): string {
       return period.placement
         ? t("${every} on ${placement}", {
             every,
-            placement: t("${month}/${day}", {
-              month: String(period.placement.month),
-              day: String(period.placement.day),
-            }),
+            placement: period.placement.days
+              .map(({ month, day }) =>
+                t("${month}/${day}", {
+                  month: String(month),
+                  day: String(day),
+                }),
+              )
+              .join(t(", ")),
           })
         : every;
     default:

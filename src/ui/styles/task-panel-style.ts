@@ -680,6 +680,36 @@ button.nextaction-dependency-task:hover {
   font-weight: var(--orca-fontweight-lg);
 }
 
+/* The days of a monthly placement: 1 to 31 in rows of seven, then the last day. */
+.nextaction-recurrence-popup-month-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* After the 31st, the rest of the last row. */
+.nextaction-recurrence-popup-month-days > [data-last] {
+  grid-column: span 4;
+}
+
+/* Rows of a monthly or yearly placement, each with its remove button. */
+.nextaction-recurrence-popup-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-recurrence-popup-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
 /* One dropdown of a placement (a day of the month, a month, an ordinal). */
 .nextaction-recurrence-popup-choice {
   margin: 0;

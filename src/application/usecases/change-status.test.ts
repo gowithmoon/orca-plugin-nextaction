@@ -393,7 +393,10 @@ describe("change status: recurring tasks", () => {
           period: {
             interval: 1,
             unit: "month",
-            placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+            placement: {
+              kind: "weekdaysOfMonth",
+              weekdays: [{ ordinal: "last", weekday: 5 }],
+            },
           },
           basis: "completion",
         },

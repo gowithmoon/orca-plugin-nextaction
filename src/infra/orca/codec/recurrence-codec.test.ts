@@ -204,39 +204,40 @@ describe("placements and weekdays (#88)", () => {
       },
     ],
     [
-      "a day of the month",
+      "some days of the month",
       {
         interval: 1,
         unit: "month",
-        placement: { kind: "dayOfMonth", day: 31 },
+        placement: { kind: "daysOfMonth", days: [1, 15, 31, "last"] },
       },
     ],
     [
-      "the last day of the month",
-      { interval: 1, unit: "month", placement: { kind: "lastDayOfMonth" } },
-    ],
-    [
-      "the second Tuesday of the month",
+      "the second and fourth Tuesday and the last Friday of the month",
       {
         interval: 1,
         unit: "month",
-        placement: { kind: "weekdayOfMonth", ordinal: 2, weekday: 2 },
+        placement: {
+          kind: "weekdaysOfMonth",
+          weekdays: [
+            { ordinal: 2, weekday: 2 },
+            { ordinal: 4, weekday: 2 },
+            { ordinal: "last", weekday: 5 },
+          ],
+        },
       },
     ],
     [
-      "the last Friday of the month",
-      {
-        interval: 1,
-        unit: "month",
-        placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
-      },
-    ],
-    [
-      "a month and day of the year",
+      "some months and days of the year",
       {
         interval: 1,
         unit: "year",
-        placement: { kind: "dayOfYear", month: 3, day: 15 },
+        placement: {
+          kind: "daysOfYear",
+          days: [
+            { month: 2, day: 29 },
+            { month: 3, day: 15 },
+          ],
+        },
       },
     ],
     ["every N weekdays", { interval: 3, unit: "weekday" }],
@@ -247,6 +248,120 @@ describe("placements and weekdays (#88)", () => {
     expect(readRecurrence(taskBlockWith(plan.property))).toEqual({
       kind: "rule",
       rule,
+    });
+  });
+
+  it.each([
+    [
+      "a day of the month",
+      { kind: "dayOfMonth", day: 31 },
+      "month",
+      { kind: "daysOfMonth", days: [31] },
+    ],
+    [
+      "the last day of the month",
+      { kind: "lastDayOfMonth" },
+      "month",
+      { kind: "daysOfMonth", days: ["last"] },
+    ],
+    [
+      "a day of the week of the month",
+      { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+      "month",
+      {
+        kind: "weekdaysOfMonth",
+        weekdays: [{ ordinal: "last", weekday: 5 }],
+      },
+    ],
+    [
+      "a month and day of the year",
+      { kind: "dayOfYear", month: 3, day: 15 },
+      "year",
+      { kind: "daysOfYear", days: [{ month: 3, day: 15 }] },
+    ],
+  ] as const)(
+    "reads a single placement written before several could be chosen: %s",
+    (_, stored, unit, placement) => {
+      const block = taskBlockWith({
+        name: "nextaction.recurrence",
+        value: {
+          v: 1,
+          rule: {
+            period: { interval: 1, unit, placement: stored },
+            basis: "schedule",
+          },
+        },
+      });
+      expect(readRecurrence(block)).toEqual({
+        kind: "rule",
+        rule: { period: { interval: 1, unit, placement }, basis: "schedule" },
+      });
+    },
+  );
+
+  it("reads several days in order and without repeats, whatever order they were stored in", () => {
+    const block = (unit: string, placement: unknown) =>
+      taskBlockWith({
+        name: "nextaction.recurrence",
+        value: {
+          v: 1,
+          rule: { period: { interval: 1, unit, placement }, basis: "schedule" },
+        },
+      });
+    expect(
+      readRecurrence(
+        block("month", { kind: "daysOfMonth", days: ["last", 15, 1, 15] }),
+      ),
+    ).toMatchObject({
+      rule: { period: { placement: { days: [1, 15, "last"] } } },
+    });
+    expect(
+      readRecurrence(
+        block("month", {
+          kind: "weekdaysOfMonth",
+          weekdays: [
+            { ordinal: "last", weekday: 1 },
+            { ordinal: 4, weekday: 2 },
+            { ordinal: 2, weekday: 2 },
+            { ordinal: 4, weekday: 2 },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      rule: {
+        period: {
+          placement: {
+            weekdays: [
+              { ordinal: 2, weekday: 2 },
+              { ordinal: 4, weekday: 2 },
+              { ordinal: "last", weekday: 1 },
+            ],
+          },
+        },
+      },
+    });
+    expect(
+      readRecurrence(
+        block("year", {
+          kind: "daysOfYear",
+          days: [
+            { month: 9, day: 1 },
+            { month: 3, day: 1 },
+            { month: 9, day: 1 },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      rule: {
+        period: {
+          placement: {
+            days: [
+              { month: 3, day: 1 },
+              { month: 9, day: 1 },
+            ],
+          },
+        },
+      },
     });
   });
 
@@ -281,6 +396,40 @@ describe("placements and weekdays (#88)", () => {
     ],
     ["February 30", "year", { kind: "dayOfYear", month: 2, day: 30 }],
     ["month 13", "year", { kind: "dayOfYear", month: 13, day: 1 }],
+    ["a month with no days", "month", { kind: "daysOfMonth", days: [] }],
+    [
+      "a month with day 32 among others",
+      "month",
+      { kind: "daysOfMonth", days: [1, 32] },
+    ],
+    [
+      "a month with no days of the week",
+      "month",
+      { kind: "weekdaysOfMonth", weekdays: [] },
+    ],
+    [
+      "a month with a sixth Tuesday among others",
+      "month",
+      {
+        kind: "weekdaysOfMonth",
+        weekdays: [
+          { ordinal: 2, weekday: 2 },
+          { ordinal: 6, weekday: 2 },
+        ],
+      },
+    ],
+    ["a year with no days", "year", { kind: "daysOfYear", days: [] }],
+    [
+      "a year with February 30 among others",
+      "year",
+      {
+        kind: "daysOfYear",
+        days: [
+          { month: 3, day: 1 },
+          { month: 2, day: 30 },
+        ],
+      },
+    ],
     ["a month's placement on a week", "week", { kind: "lastDayOfMonth" }],
     ["a placement on days", "day", { kind: "dayOfMonth", day: 1 }],
     ["a placement on weekdays", "weekday", { kind: "daysOfWeek", days: [1] }],

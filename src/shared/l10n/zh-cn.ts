@@ -341,6 +341,10 @@ const zhCN: Record<string, string> = {
   "Last day": "最后一天",
   "Day of the week": "指定星期",
   "The day of the month of the task's date.": "按任务日期是几号来定。",
+  "None chosen: the day of the month of the task's date.":
+    "不选的话，按任务日期是几号来定。",
+  Add: "添加",
+  Remove: "移除",
   "Months without that day are skipped. To land in every month, choose the last day or the last day of the week.":
     "某个月没有这一天的话，那个月就不重复。想每个月都重复，请选“最后一天”或“最后一个周几”。",
   "Month and day": "指定月日",

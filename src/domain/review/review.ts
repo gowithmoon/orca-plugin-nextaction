@@ -2,8 +2,7 @@
 // Pure: today's logical day is passed in; whole-day arithmetic comes from
 // `domain/time`.
 import {
-  dayInMonth,
-  type MonthPlacement,
+  dayOfMonthIn,
   nextInMonths,
   nextOccurrence,
   type WeekPlacement,
@@ -49,7 +48,8 @@ export type ReviewInterval =
  * (GLOSSARY: 工作日; Monday to Friday, holidays not known).
  */
 export type ReviewMonthPlacement =
-  | Extract<MonthPlacement, { kind: "dayOfMonth" | "lastDayOfMonth" }>
+  | { readonly kind: "dayOfMonth"; readonly day: number }
+  | { readonly kind: "lastDayOfMonth" }
   | { readonly kind: "lastWeekdayOfMonth" };
 
 /** The placement's day in a month, or none when the month does not have it. */
@@ -58,8 +58,11 @@ function reviewDayInMonth(
   month: number,
   placement: ReviewMonthPlacement,
 ): readonly CalendarDate[] {
-  if (placement.kind !== "lastWeekdayOfMonth") {
-    return dayInMonth(year, month, placement);
+  if (placement.kind === "dayOfMonth") {
+    return dayOfMonthIn(year, month, placement.day);
+  }
+  if (placement.kind === "lastDayOfMonth") {
+    return dayOfMonthIn(year, month, "last");
   }
   // The last day, moved back to Friday when it is a Saturday or Sunday.
   const last = { year, month, day: daysInMonth(year, month) };

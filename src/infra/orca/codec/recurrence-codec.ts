@@ -7,11 +7,14 @@
 // `weekday`, `basis` `schedule` (按固定日程) or `completion` (按完成日期). An optional
 // `period.placement` (#88) says where in the unit the period falls: for a
 // week `{ kind: "daysOfWeek", days: [1–7, …] }` (at least one, Monday 1);
-// for a month `{ kind: "dayOfMonth", day: 1–31 }`, `{ kind: "lastDayOfMonth" }`
-// or `{ kind: "weekdayOfMonth", ordinal: 1–5 | "last", weekday: 1–7 }`; for a
-// year `{ kind: "dayOfYear", month: 1–12, day }` (a day that month can have,
-// February 29 included). Days and weekdays have none; a placement out of
-// range, or not one the unit can have, reads as unreadable. `rule.paused:
+// for a month `{ kind: "daysOfMonth", days: [1–31 | "last", …] }` or `{ kind:
+// "weekdaysOfMonth", weekdays: [{ ordinal: 1–5 | "last", weekday: 1–7 }, …]
+// }`; for a year `{ kind: "daysOfYear", days: [{ month: 1–12, day }, …] }` (a
+// day that month can have, February 29 included); each at least one. The
+// single placements written before several could be chosen (`dayOfMonth`,
+// `lastDayOfMonth`, `weekdayOfMonth`, `dayOfYear`, all within v1, ADR 0008)
+// are still read, as a list of one. Days and weekdays have none; a placement
+// out of range, or not one the unit can have, reads as unreadable. `rule.paused:
 // true` while the rule is paused (GLOSSARY: 暂停重复, #92); absent reads as
 // not paused, and it is written only while paused. The optional end
 // condition (`rule.end`, #89) is `{ until: "YYYY-MM-DD" }` (the last logical
@@ -20,8 +23,11 @@
 // Fields this version does not know are not read yet. The version number is
 // added and checked by the plugin block property codec.
 import {
+  type DayOfMonth,
   type DayOfWeek,
+  type DayOfYear,
   daysOfWeek,
+  inOrder,
   type RecurrenceBasis,
   type RecurrenceEnd,
   type RecurrencePeriod,
@@ -31,6 +37,7 @@ import {
   type RecurrenceUnit,
   recurrenceBases,
   recurrenceUnits,
+  type WeekdayOfMonth,
   type WeekdayOrdinal,
   weekdayOrdinals,
 } from "../../../domain/recurrence/recurrence";
@@ -112,45 +119,83 @@ function parsePlacement(
     }
     case "month":
       switch (value.kind) {
+        case "daysOfMonth":
+          return daysOfMonthOf(value.days);
+        case "weekdaysOfMonth":
+          return weekdaysOfMonthOf(value.weekdays);
+        // The single placements written before several could be chosen.
         case "dayOfMonth":
-          return isWholeIn(value.day, 1, 31)
-            ? { kind: "dayOfMonth", day: value.day as number }
-            : "the day of the month is not from 1 to 31";
+          return daysOfMonthOf([value.day]);
         case "lastDayOfMonth":
-          return { kind: "lastDayOfMonth" };
-        case "weekdayOfMonth": {
-          const { ordinal, weekday } = value;
-          if (!weekdayOrdinals.includes(ordinal as WeekdayOrdinal)) {
-            return "the ordinal is not 1 to 5 or last";
-          }
-          if (!isDayOfWeek(weekday)) {
-            return "the day of the week is not Monday (1) to Sunday (7)";
-          }
-          return {
-            kind: "weekdayOfMonth",
-            ordinal: ordinal as WeekdayOrdinal,
-            weekday,
-          };
-        }
+          return daysOfMonthOf(["last"]);
+        case "weekdayOfMonth":
+          return weekdaysOfMonthOf([
+            { ordinal: value.ordinal, weekday: value.weekday },
+          ]);
         default:
           return "the placement is not one a month can have";
       }
-    case "year": {
-      const { month, day } = value;
-      if (value.kind !== "dayOfYear") {
-        return "the placement is not one a year can have";
+    case "year":
+      switch (value.kind) {
+        case "daysOfYear":
+          return daysOfYearOf(value.days);
+        // The single placement written before several could be chosen.
+        case "dayOfYear":
+          return daysOfYearOf([{ month: value.month, day: value.day }]);
+        default:
+          return "the placement is not one a year can have";
       }
-      if (!isWholeIn(month, 1, 12)) return "the month is not from 1 to 12";
-      // February 29 is a day of the year; it is skipped in common years.
-      const longest = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-      if (!isWholeIn(day, 1, longest[(month as number) - 1] ?? 0)) {
-        return "the day is not one that month has";
-      }
-      return { kind: "dayOfYear", month: month as number, day: day as number };
-    }
     default:
       return "days and weekdays have no placement";
   }
+}
+
+function daysOfMonthOf(value: unknown): RecurrencePlacement | string {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "the days of the month are not at least one";
+  }
+  if (!value.every((day) => day === "last" || isWholeIn(day, 1, 31))) {
+    return "the day of the month is not from 1 to 31 or last";
+  }
+  return inOrder({ kind: "daysOfMonth", days: value as DayOfMonth[] });
+}
+
+function weekdaysOfMonthOf(value: unknown): RecurrencePlacement | string {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "the days of the week of the month are not at least one";
+  }
+  const weekdays: WeekdayOfMonth[] = [];
+  for (const entry of value) {
+    if (!isObject(entry)) return "the day of the week is not an object";
+    const { ordinal, weekday } = entry;
+    if (!weekdayOrdinals.includes(ordinal as WeekdayOrdinal)) {
+      return "the ordinal is not 1 to 5 or last";
+    }
+    if (!isDayOfWeek(weekday)) {
+      return "the day of the week is not Monday (1) to Sunday (7)";
+    }
+    weekdays.push({ ordinal: ordinal as WeekdayOrdinal, weekday });
+  }
+  return inOrder({ kind: "weekdaysOfMonth", weekdays });
+}
+
+function daysOfYearOf(value: unknown): RecurrencePlacement | string {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "the days of the year are not at least one";
+  }
+  // February 29 is a day of the year; it is skipped in common years.
+  const longest = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const days: DayOfYear[] = [];
+  for (const entry of value) {
+    if (!isObject(entry)) return "the day of the year is not an object";
+    const { month, day } = entry;
+    if (!isWholeIn(month, 1, 12)) return "the month is not from 1 to 12";
+    if (!isWholeIn(day, 1, longest[(month as number) - 1] ?? 0)) {
+      return "the day is not one that month has";
+    }
+    days.push({ month: month as number, day: day as number });
+  }
+  return inOrder({ kind: "daysOfYear", days });
 }
 
 /** The period as stored: its placement only when it has one. */

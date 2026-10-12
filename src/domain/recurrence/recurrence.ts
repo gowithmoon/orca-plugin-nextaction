@@ -45,25 +45,43 @@ export interface WeekPlacement {
   readonly days: readonly DayOfWeek[];
 }
 
+/** A day of the month (1–31), or its last day. */
+export type DayOfMonth = number | "last";
+
+/** The first to fifth or last given day of the week of a month ("第二个周二"). */
+export interface WeekdayOfMonth {
+  readonly ordinal: WeekdayOrdinal;
+  readonly weekday: DayOfWeek;
+}
+
 /**
- * Where in a month a monthly period falls: a day of the month (1–31), the
- * last day of the month, or the first to fifth or last given day of the week
- * ("每月第二个周二", "每月最后一个周五").
+ * Where in a month a monthly period falls: some days of the month ("每月 1
+ * 日、15 日、最后一天"), or some days of the week of it ("每月第二个周二、第四个周二");
+ * at least one, without repeats. The two are not mixed in one rule.
  */
 export type MonthPlacement =
-  | { readonly kind: "dayOfMonth"; readonly day: number }
-  | { readonly kind: "lastDayOfMonth" }
   | {
-      readonly kind: "weekdayOfMonth";
-      readonly ordinal: WeekdayOrdinal;
-      readonly weekday: DayOfWeek;
+      readonly kind: "daysOfMonth";
+      /** In order, without repeats (`inOrder`), at least one. */
+      readonly days: readonly DayOfMonth[];
+    }
+  | {
+      readonly kind: "weekdaysOfMonth";
+      /** In order, without repeats (`inOrder`), at least one. */
+      readonly weekdays: readonly WeekdayOfMonth[];
     };
 
-/** Where in a year a yearly period falls: a month (1–12) and a day of it. */
-export interface YearPlacement {
-  readonly kind: "dayOfYear";
+/** A month (1–12) and a day of it. */
+export interface DayOfYear {
   readonly month: number;
   readonly day: number;
+}
+
+/** Where in a year a yearly period falls: some days of the year, at least one. */
+export interface YearPlacement {
+  readonly kind: "daysOfYear";
+  /** In order, without repeats (`inOrder`), at least one. */
+  readonly days: readonly DayOfYear[];
 }
 
 export type RecurrencePlacement =
@@ -416,18 +434,20 @@ export function nextOccurrence(
     }
     case "month": {
       const placement: MonthPlacement = period.placement ?? {
-        kind: "dayOfMonth",
-        day: from.day,
+        kind: "daysOfMonth",
+        days: [from.day],
       };
       return nextInMonths(from, period.interval, (year, month) =>
-        dayInMonth(year, month, placement),
+        daysInMonthOf(year, month, placement),
       );
     }
     case "year": {
-      const { month, day } = period.placement ?? from;
+      const days = period.placement?.days ?? [from];
       return firstAfter(from, (step) => {
         const year = from.year + step * period.interval;
-        return day <= daysInMonth(year, month) ? [{ year, month, day }] : [];
+        return days
+          .filter(({ month, day }) => day <= daysInMonth(year, month))
+          .map(({ month, day }) => ({ year, month, day }));
       });
     }
   }
@@ -472,29 +492,94 @@ export function nextInMonths(
   });
 }
 
-/** The placement's day in a month, or none when the month does not have it. */
-export function dayInMonth(
+/** Ascending by `compare`, without repeats (told apart by `key`). */
+function sortedUnique<T>(
+  values: readonly T[],
+  key: (value: T) => string,
+  compare: (a: T, b: T) => number,
+): T[] {
+  return [...new Map(values.map((v) => [key(v), v])).values()].sort(compare);
+}
+
+/** An ordinal or day of the month as a number to sort by, "last" after all. */
+const rank = (value: number | "last"): number =>
+  value === "last" ? Number.POSITIVE_INFINITY : value;
+
+/**
+ * A month placement's days in order, without repeats: days of the month
+ * ascending, the last day after them; days of the week of the month by
+ * ordinal, then Monday to Sunday.
+ */
+export function inOrder(placement: MonthPlacement): MonthPlacement;
+/** A year placement's days in order, without repeats: by month, then day. */
+export function inOrder(placement: YearPlacement): YearPlacement;
+export function inOrder(
+  placement: MonthPlacement | YearPlacement,
+): MonthPlacement | YearPlacement {
+  switch (placement.kind) {
+    case "daysOfMonth":
+      return {
+        kind: "daysOfMonth",
+        days: sortedUnique(placement.days, String, (a, b) => rank(a) - rank(b)),
+      };
+    case "weekdaysOfMonth":
+      return {
+        kind: "weekdaysOfMonth",
+        weekdays: sortedUnique(
+          placement.weekdays,
+          (w) => `${w.ordinal}-${w.weekday}`,
+          (a, b) => rank(a.ordinal) - rank(b.ordinal) || a.weekday - b.weekday,
+        ),
+      };
+    case "daysOfYear":
+      return {
+        kind: "daysOfYear",
+        days: sortedUnique(
+          placement.days,
+          (d) => `${d.month}-${d.day}`,
+          (a, b) => a.month - b.month || a.day - b.day,
+        ),
+      };
+  }
+}
+
+/** The placement's days in a month, leaving out those the month does not have. */
+function daysInMonthOf(
   year: number,
   month: number,
   placement: MonthPlacement,
 ): CalendarDate[] {
-  switch (placement.kind) {
-    case "dayOfMonth":
-      return placement.day <= daysInMonth(year, month)
-        ? [{ year, month, day: placement.day }]
-        : [];
-    case "lastDayOfMonth":
-      return [{ year, month, day: daysInMonth(year, month) }];
-    case "weekdayOfMonth": {
-      const length = daysInMonth(year, month);
-      // The month's first day of that weekday, then every 7 days on.
-      const first =
-        1 + ((placement.weekday - dayOfWeek({ year, month, day: 1 }) + 7) % 7);
-      const count = Math.floor((length - first) / 7) + 1;
-      const nth = placement.ordinal === "last" ? count : placement.ordinal;
-      return nth <= count ? [{ year, month, day: first + 7 * (nth - 1) }] : [];
-    }
-  }
+  return placement.kind === "daysOfMonth"
+    ? placement.days.flatMap((day) => dayOfMonthIn(year, month, day))
+    : placement.weekdays.flatMap((day) => weekdayOfMonthIn(year, month, day));
+}
+
+/**
+ * A day of the month in a given month, or none when the month does not have
+ * it. Shared with the review interval's placement (#105).
+ */
+export function dayOfMonthIn(
+  year: number,
+  month: number,
+  day: DayOfMonth,
+): CalendarDate[] {
+  const length = daysInMonth(year, month);
+  if (day === "last") return [{ year, month, day: length }];
+  return day <= length ? [{ year, month, day }] : [];
+}
+
+/** A day of the week of a given month, or none when the month does not have it. */
+function weekdayOfMonthIn(
+  year: number,
+  month: number,
+  { ordinal, weekday }: WeekdayOfMonth,
+): CalendarDate[] {
+  const length = daysInMonth(year, month);
+  // The month's first day of that weekday, then every 7 days on.
+  const first = 1 + ((weekday - dayOfWeek({ year, month, day: 1 }) + 7) % 7);
+  const count = Math.floor((length - first) / 7) + 1;
+  const nth = ordinal === "last" ? count : ordinal;
+  return nth <= count ? [{ year, month, day: first + 7 * (nth - 1) }] : [];
 }
 
 /**

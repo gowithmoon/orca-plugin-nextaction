@@ -245,7 +245,7 @@ describe("next occurrence on a placement (#88)", () => {
         {
           interval: 1,
           unit: "month",
-          placement: { kind: "dayOfMonth", day: 20 },
+          placement: { kind: "daysOfMonth", days: [20] },
         },
         day(2026, 10, 12),
       ),
@@ -258,18 +258,101 @@ describe("next occurrence on a placement (#88)", () => {
         {
           interval: 1,
           unit: "month",
-          placement: { kind: "dayOfMonth", day: 31 },
+          placement: { kind: "daysOfMonth", days: [31] },
         },
         day(2026, 10, 31),
       ),
     ).toEqual(day(2026, 12, 31));
   });
 
+  it("every month on some days of the month takes the next of them, then the first of them next month", () => {
+    const firstAndFifteenth = {
+      interval: 1,
+      unit: "month",
+      placement: { kind: "daysOfMonth", days: [1, 15] },
+    } as const;
+    expect(nextOccurrence(firstAndFifteenth, day(2026, 10, 1))).toEqual(
+      day(2026, 10, 15),
+    );
+    expect(nextOccurrence(firstAndFifteenth, day(2026, 10, 15))).toEqual(
+      day(2026, 11, 1),
+    );
+  });
+
+  it("every 2 months on some days skips the month between", () => {
+    expect(
+      nextOccurrence(
+        {
+          interval: 2,
+          unit: "month",
+          placement: { kind: "daysOfMonth", days: [1, 15] },
+        },
+        day(2026, 10, 15),
+      ),
+    ).toEqual(day(2026, 12, 1));
+  });
+
+  it("every month on the 30th and the last day takes the last day in February, which has no 30th", () => {
+    const thirtiethAndLast = {
+      interval: 1,
+      unit: "month",
+      placement: { kind: "daysOfMonth", days: [30, "last"] },
+    } as const;
+    expect(nextOccurrence(thirtiethAndLast, day(2027, 1, 31))).toEqual(
+      day(2027, 2, 28),
+    );
+    // In a month of 30 days the two are one day.
+    expect(nextOccurrence(thirtiethAndLast, day(2026, 11, 30))).toEqual(
+      day(2026, 12, 30),
+    );
+  });
+
+  it("every month on the second and fourth Tuesday takes the next of them", () => {
+    const secondAndFourthTuesday = {
+      interval: 1,
+      unit: "month",
+      placement: {
+        kind: "weekdaysOfMonth",
+        weekdays: [
+          { ordinal: 2, weekday: 2 },
+          { ordinal: 4, weekday: 2 },
+        ],
+      },
+    } as const;
+    // October 2026's Tuesdays: 6, 13, 20, 27; November's: 3, 10, 17, 24.
+    expect(nextOccurrence(secondAndFourthTuesday, day(2026, 10, 13))).toEqual(
+      day(2026, 10, 27),
+    );
+    expect(nextOccurrence(secondAndFourthTuesday, day(2026, 10, 27))).toEqual(
+      day(2026, 11, 10),
+    );
+  });
+
+  it("every month on some days of the week leaves out the ones a month does not have", () => {
+    // November 2026 has four Fridays: its fifth is left out, its first kept.
+    expect(
+      nextOccurrence(
+        {
+          interval: 1,
+          unit: "month",
+          placement: {
+            kind: "weekdaysOfMonth",
+            weekdays: [
+              { ordinal: 1, weekday: 5 },
+              { ordinal: 5, weekday: 5 },
+            ],
+          },
+        },
+        day(2026, 11, 6),
+      ),
+    ).toEqual(day(2026, 12, 4));
+  });
+
   it("every month on the last day falls on February 28, and on February 29 in a leap year", () => {
     const lastDay = {
       interval: 1,
       unit: "month",
-      placement: { kind: "lastDayOfMonth" },
+      placement: { kind: "daysOfMonth", days: ["last"] },
     } as const;
     expect(nextOccurrence(lastDay, day(2027, 1, 31))).toEqual(day(2027, 2, 28));
     expect(nextOccurrence(lastDay, day(2028, 1, 31))).toEqual(day(2028, 2, 29));
@@ -283,7 +366,10 @@ describe("next occurrence on a placement (#88)", () => {
     const secondTuesday = {
       interval: 1,
       unit: "month",
-      placement: { kind: "weekdayOfMonth", ordinal: 2, weekday: 2 },
+      placement: {
+        kind: "weekdaysOfMonth",
+        weekdays: [{ ordinal: 2, weekday: 2 }],
+      },
     } as const;
     // October 2026's Tuesdays: 6, 13, 20, 27; November's: 3, 10, 17, 24.
     expect(nextOccurrence(secondTuesday, day(2026, 10, 12))).toEqual(
@@ -298,7 +384,10 @@ describe("next occurrence on a placement (#88)", () => {
     const lastFriday = {
       interval: 1,
       unit: "month",
-      placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+      placement: {
+        kind: "weekdaysOfMonth",
+        weekdays: [{ ordinal: "last", weekday: 5 }],
+      },
     } as const;
     // October 2026 has five Fridays (the last October 30), November four
     // (the last November 27).
@@ -318,18 +407,60 @@ describe("next occurrence on a placement (#88)", () => {
         {
           interval: 1,
           unit: "month",
-          placement: { kind: "weekdayOfMonth", ordinal: 5, weekday: 5 },
+          placement: {
+            kind: "weekdaysOfMonth",
+            weekdays: [{ ordinal: 5, weekday: 5 }],
+          },
         },
         day(2026, 10, 30),
       ),
     ).toEqual(day(2027, 1, 29));
   });
 
+  it("every year on some months and days takes the next of them, then the first of them next year", () => {
+    const marchAndSeptember = {
+      interval: 1,
+      unit: "year",
+      placement: {
+        kind: "daysOfYear",
+        days: [
+          { month: 3, day: 1 },
+          { month: 9, day: 1 },
+        ],
+      },
+    } as const;
+    expect(nextOccurrence(marchAndSeptember, day(2026, 3, 1))).toEqual(
+      day(2026, 9, 1),
+    );
+    expect(nextOccurrence(marchAndSeptember, day(2026, 10, 12))).toEqual(
+      day(2027, 3, 1),
+    );
+  });
+
+  it("every year on February 29 and another day leaves out February 29 in common years", () => {
+    expect(
+      nextOccurrence(
+        {
+          interval: 1,
+          unit: "year",
+          placement: {
+            kind: "daysOfYear",
+            days: [
+              { month: 2, day: 29 },
+              { month: 6, day: 1 },
+            ],
+          },
+        },
+        day(2026, 6, 1),
+      ),
+    ).toEqual(day(2027, 6, 1));
+  });
+
   it("every year on a month and day takes it later in the same year, else the next", () => {
     const march15 = {
       interval: 1,
       unit: "year",
-      placement: { kind: "dayOfYear", month: 3, day: 15 },
+      placement: { kind: "daysOfYear", days: [{ month: 3, day: 15 }] },
     } as const;
     expect(nextOccurrence(march15, day(2026, 1, 10))).toEqual(day(2026, 3, 15));
     expect(nextOccurrence(march15, day(2026, 10, 12))).toEqual(
@@ -343,7 +474,7 @@ describe("next occurrence on a placement (#88)", () => {
         {
           interval: 1,
           unit: "year",
-          placement: { kind: "dayOfYear", month: 2, day: 29 },
+          placement: { kind: "daysOfYear", days: [{ month: 2, day: 29 }] },
         },
         day(2026, 10, 12),
       ),
@@ -410,7 +541,10 @@ describe("advancing onto a placement, on either basis (#88)", () => {
         period: {
           interval: 1,
           unit: "month",
-          placement: { kind: "weekdayOfMonth", ordinal: "last", weekday: 5 },
+          placement: {
+            kind: "weekdaysOfMonth",
+            weekdays: [{ ordinal: "last", weekday: 5 }],
+          },
         },
         basis: "completion",
       },
