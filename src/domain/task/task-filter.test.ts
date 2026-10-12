@@ -25,6 +25,7 @@ function task(set: Partial<Task> = {}): Task {
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
     ...set,
   };

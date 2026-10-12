@@ -3,6 +3,7 @@
 import type { RecurrenceRead } from "../recurrence/recurrence";
 import type { ReminderRead } from "../reminder/reminder";
 import type { ReviewRead } from "../review/review";
+import type { CustomPropertyValues } from "./custom-property";
 
 /** Identifies a task. It is the ID of the task's (source) block. */
 export type TaskId = number;
@@ -107,6 +108,11 @@ export interface Task {
    * cannot read.
    */
   readonly reminders: ReminderRead;
+  /**
+   * Its custom property values (GLOSSARY: 自定义属性), by property name, for
+   * the properties the task tag defines. A record only: no rule reads it.
+   */
+  readonly customProperties: CustomPropertyValues;
   readonly anomalies: readonly DataAnomaly[];
 }
 
@@ -144,6 +150,7 @@ export interface TaskInNotes {
   recurrence: RecurrenceRead;
   review: ReviewRead;
   reminders: ReminderRead;
+  customProperties: CustomPropertyValues;
 }
 
 /** Importance, urgency and effort default to 4 (GLOSSARY). */
@@ -200,6 +207,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     recurrence: input.recurrence,
     review: input.review,
     reminders: input.reminders,
+    customProperties: input.customProperties,
     anomalies,
   };
 }

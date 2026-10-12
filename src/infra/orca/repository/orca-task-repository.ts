@@ -21,6 +21,7 @@ import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../../../domain/task/completion-history";
+import type { CustomPropertyValue } from "../../../domain/task/custom-property";
 import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -29,6 +30,10 @@ import {
   planCompletionHistoryWrite,
   readCompletionHistory,
 } from "../codec/completion-history-codec";
+import {
+  customPropertyDefinitions,
+  planCustomPropertyWrite,
+} from "../codec/custom-property-codec";
 import {
   dependenciesWithout,
   dependentsOf,
@@ -189,6 +194,29 @@ export function createOrcaTaskRepository(
   };
 
   /**
+   * The task tag's custom property definitions as the tag block holds them
+   * now (ADR 0023). Read on every call rather than kept (ADR 0007), so an
+   * edit in Orca shows on the next read; one get-blocks.
+   */
+  const readDefinitions = async (state: ReadyTag) => {
+    const tag = (await getBlocks([state.tagBlockId])).get(state.tagBlockId);
+    if (!tag) {
+      throw new OrcaError(`the task tag block ${state.tagBlockId} is gone`);
+    }
+    return customPropertyDefinitions(tag.properties);
+  };
+
+  /** As `currentTag`, with the custom property definitions, for reads. */
+  const readingTag = async (): Promise<TaskTagContext> => {
+    const state = readyTag();
+    return {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+      customProperties: await readDefinitions(state),
+    };
+  };
+
+  /**
    * The (source) block of a task, or `undefined` when the ID is not a task:
    * no such block, no task tag, or an orphan.
    */
@@ -290,10 +318,7 @@ export function createOrcaTaskRepository(
       language: state.language,
       invalidated: state.invalidated,
     };
-    const context: TaskTagContext = {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-    };
+    const context = await readingTag();
     // Built first: a filter on an invalidated property fails before the
     // query runs.
     const query = buildTaskQuery(filter, names);
@@ -323,10 +348,7 @@ export function createOrcaTaskRepository(
    */
   const readTaskGraph = async (): Promise<TaskGraphSnapshot> => {
     const state = readyTag();
-    const context: TaskTagContext = {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-    };
+    const context = await readingTag();
     const query = buildTaskQuery(
       {},
       {
@@ -606,7 +628,7 @@ export function createOrcaTaskRepository(
     },
 
     async getTask(id: TaskId): Promise<Task | null> {
-      const context = currentTag();
+      const context = await readingTag();
       const block = await sourceBlock(id);
       if (!block) return null;
       const decoded = decodeTask(block, context);
@@ -933,6 +955,35 @@ export function createOrcaTaskRepository(
       await writeTo(block, () =>
         moveBlocks(block.id, targetBlock.id, placement),
       );
+    },
+
+    async readCustomPropertyDefinitions() {
+      return readDefinitions(readyTag());
+    },
+
+    async writeCustomProperty(
+      id: TaskId,
+      name: string,
+      value: CustomPropertyValue,
+      now: Date,
+    ): Promise<void> {
+      const state = readyTag();
+      // Checked against the definitions as they are now: a property just
+      // deleted or changed in Orca fails, writing nothing.
+      const item = planCustomPropertyWrite(
+        await readDefinitions(state),
+        name,
+        value,
+        now,
+      );
+      const block = await taskBlockToWrite(id, currentTag());
+      const ref = findTaskTagRef(block.refs, state.tagBlockId);
+      if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
+      // setRefData takes the whole reference object and changes only the
+      // items passed (tag-operations, round 1 steps 05–06).
+      await writeTo(block, async () => {
+        await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+      });
     },
 
     queryTasks,

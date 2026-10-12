@@ -20,6 +20,12 @@ import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../src/domain/task/completion-history";
+import {
+  type CustomPropertyDefinition,
+  type CustomPropertyValue,
+  checkCustomPropertyValue,
+  emptyCustomPropertyValue,
+} from "../src/domain/task/custom-property";
 import type { MyDayRead } from "../src/domain/task/my-day";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
@@ -86,6 +92,14 @@ export interface InMemoryTaskRepository extends TaskRepository {
   journalOf(id: number): CalendarDate | undefined;
   /** Every `moveTask` that succeeded, oldest first. */
   moves(): readonly TaskMove[];
+  /**
+   * The task tag's custom property definitions (none unless set), as the
+   * user would set them in Orca: values of properties no longer defined
+   * stop reading, as Orca deletes them (custom-properties).
+   */
+  setCustomPropertyDefinitions(
+    definitions: readonly CustomPropertyDefinition[],
+  ): void;
 }
 
 /** When a block was created, unless a test says otherwise. */
@@ -113,6 +127,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
   };
 }
@@ -147,6 +162,25 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const positionOf = (position: number | undefined) => {
     nextPosition += 1;
     return position ?? nextPosition;
+  };
+
+  /** The task tag's custom property definitions. */
+  let customDefinitions: CustomPropertyDefinition[] = [];
+  /**
+   * The task with a value for every custom property defined, an empty one
+   * where none is stored, and none for properties no longer defined, as
+   * decoding reads it.
+   */
+  const withCustomProperties = (task: Task): Task => {
+    const values: Record<string, CustomPropertyValue> = {};
+    for (const definition of customDefinitions) {
+      const stored = task.customProperties[definition.name];
+      values[definition.name] =
+        stored?.kind === definition.kind
+          ? stored
+          : emptyCustomPropertyValue(definition.kind);
+    }
+    return { ...task, customProperties: values };
   };
 
   const store = (id: number, block: StoredBlock) => {
@@ -343,7 +377,27 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     async getTask(id) {
-      return blocks.get(id)?.task ?? null;
+      const task = blocks.get(id)?.task;
+      return task ? withCustomProperties(task) : null;
+    },
+
+    setCustomPropertyDefinitions(next) {
+      customDefinitions = [...next];
+    },
+
+    async readCustomPropertyDefinitions() {
+      return [...customDefinitions];
+    },
+
+    async writeCustomProperty(id, name, value) {
+      const block = taskToWrite(id);
+      checkCustomPropertyValue(customDefinitions, name, value);
+      write(() => {
+        block.task = {
+          ...block.task,
+          customProperties: { ...block.task.customProperties, [name]: value },
+        };
+      });
     },
 
     async queryTasks(filter: TaskFilter) {
