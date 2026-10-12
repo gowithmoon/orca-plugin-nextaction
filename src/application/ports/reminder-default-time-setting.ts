@@ -1,4 +1,4 @@
-import type { TimeOfDay } from "../../domain/reminder/reminder";
+import type { TimeOfDay } from "../../domain/time/time-of-day";
 
 /**
  * The reminder default time the user has set: the time of day the quick

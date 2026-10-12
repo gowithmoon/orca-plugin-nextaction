@@ -7,24 +7,16 @@ import {
   upcomingReminders,
 } from "../../domain/reminder/reminder";
 import type { CalendarDate } from "../../domain/task/task";
+import { calendarDateOf } from "../../domain/time/time-of-day";
 import { t } from "../../shared/l10n/l10n";
 import { formatClock, formatDate } from "./format";
-
-/** The calendar day a moment falls on, local time (ADR 0012). */
-function localDay(at: Date): CalendarDate {
-  return {
-    year: at.getFullYear(),
-    month: at.getMonth() + 1,
-    day: at.getDate(),
-  };
-}
 
 /**
  * A reminder's moment as "10月20日 周二 9:00"; with the year when it is not
  * the year of `today`.
  */
 export function formatMoment(at: Date, today: CalendarDate): string {
-  return `${formatDate(localDay(at), today)} ${formatClock(at)}`;
+  return `${formatDate(calendarDateOf(at), today)} ${formatClock(at)}`;
 }
 
 /**

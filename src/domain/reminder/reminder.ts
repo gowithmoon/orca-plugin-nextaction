@@ -3,28 +3,14 @@
 // into one on the calendar day (not the logical day), local time (ADR 0012).
 import type { CalendarDate, TaskId, TaskStatus } from "../task/task";
 import { addDays, daysBetween } from "../time/calendar-days";
-
-/** A local time of day: hours 0–23, minutes 0–59. */
-export interface TimeOfDay {
-  readonly hours: number;
-  readonly minutes: number;
-}
+import {
+  calendarDateOf,
+  momentOnDate,
+  type TimeOfDay,
+} from "../time/time-of-day";
 
 /** The reminder default time until the user sets another one. */
 export const defaultReminderTime: TimeOfDay = { hours: 9, minutes: 0 };
-
-/**
- * The reminder default time from the `time` setting's value. Orca holds a
- * whole `Date`; only its local hours and minutes mean anything. Anything but
- * a valid `Date` (or no value) reads as 9:00, as the day boundary reads
- * (plugin-lifecycle-settings).
- */
-export function reminderDefaultTimeFrom(value: unknown): TimeOfDay {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
-    return defaultReminderTime;
-  }
-  return { hours: value.getHours(), minutes: value.getMinutes() };
-}
 
 /** Which date a quick option counts back from. */
 export type QuickReminderFrom = "due" | "start";
@@ -42,17 +28,6 @@ export interface QuickReminderOption {
   readonly at: Date;
   /** Only a moment later than now can be added. */
   readonly selectable: boolean;
-}
-
-/** `time` on the calendar day `date`, local time. */
-function momentOnDate(date: CalendarDate, time: TimeOfDay): Date {
-  return new Date(
-    date.year,
-    date.month - 1,
-    date.day,
-    time.hours,
-    time.minutes,
-  );
 }
 
 /**
@@ -213,15 +188,6 @@ export function nextWakeUp(
 export function normalizeReminders(moments: readonly Date[]): Reminders {
   const times = [...new Set(moments.map((moment) => moment.getTime()))];
   return times.sort((a, b) => a - b).map((time) => new Date(time));
-}
-
-/** The calendar day `moment` falls on, local time. */
-function calendarDateOf(moment: Date): CalendarDate {
-  return {
-    year: moment.getFullYear(),
-    month: moment.getMonth() + 1,
-    day: moment.getDate(),
-  };
 }
 
 /** `moment` `days` calendar days later, at the same local time. */
