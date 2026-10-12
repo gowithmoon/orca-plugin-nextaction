@@ -1,13 +1,12 @@
 // The single place where plugin settings are defined.
-import {
-  type DayBoundary,
-  defaultDayBoundary,
-} from "../domain/time/logical-day";
+import { defaultReminderTime } from "../domain/reminder/reminder";
+import { defaultDayBoundary } from "../domain/time/logical-day";
+import type { TimeOfDay } from "../domain/time/time-of-day";
 import type { PluginSettingsSchema } from "../orca.d.ts";
 import { t } from "../shared/l10n/l10n";
 
 /** Today at `time`, local: how a `time` setting holds a time of day. */
-function localTime({ hours, minutes }: DayBoundary): Date {
+function localTime({ hours, minutes }: TimeOfDay): Date {
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return date;
@@ -53,6 +52,19 @@ export const settingsDefinition: SettingsDefinition = {
       ),
       type: "time",
       defaultValue: localTime(defaultDayBoundary),
+    }),
+  },
+  // 9:00 shows in the settings page and fills an item without a value, as
+  // for the day boundary; anything else still reads as 9:00
+  // (infra/settings-reminder-default-time).
+  reminderDefaultTime: {
+    schema: () => ({
+      label: t("Reminder default time"),
+      description: t(
+        "The time of day the quick reminder options fall at, such as on the due date or 3 days before it.",
+      ),
+      type: "time",
+      defaultValue: localTime(defaultReminderTime),
     }),
   },
   // Read through startPreviewDaysFrom: anything but a whole number from 0 to

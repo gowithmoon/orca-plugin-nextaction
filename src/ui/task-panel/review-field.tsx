@@ -28,8 +28,6 @@ export function ReviewField(props: {
         variant="outline"
         aria-labelledby={`${props.labelId} ${valueId}`}
         aria-haspopup="dialog"
-        // An unreadable plan is kept as it is: nothing here may overwrite it.
-        disabled={unreadable}
         data-empty={props.review.kind === "none" || undefined}
         data-unreadable={unreadable || undefined}
         onClick={props.onOpen}

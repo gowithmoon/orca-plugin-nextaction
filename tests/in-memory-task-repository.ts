@@ -14,6 +14,7 @@ import type {
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
   type CompletionEntry,
   lastCompletion as lastCompletionIn,
@@ -111,6 +112,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     dependencyDelay: 0,
     recurrence: { kind: "none" },
     review: { kind: "none" },
+    reminders: { kind: "none" },
     anomalies: [],
   };
 }
@@ -233,6 +235,18 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     if (block.task.recurrence.kind === "unreadable") {
       throw new Error(
         `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
+      );
+    }
+  };
+
+  /** Reminders this plugin cannot read are never overwritten. */
+  const refuseUnreadableReminders = (
+    block: StoredBlock & { task: Task },
+    id: TaskId,
+  ) => {
+    if (block.task.reminders.kind === "unreadable") {
+      throw new Error(
+        `the reminders of block ${id} hold a value this plugin cannot read (${block.task.reminders.reason})`,
       );
     }
   };
@@ -370,6 +384,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         if (taskWrite.recurrence !== undefined) {
           refuseUnreadableRecurrence(block, taskWrite.id);
         }
+        if (taskWrite.reminders !== undefined) {
+          refuseUnreadableReminders(block, taskWrite.id);
+        }
         return { block, taskWrite };
       });
       write(() => {
@@ -381,6 +398,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
               recurrence: taskWrite.recurrence
                 ? { kind: "rule", rule: taskWrite.recurrence }
                 : { kind: "none" },
+            };
+          }
+          if (taskWrite.reminders !== undefined) {
+            block.task = {
+              ...block.task,
+              reminders: {
+                kind: "list",
+                reminders: normalizeReminders(taskWrite.reminders),
+              },
             };
           }
         }
@@ -494,6 +520,35 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       }
       write(() => {
         block.task = { ...block.task, review: { kind: "plan", plan } };
+      });
+    },
+
+    async writeReminders(id, reminders) {
+      const block = taskToWrite(id);
+      refuseUnreadableReminders(block, id);
+      write(() => {
+        // Stored ascending and each once, as the codec writes them.
+        block.task = {
+          ...block.task,
+          reminders: { kind: "list", reminders: normalizeReminders(reminders) },
+        };
+      });
+    },
+
+    async discardUnreadable(id, data) {
+      const block = taskToWrite(id);
+      if (block.task[data].kind !== "unreadable") return;
+      // The empty value of each, as the codecs write it.
+      const empty = {
+        recurrence: { kind: "none" },
+        review: {
+          kind: "plan",
+          plan: { interval: null, lastReviewed: null, reviewOn: null },
+        },
+        reminders: { kind: "list", reminders: [] },
+      } as const;
+      write(() => {
+        block.task = { ...block.task, [data]: empty[data] };
       });
     },
 

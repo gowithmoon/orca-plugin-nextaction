@@ -1,12 +1,10 @@
 // The day boundary and the logical day (GLOSSARY: Day Boundary, Logical Day;
 // ADR 0005). Pure: the current time is passed in as `now`.
 import type { CalendarDate } from "../task/task";
+import type { TimeOfDay } from "./time-of-day";
 
-/** A time of day: hours 0–23, minutes 0–59. */
-export interface DayBoundary {
-  readonly hours: number;
-  readonly minutes: number;
-}
+/** The time of day a logical day starts at. */
+export type DayBoundary = TimeOfDay;
 
 /** Used until the user sets another boundary. */
 export const defaultDayBoundary: DayBoundary = { hours: 5, minutes: 0 };
@@ -35,10 +33,7 @@ export function logicalDay(now: Date, boundary: DayBoundary): CalendarDate {
  * on the next calendar day before it, so the small hours belong to that
  * logical day (ADR 0005). Local time only (ADR 0012).
  */
-export function momentOn(
-  day: LogicalDayRange,
-  time: { readonly hours: number; readonly minutes: number },
-): Date {
+export function momentOn(day: LogicalDayRange, time: TimeOfDay): Date {
   const from = day.start;
   const sameDay = new Date(
     from.getFullYear(),

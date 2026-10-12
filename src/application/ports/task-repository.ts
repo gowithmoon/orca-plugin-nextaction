@@ -1,6 +1,7 @@
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
 import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
+import type { Reminders } from "../../domain/reminder/reminder";
 import type { ReviewPlan } from "../../domain/review/review";
 import type { CompletionHistory } from "../../domain/task/completion-history";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
@@ -16,6 +17,12 @@ import type { TaskChanges } from "../../domain/task/task-changes";
 export type CompletionHistoryRead =
   | { kind: "readable"; history: CompletionHistory }
   | { kind: "unreadable"; reason: string };
+
+/**
+ * The task data held as a versioned plugin block property that the user can
+ * discard when this plugin cannot read it (`discardUnreadable`).
+ */
+export type DiscardableData = "recurrence" | "review" | "reminders";
 
 /** Values a multi-value property (contexts, labels) must or must not hold. */
 export interface ValuesFilter {
@@ -103,6 +110,11 @@ export interface TaskWrite {
   readonly completionHistory?: CompletionHistory;
   /** Replaces the task's recurrence rule, `null` removes it; absent leaves it. */
   readonly recurrence?: RecurrenceRule | null;
+  /**
+   * Replaces the task's reminders (GLOSSARY: 提醒), an empty list clearing
+   * them; absent leaves them.
+   */
+  readonly reminders?: Reminders;
 }
 
 /**
@@ -160,10 +172,11 @@ export interface TaskRepository {
   /**
    * Writes several tasks as `updateTask` writes one, each as its `TaskWrite`
    * says, and with `recurrence` also replaces its recurrence rule (`null`
-   * removes it, the property kept, as `writeRecurrence` does). The user
-   * undoes every task's write with one undo. Fails, writing nothing at all,
-   * when any block is not a task, a property is invalidated, or a completion
-   * history or recurrence rule to be replaced reads as unreadable. A mirror
+   * removes it, the property kept, as `writeRecurrence` does), with
+   * `reminders` its reminders (as `writeReminders` does). The user undoes
+   * every task's write with one undo. Fails, writing nothing at all, when
+   * any block is not a task, a property is invalidated, or a completion
+   * history, recurrence rule or reminders to be replaced read as unreadable. A mirror
    * block's ID writes to its source block.
    */
   updateTasks(writes: readonly TaskWrite[]): Promise<void>;
@@ -209,6 +222,27 @@ export interface TaskRepository {
    * ID writes to its source block.
    */
   writeReview(id: TaskId, plan: ReviewPlan): Promise<void>;
+
+  /**
+   * Writes the task's reminders (GLOSSARY: 提醒), replacing what it holds,
+   * ascending and each once; none writes an empty list, the property kept.
+   * The task's other properties are left as they are. The user undoes it
+   * with one undo. Fails, writing nothing, when the block is not a task, its
+   * reminders read as unreadable, or the write fails. A mirror block's ID
+   * writes to its source block.
+   */
+  writeReminders(id: TaskId, reminders: Reminders): Promise<void>;
+
+  /**
+   * Discards the task's `data` when this plugin cannot read it, writing its
+   * empty value over it: no recurrence rule, a review plan with no fields, no
+   * reminders. The one write that overwrites unreadable data, made only when
+   * the user asks for it; every other write refuses. Readable data, or none,
+   * is left as it is, writing nothing. The user undoes it with one undo.
+   * Fails, writing nothing, when the block is not a task or the write fails.
+   * A mirror block's ID writes to its source block.
+   */
+  discardUnreadable(id: TaskId, data: DiscardableData): Promise<void>;
 
   /**
    * Converts the block into an inbox task (GLOSSARY: 转为任务). A mirror

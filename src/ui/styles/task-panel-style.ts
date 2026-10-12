@@ -552,6 +552,113 @@ button.nextaction-dependency-task:hover {
   width: 5rem;
 }
 
+/* The reminder popup (reminder-popup.tsx), in the recurrence popup's look:
+   the list, one reminder a row (passed ones greyed), the quick options
+   wrapping, the custom moment with "Add" beside it. */
+.nextaction-reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-reminder-item,
+.nextaction-reminder-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+}
+
+.nextaction-reminder-moment {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.nextaction-reminder-moment-button {
+  gap: var(--orca-spacing-sm);
+  white-space: nowrap;
+}
+
+.nextaction-reminder-moment-button > .ti {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-reminder-item[data-passed] .nextaction-reminder-moment-button,
+.nextaction-reminder-passed {
+  color: var(--orca-color-text-2);
+  opacity: 0.7;
+}
+
+.nextaction-reminder-passed {
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-reminder-item > :last-child {
+  margin-left: auto;
+}
+
+/* Held from the top, not centred: as reminders are added the window only
+   grows downwards, so what is picked from stays where it was. */
+.nextaction-reminder-popup {
+  margin: max(var(--orca-spacing-lg), 12vh) auto auto;
+}
+
+/* The quick options: toggles in a two-column grid of fixed cells, so
+   choosing one changes neither its size nor anything around it. */
+.nextaction-reminder-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.nextaction-reminder-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  border-radius: var(--orca-radius-md);
+  background-color: transparent;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nextaction-reminder-option:hover:not(:disabled) {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-reminder-option[data-chosen] {
+  border-color: var(--orca-color-primary-5);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 12%, var(--orca-color-bg-1));
+  color: var(--orca-color-text-1);
+}
+
+.nextaction-reminder-option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Its room is kept while not chosen, so the text does not shift. */
+.nextaction-reminder-option-check {
+  visibility: hidden;
+}
+
+.nextaction-reminder-option[data-chosen] .nextaction-reminder-option-check {
+  visibility: visible;
+}
+
 /* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
 .nextaction-recurrence-popup {
   --nextaction-window-width: 26rem;

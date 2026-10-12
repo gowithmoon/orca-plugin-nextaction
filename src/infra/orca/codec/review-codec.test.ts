@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewPlan } from "../../../domain/review/review";
-import { planReviewWrite, readReview } from "./review-codec";
+import { planReviewDiscard, planReviewWrite, readReview } from "./review-codec";
 
 // A task block's `properties` as get-blocks returns them: plugin block
 // properties are JSON (type 0) next to `_tags` and `_repr`
@@ -260,5 +260,34 @@ describe("readReview and planReviewWrite", () => {
     const block = taskBlockWith({ name: "nextaction.review", value: raw });
     expect(readReview(block)).toMatchObject({ kind: "unreadable", raw });
     expect(planReviewWrite(block, anyPlan).kind).toBe("refused");
+  });
+});
+
+describe("planReviewDiscard", () => {
+  it("writes an empty plan over one it cannot read, which then reads as a plan with no fields", () => {
+    const block = taskBlockWith({
+      name: "nextaction.review",
+      value: { v: 2, interval: { every: 1, unit: "week" } },
+    });
+    const discard = planReviewDiscard(block);
+    if (discard.kind !== "write") throw new Error("nothing to discard");
+    expect(discard.property).toEqual({
+      name: "nextaction.review",
+      type: 0,
+      value: { v: 1 },
+    });
+    expect(readReview(taskBlockWith(discard.property))).toEqual({
+      kind: "plan",
+      plan: { interval: null, lastReviewed: null, reviewOn: null },
+    });
+  });
+
+  it("writes nothing over a plan it can read, or to a task without one", () => {
+    const readable = taskBlockWith({
+      name: "nextaction.review",
+      value: { v: 1, interval: { every: 1, unit: "week" } },
+    });
+    expect(planReviewDiscard(readable)).toEqual({ kind: "nothing" });
+    expect(planReviewDiscard(taskBlockWith())).toEqual({ kind: "nothing" });
   });
 });

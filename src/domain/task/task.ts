@@ -1,6 +1,7 @@
 // The task model and the rules for interpreting what the notes hold
 // (GLOSSARY: Status, Importance, Urgency, Effort, Start, Due). Pure; no Orca types.
 import type { RecurrenceRead } from "../recurrence/recurrence";
+import type { ReminderRead } from "../reminder/reminder";
 import type { ReviewRead } from "../review/review";
 
 /** Identifies a task. It is the ID of the task's (source) block. */
@@ -36,6 +37,12 @@ export interface CalendarDate {
   readonly month: number;
   /** 1–31 */
   readonly day: number;
+}
+
+/** A task's start and due dates, `null` when it lacks one. */
+export interface TaskDates {
+  readonly start: CalendarDate | null;
+  readonly due: CalendarDate | null;
 }
 
 /**
@@ -95,6 +102,11 @@ export interface Task {
    * or one this plugin cannot read.
    */
   readonly review: ReviewRead;
+  /**
+   * Its reminders as read (GLOSSARY: 提醒): none, a list, or one this plugin
+   * cannot read.
+   */
+  readonly reminders: ReminderRead;
   readonly anomalies: readonly DataAnomaly[];
 }
 
@@ -131,6 +143,7 @@ export interface TaskInNotes {
   created: Date;
   recurrence: RecurrenceRead;
   review: ReviewRead;
+  reminders: ReminderRead;
 }
 
 /** Importance, urgency and effort default to 4 (GLOSSARY). */
@@ -186,6 +199,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     created: input.created,
     recurrence: input.recurrence,
     review: input.review,
+    reminders: input.reminders,
     anomalies,
   };
 }

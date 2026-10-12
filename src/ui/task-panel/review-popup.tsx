@@ -30,12 +30,17 @@ import {
   reviewMonthPlacementText,
   reviewUnitName,
 } from "../components/review-text";
+import {
+  type DiscardUnreadableDeps,
+  useDiscardUnreadable,
+} from "../hooks/use-discard-unreadable";
 import { useFocusInside } from "../hooks/use-focus-inside";
 import {
   type Notify,
   notifyMarkReviewedFailure,
   notifySetReviewFailure,
 } from "../notify";
+import { DiscardUnreadableField } from "./discard-unreadable-field";
 import { Choice, DaysOfWeekPicker } from "./recurrence-placement-field";
 import { DateField } from "./task-panel-fields";
 
@@ -49,6 +54,8 @@ export interface ReviewPopupDeps {
   /** The current logical day, for showing dates and the next review day. */
   today: () => CalendarDate;
   notify: Notify;
+  /** Discards the task's data when it cannot be read (#106). */
+  discard: DiscardUnreadableDeps;
 }
 
 /** Opens the popup for `task`, replacing one already open. */
@@ -251,8 +258,10 @@ function ReviewPopup(props: {
   task: Task;
   deps: ReviewPopupDeps;
   onClose: () => void;
+  /** Shows the popup afresh for the task as read again. */
+  onReopen: (task: Task) => void;
 }) {
-  const { task, deps, onClose } = props;
+  const { task, deps, onClose, onReopen } = props;
   const { Button, Input, ModalOverlay, Segmented, Tooltip } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -271,6 +280,17 @@ function ReviewPopup(props: {
   const focus = React.useRef<HTMLDivElement>(null);
   const restoreFocus = React.useRef(true);
   useFocusInside(focus, restoreFocus);
+  // Discarded (#106): shown afresh with the empty value to edit, or closed
+  // when the block is no longer a task.
+  const discard = useDiscardUnreadable(
+    deps.discard,
+    task.id,
+    "review",
+    React.useCallback(
+      (read: Task | null) => (read ? onReopen(read) : onClose()),
+      [onReopen, onClose],
+    ),
+  );
 
   const today = deps.today();
   // An unreadable plan cannot be overwritten (the use case refuses); the
@@ -388,6 +408,12 @@ function ReviewPopup(props: {
                   { reason: task.review.reason },
                 )}
               </div>
+            )}
+            {unreadable && (
+              <DiscardUnreadableField
+                busy={discard.busy}
+                onDiscard={discard.discard}
+              />
             )}
             <div className="nextaction-recurrence-popup-field">
               <span
@@ -507,19 +533,23 @@ export function createReviewPopup(options: {
   render: (node: React.ReactNode) => void;
 }): OpenReviewPopup {
   let shown = 0;
-  return (task) => {
+  const open: OpenReviewPopup = (task) => {
     shown += 1;
     const mine = shown;
     options.render(
       <ReviewPopup
-        // Another task starts afresh.
+        // Another task, or the same one read again, starts afresh.
         key={mine}
         task={task}
         deps={options.deps}
         onClose={() => {
           if (mine === shown) options.render(null);
         }}
+        onReopen={(read) => {
+          if (mine === shown) open(read);
+        }}
       />,
     );
   };
+  return open;
 }

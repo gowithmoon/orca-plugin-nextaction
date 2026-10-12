@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { planRecurrenceWrite, readRecurrence } from "./recurrence-codec";
+import {
+  planRecurrenceDiscard,
+  planRecurrenceWrite,
+  readRecurrence,
+} from "./recurrence-codec";
 
 // A task block's `properties` as get-blocks returns them: plugin block
 // properties are JSON (type 0) next to `_tags` and `_repr`
@@ -448,4 +452,36 @@ describe("placements and weekdays (#88)", () => {
       expect(planRecurrenceWrite(block, everyTwoWeeks).kind).toBe("refused");
     },
   );
+});
+
+describe("planRecurrenceDiscard", () => {
+  it("writes no rule over one it cannot read, which then reads as none", () => {
+    const block = taskBlockWith({
+      name: "nextaction.recurrence",
+      value: { v: 2, rule: { cron: "0 0 * * 1" } },
+    });
+    const discard = planRecurrenceDiscard(block);
+    if (discard.kind !== "write") throw new Error("nothing to discard");
+    expect(discard.property).toEqual({
+      name: "nextaction.recurrence",
+      type: 0,
+      value: { v: 1, rule: null },
+    });
+    expect(readRecurrence(taskBlockWith(discard.property))).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("writes nothing over a rule it can read, or to a task without one", () => {
+    const readable = taskBlockWith({
+      name: "nextaction.recurrence",
+      value: {
+        v: 1,
+        rule: { period: { interval: 2, unit: "week" }, basis: "schedule" },
+      },
+    });
+    expect(readRecurrence(readable).kind).toBe("rule");
+    expect(planRecurrenceDiscard(readable)).toEqual({ kind: "nothing" });
+    expect(planRecurrenceDiscard(taskBlockWith())).toEqual({ kind: "nothing" });
+  });
 });

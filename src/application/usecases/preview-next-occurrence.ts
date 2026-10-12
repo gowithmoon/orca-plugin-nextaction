@@ -6,9 +6,8 @@ import {
   isLastOccurrence,
   nextOccurrence,
   type RecurrenceRule,
-  type TaskDates,
 } from "../../domain/recurrence/recurrence";
-import type { CalendarDate } from "../../domain/task/task";
+import type { CalendarDate, TaskDates } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";

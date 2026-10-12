@@ -44,6 +44,41 @@
 
 - `orca.state.settings[46]`（`ReminderAlertOffsets`）的结果没有出现在返回中，P3 只返回了别名。推测这个设置项与提前提醒有关（推断）。
 
+### 第十步补测（2026-10-12，Windows，脚本 `.scratch/spikes/step10-reminder.js`）
+
+- **修改提醒**：`setRefData(Reminder 标签引用, [{ name: "Date time", type: 5, value: Date }])` 后，`get-remindings` 立即跟着变成新时刻，到新时刻照常弹出通知（S4）。
+- **移除提醒**：`removeTag(块, "Reminder")` 后，`get-remindings` 中不再有这个块，原定时刻没有弹出通知（S5）。
+- **任务块上的原生提醒**：块上同时有任务标签和 `Reminder` 标签时，到时照常弹出通知（S3）。
+- **点击原生通知**：Orca 定位到笔记中的对应块（用户确认）。
+- **插件自己发系统通知**：渲染进程中的网页 `Notification` 可以使用，不需要申请权限，弹出的是系统通知（S1）。Orca 在前台时，3 分钟的 `setTimeout` 晚了 6 ms（S2，`visibility: "visible"`；最小化时的表现没测到）。点击插件发出的通知，没有记录到 `onclick`。
+- 读回的 `Date time` 带 `typeArgs: { subType: "datetime" }`。
+
+### 第十步补测二：Orca 最小化时（2026-10-12，Windows，Orca 1.97.1 / Electron 42.7.0，脚本 `.scratch/spikes/step10-background.js`）
+
+- **单次长 `setTimeout` 准时**：最小化（`visibility: "hidden"`）期间，12 分钟的 `setTimeout` 晚了 142 ms，系统通知照常弹出（`onshow`）。
+- **`setInterval` 被节流**：隐藏约 3 分钟后，30 秒的间隔变成 60 秒左右（其中一次 85 秒），即每分钟最多一次。靠轮询计时最多晚约 1 分钟；用"只为最近的提醒设一次 `setTimeout`"不受影响。
+- **点击插件发出的系统通知，Orca 没有回到前台**：没有记录到 `onclick`；点击后约 1 分钟记录到 `onclose`。`onclose` 是点击引起的，还是通知超时进入通知中心引起的，分不出来。用户随后自己切回 Orca。
+- 对比：原生 `Reminder` 的通知由 Orca 主进程发出，点击后会定位到块。
+
+### 第十步补测三：通知的事件与把窗口带到前台（2026-10-12，同上环境，脚本 `.scratch/spikes/step10-click.js`）
+
+- **点击还在屏幕上的通知会触发 `onclick`**（A，弹出 2 秒后点击），但 Orca 不会因此回到前台。
+- **点 × 和等它自己消失都触发 `onclose`**（B 4 秒后，C 约 6 秒后），两者分不出来。Windows 的通知弹出约 6 秒后自动收起。
+- 补测二点击时没有 `onclick`、约 1 分钟后才有 `onclose`：那次通知带 `requireInteraction`，推测点击时它已经收进了通知中心，从通知中心点击不触发 `onclick`（推断，没有单独验证）。
+- **`core.global.toggleWindow` 能把最小化的 Orca 带到前台**：调用后立即 `visibility: "visible"`、窗口获得焦点。插件调用时不需要用户操作。
+
+### 第十步补测四：点击通知后带到前台并定位（2026-10-12，同上环境，脚本 `.scratch/spikes/step10-locate.js`）
+
+- **在 `onclick` 里调 `toggleWindow`，最小化（A）和被别的窗口完全挡住（B）时，Orca 都回到了前台**，没有出现反而被藏起来的情况。
+- **Windows 上被完全挡住的窗口也报告 `visibility: "hidden"`**（B 点击时），与最小化分不出来。
+- 紧接着 `orca.nav.goTo("block", { blockId: 69 }, orca.state.activePanel)` 看起来没有跳转：69 是当天的日记块（`TARGET` 为空时的取值），活动面板本来就显示着它。补测五改用任务块后确认跳转正常。
+
+### 第十步补测五：定位到任务块；可见但没有焦点时（2026-10-12，同上环境，脚本 `.scratch/spikes/step10-goto.js`）
+
+- **点击通知 → `toggleWindow` → `goTo` 能定位到任务块**：最小化（A）和可见但没有焦点（B）两种情况，Orca 都回到前台并获得焦点，活动面板立即显示目标任务块 48（`viewArgs.blockId: 48`），不需要等待或再次调用（用户确认）。
+- **Orca 可见但没有焦点时，`toggleWindow` 把它带到前台，不会藏起来**（B，`visibility: "visible"`、`focus: false` 时调用）。没有测 Orca 已有焦点时调用；做法是只在 `document.hasFocus()` 为假时调用。
+- 结论：通知还在屏幕上时点击，可以把 Orca 带到前台并定位到任务块；收进系统通知中心后再点，不触发 `onclick`（补测二、三），这时什么都不做。
+
 ## 对后续步骤的影响
 
 **第十步：提醒（决策留到那时）**

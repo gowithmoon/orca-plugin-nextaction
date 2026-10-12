@@ -218,3 +218,63 @@ describe("skip this occurrence of a recurring task (#91)", () => {
     expect(repository.writeCount()).toBe(0);
   });
 });
+
+describe("skip this occurrence: reminders (GLOSSARY: 提醒)", () => {
+  it("moves the task's reminders with its dates, in the same write, leaving a done descendant task's reminders as they are", async () => {
+    const repository = createInMemoryTaskRepository();
+    const childReminders = {
+      kind: "list",
+      reminders: [new Date("2026-10-11T20:00:00+08:00")],
+    } as const;
+    repository.addTask({
+      id: 30,
+      status: "todo",
+      due: oct12,
+      recurrence: { kind: "rule", rule: weekly },
+      reminders: {
+        kind: "list",
+        reminders: [new Date("2026-10-11T09:00:00+08:00")],
+      },
+    });
+    repository.addTask(
+      { id: 31, status: "done", reminders: childReminders },
+      { parentId: 30 },
+    );
+    const skip = createSkipOccurrence(deps(repository));
+
+    await skip(30);
+
+    expect((await repository.getTask(30))?.reminders).toEqual({
+      kind: "list",
+      reminders: [new Date("2026-10-18T09:00:00+08:00")],
+    });
+    expect(await repository.getTask(31)).toMatchObject({
+      status: "todo",
+      reminders: childReminders,
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("skips a task whose reminders cannot be read, the reminders kept as they are", async () => {
+    const repository = createInMemoryTaskRepository();
+    const unreadable = {
+      kind: "unreadable",
+      reason: "unknown version 2",
+    } as const;
+    repository.addTask({
+      id: 32,
+      status: "todo",
+      due: oct12,
+      recurrence: { kind: "rule", rule: weekly },
+      reminders: unreadable,
+    });
+    const skip = createSkipOccurrence(deps(repository));
+
+    expect(await skip(32)).toEqual({ next: oct19, skippedOn: oct14 });
+
+    expect(await repository.getTask(32)).toMatchObject({
+      due: oct19,
+      reminders: unreadable,
+    });
+  });
+});

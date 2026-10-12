@@ -9,6 +9,9 @@ const zhCN: Record<string, string> = {
   "Day boundary": "日界线",
   "A day starts at this time. Usually set in the early morning.":
     "一天从这个时刻开始，一般设在凌晨。",
+  "Reminder default time": "提醒默认时刻",
+  "The time of day the quick reminder options fall at, such as on the due date or 3 days before it.":
+    "提醒快捷选项（如截止日期当天、前 3 天）所用的时刻。",
   "Start preview days": "开始日期预览天数",
   "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
     "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
@@ -388,6 +391,35 @@ const zhCN: Record<string, string> = {
   "Last reviewed": "上次回顾",
   "Not yet": "还没有",
   "Remove review": "移除回顾",
+  Reminders: "提醒",
+  "No reminders": "无",
+  "No reminders yet": "还没有提醒",
+  Passed: "已过",
+  "${moment} · ${n} more": "${moment} · 另 ${n} 个",
+  "On the due date": "截止日期当天",
+  "1 day before the due date": "截止日期前 1 天",
+  "${n} days before the due date": "截止日期前 ${n} 天",
+  "On the start date": "开始日期当天",
+  "1 day before the start date": "开始日期前 1 天",
+  "${n} days before the start date": "开始日期前 ${n} 天",
+  "This task's reminders cannot be read (${reason}). They are kept as they are and cannot be changed here.":
+    "这个任务的提醒无法读取（${reason}），已原样保留，不能在这里修改。",
+  "Change the time of the reminder at ${moment}": "修改 ${moment} 的提醒时刻",
+  "Delete reminder": "删除提醒",
+  "Delete the reminder at ${moment}": "删除 ${moment} 的提醒",
+  "Quick add": "快捷添加",
+  "${name} (passed)": "${name}（已过）",
+  Custom: "自定义",
+  "Choose the date and time": "选择日期和时刻",
+  "A reminder cannot be set in the past.": "不能把提醒设在过去的时刻。",
+  "Clear all": "清除全部",
+  "Discard and reset": "丢弃并重置",
+  "It may have been written by a newer version of this plugin. Once discarded, this version cannot bring it back; you can undo it.":
+    "这份数据可能是更新版本的插件写的，丢弃后无法用这个版本恢复；可以撤销。",
+  "Could not discard: ${reason}": "无法丢弃：${reason}",
+  "Could not save the reminders: they cannot be read (${reason}) and are kept as they are.":
+    "无法保存提醒：提醒无法读取（${reason}），已原样保留。",
+  "Has reminders": "有提醒",
   "This task's review plan cannot be read (${reason}). It is kept as it is and cannot be changed here.":
     "这个任务的回顾计划读取失败（${reason}），保持原样，这里不能修改。",
   "Mark reviewed": "标记已回顾",
@@ -446,6 +478,7 @@ const zhCN: Record<string, string> = {
   "Nothing completed or skipped": "这段时间没有完成或跳过的任务",
   "Planned but not done": "排了没做",
   "Nothing planned was left undone": "排进我的一天的任务都做了",
+  "Orca Note task reminder": "虎鲸笔记任务提醒",
 };
 
 export default zhCN;

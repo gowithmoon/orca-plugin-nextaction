@@ -36,6 +36,7 @@ import { markedStatus } from "../components/status-menu";
 import { FailedNotice, PausedNotice } from "../components/view-notice";
 import { useCandidates } from "../hooks/use-candidates";
 import { useLiveTask } from "../hooks/use-live-task";
+import { useNow } from "../hooks/use-now";
 import {
   type TaskActionsDeps,
   useTaskActions,
@@ -45,6 +46,8 @@ import { ChoicesField } from "./choices-field";
 import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
+import { ReminderField } from "./reminder-field";
+import type { OpenReminderPopup } from "./reminder-popup";
 import { ReviewField } from "./review-field";
 import type { OpenReviewPopup } from "./review-popup";
 import {
@@ -82,6 +85,10 @@ export interface TaskPanelFormDeps {
   repairNotAdvanced: RepairNotAdvanced;
   /** Opens the review popup for the task (#103). */
   openReviewPopup: OpenReviewPopup;
+  /** Opens the reminder popup for the task (#107). */
+  openReminderPopup: OpenReminderPopup;
+  /** The current time, for which reminders are still to come. */
+  now: () => Date;
   /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
   markReviewed: MarkReviewed;
   /** Whether "Mark reviewed" shows for the task. */
@@ -170,6 +177,10 @@ function Fields(props: {
   onOpenRecurrence: () => void;
   /** Opens the review popup (#103). */
   onOpenReview: () => void;
+  /** Opens the reminder popup (#107). */
+  onOpenReminders: () => void;
+  /** The current time, for the reminder row. */
+  now: Date;
   /** Whether "Mark reviewed" shows (#103). */
   canMarkReviewed: boolean;
 }) {
@@ -238,6 +249,15 @@ function Fields(props: {
           labelId={id("recurrence")}
           recurrence={task.recurrence}
           onOpen={props.onOpenRecurrence}
+        />
+      </Field>
+      <Field label={t("Reminders")} labelId={id("reminders")}>
+        <ReminderField
+          labelId={id("reminders")}
+          reminders={task.reminders}
+          now={props.now}
+          today={today}
+          onOpen={props.onOpenReminders}
         />
       </Field>
       <Field label={t("Review")} labelId={id("review")}>
@@ -319,6 +339,8 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const idPrefix = React.useId();
   const { state, reload } = useLiveTask(deps.readTask, taskId, deps.changes);
   const actions = useTaskPanelActions(deps, taskId, reload);
+  // Read again once a minute, so a reminder passing shows as passed.
+  const now = useNow(deps.now);
   const taskActions = useTaskActions(deps.actions);
   const { notify } = deps.actions;
   const candidates = useCandidates(deps.readCandidates, deps.changes, notify);
@@ -359,6 +381,8 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         candidates={candidates}
         onOpenRecurrence={() => deps.openRecurrencePopup(state.task)}
         onOpenReview={() => deps.openReviewPopup(state.task)}
+        onOpenReminders={() => deps.openReminderPopup(state.task)}
+        now={now}
         canMarkReviewed={deps.canMarkReviewed(state.task)}
         notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use

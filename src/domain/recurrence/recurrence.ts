@@ -6,7 +6,7 @@ import {
   type CompletionHistory,
   lastCompletion,
 } from "../task/completion-history";
-import type { CalendarDate, TaskStatus } from "../task/task";
+import type { CalendarDate, TaskDates, TaskStatus } from "../task/task";
 import type { TaskChanges } from "../task/task-changes";
 import {
   addDays,
@@ -191,12 +191,6 @@ export function activeRule(
   return recurrence.kind === "rule" && !recurrence.rule.paused
     ? recurrence.rule
     : undefined;
-}
-
-/** A task's dates, as the next occurrence needs them. */
-export interface TaskDates {
-  readonly start: CalendarDate | null;
-  readonly due: CalendarDate | null;
 }
 
 /**

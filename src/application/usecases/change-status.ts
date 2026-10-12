@@ -99,7 +99,18 @@ export function createChangeStatus(deps: {
       status,
       completion,
     );
-    await deps.repository.updateTask(id, { status }, history);
+    // A done task has no use for its reminders (GLOSSARY: 提醒): cleared in
+    // the same write as the completion, so one undo brings them back.
+    // Only a task with a list has any to clear; reminders this plugin cannot
+    // read are kept as they are, and the task is completed all the same.
+    await deps.repository.updateTasks([
+      {
+        id,
+        changes: { status },
+        completionHistory: history,
+        ...(task.reminders.kind === "list" && { reminders: [] }),
+      },
+    ]);
     return { kind: "changed" };
   };
 }
