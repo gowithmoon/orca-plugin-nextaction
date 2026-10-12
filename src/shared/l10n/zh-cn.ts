@@ -475,6 +475,7 @@ const zhCN: Record<string, string> = {
   "Nothing completed or skipped": "这段时间没有完成或跳过的任务",
   "Planned but not done": "排了没做",
   "Nothing planned was left undone": "排进我的一天的任务都做了",
+  "Orca Note task reminder": "虎鲸笔记任务提醒",
 };
 
 export default zhCN;

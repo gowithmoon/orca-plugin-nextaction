@@ -1,7 +1,7 @@
 // Reminders (GLOSSARY: 提醒). Pure: the current time is passed in as `now`.
 // A reminder is an absolute moment; quick options turn a due or start date
 // into one on the calendar day (not the logical day), local time (ADR 0012).
-import type { CalendarDate, TaskStatus } from "../task/task";
+import type { CalendarDate, TaskId, TaskStatus } from "../task/task";
 import { addDays } from "../time/calendar-days";
 
 /** A local time of day: hours 0–23, minutes 0–59. */
@@ -147,6 +147,66 @@ export function showsReminderBell(
 /** The reminders later than `now` (still to come), in order. */
 export function upcomingReminders(reminders: Reminders, now: Date): Reminders {
   return reminders.filter((moment) => moment.getTime() > now.getTime());
+}
+
+/** What checking reminders needs of a task. */
+export interface RemindedTask {
+  readonly id: TaskId;
+  readonly status: TaskStatus;
+  readonly reminders: ReminderRead;
+}
+
+/** A reminder that has come due: its task and its moment. */
+export interface DueReminder {
+  readonly taskId: TaskId;
+  readonly at: Date;
+}
+
+/**
+ * Every reminder of `tasks` that came due after `since` (not at it) up to
+ * and at `now`, each once, by moment. Done tasks and reminders this plugin
+ * cannot read are skipped. Missed reminders come out one by one as those on
+ * time do (GLOSSARY: 错过的提醒).
+ */
+export function dueReminders(
+  tasks: readonly RemindedTask[],
+  since: Date,
+  now: Date,
+): DueReminder[] {
+  const due: DueReminder[] = [];
+  for (const task of tasks) {
+    // A done task is not reminded; reminders it cannot read are none.
+    if (task.status === "done") continue;
+    for (const moment of remindersIn(task.reminders)) {
+      if (
+        moment.getTime() > since.getTime() &&
+        moment.getTime() <= now.getTime()
+      ) {
+        due.push({ taskId: task.id, at: moment });
+      }
+    }
+  }
+  // Stable: reminders at the same moment keep the order of `tasks`.
+  return due.sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
+/**
+ * When reminders next need checking: the earliest reminder later than `now`
+ * among `tasks` not done; `null` when none is to come.
+ */
+export function nextWakeUp(
+  tasks: readonly RemindedTask[],
+  now: Date,
+): Date | null {
+  let earliest: Date | null = null;
+  for (const task of tasks) {
+    if (task.status === "done") continue;
+    const next = upcomingReminders(remindersIn(task.reminders), now)[0];
+    if (next && (earliest === null || next.getTime() < earliest.getTime())) {
+      earliest = next;
+    }
+  }
+  return earliest;
 }
 
 /** `moments` ascending, each moment once. */

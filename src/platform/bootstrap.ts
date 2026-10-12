@@ -6,6 +6,7 @@ import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
 import { createRegistry, type Registry } from "./registry";
 import { createLoadReminderDefaultTime } from "./reminder-default-time";
+import { createReminderFeature } from "./reminder-feature";
 import {
   applySettingsSchema,
   readSettings,
@@ -195,6 +196,14 @@ export function createNextActionPlugin(): Plugin {
       taskPanel.feature,
       taskMenu.feature,
       panel.feature,
+      // Last: it checks once loaded, so missed reminders are caught up with
+      // every feature in place; its timer is released first.
+      createReminderFeature({
+        repository,
+        changes: taskChanges.changes,
+        names: taskTag.names,
+        openInNotes: (taskId) => taskActions.taskActions.openInNotes(taskId),
+      }),
     ],
   });
 }
