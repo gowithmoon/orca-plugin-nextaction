@@ -31,11 +31,7 @@ import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { Select } from "../../components/popup-controls";
 import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
-import {
-  FailedNotice,
-  PausedNotice,
-  ViewNotice,
-} from "../../components/view-notice";
+import { FailedNotice, PausedNotice } from "../../components/view-notice";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
 import { useMyDayCandidates } from "../../hooks/use-my-day-candidates";
 import { useNow } from "../../hooks/use-now";
@@ -130,6 +126,8 @@ function AddSearch(props: { deps: MyDayViewDeps }) {
         placeholder={t("Search to add")}
         width="100%"
         alignment="right"
+        // Framed like the search boxes of the other views (my-day-style.ts).
+        buttonClassName="nextaction-my-day-search-button"
         pre={<i className="ti ti-search" aria-hidden="true" />}
         onChange={(selected) => {
           const picked = Number(selected[0]);
@@ -153,20 +151,22 @@ function UnscheduledList(props: {
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
   const items = read.unscheduled;
+  // Empty, one line: the timeline below keeps the room.
   if (items.length === 0 && read.scheduled.length === 0) {
     return (
-      <ViewNotice
-        icon="ti ti-sun"
-        title={t("Nothing in My Day yet")}
-        detail={t(
+      <div className="nextaction-my-day-unscheduled-empty" role="status">
+        <span className="nextaction-my-day-unscheduled-empty-title">
+          {t("Nothing in My Day yet")}
+        </span>{" "}
+        {t(
           "Search beside the title to add a task, or choose “Add to My Day” in a task's menu.",
         )}
-      />
+      </div>
     );
   }
   if (items.length === 0) {
     return (
-      <div className="nextaction-my-day-all-scheduled">
+      <div className="nextaction-my-day-unscheduled-empty">
         {t("Everything in My Day is scheduled.")}
       </div>
     );

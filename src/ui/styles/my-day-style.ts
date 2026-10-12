@@ -88,6 +88,18 @@ export const myDayCss = `
   max-width: 100%;
 }
 
+/* Orca's Select button has no frame of its own; a search box needs one to be seen. */
+.nextaction-my-day-search .nextaction-my-day-search-button {
+  box-sizing: border-box;
+  border: 1px solid var(--orca-color-border);
+  border-radius: var(--orca-radius-md);
+  background-color: var(--orca-color-bg-1);
+}
+
+.nextaction-my-day-search .nextaction-my-day-search-button:hover {
+  border-color: var(--orca-color-text-2);
+}
+
 /*
  * A press anywhere on a card in My Day starts a drag (#85): its text is not
  * selectable here, as in the all tasks view's handle; the task panel shows
@@ -99,10 +111,21 @@ export const myDayCss = `
   user-select: none;
 }
 
-.nextaction-my-day-all-scheduled {
-  padding: var(--orca-spacing-md) 0;
+/*
+ * Nothing unscheduled: one quiet line, so the timeline keeps the room. Tall
+ * enough still to drop a timeline card on (#85).
+ */
+.nextaction-my-day-unscheduled-empty {
+  min-height: 2.5em;
+  padding: var(--orca-spacing-sm) 0;
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-sm);
+  line-height: var(--orca-lineheight-md);
+}
+
+.nextaction-my-day-unscheduled-empty-title {
+  color: var(--orca-color-text-1);
+  font-weight: var(--orca-fontweight-lg);
 }
 
 /*
