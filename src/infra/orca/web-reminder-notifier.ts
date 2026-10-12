@@ -18,9 +18,17 @@ export function createWebReminderNotifier(
 ): ReminderNotifier {
   return {
     notify({ taskId, text }) {
-      const notice = new Notification(t("Orca Note task reminder"), {
-        body: text,
-      });
+      let notice: Notification;
+      try {
+        notice = new Notification(t("Orca Note task reminder"), {
+          body: text,
+        });
+      } catch (error) {
+        // The port does not throw: the other notices still go out, and the
+        // checkpoint still moves, so this one is not shown twice.
+        console.error("[nextaction] could not show a reminder", error);
+        return;
+      }
       notice.onclick = () => {
         void (async () => {
           try {

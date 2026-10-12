@@ -16,6 +16,12 @@ import {
   remindersIn,
 } from "../../domain/reminder/reminder";
 import type { CalendarDate, Task } from "../../domain/task/task";
+import { addDays } from "../../domain/time/calendar-days";
+import {
+  calendarDateOf,
+  momentOnDate,
+  type TimeOfDay,
+} from "../../domain/time/time-of-day";
 import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
 import { DatePicker } from "../components/popup-controls";
@@ -48,25 +54,11 @@ const has = (list: Reminders, at: Date) =>
  * Where the custom moment starts: today at the reminder default time, or
  * tomorrow's when that has passed.
  */
-function customStart(
-  now: Date,
-  time: { readonly hours: number; readonly minutes: number },
-): Date {
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    time.hours,
-    time.minutes,
-  );
-  if (later(today, now)) return today;
-  return new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1,
-    time.hours,
-    time.minutes,
-  );
+function customStart(now: Date, time: TimeOfDay): Date {
+  const today = calendarDateOf(now);
+  const onToday = momentOnDate(today, time);
+  if (later(onToday, now)) return onToday;
+  return momentOnDate(addDays(today, 1), time);
 }
 
 /**

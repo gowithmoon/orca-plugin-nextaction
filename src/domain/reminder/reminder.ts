@@ -1,30 +1,16 @@
 // Reminders (GLOSSARY: 提醒). Pure: the current time is passed in as `now`.
 // A reminder is an absolute moment; quick options turn a due or start date
 // into one on the calendar day (not the logical day), local time (ADR 0012).
-import type { CalendarDate, TaskId, TaskStatus } from "../task/task";
+import type { CalendarDate, TaskDates, TaskId, TaskStatus } from "../task/task";
 import { addDays, daysBetween } from "../time/calendar-days";
-
-/** A local time of day: hours 0–23, minutes 0–59. */
-export interface TimeOfDay {
-  readonly hours: number;
-  readonly minutes: number;
-}
+import {
+  calendarDateOf,
+  momentOnDate,
+  type TimeOfDay,
+} from "../time/time-of-day";
 
 /** The reminder default time until the user sets another one. */
 export const defaultReminderTime: TimeOfDay = { hours: 9, minutes: 0 };
-
-/**
- * The reminder default time from the `time` setting's value. Orca holds a
- * whole `Date`; only its local hours and minutes mean anything. Anything but
- * a valid `Date` (or no value) reads as 9:00, as the day boundary reads
- * (plugin-lifecycle-settings).
- */
-export function reminderDefaultTimeFrom(value: unknown): TimeOfDay {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
-    return defaultReminderTime;
-  }
-  return { hours: value.getHours(), minutes: value.getMinutes() };
-}
 
 /** Which date a quick option counts back from. */
 export type QuickReminderFrom = "due" | "start";
@@ -44,27 +30,13 @@ export interface QuickReminderOption {
   readonly selectable: boolean;
 }
 
-/** `time` on the calendar day `date`, local time. */
-function momentOnDate(date: CalendarDate, time: TimeOfDay): Date {
-  return new Date(
-    date.year,
-    date.month - 1,
-    date.day,
-    time.hours,
-    time.minutes,
-  );
-}
-
 /**
  * The quick options for a task with these dates: the due day and 1, 3 and 7
  * days before it, then the start day and 1 day before it, each at
  * `defaultTime`. A date the task lacks has no options.
  */
 export function quickReminderOptions(
-  dates: {
-    readonly start: CalendarDate | null;
-    readonly due: CalendarDate | null;
-  },
+  dates: TaskDates,
   defaultTime: TimeOfDay,
   now: Date,
 ): QuickReminderOption[] {
@@ -163,6 +135,18 @@ export interface DueReminder {
 }
 
 /**
+ * Every reminder of `tasks` not done, in the order of `tasks`. Done tasks
+ * are not reminded; reminders this plugin cannot read count as none.
+ */
+function remindersOfOpenTasks(tasks: readonly RemindedTask[]): DueReminder[] {
+  return tasks.flatMap((task) =>
+    task.status === "done"
+      ? []
+      : remindersIn(task.reminders).map((at) => ({ taskId: task.id, at })),
+  );
+}
+
+/**
  * Every reminder of `tasks` that came due after `since` (not at it) up to
  * and at `now`, each once, by moment. Done tasks and reminders this plugin
  * cannot read are skipped. Missed reminders come out one by one as those on
@@ -173,21 +157,15 @@ export function dueReminders(
   since: Date,
   now: Date,
 ): DueReminder[] {
-  const due: DueReminder[] = [];
-  for (const task of tasks) {
-    // A done task is not reminded; reminders it cannot read are none.
-    if (task.status === "done") continue;
-    for (const moment of remindersIn(task.reminders)) {
-      if (
-        moment.getTime() > since.getTime() &&
-        moment.getTime() <= now.getTime()
-      ) {
-        due.push({ taskId: task.id, at: moment });
-      }
-    }
-  }
-  // Stable: reminders at the same moment keep the order of `tasks`.
-  return due.sort((a, b) => a.at.getTime() - b.at.getTime());
+  return (
+    remindersOfOpenTasks(tasks)
+      .filter(
+        ({ at }) =>
+          at.getTime() > since.getTime() && at.getTime() <= now.getTime(),
+      )
+      // Stable: reminders at the same moment keep the order of `tasks`.
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+  );
 }
 
 /**
@@ -199,11 +177,12 @@ export function nextWakeUp(
   now: Date,
 ): Date | null {
   let earliest: Date | null = null;
-  for (const task of tasks) {
-    if (task.status === "done") continue;
-    const next = upcomingReminders(remindersIn(task.reminders), now)[0];
-    if (next && (earliest === null || next.getTime() < earliest.getTime())) {
-      earliest = next;
+  for (const { at } of remindersOfOpenTasks(tasks)) {
+    if (
+      at.getTime() > now.getTime() &&
+      (earliest === null || at.getTime() < earliest.getTime())
+    ) {
+      earliest = at;
     }
   }
   return earliest;
@@ -213,15 +192,6 @@ export function nextWakeUp(
 export function normalizeReminders(moments: readonly Date[]): Reminders {
   const times = [...new Set(moments.map((moment) => moment.getTime()))];
   return times.sort((a, b) => a - b).map((time) => new Date(time));
-}
-
-/** The calendar day `moment` falls on, local time. */
-function calendarDateOf(moment: Date): CalendarDate {
-  return {
-    year: moment.getFullYear(),
-    month: moment.getMonth() + 1,
-    day: moment.getDate(),
-  };
 }
 
 /** `moment` `days` calendar days later, at the same local time. */
@@ -244,10 +214,7 @@ function laterByDays(moment: Date, days: number): Date {
  */
 export function moveReminders(
   reminders: Reminders,
-  dates: {
-    readonly start: CalendarDate | null;
-    readonly due: CalendarDate | null;
-  },
+  dates: TaskDates,
   next: CalendarDate,
 ): Reminders {
   const sorted = normalizeReminders(reminders);
