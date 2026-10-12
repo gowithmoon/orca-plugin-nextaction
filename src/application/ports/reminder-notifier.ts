@@ -9,7 +9,9 @@ export interface TaskReminderNotice {
 
 /**
  * Tells the user a task's reminder has come due (GLOSSARY: 提醒), as a
- * system notification. Each call is one notice; none are merged.
+ * system notification. Each call is one notice; none are merged. It does not
+ * throw: a notice that cannot be shown is reported by the implementation, so
+ * one failure neither stops the others nor holds the checkpoint back.
  */
 export interface ReminderNotifier {
   notify(notice: TaskReminderNotice): void;

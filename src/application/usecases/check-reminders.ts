@@ -11,8 +11,10 @@ import type { TaskRepository } from "../ports/task-repository";
  * Notifies every reminder due after the checkpoint up to now, in order of
  * moment, records now as the checkpoint, and returns when reminders next need
  * checking (`null` when none is to come). Without a checkpoint it starts from
- * now and catches nothing up. Errors are thrown as they are; a failed check
- * moves no checkpoint, so the next one tries again.
+ * now and catches nothing up. The notifier does not throw, so a notice that
+ * cannot be shown holds back neither the others nor the checkpoint. Errors
+ * reading or writing are thrown as they are; a failed check moves no
+ * checkpoint, so the next one tries again.
  */
 export type CheckReminders = () => Promise<Date | null>;
 
