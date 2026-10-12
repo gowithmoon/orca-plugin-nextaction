@@ -52,6 +52,8 @@ interface StoredBlock {
    * tag goes, as the completion history is.
    */
   myDay: MyDayRead | undefined;
+  /** Tags the block carries, by name, for block searches with a scope. */
+  tags: readonly string[];
 }
 
 export interface BlockSetup {
@@ -69,6 +71,8 @@ export interface BlockSetup {
   myDay?: MyDayRead;
   /** The block has an alias: it is a page. */
   page?: boolean;
+  /** Tags the block carries, by name, for block searches with a scope. */
+  tags?: readonly string[];
 }
 
 export interface InMemoryTaskRepository extends TaskRepository {
@@ -309,6 +313,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         completionHistory: setup.completionHistory,
         myDay: setup.myDay,
         page: setup.page ?? false,
+        tags: setup.tags ?? [],
       });
     },
 
@@ -324,6 +329,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         completionHistory: setup.completionHistory,
         myDay: setup.myDay,
         page: setup.page ?? false,
+        tags: setup.tags ?? [],
       });
     },
 
@@ -388,6 +394,29 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async readCustomPropertyDefinitions() {
       return [...customDefinitions];
+    },
+
+    async searchBlocks(search, scope) {
+      // Every word of `search`, ignoring case, in the block's text. Journals,
+      // orphans and mirrors are Orca details not modelled here.
+      const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+      const found = [];
+      for (const [id, block] of blocks) {
+        const text = block.task?.text ?? block.text;
+        if (scope !== null && !block.tags.includes(scope)) continue;
+        if (!words.every((word) => text.toLowerCase().includes(word))) continue;
+        found.push({ id, text });
+      }
+      return found;
+    },
+
+    async readBlockTexts(ids) {
+      const texts = new Map<number, string>();
+      for (const id of ids) {
+        const block = blocks.get(id);
+        if (block) texts.set(id, block.task?.text ?? block.text);
+      }
+      return texts;
     },
 
     async writeCustomProperty(id, name, value) {
@@ -661,6 +690,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           completionHistory: undefined,
           myDay: undefined,
           page: false,
+          tags: [],
         });
       });
       return id;

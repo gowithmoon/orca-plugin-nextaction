@@ -31,8 +31,12 @@ import {
   readCompletionHistory,
 } from "../codec/completion-history-codec";
 import {
+  blockCandidates,
   customPropertyDefinitions,
+  encodeBlockRefs,
+  planBlockRefsWrite,
   planCustomPropertyWrite,
+  resolveBlockRefTargets,
 } from "../codec/custom-property-codec";
 import {
   dependenciesWithout,
@@ -57,9 +61,11 @@ import { planReviewDiscard, planReviewWrite } from "../codec/review-codec";
 import {
   decodeTask,
   findTaskTagRef,
+  isOrphan,
   mirrorSourceId,
   resolveDependencyTargets,
   type TaskTagContext,
+  taskText,
 } from "../codec/task-codec";
 import { planConversion } from "../codec/task-conversion";
 import { encodeDependencies, encodeTaskChanges } from "../codec/task-encode";
@@ -70,6 +76,7 @@ import {
   moveBlocks,
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
+import { buildBlockSearchQuery } from "../query/block-search-query";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
 import { planChoiceAdditions } from "../schema/choice-plan";
@@ -593,7 +600,101 @@ export function createOrcaTaskRepository(
     return { block, run };
   };
 
+  /**
+   * Writes a block reference custom property (#115) as dependencies are
+   * written: a reference created for each new target, then the value as
+   * reference IDs, never block IDs (tag-operations A2); reference IDs left
+   * out go with their references (A4, A5). Everything is planned first, so a
+   * property deleted or changed in Orca fails having written nothing; one
+   * group, one undo.
+   */
+  const writeBlockRefs = async (
+    state: ReadyTag,
+    id: TaskId,
+    name: string,
+    targets: readonly number[],
+  ) => {
+    const definitions = await readDefinitions(state);
+    const block = await taskBlockToWrite(id, currentTag());
+    // Targets are block IDs coming in: mirrors resolve to their sources
+    // first, as every block ID does (block-properties-json M3).
+    const resolved =
+      targets.length === 0
+        ? []
+        : resolveDependencyTargets(targets, await getBlocks(targets));
+    const plan = planBlockRefsWrite(
+      definitions,
+      block,
+      state.tagBlockId,
+      name,
+      resolved,
+    );
+    await writeTo(block, async () => {
+      const refIds: number[] = [];
+      for (const item of plan) {
+        if (item.kind === "existing") {
+          refIds.push(item.refId);
+          continue;
+        }
+        const refId = await invokeEditorCommand(
+          "core.editor.createRef",
+          block.id,
+          item.target,
+          3,
+        );
+        if (typeof refId !== "number") {
+          throw new OrcaError(`createRef returned ${JSON.stringify(refId)}`);
+        }
+        refIds.push(refId);
+      }
+      // Read again after createRef before setRefData, as for dependencies.
+      const current = plan.some((i) => i.kind === "new")
+        ? (await getBlocks([block.id])).get(block.id)
+        : block;
+      const tagRef = current && findTaskTagRef(current.refs, state.tagBlockId);
+      if (!tagRef) throw new OrcaError(`block ${block.id} lost its task tag`);
+      await invokeEditorCommand("core.editor.setRefData", tagRef, [
+        encodeBlockRefs(name, refIds),
+      ]);
+    });
+  };
+
   return {
+    async readBlockTexts(ids) {
+      const texts = new Map<number, string>();
+      if (ids.length === 0) return texts;
+      // A block deleted while still referenced stays as an orphan
+      // (tag-operations X2): it reads as deleted, as a missing one does.
+      for (const [blockId, block] of await getBlocks(ids)) {
+        if (!isOrphan(block)) texts.set(blockId, taskText(block));
+      }
+      return texts;
+    },
+
+    async searchBlocks(search, scope) {
+      const query = buildBlockSearchQuery(search, scope);
+      if (!query) return [];
+      const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
+      if (ids.length === 0) return [];
+      const found = await getBlocks(ids);
+      const ordered = ids.flatMap((blockId) => {
+        const block = found.get(blockId);
+        return block ? [block] : [];
+      });
+      // Mirrors read as their sources (block-properties-json M1).
+      const sourceIds = ordered
+        .map((block) => mirrorSourceId(block))
+        .filter((sourceId): sourceId is number => sourceId !== undefined)
+        .filter((sourceId) => !found.has(sourceId));
+      const sources = new Map(found);
+      if (sourceIds.length > 0) {
+        for (const [sourceId, block] of await getBlocks(sourceIds)) {
+          sources.set(sourceId, block);
+        }
+      }
+      return blockCandidates(ordered, sources);
+    },
+
     async readCandidates(): Promise<Candidates> {
       const state = readyTag();
       const candidates: Candidates = { contexts: [], labels: [] };
@@ -634,7 +735,20 @@ export function createOrcaTaskRepository(
       const decoded = decodeTask(block, context);
       if (decoded.kind !== "task") return null;
       const [task] = await withResolvedDependencies([decoded.task], new Set());
-      return task ?? null;
+      if (!task) return null;
+      // Block reference custom property targets that are mirrors read as
+      // their sources too (#115), read only when there are any.
+      const targets = Object.values(task.customProperties).flatMap((value) =>
+        value.kind === "blockRefs" ? value.value : [],
+      );
+      if (targets.length === 0) return task;
+      return {
+        ...task,
+        customProperties: resolveBlockRefTargets(
+          task.customProperties,
+          await getBlocks([...new Set(targets)]),
+        ),
+      };
     },
 
     async updateTask(
@@ -968,6 +1082,10 @@ export function createOrcaTaskRepository(
       now: Date,
     ): Promise<void> {
       const state = readyTag();
+      if (value.kind === "blockRefs") {
+        await writeBlockRefs(state, id, name, value.value);
+        return;
+      }
       // Checked against the definitions as they are now: a property just
       // deleted or changed in Orca fails, writing nothing.
       const item = planCustomPropertyWrite(

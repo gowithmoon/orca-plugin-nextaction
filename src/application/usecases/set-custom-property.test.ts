@@ -53,6 +53,26 @@ describe("set custom property", () => {
     expect(repository.writeCount()).toBe(0);
   });
 
+  it("adds and removes block reference targets, one write each", async () => {
+    const { repository, setCustomProperty } = setup();
+    repository.setCustomPropertyDefinitions([
+      { name: "委托给", kind: "blockRefs", scope: "人" },
+    ]);
+
+    await setCustomProperty(1, "委托给", { kind: "blockRefs", value: [26] });
+    await setCustomProperty(1, "委托给", {
+      kind: "blockRefs",
+      value: [26, 27],
+    });
+    await setCustomProperty(1, "委托给", { kind: "blockRefs", value: [27] });
+
+    expect((await repository.getTask(1))?.customProperties.委托给).toEqual({
+      kind: "blockRefs",
+      value: [27],
+    });
+    expect(repository.writeCount()).toBe(3);
+  });
+
   it("refuses a property no longer defined (deleted in Orca), writing nothing", async () => {
     const { repository, setCustomProperty } = setup();
     repository.setCustomPropertyDefinitions([{ name: "预算", kind: "number" }]);

@@ -61,4 +61,34 @@ describe("read task for the task panel", () => {
 
     expect(await readTaskForPanel(41)).toBeNull();
   });
+
+  it("reads the text of each block reference target, a target deleted or never there marked deleted", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.setCustomPropertyDefinitions([
+      { name: "委托给", kind: "blockRefs", scope: "人" },
+    ]);
+    repository.addBlock(26, { text: "张三" });
+    repository.addBlock(27, { text: "李四" });
+    repository.addTask({
+      id: 40,
+      customProperties: {
+        委托给: { kind: "blockRefs", value: [27, 99, 26] },
+      },
+    });
+    const readTaskForPanel = createReadTaskForPanel({ repository });
+
+    const read = await readTaskForPanel(40);
+
+    expect(read?.customProperties).toEqual([
+      {
+        definition: { name: "委托给", kind: "blockRefs", scope: "人" },
+        value: { kind: "blockRefs", value: [27, 99, 26] },
+        targets: [
+          { id: 27, text: "李四", deleted: false },
+          { id: 99, text: null, deleted: true },
+          { id: 26, text: "张三", deleted: false },
+        ],
+      },
+    ]);
+  });
 });

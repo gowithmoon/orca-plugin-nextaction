@@ -222,6 +222,9 @@ const zhCN: Record<string, string> = {
   "Search tasks": "搜索任务",
   "Clear search": "清除搜索",
   "Add a dependency": "添加依赖",
+  "(Deleted block)": "（已删除的块）",
+  "Search blocks": "搜索块",
+  "Could not search the blocks: ${reason}": "无法搜索块：${reason}",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
   "Dependency mode": "依赖模式",

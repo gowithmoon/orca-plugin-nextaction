@@ -10,6 +10,7 @@ import {
   createMarkReviewed,
 } from "../application/usecases/mark-reviewed";
 import { createPreviewNextOccurrence } from "../application/usecases/preview-next-occurrence";
+import { createReadBlockRefCandidates } from "../application/usecases/read-block-ref-candidates";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
@@ -134,6 +135,7 @@ export function createTaskPanelFeature(deps: {
     }),
     setSequential: createSetSequential({ repository }),
     readDependencyCandidates: createReadDependencyCandidates({ repository }),
+    readBlockRefCandidates: createReadBlockRefCandidates({ repository }),
     setDependencies: createSetDependencies({ repository }),
     setDependencyMode: createSetDependencyMode({ repository }),
     openRecurrencePopup: createRecurrencePopup({

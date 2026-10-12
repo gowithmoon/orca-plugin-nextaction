@@ -20,6 +20,8 @@ export interface TaskActions {
   changeStatus(task: Task, status: TaskStatus): void;
   /** Opens the task's block in a note panel, never in the plugin panel. */
   openInNotes(task: Task): void;
+  /** As `openInNotes`, for any block (e.g. a block reference target, #115). */
+  openBlockInNotes(blockId: number): void;
 }
 
 export function useTaskActions(deps: TaskActionsDeps): TaskActions {
@@ -28,8 +30,17 @@ export function useTaskActions(deps: TaskActionsDeps): TaskActions {
   const panelId = panel?.panelId;
   const originPanelId = panel?.originPanelId;
   const openedInNotes = panel?.openedInNotes;
-  return React.useMemo(
-    () => ({
+  return React.useMemo(() => {
+    const openBlockInNotes = (blockId: number) => {
+      openInNotesReporting(
+        deps.openInNotes,
+        deps.notify,
+        blockId,
+        panelId === undefined ? undefined : { panelId, originPanelId },
+      );
+      openedInNotes?.();
+    };
+    return {
       changeStatus(task, status) {
         void changeStatusReporting(
           deps.changeStatus,
@@ -38,16 +49,8 @@ export function useTaskActions(deps: TaskActionsDeps): TaskActions {
           status,
         );
       },
-      openInNotes(task) {
-        openInNotesReporting(
-          deps.openInNotes,
-          deps.notify,
-          task.id,
-          panelId === undefined ? undefined : { panelId, originPanelId },
-        );
-        openedInNotes?.();
-      },
-    }),
-    [deps, panelId, originPanelId, openedInNotes],
-  );
+      openInNotes: (task) => openBlockInNotes(task.id),
+      openBlockInNotes,
+    };
+  }, [deps, panelId, originPanelId, openedInNotes]);
 }

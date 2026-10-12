@@ -43,7 +43,24 @@ export function planDependencyWrite(
   tagBlockId: number,
   targets: readonly number[],
 ): DependencyWriteItem[] {
-  const current = currentDependencyRefIds(block, tagBlockId);
+  return planBlockRefWrite(
+    block,
+    currentDependencyRefIds(block, tagBlockId),
+    targets,
+  );
+}
+
+/**
+ * What to write so a block reference value is exactly `targets` (block IDs
+ * of source blocks, in order), given the task block as read and the
+ * reference IDs the value holds now. Dependencies and block reference custom
+ * properties (#115) are written alike. A target listed twice is written once.
+ */
+export function planBlockRefWrite(
+  block: Pick<RawBlock, "refs">,
+  current: ReadonlySet<unknown>,
+  targets: readonly number[],
+): DependencyWriteItem[] {
   const items: DependencyWriteItem[] = [];
   for (const target of new Set(targets)) {
     const ref = block.refs.find(

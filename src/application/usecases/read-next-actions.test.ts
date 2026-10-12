@@ -61,6 +61,24 @@ describe("read next actions with custom properties", () => {
     expect(await read(false)).toEqual([3, 4, 1]);
     expect(await read(true)).toEqual([3, 4, 1]);
   });
+
+  it("does not take a block reference custom property pointing at an unfinished task for a dependency", async () => {
+    const { repository, readNextActions } = setup();
+    repository.setCustomPropertyDefinitions([
+      { name: "关联任务", kind: "blockRefs", scope: null },
+    ]);
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({
+      id: 2,
+      status: "todo",
+      customProperties: { 关联任务: { kind: "blockRefs", value: [1] } },
+    });
+
+    const ids = (await readNextActions()).items.map((item) => item.task.id);
+
+    expect(ids).toContain(2);
+    expect(ids).toContain(1);
+  });
 });
 
 describe("read next actions", () => {
