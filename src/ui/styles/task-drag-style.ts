@@ -17,8 +17,10 @@ export const taskDragCss = `
   min-width: 0;
 }
 
+/* As tall as the card, its grip in the middle: easy to find on a tall card. */
 .nextaction-drag-handle {
   flex: 0 0 auto;
+  align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: center;
