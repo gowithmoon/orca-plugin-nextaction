@@ -239,6 +239,18 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     }
   };
 
+  /** Reminders this plugin cannot read are never overwritten. */
+  const refuseUnreadableReminders = (
+    block: StoredBlock & { task: Task },
+    id: TaskId,
+  ) => {
+    if (block.task.reminders.kind === "unreadable") {
+      throw new Error(
+        `the reminders of block ${id} hold a value this plugin cannot read (${block.task.reminders.reason})`,
+      );
+    }
+  };
+
   const isBelow = (id: number, ancestorId: number) => {
     const seen = new Set<number>();
     let parentId = blocks.get(id)?.parentId;
@@ -372,6 +384,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         if (taskWrite.recurrence !== undefined) {
           refuseUnreadableRecurrence(block, taskWrite.id);
         }
+        if (taskWrite.reminders !== undefined) {
+          refuseUnreadableReminders(block, taskWrite.id);
+        }
         return { block, taskWrite };
       });
       write(() => {
@@ -383,6 +398,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
               recurrence: taskWrite.recurrence
                 ? { kind: "rule", rule: taskWrite.recurrence }
                 : { kind: "none" },
+            };
+          }
+          if (taskWrite.reminders !== undefined) {
+            block.task = {
+              ...block.task,
+              reminders: {
+                kind: "list",
+                reminders: normalizeReminders(taskWrite.reminders),
+              },
             };
           }
         }
@@ -501,12 +525,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async writeReminders(id, reminders) {
       const block = taskToWrite(id);
-      // Reminders this plugin cannot read are never overwritten.
-      if (block.task.reminders.kind === "unreadable") {
-        throw new Error(
-          `the reminders of block ${id} hold a value this plugin cannot read (${block.task.reminders.reason})`,
-        );
-      }
+      refuseUnreadableReminders(block, id);
       write(() => {
         // Stored ascending and each once, as the codec writes them.
         block.task = {

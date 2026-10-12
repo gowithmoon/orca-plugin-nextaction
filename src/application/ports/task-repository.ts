@@ -104,6 +104,11 @@ export interface TaskWrite {
   readonly completionHistory?: CompletionHistory;
   /** Replaces the task's recurrence rule, `null` removes it; absent leaves it. */
   readonly recurrence?: RecurrenceRule | null;
+  /**
+   * Replaces the task's reminders (GLOSSARY: 提醒), an empty list clearing
+   * them; absent leaves them.
+   */
+  readonly reminders?: Reminders;
 }
 
 /**
@@ -161,10 +166,11 @@ export interface TaskRepository {
   /**
    * Writes several tasks as `updateTask` writes one, each as its `TaskWrite`
    * says, and with `recurrence` also replaces its recurrence rule (`null`
-   * removes it, the property kept, as `writeRecurrence` does). The user
-   * undoes every task's write with one undo. Fails, writing nothing at all,
-   * when any block is not a task, a property is invalidated, or a completion
-   * history or recurrence rule to be replaced reads as unreadable. A mirror
+   * removes it, the property kept, as `writeRecurrence` does), with
+   * `reminders` its reminders (as `writeReminders` does). The user undoes
+   * every task's write with one undo. Fails, writing nothing at all, when
+   * any block is not a task, a property is invalidated, or a completion
+   * history, recurrence rule or reminders to be replaced read as unreadable. A mirror
    * block's ID writes to its source block.
    */
   updateTasks(writes: readonly TaskWrite[]): Promise<void>;
