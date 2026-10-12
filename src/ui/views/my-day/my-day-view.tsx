@@ -30,6 +30,7 @@ import { shownText } from "../../components/format";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { Select } from "../../components/popup-controls";
 import { TaskCard } from "../../components/task-card";
+import { taskSearchFilter } from "../../components/task-search-filter";
 import { ViewHeader } from "../../components/view-header";
 import { FailedNotice, PausedNotice } from "../../components/view-notice";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
@@ -104,9 +105,9 @@ function candidateOptions(
 }
 
 /**
- * The search box beside the unscheduled area's title: part of a task's text
- * finds it, choosing it adds it to today's My Day, unscheduled. Orca's
- * `Select` matches the text typed anywhere in the label (and its pinyin).
+ * The search box beside the unscheduled area's title: words of a task's text
+ * or search text find it (#112), choosing it adds it to today's My Day,
+ * unscheduled.
  */
 function AddSearch(props: { deps: MyDayViewDeps }) {
   const { deps } = props;
@@ -116,12 +117,14 @@ function AddSearch(props: { deps: MyDayViewDeps }) {
     deps.taskActions.notify,
   );
   const add = useAddToMyDay(deps.addToMyDay, deps.taskActions.notify);
+  const options = candidateOptions(candidates);
   return (
     <div className="nextaction-my-day-search">
       <Select
         selected={[]}
-        options={candidateOptions(candidates)}
+        options={options}
         filter={true}
+        filterFunction={taskSearchFilter(candidates, options)}
         filterPlaceholder={t("Search tasks")}
         placeholder={t("Search to add")}
         width="100%"

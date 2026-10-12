@@ -96,6 +96,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
   return {
     id,
     text,
+    searchText: "",
     created,
     status: "inbox",
     importance: 4,
