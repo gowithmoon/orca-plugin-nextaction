@@ -40,6 +40,7 @@ describe("decodeTask", () => {
     expect(decodedTask(blocks.zhFilled)).toEqual({
       id: 201,
       text: "NA验证任务A",
+      searchText: "NA验证任务A #任务,@home,2026-10-20,待开始,6\n",
       status: "todo",
       importance: 6,
       urgency: 5,
@@ -57,6 +58,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      customProperties: {},
       anomalies: [],
     });
   });
@@ -65,6 +67,7 @@ describe("decodeTask", () => {
     expect(decodedTask(blocks.enFilled, enTag)).toEqual({
       id: 301,
       text: "Call the plumber",
+      searchText: "Call the plumber #Task,@phone,Waiting,2,5\n",
       status: "waiting",
       importance: 2,
       urgency: 3,
@@ -82,6 +85,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      customProperties: {},
       anomalies: [],
     });
   });
@@ -91,6 +95,7 @@ describe("decodeTask", () => {
     expect(decodedTask(blocks.zhDefaultsOnly)).toEqual({
       id: 204,
       text: "NA验证任务B",
+      searchText: "NA验证任务B #任务,收集箱,4\n",
       status: "inbox",
       importance: 4,
       urgency: 4,
@@ -108,6 +113,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      customProperties: {},
       anomalies: [],
     });
   });
@@ -116,6 +122,7 @@ describe("decodeTask", () => {
     expect(decodedTask(blocks.zhCleared)).toEqual({
       id: 206,
       text: "NA清空测试",
+      searchText: "NA清空测试 #任务\n",
       status: "inbox",
       importance: 4,
       urgency: 4,
@@ -133,6 +140,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      customProperties: {},
       anomalies: [{ property: "status", value: null }],
     });
   });
@@ -544,6 +552,20 @@ describe("decodeTask", () => {
     expect(decodedTask(page).text).toBe("NA诊断页面");
   });
 
+  // tag-operations: Orca keeps the block's text with its tags and their
+  // property values joined in.
+  it("reads the search text from the block's text", () => {
+    expect(decodedTask(blocks.zhFilled).searchText).toBe(
+      "NA验证任务A #任务,@home,2026-10-20,待开始,6\n",
+    );
+  });
+
+  it("reads a missing or null block text as an empty search text", () => {
+    const { text: _text, ...withoutText } = blocks.zhFilled;
+    expect(decodedTask(withoutText).searchText).toBe("");
+    expect(decodedTask({ ...blocks.zhFilled, text: null }).searchText).toBe("");
+  });
+
   it("reads a page's own content as its text when it has some", () => {
     const page = { ...blocks.zhFilled, parent: null, aliases: ["NA页面"] };
     expect(decodedTask(page).text).toBe("NA验证任务A");
@@ -637,12 +659,13 @@ describe("decodeTask with values of the wrong kind", () => {
         { name: "截止日期", type: 3, value: 20261020 },
         { name: "上下文", type: 1, value: "@home" },
         { name: "标记", type: 6, value: [3, "house"] },
-        { name: "备注", type: 3, value: 42 },
+        { name: "备注", type: 3, value: [42] },
       ]),
     );
     expect(task).toEqual({
       id: 204,
       text: "NA验证任务B",
+      searchText: "NA验证任务B #任务,收集箱,4\n",
       status: "inbox",
       importance: 4,
       urgency: 4,
@@ -660,7 +683,37 @@ describe("decodeTask with values of the wrong kind", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      customProperties: {},
       anomalies: [{ property: "status", value: ["待开始"] }],
     });
+  });
+
+  it("reads the custom property values the task tag defines, ignoring the rest", () => {
+    const task = decodeTask(
+      withData([
+        { name: "状态", type: 6, value: "待开始" },
+        { name: "合同号", type: 1, value: 222 },
+        { name: "已报销", type: 4, value: true },
+        { name: "删掉的属性", type: 1, value: "old" },
+      ]),
+      {
+        ...zhTag,
+        customProperties: [
+          { name: "合同号", kind: "text" },
+          { name: "已报销", kind: "boolean" },
+          { name: "预算", kind: "number" },
+        ],
+      },
+    );
+    expect(task.kind === "task" && task.task.customProperties).toEqual({
+      合同号: { kind: "text", value: "222" },
+      已报销: { kind: "boolean", value: true },
+      预算: { kind: "number", value: null },
+    });
+  });
+
+  it("reads a note of digits only, stored as a number, as text (custom-properties)", () => {
+    const task = decodedTask(withData([{ name: "备注", type: 1, value: 222 }]));
+    expect(task.note).toBe("222");
   });
 });

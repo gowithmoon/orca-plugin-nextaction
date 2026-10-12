@@ -2,14 +2,22 @@
 // and again on every task change signal (ADR 0007). Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { ReadTask } from "../../application/usecases/read-task";
+import type {
+  ReadTaskForPanel,
+  TaskCustomProperty,
+} from "../../application/usecases/read-task";
 import type { Task, TaskId } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { createLatestRead } from "./latest-read";
 
 export type LiveTaskState =
   | { readonly kind: "loading" }
-  | { readonly kind: "loaded"; readonly task: Task }
+  | {
+      readonly kind: "loaded";
+      readonly task: Task;
+      /** Its custom properties, in Orca's order (#113). */
+      readonly customProperties: readonly TaskCustomProperty[];
+    }
   /** The block is no longer a task (dropped, deleted, tag removed). */
   | { readonly kind: "gone" }
   | { readonly kind: "failed"; readonly error: unknown }
@@ -18,10 +26,12 @@ export type LiveTaskState =
 /**
  * Task `id` as the notes hold it. A new read keeps what is shown until it
  * ends; only the latest read counts. `reload` reads again at once (e.g. after
- * a write failed, to show what the notes really hold).
+ * a write failed, to show what the notes really hold). The task tag's
+ * definitions are read each time too, so a custom property added, renamed or
+ * deleted in Orca shows on the next signal.
  */
 export function useLiveTask(
-  readTask: ReadTask,
+  readTaskForPanel: ReadTaskForPanel,
   id: TaskId,
   changes: ChangeSignalSource,
 ): { state: LiveTaskState; reload: () => void } {
@@ -29,15 +39,15 @@ export function useLiveTask(
   const reads = React.useMemo(
     () =>
       createLatestRead(
-        () => readTask(id),
+        () => readTaskForPanel(id),
         (outcome) => {
           if (outcome.kind !== "loaded") setState(outcome);
           else if (outcome.data) {
-            setState({ kind: "loaded", task: outcome.data });
+            setState({ kind: "loaded", ...outcome.data });
           } else setState({ kind: "gone" });
         },
       ),
-    [readTask, id],
+    [readTaskForPanel, id],
   );
   const reload = React.useCallback(() => reads.run(), [reads]);
 

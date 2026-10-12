@@ -860,6 +860,40 @@ describe("read all tasks, filtered and searched", () => {
     expect(shape(read.tree)).toEqual([1, 4]);
   });
 
+  it("by search text also finds the values in the block's search text, still finding what its text holds", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({
+      id: 1,
+      text: "Fix the sink",
+      searchText: "Fix the sink #Task,Todo,Zhang San\n",
+    });
+    repository.addTask({ id: 2, text: "Ask Zhang about the sink" });
+    repository.addTask({
+      id: 3,
+      text: "Fix the door",
+      searchText: "Fix the door #Task,Todo,Li Si\n",
+    });
+
+    expect(shape((await readAllTasks({ search: "zhang sink" })).tree)).toEqual([
+      1, 2,
+    ]);
+    expect(shape((await readAllTasks({ search: "door" })).tree)).toEqual([3]);
+  });
+
+  it("by search text finds a done section item by its search text", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({
+      id: 1,
+      status: "done",
+      text: "Renew passport",
+      searchText: "Renew passport #Task,Done,Zhang San\n",
+    });
+
+    const read = await readAllTasks({ search: "zhang" });
+
+    expect(read.done.items.map((task) => task.id)).toEqual([1]);
+  });
+
   it("counts the matching tasks, not the ancestor tasks shown only for where they sit", async () => {
     const { repository, readAllTasks } = setup();
     repository.addTask({ id: 1, text: "Move house" });

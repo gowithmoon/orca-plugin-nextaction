@@ -31,6 +31,7 @@ function task(
   const full: Task = {
     id,
     text: `task ${id}`,
+    searchText: "",
     created: new Date("2026-01-01T00:00:00Z"),
     status: setup.status ?? "todo",
     importance: 4,
@@ -48,6 +49,7 @@ function task(
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
   };
   return {

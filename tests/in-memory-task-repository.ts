@@ -20,6 +20,12 @@ import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../src/domain/task/completion-history";
+import {
+  type CustomPropertyDefinition,
+  type CustomPropertyValue,
+  checkCustomPropertyValue,
+  emptyCustomPropertyValue,
+} from "../src/domain/task/custom-property";
 import type { MyDayRead } from "../src/domain/task/my-day";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
 import type { TaskChanges } from "../src/domain/task/task-changes";
@@ -46,6 +52,8 @@ interface StoredBlock {
    * tag goes, as the completion history is.
    */
   myDay: MyDayRead | undefined;
+  /** Tags the block carries, by name, for block searches with a scope. */
+  tags: readonly string[];
 }
 
 export interface BlockSetup {
@@ -63,6 +71,8 @@ export interface BlockSetup {
   myDay?: MyDayRead;
   /** The block has an alias: it is a page. */
   page?: boolean;
+  /** Tags the block carries, by name, for block searches with a scope. */
+  tags?: readonly string[];
 }
 
 export interface InMemoryTaskRepository extends TaskRepository {
@@ -86,6 +96,14 @@ export interface InMemoryTaskRepository extends TaskRepository {
   journalOf(id: number): CalendarDate | undefined;
   /** Every `moveTask` that succeeded, oldest first. */
   moves(): readonly TaskMove[];
+  /**
+   * The task tag's custom property definitions (none unless set), as the
+   * user would set them in Orca: values of properties no longer defined
+   * stop reading, as Orca deletes them (custom-properties).
+   */
+  setCustomPropertyDefinitions(
+    definitions: readonly CustomPropertyDefinition[],
+  ): void;
 }
 
 /** When a block was created, unless a test says otherwise. */
@@ -96,6 +114,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
   return {
     id,
     text,
+    searchText: "",
     created,
     status: "inbox",
     importance: 4,
@@ -113,6 +132,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
   };
 }
@@ -147,6 +167,25 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const positionOf = (position: number | undefined) => {
     nextPosition += 1;
     return position ?? nextPosition;
+  };
+
+  /** The task tag's custom property definitions. */
+  let customDefinitions: CustomPropertyDefinition[] = [];
+  /**
+   * The task with a value for every custom property defined, an empty one
+   * where none is stored, and none for properties no longer defined, as
+   * decoding reads it.
+   */
+  const withCustomProperties = (task: Task): Task => {
+    const values: Record<string, CustomPropertyValue> = {};
+    for (const definition of customDefinitions) {
+      const stored = task.customProperties[definition.name];
+      values[definition.name] =
+        stored?.kind === definition.kind
+          ? stored
+          : emptyCustomPropertyValue(definition.kind);
+    }
+    return { ...task, customProperties: values };
   };
 
   const store = (id: number, block: StoredBlock) => {
@@ -274,6 +313,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         completionHistory: setup.completionHistory,
         myDay: setup.myDay,
         page: setup.page ?? false,
+        tags: setup.tags ?? [],
       });
     },
 
@@ -289,6 +329,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         completionHistory: setup.completionHistory,
         myDay: setup.myDay,
         page: setup.page ?? false,
+        tags: setup.tags ?? [],
       });
     },
 
@@ -343,7 +384,77 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     async getTask(id) {
-      return blocks.get(id)?.task ?? null;
+      const task = blocks.get(id)?.task;
+      return task ? withCustomProperties(task) : null;
+    },
+
+    async getTaskWithDefinitions(id) {
+      const task = blocks.get(id)?.task;
+      return task
+        ? {
+            task: withCustomProperties(task),
+            definitions: [...customDefinitions],
+          }
+        : null;
+    },
+
+    setCustomPropertyDefinitions(next) {
+      customDefinitions = [...next];
+    },
+
+    async readCustomPropertyDefinitions() {
+      return [...customDefinitions];
+    },
+
+    async searchBlocks(search, scope) {
+      // Every word of `search`, ignoring case, in the block's text. Journals,
+      // orphans and mirrors are Orca details not modelled here.
+      const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+      const found = [];
+      for (const [id, block] of blocks) {
+        const text = block.task?.text ?? block.text;
+        if (scope !== null && !block.tags.includes(scope)) continue;
+        if (!words.every((word) => text.toLowerCase().includes(word))) continue;
+        found.push({ id, text });
+      }
+      return found;
+    },
+
+    async readBlockTexts(ids) {
+      const texts = new Map<number, string>();
+      for (const id of ids) {
+        const block = blocks.get(id);
+        if (block) texts.set(id, block.task?.text ?? block.text);
+      }
+      return texts;
+    },
+
+    async writeCustomProperty(id, name, value) {
+      const block = taskToWrite(id);
+      checkCustomPropertyValue(customDefinitions, name, value);
+      write(() => {
+        // Options typed in are added to the definition, as Orca's does.
+        if (value.kind === "single" || value.kind === "multi") {
+          const typed =
+            value.kind === "multi"
+              ? value.value
+              : value.value === null
+                ? []
+                : [value.value];
+          customDefinitions = customDefinitions.map((d) =>
+            d.name === name && (d.kind === "single" || d.kind === "multi")
+              ? {
+                  ...d,
+                  choices: [...new Set([...d.choices, ...typed])],
+                }
+              : d,
+          );
+        }
+        block.task = {
+          ...block.task,
+          customProperties: { ...block.task.customProperties, [name]: value },
+        };
+      });
     },
 
     async queryTasks(filter: TaskFilter) {
@@ -606,6 +717,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           completionHistory: undefined,
           myDay: undefined,
           page: false,
+          tags: [],
         });
       });
       return id;

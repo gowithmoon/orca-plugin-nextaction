@@ -92,6 +92,7 @@ describe("whether the task menu offers Mark reviewed", () => {
   const task = (partial: Partial<Task>): Task => ({
     id: 1,
     text: "",
+    searchText: "",
     status: "todo",
     importance: 4,
     urgency: 4,
@@ -109,6 +110,7 @@ describe("whether the task menu offers Mark reviewed", () => {
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
     ...partial,
   });

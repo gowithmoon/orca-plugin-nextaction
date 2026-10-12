@@ -10,11 +10,16 @@ import type {
   CanMarkReviewed,
   MarkReviewed,
 } from "../../application/usecases/mark-reviewed";
+import type { ReadBlockRefCandidates } from "../../application/usecases/read-block-ref-candidates";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
-import type { ReadTask } from "../../application/usecases/read-task";
+import type {
+  ReadTaskForPanel,
+  TaskCustomProperty,
+} from "../../application/usecases/read-task";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
+import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
@@ -43,6 +48,10 @@ import {
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import { ChoicesField } from "./choices-field";
+import {
+  type BlockRefsDeps,
+  CustomPropertiesField,
+} from "./custom-properties-field";
 import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
@@ -64,7 +73,12 @@ import {
 } from "./task-panel-fields";
 
 export interface TaskPanelFormDeps {
-  readTask: ReadTask;
+  /** The task with its custom properties (#113). */
+  readTaskForPanel: ReadTaskForPanel;
+  /** Writes one custom property (#113). */
+  setCustomProperty: SetCustomProperty;
+  /** Blocks offered to a block reference custom property (#115). */
+  readBlockRefCandidates: ReadBlockRefCandidates;
   editTask: EditTask;
   dropTask: DropTask;
   /** Values offered for contexts and labels. */
@@ -163,6 +177,8 @@ function Header(props: {
 
 function Fields(props: {
   task: Task;
+  /** In Orca's order; shown after the built-in fields (#113). */
+  customProperties: readonly TaskCustomProperty[];
   today: CalendarDate;
   idPrefix: string;
   actions: ReturnType<typeof useTaskPanelActions>;
@@ -173,6 +189,8 @@ function Fields(props: {
   notNextActionReasons: React.ReactNode;
   /** The dependencies list and search to add (#57). */
   dependencies: React.ReactNode;
+  /** For block reference custom properties (#115). */
+  blockRefs: BlockRefsDeps;
   /** Opens the recurrence rule popup (#95). */
   onOpenRecurrence: () => void;
   /** Opens the review popup (#103). */
@@ -329,6 +347,14 @@ function Fields(props: {
           />
         </Field>
       )}
+      <CustomPropertiesField
+        idPrefix={idPrefix}
+        properties={props.customProperties}
+        today={today}
+        saveOnLeave={props.saveOnLeave}
+        onChange={actions.setCustomProperty}
+        blockRefs={props.blockRefs}
+      />
     </div>
   );
 }
@@ -337,7 +363,11 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const { deps, taskId, onClose } = props;
   const { Button, Tooltip } = orca.components;
   const idPrefix = React.useId();
-  const { state, reload } = useLiveTask(deps.readTask, taskId, deps.changes);
+  const { state, reload } = useLiveTask(
+    deps.readTaskForPanel,
+    taskId,
+    deps.changes,
+  );
   const actions = useTaskPanelActions(deps, taskId, reload);
   // Read again once a minute, so a reminder passing shows as passed.
   const now = useNow(deps.now);
@@ -374,6 +404,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
     body = (
       <Fields
         task={state.task}
+        customProperties={state.customProperties}
         today={deps.today()}
         idPrefix={idPrefix}
         actions={actions}
@@ -384,6 +415,15 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         onOpenReminders={() => deps.openReminderPopup(state.task)}
         now={now}
         canMarkReviewed={deps.canMarkReviewed(state.task)}
+        blockRefs={{
+          readBlockRefCandidates: deps.readBlockRefCandidates,
+          notify,
+          onOpen: (blockId) => {
+            // Failures are told by the shared action (#39).
+            taskActions.openBlockInNotes(blockId);
+            props.onOpenedInNotes?.();
+          },
+        }}
         notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use
           // case returns none for the rest, so the row stays hidden.

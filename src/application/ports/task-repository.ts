@@ -4,6 +4,10 @@ import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
 import type { Reminders } from "../../domain/reminder/reminder";
 import type { ReviewPlan } from "../../domain/review/review";
 import type { CompletionHistory } from "../../domain/task/completion-history";
+import type {
+  CustomPropertyDefinition,
+  CustomPropertyValue,
+} from "../../domain/task/custom-property";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
@@ -30,6 +34,13 @@ export interface ValuesFilter {
   includes?: readonly string[];
   /** The task holds none of these. */
   excludes?: readonly string[];
+}
+
+/** A block offered as a block reference target (#115). */
+export interface BlockCandidate {
+  readonly id: number;
+  /** Its text as the notes hold it; may be empty. */
+  readonly text: string;
 }
 
 /** The multi-value properties whose values the user picks from candidates. */
@@ -287,4 +298,60 @@ export interface TaskRepository {
    * it, or the write fails.
    */
   moveTask(id: TaskId, target: TaskId, placement: MovePlacement): Promise<void>;
+
+  /**
+   * The task tag's custom property definitions (GLOSSARY: 自定义属性, ADR
+   * 0023) as they are now, in Orca's order. Read afresh on every call, so a
+   * property added, renamed, reordered or deleted in Orca shows on the next
+   * read (the task change signal follows the edit, ADR 0007).
+   */
+  readCustomPropertyDefinitions(): Promise<CustomPropertyDefinition[]>;
+
+  /**
+   * As `getTask`, with the custom property definitions its custom property
+   * values were read against: one read of them, so the two always agree
+   * (the task panel shows a row per definition, #113). `null` when the
+   * block is not a task.
+   */
+  getTaskWithDefinitions(id: TaskId): Promise<{
+    task: Task;
+    definitions: CustomPropertyDefinition[];
+  } | null>;
+
+  /**
+   * The text of each of the blocks `ids` (block reference targets, #115),
+   * read when asked for. A block that is gone, or deleted while still
+   * referenced (left behind as an orphan, tag-operations X2), is not in the
+   * result.
+   */
+  readBlockTexts(ids: readonly number[]): Promise<ReadonlyMap<number, string>>;
+
+  /**
+   * Blocks offered as targets of a block reference custom property (#115)
+   * whose text holds `search`: only blocks carrying the tag `scope` when
+   * given, every block otherwise. Journal blocks and orphans are left out; a
+   * mirror reads as its source block, each once.
+   */
+  searchBlocks(
+    search: string,
+    scope: string | null,
+  ): Promise<readonly BlockCandidate[]>;
+
+  /**
+   * Writes one custom property value of a task, an empty value clearing it;
+   * the task's other properties are left as they are. A single or multiple
+   * choice value's options missing from the property's choices are added to
+   * them in the same write (the only change to a definition, ADR 0023). `now` is when it is
+   * written (a time of day is stored on that day). The user undoes it with
+   * one undo. Fails, writing nothing, with `CustomPropertyChangedError` when
+   * the property is no longer defined or its kind is not the value's, or
+   * when the block is not a task or the write fails. A mirror block's ID
+   * writes to its source block.
+   */
+  writeCustomProperty(
+    id: TaskId,
+    name: string,
+    value: CustomPropertyValue,
+    now: Date,
+  ): Promise<void>;
 }

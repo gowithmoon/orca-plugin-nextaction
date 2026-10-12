@@ -3,6 +3,7 @@
 import type { RecurrenceRead } from "../recurrence/recurrence";
 import type { ReminderRead } from "../reminder/reminder";
 import type { ReviewRead } from "../review/review";
+import type { CustomPropertyValues } from "./custom-property";
 
 /** Identifies a task. It is the ID of the task's (source) block. */
 export type TaskId = number;
@@ -59,6 +60,12 @@ export interface Task {
   readonly id: TaskId;
   /** The block's own text, without tags or property values. */
   readonly text: string;
+  /**
+   * The text Orca keeps for the block, its tags and tag property values
+   * joined in (tag-operations); empty when it cannot be read. Only for
+   * searching (#112): no rule of the plugin reads it.
+   */
+  readonly searchText: string;
   readonly status: TaskStatus;
   readonly importance: Importance;
   /** How soon it needs moving, apart from any due date (GLOSSARY: 紧急度). */
@@ -107,6 +114,11 @@ export interface Task {
    * cannot read.
    */
   readonly reminders: ReminderRead;
+  /**
+   * Its custom property values (GLOSSARY: 自定义属性), by property name, for
+   * the properties the task tag defines. A record only: no rule reads it.
+   */
+  readonly customProperties: CustomPropertyValues;
   readonly anomalies: readonly DataAnomaly[];
 }
 
@@ -120,6 +132,7 @@ export type AncestorRatings = Pick<Task, "importance" | "urgency">;
 export interface TaskInNotes {
   id: TaskId;
   text: string;
+  searchText: string;
   status: {
     /** The status the note value stands for, if it is one. */
     key: TaskStatus | undefined;
@@ -144,6 +157,7 @@ export interface TaskInNotes {
   recurrence: RecurrenceRead;
   review: ReviewRead;
   reminders: ReminderRead;
+  customProperties: CustomPropertyValues;
 }
 
 /** Importance, urgency and effort default to 4 (GLOSSARY). */
@@ -183,6 +197,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
   return {
     id: input.id,
     text: input.text,
+    searchText: input.searchText,
     status: input.status.key ?? "inbox",
     importance: isRating(input.importance) ? input.importance : defaultRating,
     urgency: isRating(input.urgency) ? input.urgency : defaultRating,
@@ -200,6 +215,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     recurrence: input.recurrence,
     review: input.review,
     reminders: input.reminders,
+    customProperties: input.customProperties,
     anomalies,
   };
 }

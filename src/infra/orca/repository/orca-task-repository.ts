@@ -21,6 +21,10 @@ import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../../../domain/task/completion-history";
+import type {
+  CustomPropertyDefinition,
+  CustomPropertyValue,
+} from "../../../domain/task/custom-property";
 import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
@@ -30,6 +34,16 @@ import {
   readCompletionHistory,
 } from "../codec/completion-history-codec";
 import {
+  blockCandidates,
+  customPropertyDefinitions,
+  encodeBlockRefs,
+  planBlockRefsWrite,
+  planCustomChoiceAdditions,
+  planCustomPropertyWrite,
+  resolveBlockRefTargets,
+} from "../codec/custom-property-codec";
+import {
+  type DependencyWriteItem,
   dependenciesWithout,
   dependentsOf,
   planDependencyWrite,
@@ -52,12 +66,18 @@ import { planReviewDiscard, planReviewWrite } from "../codec/review-codec";
 import {
   decodeTask,
   findTaskTagRef,
+  isOrphan,
   mirrorSourceId,
   resolveDependencyTargets,
   type TaskTagContext,
+  taskText,
 } from "../codec/task-codec";
 import { planConversion } from "../codec/task-conversion";
-import { encodeDependencies, encodeTaskChanges } from "../codec/task-encode";
+import {
+  encodeDependencies,
+  encodeTaskChanges,
+  type RefDataItem,
+} from "../codec/task-encode";
 import {
   invokeBackend,
   invokeEditorCommand,
@@ -65,8 +85,10 @@ import {
   moveBlocks,
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
+import { buildBlockSearchQuery } from "../query/block-search-query";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
+import { RefType } from "../ref-type";
 import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
 import type { TaskTagState } from "../schema/task-tag-state";
@@ -189,6 +211,54 @@ export function createOrcaTaskRepository(
   };
 
   /**
+   * The task tag's custom property definitions as the tag block holds them
+   * now (ADR 0023). Read on every call rather than kept (ADR 0007), so an
+   * edit in Orca shows on the next read; one get-blocks.
+   */
+  const readTagProperties = async (state: ReadyTag) => {
+    const tag = (await getBlocks([state.tagBlockId])).get(state.tagBlockId);
+    if (!tag) {
+      throw new OrcaError(`the task tag block ${state.tagBlockId} is gone`);
+    }
+    return tag.properties;
+  };
+  const readDefinitions = async (state: ReadyTag) =>
+    customPropertyDefinitions(await readTagProperties(state));
+
+  /**
+   * As `readDefinitions`, for reads: when the tag block cannot be read just
+   * now, no custom properties rather than a failed view; writes still check
+   * against `readDefinitions` and fail.
+   */
+  const definitionsForReading = async (
+    state: ReadyTag,
+  ): Promise<CustomPropertyDefinition[]> => {
+    try {
+      return await readDefinitions(state);
+    } catch (error) {
+      console.warn(
+        "[nextaction] the task tag's custom properties cannot be read; tasks read without them",
+        error,
+      );
+      return [];
+    }
+  };
+
+  /**
+   * As `currentTag`, with the custom property definitions, for reads. They
+   * are read alongside what the caller reads (not before it), so they add
+   * no round trip in a row.
+   */
+  const readingTag = async (
+    state: ReadyTag,
+    definitions: Promise<CustomPropertyDefinition[]>,
+  ): Promise<TaskTagContext> => ({
+    tagBlockId: state.tagBlockId,
+    invalidated: state.invalidated,
+    customProperties: await definitions,
+  });
+
+  /**
    * The (source) block of a task, or `undefined` when the ID is not a task:
    * no such block, no task tag, or an orphan.
    */
@@ -290,16 +360,16 @@ export function createOrcaTaskRepository(
       language: state.language,
       invalidated: state.invalidated,
     };
-    const context: TaskTagContext = {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-    };
     // Built first: a filter on an invalidated property fails before the
     // query runs.
     const query = buildTaskQuery(filter, names);
+    const definitions = definitionsForReading(state);
     const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
     if (ids.length === 0) return [];
-    const blocks = await getBlocks(ids);
+    const [blocks, context] = await Promise.all([
+      getBlocks(ids),
+      readingTag(state, definitions),
+    ]);
     const tasks: Task[] = [];
     for (const id of ids) {
       const block = blocks.get(id);
@@ -323,10 +393,6 @@ export function createOrcaTaskRepository(
    */
   const readTaskGraph = async (): Promise<TaskGraphSnapshot> => {
     const state = readyTag();
-    const context: TaskTagContext = {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-    };
     const query = buildTaskQuery(
       {},
       {
@@ -335,9 +401,13 @@ export function createOrcaTaskRepository(
         invalidated: state.invalidated,
       },
     );
+    const definitions = definitionsForReading(state);
     const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
     if (ids.length === 0) return { tasks: [] };
-    const blocks = await getBlocks(ids);
+    const [blocks, context] = await Promise.all([
+      getBlocks(ids),
+      readingTag(state, definitions),
+    ]);
     const tasks: Task[] = [];
     for (const id of ids) {
       const block = blocks.get(id);
@@ -526,37 +596,9 @@ export function createOrcaTaskRepository(
       // (tag-operations A2). Reference IDs left out are removed with their
       // references (A4, A5). One group, so one undo.
       if (dependencyPlan !== undefined) {
-        const refIds: number[] = [];
-        for (const item of dependencyPlan) {
-          if (item.kind === "existing") {
-            refIds.push(item.refId);
-            continue;
-          }
-          const refId = await invokeEditorCommand(
-            "core.editor.createRef",
-            block.id,
-            item.target,
-            3,
-          );
-          if (typeof refId !== "number") {
-            throw new OrcaError(`createRef returned ${JSON.stringify(refId)}`);
-          }
-          refIds.push(refId);
-        }
-        // The spikes read the block again after createRef before
-        // setRefData; done the same here rather than reuse the old ref.
-        const current =
-          refIds.length > 0 && dependencyPlan.some((i) => i.kind === "new")
-            ? (await getBlocks([block.id])).get(block.id)
-            : block;
-        const tagRef =
-          current && findTaskTagRef(current.refs, state.tagBlockId);
-        if (!tagRef) {
-          throw new OrcaError(`block ${block.id} lost its task tag`);
-        }
-        await invokeEditorCommand("core.editor.setRefData", tagRef, [
-          encodeDependencies(refIds, { language: state.language }),
-        ]);
+        await runRefDataWrite(block, state.tagBlockId, dependencyPlan, (ids) =>
+          encodeDependencies(ids, { language: state.language }),
+        );
       }
       // setProperties replaces a property of the same name and keeps the
       // others (block-properties-json J2).
@@ -571,7 +613,161 @@ export function createOrcaTaskRepository(
     return { block, run };
   };
 
+  /**
+   * Runs a block reference write (dependencies #57, a block reference custom
+   * property #115) inside a write: a reference created with
+   * `createRef(task, target, 3)` for each new target, then the value written
+   * as reference IDs, never block IDs (tag-operations A2). Reference IDs left
+   * out go with their references (A4, A5).
+   */
+  const runRefDataWrite = async (
+    block: Block,
+    tagBlockId: number,
+    plan: readonly DependencyWriteItem[],
+    encode: (refIds: number[]) => RefDataItem,
+  ) => {
+    const refIds: number[] = [];
+    for (const item of plan) {
+      if (item.kind === "existing") {
+        refIds.push(item.refId);
+        continue;
+      }
+      const refId = await invokeEditorCommand(
+        "core.editor.createRef",
+        block.id,
+        item.target,
+        RefType.RefData,
+      );
+      if (typeof refId !== "number") {
+        throw new OrcaError(`createRef returned ${JSON.stringify(refId)}`);
+      }
+      refIds.push(refId);
+    }
+    // The spikes read the block again after createRef before setRefData;
+    // done the same here rather than reuse the old ref.
+    const current = plan.some((i) => i.kind === "new")
+      ? (await getBlocks([block.id])).get(block.id)
+      : block;
+    const tagRef = current && findTaskTagRef(current.refs, tagBlockId);
+    if (!tagRef) throw new OrcaError(`block ${block.id} lost its task tag`);
+    await invokeEditorCommand("core.editor.setRefData", tagRef, [
+      encode(refIds),
+    ]);
+  };
+
+  /**
+   * The task with the custom property definitions it was decoded with, one
+   * read of them, alongside reading the block.
+   */
+  const getTaskWithDefinitions = async (id: TaskId) => {
+    const state = readyTag();
+    const definitions = definitionsForReading(state);
+    const [block, context] = await Promise.all([
+      sourceBlock(id),
+      readingTag(state, definitions),
+    ]);
+    if (!block) return null;
+    const decoded = decodeTask(block, context);
+    if (decoded.kind !== "task") return null;
+    const [resolved] = await withResolvedDependencies(
+      [decoded.task],
+      new Set(),
+    );
+    if (!resolved) return null;
+    const result = {
+      task: resolved,
+      definitions: [...(context.customProperties ?? [])],
+    };
+    // Block reference custom property targets that are mirrors read as
+    // their sources too (#115), read only when there are any.
+    const targets = Object.values(resolved.customProperties).flatMap((value) =>
+      value.kind === "blockRefs" ? value.value : [],
+    );
+    if (targets.length === 0) return result;
+    return {
+      ...result,
+      task: {
+        ...resolved,
+        customProperties: resolveBlockRefTargets(
+          resolved.customProperties,
+          await getBlocks([...new Set(targets)]),
+        ),
+      },
+    };
+  };
+
+  /**
+   * Writes a block reference custom property (#115) as dependencies are
+   * written: a reference created for each new target, then the value as
+   * reference IDs, never block IDs (tag-operations A2); reference IDs left
+   * out go with their references (A4, A5). Everything is planned first, so a
+   * property deleted or changed in Orca fails having written nothing; one
+   * group, one undo.
+   */
+  const writeBlockRefs = async (
+    state: ReadyTag,
+    id: TaskId,
+    name: string,
+    targets: readonly number[],
+  ) => {
+    const definitions = await readDefinitions(state);
+    const block = await taskBlockToWrite(id, currentTag());
+    // Targets are block IDs coming in: mirrors resolve to their sources
+    // first, as every block ID does (block-properties-json M3).
+    const resolved =
+      targets.length === 0
+        ? []
+        : resolveDependencyTargets(targets, await getBlocks(targets));
+    const plan = planBlockRefsWrite(
+      definitions,
+      block,
+      state.tagBlockId,
+      name,
+      resolved,
+    );
+    await writeTo(block, () =>
+      runRefDataWrite(block, state.tagBlockId, plan, (ids) =>
+        encodeBlockRefs(name, ids),
+      ),
+    );
+  };
+
   return {
+    async readBlockTexts(ids) {
+      const texts = new Map<number, string>();
+      if (ids.length === 0) return texts;
+      // A block deleted while still referenced stays as an orphan
+      // (tag-operations X2): it reads as deleted, as a missing one does.
+      for (const [blockId, block] of await getBlocks(ids)) {
+        if (!isOrphan(block)) texts.set(blockId, taskText(block));
+      }
+      return texts;
+    },
+
+    async searchBlocks(search, scope) {
+      const query = buildBlockSearchQuery(search, scope);
+      if (!query) return [];
+      const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
+      if (ids.length === 0) return [];
+      const found = await getBlocks(ids);
+      const ordered = ids.flatMap((blockId) => {
+        const block = found.get(blockId);
+        return block ? [block] : [];
+      });
+      // Mirrors read as their sources (block-properties-json M1).
+      const sourceIds = ordered
+        .map((block) => mirrorSourceId(block))
+        .filter((sourceId): sourceId is number => sourceId !== undefined)
+        .filter((sourceId) => !found.has(sourceId));
+      const sources = new Map(found);
+      if (sourceIds.length > 0) {
+        for (const [sourceId, block] of await getBlocks(sourceIds)) {
+          sources.set(sourceId, block);
+        }
+      }
+      return blockCandidates(ordered, sources);
+    },
+
     async readCandidates(): Promise<Candidates> {
       const state = readyTag();
       const candidates: Candidates = { contexts: [], labels: [] };
@@ -606,14 +802,10 @@ export function createOrcaTaskRepository(
     },
 
     async getTask(id: TaskId): Promise<Task | null> {
-      const context = currentTag();
-      const block = await sourceBlock(id);
-      if (!block) return null;
-      const decoded = decodeTask(block, context);
-      if (decoded.kind !== "task") return null;
-      const [task] = await withResolvedDependencies([decoded.task], new Set());
-      return task ?? null;
+      return (await getTaskWithDefinitions(id))?.task ?? null;
     },
+
+    getTaskWithDefinitions,
 
     async updateTask(
       id: TaskId,
@@ -933,6 +1125,55 @@ export function createOrcaTaskRepository(
       await writeTo(block, () =>
         moveBlocks(block.id, targetBlock.id, placement),
       );
+    },
+
+    async readCustomPropertyDefinitions() {
+      return readDefinitions(readyTag());
+    },
+
+    async writeCustomProperty(
+      id: TaskId,
+      name: string,
+      value: CustomPropertyValue,
+      now: Date,
+    ): Promise<void> {
+      const state = readyTag();
+      if (value.kind === "blockRefs") {
+        await writeBlockRefs(state, id, name, value.value);
+        return;
+      }
+      const tagProperties = await readTagProperties(state);
+      // Checked against the definitions as they are now: a property just
+      // deleted or changed in Orca fails, writing nothing.
+      const item = planCustomPropertyWrite(
+        customPropertyDefinitions(tagProperties),
+        name,
+        value,
+        now,
+      );
+      // Options typed in go into the property's choices first, or Orca
+      // stores them without showing them (multi-choices-created).
+      const choiceWrite =
+        value.kind === "single" || value.kind === "multi"
+          ? planCustomChoiceAdditions(tagProperties, name, value)
+          : undefined;
+      const block = await taskBlockToWrite(id, currentTag());
+      const ref = findTaskTagRef(block.refs, state.tagBlockId);
+      if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
+      // setRefData takes the whole reference object and changes only the
+      // items passed (tag-operations, round 1 steps 05–06).
+      await writeTo(block, async () => {
+        // The options first, in the same group: one undo takes back both
+        // (multi-choices-created §3–4).
+        if (choiceWrite) {
+          await invokeEditorCommand(
+            "core.editor.setProperties",
+            [state.tagBlockId],
+            [choiceWrite],
+          );
+        }
+        await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+      });
     },
 
     queryTasks,

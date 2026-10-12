@@ -15,6 +15,7 @@ import type {
   TaskStatus,
 } from "../../domain/task/task";
 import { filterLets, type TaskFilter } from "../../domain/task/task-filter";
+import { matchesSearch } from "../../domain/task/task-search";
 import { addDays, compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
@@ -128,8 +129,8 @@ export interface ReadAllTasksOptions {
   /** Only the tasks it lets through are shown; none: every one. */
   readonly filter?: AllTasksFilter;
   /**
-   * Only the tasks whose text holds every word of it (split on white space),
-   * whatever the case, are shown; empty: every one.
+   * Only the tasks whose text and search text together hold every word of it
+   * (`matchesSearch`) are shown; empty: every one.
    */
   readonly search?: string;
   /**
@@ -276,24 +277,22 @@ function keptPath(
 /** What the filter and the search text let through. */
 interface Narrowing {
   readonly filter: AllTasksFilter;
-  /** The words searched for, in lower case; none: no search. */
-  readonly words: readonly string[];
+  /** What is searched for, as typed; empty: no search. */
+  readonly search: string;
 }
 
 function narrowing(options: ReadAllTasksOptions): Narrowing {
-  return {
-    filter: options.filter ?? {},
-    words: (options.search ?? "")
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((word) => word !== ""),
-  };
+  return { filter: options.filter ?? {}, search: options.search ?? "" };
 }
 
-/** The task's text holds every word searched for. */
+/** Something is searched for: not only white space. */
+function searches(narrow: Narrowing): boolean {
+  return narrow.search.trim() !== "";
+}
+
+/** The task is found by what is searched for (#112). */
 function found(narrow: Narrowing, task: Task): boolean {
-  const text = task.text.toLowerCase();
-  return narrow.words.every((word) => text.includes(word));
+  return matchesSearch(narrow.search, task);
 }
 
 /** The task is let through in the tree. */
@@ -433,8 +432,7 @@ export function createReadAllTasks(deps: {
     // Stable: ties keep note order.
     if (compare) tree.sort(compare);
     // Showing earlier items or searching lifts the done section's range.
-    const everyDay =
-      options.showEarlierDone === true || narrow.words.length > 0;
+    const everyDay = options.showEarlierDone === true || searches(narrow);
     return { tree, matchCount, done: doneSection(done, today, everyDay) };
   };
 }

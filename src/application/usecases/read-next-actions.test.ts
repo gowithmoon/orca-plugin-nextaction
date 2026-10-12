@@ -22,6 +22,65 @@ function setup() {
   return { repository, clock, startPreviewDays, readNextActions };
 }
 
+describe("read next actions with custom properties", () => {
+  it("gives the same next actions in the same score order whether or not tasks hold custom properties", async () => {
+    const read = async (withCustom: boolean) => {
+      const { repository, readNextActions } = setup();
+      repository.setCustomPropertyDefinitions(
+        withCustom
+          ? [
+              { name: "截止", kind: "date" },
+              { name: "优先", kind: "number" },
+              { name: "已报销", kind: "boolean" },
+            ]
+          : [],
+      );
+      const custom = withCustom
+        ? {
+            customProperties: {
+              截止: {
+                kind: "date",
+                value: { year: 2026, month: 10, day: 1 },
+              },
+              优先: { kind: "number", value: 7 },
+              已报销: { kind: "boolean", value: true },
+            } as const,
+          }
+        : {};
+      repository.addTask({ id: 1, status: "todo", importance: 2, ...custom });
+      repository.addTask({ id: 2, status: "waiting", ...custom });
+      repository.addTask({
+        id: 3,
+        status: "doing",
+        due: { year: 2026, month: 10, day: 9 },
+      });
+      repository.addTask({ id: 4, status: "todo", ...custom });
+      return (await readNextActions()).items.map((item) => item.task.id);
+    };
+
+    expect(await read(false)).toEqual([3, 4, 1]);
+    expect(await read(true)).toEqual([3, 4, 1]);
+  });
+
+  it("does not take a block reference custom property pointing at an unfinished task for a dependency", async () => {
+    const { repository, readNextActions } = setup();
+    repository.setCustomPropertyDefinitions([
+      { name: "关联任务", kind: "blockRefs", scope: null },
+    ]);
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({
+      id: 2,
+      status: "todo",
+      customProperties: { 关联任务: { kind: "blockRefs", value: [1] } },
+    });
+
+    const ids = (await readNextActions()).items.map((item) => item.task.id);
+
+    expect(ids).toContain(2);
+    expect(ids).toContain(1);
+  });
+});
+
 describe("read next actions", () => {
   it("lists the next actions, the highest score first", async () => {
     const { repository, readNextActions } = setup();

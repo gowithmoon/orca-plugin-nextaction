@@ -7,9 +7,11 @@ import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
 import type { MarkReviewed } from "../../application/usecases/mark-reviewed";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
+import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
 import type { SetSequential } from "../../application/usecases/set-sequential";
+import type { CustomPropertyValue } from "../../domain/task/custom-property";
 import type {
   DependencyMode,
   TaskId,
@@ -36,6 +38,8 @@ export interface TaskPanelWrites {
   repairNotAdvanced: RepairNotAdvanced;
   /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
   markReviewed: MarkReviewed;
+  /** Writes one custom property (GLOSSARY: 自定义属性, #113). */
+  setCustomProperty: SetCustomProperty;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -59,6 +63,7 @@ export function useTaskPanelActions(
   setDependencyMode(mode: DependencyMode): Promise<boolean>;
   repairNotAdvanced(): Promise<boolean>;
   markReviewed(): Promise<boolean>;
+  setCustomProperty(name: string, value: CustomPropertyValue): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -107,6 +112,11 @@ export function useTaskPanelActions(
       setDependencyMode: (mode) =>
         run(
           () => writes.setDependencyMode(id, mode),
+          (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
+      setCustomProperty: (name, value) =>
+        run(
+          () => writes.setCustomProperty(id, name, value),
           (reason) => t("Could not save the change: ${reason}", { reason }),
         ),
       // Its icon shows todo again, so the next occurrence is told (#93).

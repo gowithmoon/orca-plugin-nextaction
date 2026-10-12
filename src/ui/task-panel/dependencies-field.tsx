@@ -1,7 +1,9 @@
 // The task panel's dependencies (#57, GLOSSARY: 依赖, 失效依赖): the tasks
 // this one waits for, each removable on its own, stale ones marked; tasks are
-// added by searching their text. Every add or remove is one write, so one
-// undo. Recurring tasks, offered or picked, are marked with a hint that the
+// added by searching their text. The list and search are the shared block
+// reference field (#115); cycles and recurring tasks are this field's own. Every add or remove is one write, so one
+// undo. The search finds a task by its text and its search text (#112).
+// Recurring tasks, offered or picked, are marked with a hint that the
 // dependency stays unmet until they no longer recur (#94, ADR 0021).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 
@@ -15,10 +17,11 @@ import type { SelectOption } from "../../orca.d.ts";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
-import { Select } from "../components/popup-controls";
+import { taskSearchFilter } from "../components/task-search-filter";
 import { useDependencyCandidates } from "../hooks/use-dependency-candidates";
 import { useNotNextActionReasons } from "../hooks/use-not-next-action-reasons";
 import type { Notify } from "../notify";
+import { BlockRefsField } from "./block-refs-field";
 
 /**
  * Why a candidate cannot be picked, shown after its text; `null` when it can
@@ -57,7 +60,7 @@ export function DependenciesField(props: {
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
 }) {
-  const { Button, Tooltip } = orca.components;
+  const { Tooltip } = orca.components;
   // The text and staleness of each dependency come with why the task is not
   // a next action: both are what the task graph says about the task.
   const { dependencies: shown } = useNotNextActionReasons(
@@ -101,92 +104,55 @@ export function DependenciesField(props: {
     .map((entry) => entry.option);
 
   return (
-    <div className="nextaction-dependencies-field">
-      {shown.length > 0 && (
-        <ul className="nextaction-dependencies" aria-labelledby={props.labelId}>
-          {shown.map((dependency) => {
-            const text =
-              dependency.text === null
-                ? undefined
-                : shownText({ text: dependency.text });
-            return (
-              <li
-                key={dependency.id}
-                className="nextaction-dependency"
-                data-stale={dependency.stale || undefined}
-              >
-                {text ? (
-                  <button
-                    type="button"
-                    className="nextaction-dependency-task"
-                    data-empty={text.empty || undefined}
-                    onClick={() => props.onSelectTask(dependency.id)}
-                  >
-                    {text.text}
-                  </button>
-                ) : (
-                  <span className="nextaction-dependency-task">
-                    {t("(No longer a task)")}
-                  </span>
-                )}
-                {dependency.recurring && (
-                  <Tooltip text={recurringHint()}>
-                    <span
-                      className="nextaction-dependency-recurring"
-                      role="img"
-                      aria-label={t("Recurring task")}
-                    >
-                      <i className="ti ti-repeat" aria-hidden="true" />
-                    </span>
-                  </Tooltip>
-                )}
-                {dependency.stale && (
-                  <span className="nextaction-dependency-stale">
-                    {t("Stale")}
-                  </span>
-                )}
-                <Tooltip text={t("Remove dependency")}>
-                  <Button
-                    variant="plain"
-                    aria-label={t("Remove dependency")}
-                    onClick={() =>
-                      props.onChange(
-                        current.filter((id) => id !== dependency.id),
-                      )
-                    }
-                  >
-                    <i className="ti ti-x" aria-hidden="true" />
-                  </Button>
-                </Tooltip>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {shown.some((dependency) => dependency.recurring) && (
-        <div className="nextaction-dependency-hint">{recurringHint()}</div>
-      )}
-      <Select
-        selected={[]}
-        options={options}
-        filter={true}
-        filterPlaceholder={t("Search tasks")}
-        placeholder={t("Add a dependency")}
-        width="100%"
-        alignment="left"
-        onChange={(selected) => {
-          const picked = Number(selected[0]);
-          if (!Number.isInteger(picked) || current.includes(picked)) return;
-          const candidate = offered.find((offer) => offer.id === picked);
-          const reason = candidate ? cycleText(candidate) : null;
-          if (reason !== null) {
-            // Not added; the use case would refuse it as well.
-            props.notify("warn", t("Not added. ${reason}", { reason }));
-            return;
-          }
-          props.onChange([...current, picked]);
-        }}
-      />
-    </div>
+    <BlockRefsField
+      labelId={props.labelId}
+      items={shown.map((dependency) => ({
+        id: dependency.id,
+        text: dependency.text,
+        struck: dependency.stale,
+        after: (
+          <>
+            {dependency.recurring && (
+              <Tooltip text={recurringHint()}>
+                <span
+                  className="nextaction-dependency-recurring"
+                  role="img"
+                  aria-label={t("Recurring task")}
+                >
+                  <i className="ti ti-repeat" aria-hidden="true" />
+                </span>
+              </Tooltip>
+            )}
+            {dependency.stale && (
+              <span className="nextaction-dependency-stale">{t("Stale")}</span>
+            )}
+          </>
+        ),
+      }))}
+      missingText={t("(No longer a task)")}
+      onOpen={props.onSelectTask}
+      removeLabel={t("Remove dependency")}
+      onRemove={(id) => props.onChange(current.filter((d) => d !== id))}
+      below={
+        shown.some((dependency) => dependency.recurring) && (
+          <div className="nextaction-dependency-hint">{recurringHint()}</div>
+        )
+      }
+      options={options}
+      filterFunction={taskSearchFilter(offered, options)}
+      filterPlaceholder={t("Search tasks")}
+      placeholder={t("Add a dependency")}
+      onPick={(picked) => {
+        if (current.includes(picked)) return;
+        const candidate = offered.find((offer) => offer.id === picked);
+        const reason = candidate ? cycleText(candidate) : null;
+        if (reason !== null) {
+          // Not added; the use case would refuse it as well.
+          props.notify("warn", t("Not added. ${reason}", { reason }));
+          return;
+        }
+        props.onChange([...current, picked]);
+      }}
+    />
   );
 }

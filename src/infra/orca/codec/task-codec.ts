@@ -2,12 +2,15 @@
 // task tag block (tag-operations): `refs[]` with `type === 2` and `to` equal
 // to the tag block ID, its `data` holding one item per property.
 
+import type { CustomPropertyDefinition } from "../../../domain/task/custom-property";
 import {
   type CalendarDate,
   type DependencyMode,
   type Task,
   taskFromNotes,
 } from "../../../domain/task/task";
+import { RefType } from "../ref-type";
+import { decodeCustomPropertyValues, textValue } from "./custom-property-codec";
 import {
   findDependencyModeKey,
   findPropertyKey,
@@ -23,6 +26,8 @@ export interface TaskTagContext {
   tagBlockId: number;
   /** Plugin properties whose definition conflicts; they read as empty (#19). */
   invalidated: readonly PropertyKey[];
+  /** The task tag's custom property definitions; none when absent (#113). */
+  customProperties?: readonly CustomPropertyDefinition[];
 }
 
 /**
@@ -52,6 +57,11 @@ export interface RawBlock {
   parent?: number | null;
   aliases: readonly string[];
   content?: readonly { t: string; v: unknown }[] | null;
+  /**
+   * The text Orca keeps for the block: its content with its tags and their
+   * property values joined in (tag-operations). Only searched (#112).
+   */
+  text?: string | null;
   properties: readonly { name: string; value?: unknown }[];
   refs: readonly {
     /** The reference's own ID: what a block reference property's value holds. */
@@ -90,19 +100,16 @@ export function mirrorSourceId(
  * it can be a task. Reading by ID agrees with the task query’s "has a parent
  * or an alias" (page-task P2).
  */
-function isOrphan(block: RawBlock): boolean {
+export function isOrphan(block: Pick<RawBlock, "parent" | "aliases">): boolean {
   return block.parent == null && block.aliases.length === 0;
 }
-
-/** Orca `RefType.Property`: a tag reference (plugin-docs/constants/db.md). */
-const propertyRef = 2;
 
 /** The block's reference to the task tag, which holds the task's values. */
 export function findTaskTagRef<R extends RawBlock["refs"][number]>(
   refs: readonly R[],
   tagBlockId: number,
 ): R | undefined {
-  return refs.find((r) => r.type === propertyRef && r.to === tagBlockId);
+  return refs.find((r) => r.type === RefType.Property && r.to === tagBlockId);
 }
 
 export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
@@ -127,6 +134,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
     task: taskFromNotes({
       id: block.id,
       text: taskText(block),
+      searchText: typeof block.text === "string" ? block.text : "",
       status: {
         key: statusInvalidated
           ? "inbox"
@@ -144,13 +152,18 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       labels: choicesValue(values.get("label")),
       note: textValue(values.get("note")),
       sequential: booleanValue(values.get("sequential")),
-      dependencies: dependencyTargets(block, values.get("dependencies")),
+      dependencies: refDataTargets(block.refs, values.get("dependencies")),
       dependencyMode: dependencyModeValue(values.get("dependencyMode")),
       dependencyDelay: numberValue(values.get("dependencyDelay")),
       created: createdValue(block.id, block.created),
       recurrence: recurrenceOf(block),
       review: reviewOf(block),
       reminders: remindersOf(block),
+      customProperties: decodeCustomPropertyValues(
+        ref.data,
+        tag.customProperties ?? [],
+        block.refs,
+      ),
     }),
   };
 }
@@ -159,7 +172,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
  * The block's own text. A page's title is its alias, its content empty
  * (plugin-panel-writes), so a page without content reads as its first alias.
  */
-function taskText(block: RawBlock): string {
+export function taskText(block: Pick<RawBlock, "content" | "aliases">): string {
   const text = (block.content ?? [])
     .map((fragment) => (typeof fragment.v === "string" ? fragment.v : ""))
     .join("");
@@ -175,10 +188,6 @@ function taskText(block: RawBlock): string {
 
 function numberValue(value: unknown): number | null {
   return typeof value === "number" ? value : null;
-}
-
-function textValue(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 /**
@@ -201,22 +210,21 @@ function dependencyModeValue(value: unknown): DependencyMode {
     : "all";
 }
 
-/** Orca `RefType.RefData`: what a block reference property's value points through. */
-const refDataRef = 3;
-
 /**
- * The target block IDs of a dependencies value. The value holds reference
- * IDs, never block IDs (tag-operations A2): each is resolved through the
- * block's own `type: 3` reference of that ID to the block it points at.
+ * The target block IDs of a block reference value (dependencies, or a block
+ * reference custom property), in order. The value holds reference IDs,
+ * never block IDs (tag-operations A2): each is resolved through the block's
+ * own `type: 3` reference of that ID to the block it points at; one with no
+ * such reference is left out. Mirrors are resolved by the repository.
  */
-function dependencyTargets(
-  block: Pick<RawBlock, "refs">,
+export function refDataTargets(
+  refs: readonly { id: number; type: number; to: number }[],
   value: unknown,
 ): number[] {
   if (!Array.isArray(value)) return [];
   const targets: number[] = [];
   for (const refId of value) {
-    const ref = block.refs.find((r) => r.id === refId && r.type === refDataRef);
+    const ref = refs.find((r) => r.id === refId && r.type === RefType.RefData);
     if (ref) targets.push(ref.to);
   }
   return targets;

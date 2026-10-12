@@ -105,6 +105,21 @@ export const taskPanelCss = `
   min-width: 0;
 }
 
+/* Custom properties (#113): their own group after the built-in fields. */
+.nextaction-custom-properties {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  padding-top: var(--orca-spacing-md);
+  border-top: 1px solid var(--orca-color-border);
+}
+
+.nextaction-custom-properties-heading {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+  font-weight: 600;
+}
+
 ${wideFieldsCss("nextaction-task-panel", "420px")}
 ${wideFieldsCss("nextaction-capture-fields", "300px")}
 
@@ -399,13 +414,13 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   color: var(--orca-color-text-2);
 }
 
-.nextaction-dependencies-field {
+.nextaction-block-refs-field {
   display: flex;
   flex-direction: column;
   gap: var(--orca-spacing-xs);
 }
 
-.nextaction-dependencies {
+.nextaction-block-refs {
   display: flex;
   flex-direction: column;
   gap: var(--orca-spacing-xs);
@@ -414,14 +429,14 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   list-style: none;
 }
 
-.nextaction-dependency {
+.nextaction-block-ref {
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-sm);
   line-height: var(--orca-lineheight-md);
 }
 
-.nextaction-dependency-task {
+.nextaction-block-ref-target {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
@@ -435,20 +450,20 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   cursor: pointer;
 }
 
-span.nextaction-dependency-task {
+span.nextaction-block-ref-target {
   color: var(--orca-color-text-2);
   cursor: default;
 }
 
-button.nextaction-dependency-task:hover {
+button.nextaction-block-ref-target:hover {
   text-decoration: underline;
 }
 
-.nextaction-dependency-task[data-empty] {
+.nextaction-block-ref-target[data-empty] {
   font-style: italic;
 }
 
-.nextaction-dependency[data-stale] .nextaction-dependency-task {
+.nextaction-block-ref[data-struck] .nextaction-block-ref-target {
   text-decoration: line-through;
   color: var(--orca-color-text-2);
 }

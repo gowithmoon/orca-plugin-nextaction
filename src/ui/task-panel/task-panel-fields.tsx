@@ -220,6 +220,8 @@ export function NoteField(props: {
   /** Resolves to whether the write succeeded. */
   onSave: (note: string | null) => Promise<boolean>;
   saveOnLeave: () => boolean;
+  /** Defaults to the note's own hint (a text custom property passes its own). */
+  placeholder?: string;
 }) {
   const { CompositionInput } = orca.components;
   const fromNotes = props.note ?? "";
@@ -271,7 +273,7 @@ export function NoteField(props: {
     <div className="nextaction-note-field">
       <CompositionInput
         aria-labelledby={props.labelId}
-        placeholder={t("A line about this task")}
+        placeholder={props.placeholder ?? t("A line about this task")}
         value={draft}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
           setDraft(e.target.value)
