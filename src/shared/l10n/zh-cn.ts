@@ -9,6 +9,9 @@ const zhCN: Record<string, string> = {
   "Day boundary": "日界线",
   "A day starts at this time. Usually set in the early morning.":
     "一天从这个时刻开始，一般设在凌晨。",
+  "Reminder default time": "提醒默认时刻",
+  "The time of day the quick reminder options fall at, such as on the due date or 3 days before it.":
+    "提醒快捷选项（如截止日期当天、前 3 天）所用的时刻。",
   "Start preview days": "开始日期预览天数",
   "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
     "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",

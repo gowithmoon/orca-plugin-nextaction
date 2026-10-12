@@ -10,6 +10,22 @@ export interface TimeOfDay {
   readonly minutes: number;
 }
 
+/** The reminder default time until the user sets another one. */
+export const defaultReminderTime: TimeOfDay = { hours: 9, minutes: 0 };
+
+/**
+ * The reminder default time from the `time` setting's value. Orca holds a
+ * whole `Date`; only its local hours and minutes mean anything. Anything but
+ * a valid `Date` (or no value) reads as 9:00, as the day boundary reads
+ * (plugin-lifecycle-settings).
+ */
+export function reminderDefaultTimeFrom(value: unknown): TimeOfDay {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return defaultReminderTime;
+  }
+  return { hours: value.getHours(), minutes: value.getMinutes() };
+}
+
 /** Which date a quick option counts back from. */
 export type QuickReminderFrom = "due" | "start";
 

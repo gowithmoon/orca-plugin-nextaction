@@ -1,4 +1,5 @@
 // The single place where plugin settings are defined.
+import { defaultReminderTime } from "../domain/reminder/reminder";
 import {
   type DayBoundary,
   defaultDayBoundary,
@@ -53,6 +54,19 @@ export const settingsDefinition: SettingsDefinition = {
       ),
       type: "time",
       defaultValue: localTime(defaultDayBoundary),
+    }),
+  },
+  // 9:00 shows in the settings page and fills an item without a value, as
+  // for the day boundary; anything else still reads as 9:00
+  // (domain/reminder: reminderDefaultTimeFrom).
+  reminderDefaultTime: {
+    schema: () => ({
+      label: t("Reminder default time"),
+      description: t(
+        "The time of day the quick reminder options fall at, such as on the due date or 3 days before it.",
+      ),
+      type: "time",
+      defaultValue: localTime(defaultReminderTime),
     }),
   },
   // Read through startPreviewDaysFrom: anything but a whole number from 0 to
