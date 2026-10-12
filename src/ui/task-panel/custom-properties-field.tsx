@@ -1,18 +1,22 @@
 // The task panel's custom properties group (GLOSSARY: 自定义属性, #113): one
 // row per property the task tag defines, in Orca's order, each shaped like
 // the panel's built-in field of its kind. Property names are shown as the
-// notes hold them (ADR 0009 is about the plugin's own names). Choice and
-// block reference properties are not shown yet (#114, #115). Verified by
+// notes hold them (ADR 0009 is about the plugin's own names). Block
+// reference properties are not shown yet (#115). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { TaskCustomProperty } from "../../application/usecases/read-task";
-import type { CustomPropertyValue } from "../../domain/task/custom-property";
+import type {
+  CustomPropertyDefinition,
+  CustomPropertyValue,
+} from "../../domain/task/custom-property";
 import type { CalendarDate } from "../../domain/task/task";
 import type { TimeOfDay } from "../../domain/time/time-of-day";
 import { t } from "../../shared/l10n/l10n";
 import { formatClock } from "../components/format";
 import { DatePicker } from "../components/popup-controls";
 import { formatMoment } from "../components/reminder-text";
+import { ChoicesField } from "./choices-field";
 import { DateField, Field, NoteField } from "./task-panel-fields";
 
 /** The kinds this group shows so far. */
@@ -23,6 +27,8 @@ const shownKinds = new Set<CustomPropertyValue["kind"]>([
   "date",
   "datetime",
   "time",
+  "single",
+  "multi",
 ]);
 
 /**
@@ -59,6 +65,7 @@ export function CustomPropertiesField(props: {
           >
             <CustomPropertyControl
               labelId={labelId}
+              definition={property.definition}
               value={property.value}
               today={props.today}
               saveOnLeave={props.saveOnLeave}
@@ -75,6 +82,7 @@ export function CustomPropertiesField(props: {
 
 function CustomPropertyControl(props: {
   labelId: string;
+  definition: CustomPropertyDefinition;
   value: CustomPropertyValue;
   today: CalendarDate;
   saveOnLeave: () => boolean;
@@ -142,9 +150,77 @@ function CustomPropertyControl(props: {
           }
         />
       );
+    case "single":
+      return (
+        <SingleChoiceField
+          labelId={props.labelId}
+          value={value.value}
+          options={optionsOf(props.definition)}
+          onChange={(option) =>
+            void onChange({ kind: "single", value: option })
+          }
+        />
+      );
+    case "multi":
+      // As contexts and labels; options typed in are added (#114).
+      return (
+        <ChoicesField
+          labelId={props.labelId}
+          values={value.value}
+          candidates={optionsOf(props.definition)}
+          display={(option) => option}
+          placeholder={t("Not set")}
+          onChange={(options) =>
+            void onChange({ kind: "multi", value: options })
+          }
+        />
+      );
     default:
       return null;
   }
+}
+
+/** The options a choice property offers. */
+function optionsOf(definition: CustomPropertyDefinition): readonly string[] {
+  return definition.kind === "single" || definition.kind === "multi"
+    ? definition.choices
+    : [];
+}
+
+/**
+ * A single choice: the choices field holding one option at most, an option
+ * typed in added (#114), and a clear button.
+ */
+function SingleChoiceField(props: {
+  labelId: string;
+  value: string | null;
+  options: readonly string[];
+  onChange: (option: string | null) => void;
+}) {
+  const { Button } = orca.components;
+  return (
+    <div className="nextaction-date-field">
+      <ChoicesField
+        labelId={props.labelId}
+        values={props.value === null ? [] : [props.value]}
+        candidates={props.options}
+        display={(option) => option}
+        placeholder={t("Not set")}
+        single={true}
+        onChange={(options) => props.onChange(options[0] ?? null)}
+      />
+      {props.value !== null && (
+        <Button
+          variant="plain"
+          aria-label={t("Clear")}
+          title={t("Clear")}
+          onClick={() => props.onChange(null)}
+        >
+          <i className="ti ti-x" aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /** A time of day as "9:05". */

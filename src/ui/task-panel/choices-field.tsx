@@ -34,6 +34,8 @@ export function ChoicesField(props: {
   /** How a value shows (a context gets `@`); never what is stored. */
   display: (value: string) => string;
   placeholder: string;
+  /** One value at most (a single choice custom property); multiple by default. */
+  single?: boolean;
   /** Called with the whole new list; one call is one write. */
   onChange: (values: string[]) => void;
 }) {
@@ -76,7 +78,7 @@ export function ChoicesField(props: {
       <Select
         selected={[...props.values]}
         options={options}
-        multiSelection={true}
+        multiSelection={!props.single}
         filter={true}
         filterPlaceholder={t("Search or add")}
         filterFunction={filterFunction}
@@ -89,7 +91,9 @@ export function ChoicesField(props: {
           const same =
             selected.length === props.values.length &&
             selected.every((value, i) => value === props.values[i]);
-          if (!same) props.onChange(selected);
+          if (!same) {
+            props.onChange(props.single ? selected.slice(-1) : selected);
+          }
         }}
       />
     </fieldset>

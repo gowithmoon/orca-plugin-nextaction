@@ -9,6 +9,7 @@ import {
   emptyCustomPropertyValue,
 } from "../../../domain/task/custom-property";
 import { PropType } from "../prop-type";
+import { missingChoices } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
 import { findPropertyKey } from "./names";
 import type { RefDataItem } from "./task-encode";
@@ -88,6 +89,56 @@ function definitionOf(
   }
 }
 
+/** A whole property definition to write with `setProperties`. */
+export interface CustomPropertyDefinitionWrite {
+  name: string;
+  type: number;
+  pos: number | null;
+  typeArgs: Record<string, unknown>;
+}
+
+/**
+ * The definition to write so every option of a single or multiple choice
+ * value is one of the property's choices (multi-choices-created), or
+ * `undefined` when all already are. The only custom property definition the
+ * plugin writes (ADR 0023). New options follow the format of the existing
+ * ones: strings after strings, `{ n, c }` after objects, objects when there
+ * are none. The whole `typeArgs` is carried over and `pos` kept, `null`
+ * included (tag-operations, custom-properties). Fails with
+ * `CustomPropertyChangedError` when the property is no longer defined or its
+ * kind is not the value's.
+ */
+export function planCustomChoiceAdditions(
+  properties: readonly TagPropertyDefinition[],
+  name: string,
+  value: Extract<CustomPropertyValue, { kind: "single" | "multi" }>,
+): CustomPropertyDefinitionWrite | undefined {
+  checkCustomPropertyValue(customPropertyDefinitions(properties), name, value);
+  // Found: the check above passed.
+  const property = properties.find((p) => p.name === name) as
+    | TagPropertyDefinition
+    | undefined;
+  if (!property) return undefined;
+  const values =
+    value.kind === "multi" ? value.value : value.value ? [value.value] : [];
+  const typeArgs = record(property.typeArgs);
+  const { present, added } = missingChoices(typeArgs, values);
+  if (added.length === 0) return undefined;
+  const asStrings = present.length > 0 && typeof present[0] === "string";
+  return {
+    name,
+    type: PropType.TextChoices,
+    pos: typeof property.pos === "number" ? property.pos : null,
+    typeArgs: {
+      ...typeArgs,
+      choices: [
+        ...present,
+        ...added.map((n) => (asStrings ? n : { n, c: "" })),
+      ],
+    },
+  };
+}
+
 /**
  * The item to write with `setRefData` for a custom property's new value.
  * `now` is when it is written.
@@ -136,6 +187,11 @@ export function planCustomPropertyWrite(
     case "text":
     case "number":
       return { name, value: value.value };
+    case "single":
+      return { name, value: value.value };
+    case "multi":
+      // An empty list clears with null, as contexts and labels do.
+      return { name, value: value.value.length > 0 ? [...value.value] : null };
     default:
       // Choice and block reference properties are written by #114, #115.
       throw new Error(
@@ -156,9 +212,7 @@ function decodeValue(
   value: unknown,
 ): CustomPropertyValue | undefined {
   if (value === null || value === undefined) {
-    return kind === "single" || kind === "multi" || kind === "blockRefs"
-      ? undefined
-      : emptyCustomPropertyValue(kind);
+    return kind === "blockRefs" ? undefined : emptyCustomPropertyValue(kind);
   }
   switch (kind) {
     case "text":
@@ -191,6 +245,17 @@ function decodeValue(
         value: at && { hours: at.getHours(), minutes: at.getMinutes() },
       };
     }
+    case "single":
+      // An option name.
+      return { kind, value: typeof value === "string" ? value : null };
+    case "multi":
+      // Option names; an item that is not a string is dropped.
+      return {
+        kind,
+        value: Array.isArray(value)
+          ? value.filter((item): item is string => typeof item === "string")
+          : [],
+      };
     default:
       return undefined;
   }
