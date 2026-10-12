@@ -546,10 +546,39 @@ describe("change status: reminders (GLOSSARY: 提醒)", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("completing a task that never had reminders writes none", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 95, status: "todo" });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(95, "done");
+
+    expect((await repository.getTask(95))?.reminders).toEqual({
+      kind: "none",
+    });
+  });
+
   const weekly = {
     period: { interval: 1, unit: "week" },
     basis: "schedule",
   } as const;
+
+  it("completing a task whose rule is paused, without reminders, writes none", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 96,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 5 },
+      recurrence: { kind: "rule", rule: { ...weekly, paused: true } },
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(96, "done");
+
+    expect((await repository.getTask(96))?.reminders).toEqual({
+      kind: "none",
+    });
+  });
 
   it("completing a task whose rule is paused clears its reminders", async () => {
     const repository = createInMemoryTaskRepository();
