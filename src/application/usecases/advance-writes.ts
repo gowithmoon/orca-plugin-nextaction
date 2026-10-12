@@ -2,10 +2,7 @@
 // completing, skipping, resuming and the repair of a task not advanced.
 import { planDescendantAdvances } from "../../domain/recurrence/descendants-advance";
 import type { AdvancePlan } from "../../domain/recurrence/recurrence";
-import {
-  moveReminders,
-  type Reminders,
-} from "../../domain/reminder/reminder";
+import { moveReminders, type Reminders } from "../../domain/reminder/reminder";
 import type { CompletionEntry } from "../../domain/task/completion-history";
 import type { Task } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
@@ -39,8 +36,8 @@ export type PlannedAdvance = Omit<AdvancePlan, "history"> & {
  * descendants are left as they are. The task's reminders move with its
  * dates, or are cleared on the last occurrence (GLOSSARY: 提醒); those of its
  * descendants are left as they are, and so are reminders this plugin cannot
- * read. Throws `RecurrenceUnreadableError`,
- * having written nothing, when a done descendant task's rule cannot be read.
+ * read. Throws `RecurrenceUnreadableError`, having written nothing, when a
+ * done descendant task's rule cannot be read.
  */
 export async function advanceWrites(
   repository: TaskRepository,

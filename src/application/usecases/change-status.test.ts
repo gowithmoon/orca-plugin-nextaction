@@ -611,7 +611,10 @@ describe("change status: reminders (GLOSSARY: 提醒)", () => {
 
   it("completing a task whose reminders cannot be read completes it, the reminders kept as they are", async () => {
     const repository = createInMemoryTaskRepository();
-    const unreadable = { kind: "unreadable", reason: "unknown version 2" };
+    const unreadable = {
+      kind: "unreadable",
+      reason: "unknown version 2",
+    } as const;
     repository.addTask({ id: 91, status: "todo", reminders: unreadable });
     const changeStatus = createChangeStatus(deps(repository));
 
