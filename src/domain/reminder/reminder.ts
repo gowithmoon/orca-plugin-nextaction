@@ -2,7 +2,7 @@
 // A reminder is an absolute moment; quick options turn a due or start date
 // into one on the calendar day (not the logical day), local time (ADR 0012).
 import type { CalendarDate, TaskStatus } from "../task/task";
-import { addDays } from "../time/calendar-days";
+import { addDays, daysBetween } from "../time/calendar-days";
 
 /** A local time of day: hours 0–23, minutes 0–59. */
 export interface TimeOfDay {
@@ -153,4 +153,59 @@ export function upcomingReminders(reminders: Reminders, now: Date): Reminders {
 export function normalizeReminders(moments: readonly Date[]): Reminders {
   const times = [...new Set(moments.map((moment) => moment.getTime()))];
   return times.sort((a, b) => a - b).map((time) => new Date(time));
+}
+
+/** The calendar day `moment` falls on, local time. */
+function calendarDateOf(moment: Date): CalendarDate {
+  return {
+    year: moment.getFullYear(),
+    month: moment.getMonth() + 1,
+    day: moment.getDate(),
+  };
+}
+
+/** `moment` `days` calendar days later, at the same local time. */
+function laterByDays(moment: Date, days: number): Date {
+  return new Date(
+    moment.getFullYear(),
+    moment.getMonth(),
+    moment.getDate() + days,
+    moment.getHours(),
+    moment.getMinutes(),
+    moment.getSeconds(),
+    moment.getMilliseconds(),
+  );
+}
+
+/**
+ * The reminders after a recurring task advances to `next` (GLOSSARY: 安排下一次,
+ * 提醒), from its dates before the advance: each reminder moves as many
+ * calendar days as the task's date moves, keeping its local time.
+ */
+export function moveReminders(
+  reminders: Reminders,
+  dates: {
+    readonly start: CalendarDate | null;
+    readonly due: CalendarDate | null;
+  },
+  next: CalendarDate,
+): Reminders {
+  const sorted = normalizeReminders(reminders);
+  // The due date leads, the start date without one, as planAdvance moves
+  // the task's dates.
+  const from = dates.due ?? dates.start;
+  if (from !== null) {
+    const days = daysBetween(from, next);
+    return sorted.map((moment) => laterByDays(moment, days));
+  }
+  // Without dates the earliest reminder goes to the next date at its local
+  // time; the others keep their time from it.
+  const [earliest] = sorted;
+  if (earliest === undefined) return [];
+  const moved = laterByDays(
+    earliest,
+    daysBetween(calendarDateOf(earliest), next),
+  );
+  const shift = moved.getTime() - earliest.getTime();
+  return sorted.map((moment) => new Date(moment.getTime() + shift));
 }

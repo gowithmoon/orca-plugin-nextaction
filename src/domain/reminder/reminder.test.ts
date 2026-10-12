@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  moveReminders,
   planSetReminders,
   quickReminderOptions,
   reminderDefaultTimeFrom,
@@ -207,5 +208,75 @@ describe("the reminder default time setting", () => {
     ["an invalid Date", new Date("not a time")],
   ])("reads %s as 9:00", (_, value) => {
     expect(reminderDefaultTimeFrom(value)).toEqual({ hours: 9, minutes: 0 });
+  });
+});
+
+describe("moving reminders when a recurring task advances (GLOSSARY: 安排下一次)", () => {
+  it("moves each reminder as many calendar days as the due date moves, keeping its local time", () => {
+    expect(
+      moveReminders(
+        [at("2026-10-17T09:00:00"), at("2026-10-20T14:30:00")],
+        { start: null, due: day(2026, 10, 20) },
+        day(2026, 10, 27),
+      ),
+    ).toEqual([at("2026-10-24T09:00:00"), at("2026-10-27T14:30:00")]);
+  });
+
+  it("moves them with the start date when the task has no due date", () => {
+    expect(
+      moveReminders(
+        [at("2026-10-12T09:00:00")],
+        { start: day(2026, 10, 12), due: null },
+        day(2026, 10, 19),
+      ),
+    ).toEqual([at("2026-10-19T09:00:00")]);
+  });
+
+  it("moves them with the due date when the task has both dates", () => {
+    expect(
+      moveReminders(
+        [at("2026-10-14T09:00:00")],
+        { start: day(2026, 10, 10), due: day(2026, 10, 15) },
+        day(2026, 10, 18),
+      ),
+    ).toEqual([at("2026-10-17T09:00:00")]);
+  });
+
+  it("moves them across the end of a month", () => {
+    expect(
+      moveReminders(
+        [at("2026-10-28T08:15:00")],
+        { start: null, due: day(2026, 10, 31) },
+        day(2026, 11, 30),
+      ),
+    ).toEqual([at("2026-11-27T08:15:00")]);
+  });
+
+  it("without dates, puts the earliest reminder on the next date at its local time and keeps the others as far from it", () => {
+    expect(
+      moveReminders(
+        [at("2026-10-12T21:00:00"), at("2026-10-10T09:30:00")],
+        { start: null, due: null },
+        day(2026, 10, 20),
+      ),
+    ).toEqual([at("2026-10-20T09:30:00"), at("2026-10-22T21:00:00")]);
+  });
+
+  it("keeps a moved reminder that is still in the past", () => {
+    // A task months behind: the next date is still past, and so is the
+    // reminder moved with it; it stays, and is never notified.
+    expect(
+      moveReminders(
+        [at("2026-06-29T09:00:00")],
+        { start: null, due: day(2026, 7, 1) },
+        day(2026, 7, 8),
+      ),
+    ).toEqual([at("2026-07-06T09:00:00")]);
+  });
+
+  it("moves no reminders when the task has none", () => {
+    expect(
+      moveReminders([], { start: null, due: null }, day(2026, 10, 20)),
+    ).toEqual([]);
   });
 });
