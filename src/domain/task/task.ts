@@ -39,6 +39,12 @@ export interface CalendarDate {
   readonly day: number;
 }
 
+/** A task's start and due dates, `null` when it lacks one. */
+export interface TaskDates {
+  readonly start: CalendarDate | null;
+  readonly due: CalendarDate | null;
+}
+
 /**
  * Something in the notes that could not be taken at face value. The task
  * still reads with a fallback; the original value is kept for the user.

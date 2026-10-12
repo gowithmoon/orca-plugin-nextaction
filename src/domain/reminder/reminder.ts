@@ -1,7 +1,7 @@
 // Reminders (GLOSSARY: 提醒). Pure: the current time is passed in as `now`.
 // A reminder is an absolute moment; quick options turn a due or start date
 // into one on the calendar day (not the logical day), local time (ADR 0012).
-import type { CalendarDate, TaskId, TaskStatus } from "../task/task";
+import type { CalendarDate, TaskDates, TaskId, TaskStatus } from "../task/task";
 import { addDays, daysBetween } from "../time/calendar-days";
 import {
   calendarDateOf,
@@ -36,10 +36,7 @@ export interface QuickReminderOption {
  * `defaultTime`. A date the task lacks has no options.
  */
 export function quickReminderOptions(
-  dates: {
-    readonly start: CalendarDate | null;
-    readonly due: CalendarDate | null;
-  },
+  dates: TaskDates,
   defaultTime: TimeOfDay,
   now: Date,
 ): QuickReminderOption[] {
@@ -210,10 +207,7 @@ function laterByDays(moment: Date, days: number): Date {
  */
 export function moveReminders(
   reminders: Reminders,
-  dates: {
-    readonly start: CalendarDate | null;
-    readonly due: CalendarDate | null;
-  },
+  dates: TaskDates,
   next: CalendarDate,
 ): Reminders {
   const sorted = normalizeReminders(reminders);
