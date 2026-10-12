@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
+import { matchesSearch } from "../../domain/task/task-search";
 import { createReadMyDayCandidates } from "./read-my-day-candidates";
 
 // 2:00 on October 9 in UTC+8: before the 5:00 boundary, still October 8.
@@ -30,9 +31,9 @@ describe("read My Day candidates", () => {
     });
 
     expect(await readMyDayCandidates()).toEqual([
-      { id: 1, text: "Write the report" },
-      { id: 3, text: "Buy parts" },
-      { id: 4, text: "Clear the cupboard" },
+      { id: 1, text: "Write the report", searchText: "" },
+      { id: 3, text: "Buy parts", searchText: "" },
+      { id: 4, text: "Clear the cupboard", searchText: "" },
     ]);
   });
 
@@ -50,7 +51,28 @@ describe("read My Day candidates", () => {
     });
 
     expect(await readMyDayCandidates()).toEqual([
-      { id: 1, text: "Write the report" },
+      { id: 1, text: "Write the report", searchText: "" },
     ]);
+  });
+
+  it("offers each candidate with its search text, so a search finds the values in it as well as the text", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      text: "Write the report",
+      searchText: "Write the report #Task,Todo,Zhang San\n",
+    });
+    repository.addTask({ id: 2, text: "Ask Zhang for the report" });
+    const readMyDayCandidates = createReadMyDayCandidates({
+      repository,
+      clock: createFixedClock(night),
+      dayBoundary: createFixedDayBoundary(),
+    });
+
+    const found = (await readMyDayCandidates()).filter((candidate) =>
+      matchesSearch("zhang report", candidate),
+    );
+
+    expect(found.map((candidate) => candidate.id)).toEqual([1, 2]);
   });
 });

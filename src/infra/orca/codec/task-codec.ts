@@ -56,6 +56,11 @@ export interface RawBlock {
   parent?: number | null;
   aliases: readonly string[];
   content?: readonly { t: string; v: unknown }[] | null;
+  /**
+   * The text Orca keeps for the block: its content with its tags and their
+   * property values joined in (tag-operations). Only searched (#112).
+   */
+  text?: string | null;
   properties: readonly { name: string; value?: unknown }[];
   refs: readonly {
     /** The reference's own ID: what a block reference property's value holds. */
@@ -131,6 +136,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
     task: taskFromNotes({
       id: block.id,
       text: taskText(block),
+      searchText: typeof block.text === "string" ? block.text : "",
       status: {
         key: statusInvalidated
           ? "inbox"

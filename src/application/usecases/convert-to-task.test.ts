@@ -20,6 +20,7 @@ describe("convert to task", () => {
     expect(await repository.getTask(10)).toEqual({
       id: 10,
       text: "Call the plumber",
+      searchText: "",
       status: "inbox",
       importance: 4,
       // Like importance, 4 by default (#79).

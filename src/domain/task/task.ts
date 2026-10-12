@@ -60,6 +60,12 @@ export interface Task {
   readonly id: TaskId;
   /** The block's own text, without tags or property values. */
   readonly text: string;
+  /**
+   * The text Orca keeps for the block, its tags and tag property values
+   * joined in (tag-operations); empty when it cannot be read. Only for
+   * searching (#112): no rule of the plugin reads it.
+   */
+  readonly searchText: string;
   readonly status: TaskStatus;
   readonly importance: Importance;
   /** How soon it needs moving, apart from any due date (GLOSSARY: 紧急度). */
@@ -126,6 +132,7 @@ export type AncestorRatings = Pick<Task, "importance" | "urgency">;
 export interface TaskInNotes {
   id: TaskId;
   text: string;
+  searchText: string;
   status: {
     /** The status the note value stands for, if it is one. */
     key: TaskStatus | undefined;
@@ -190,6 +197,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
   return {
     id: input.id,
     text: input.text,
+    searchText: input.searchText,
     status: input.status.key ?? "inbox",
     importance: isRating(input.importance) ? input.importance : defaultRating,
     urgency: isRating(input.urgency) ? input.urgency : defaultRating,
