@@ -4,6 +4,7 @@
 import {
   type QuickReminderOption,
   type ReminderRead,
+  remindersIn,
   upcomingReminders,
 } from "../../domain/reminder/reminder";
 import type { CalendarDate } from "../../domain/task/task";
@@ -32,7 +33,7 @@ export function remindersText(
   if (read.kind === "unreadable") {
     return t("Cannot be read (${reason})", { reason: read.reason });
   }
-  const reminders = read.kind === "list" ? read.reminders : [];
+  const reminders = remindersIn(read);
   if (reminders.length === 0) return t("No reminders");
   const [next] = upcomingReminders(reminders, now);
   if (!next) return t("Passed");

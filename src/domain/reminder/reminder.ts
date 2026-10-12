@@ -135,6 +135,18 @@ export interface DueReminder {
 }
 
 /**
+ * Every reminder of `tasks` not done, in the order of `tasks`. Done tasks
+ * are not reminded; reminders this plugin cannot read count as none.
+ */
+function remindersOfOpenTasks(tasks: readonly RemindedTask[]): DueReminder[] {
+  return tasks.flatMap((task) =>
+    task.status === "done"
+      ? []
+      : remindersIn(task.reminders).map((at) => ({ taskId: task.id, at })),
+  );
+}
+
+/**
  * Every reminder of `tasks` that came due after `since` (not at it) up to
  * and at `now`, each once, by moment. Done tasks and reminders this plugin
  * cannot read are skipped. Missed reminders come out one by one as those on
@@ -145,21 +157,15 @@ export function dueReminders(
   since: Date,
   now: Date,
 ): DueReminder[] {
-  const due: DueReminder[] = [];
-  for (const task of tasks) {
-    // A done task is not reminded; reminders it cannot read are none.
-    if (task.status === "done") continue;
-    for (const moment of remindersIn(task.reminders)) {
-      if (
-        moment.getTime() > since.getTime() &&
-        moment.getTime() <= now.getTime()
-      ) {
-        due.push({ taskId: task.id, at: moment });
-      }
-    }
-  }
-  // Stable: reminders at the same moment keep the order of `tasks`.
-  return due.sort((a, b) => a.at.getTime() - b.at.getTime());
+  return (
+    remindersOfOpenTasks(tasks)
+      .filter(
+        ({ at }) =>
+          at.getTime() > since.getTime() && at.getTime() <= now.getTime(),
+      )
+      // Stable: reminders at the same moment keep the order of `tasks`.
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+  );
 }
 
 /**
@@ -171,11 +177,12 @@ export function nextWakeUp(
   now: Date,
 ): Date | null {
   let earliest: Date | null = null;
-  for (const task of tasks) {
-    if (task.status === "done") continue;
-    const next = upcomingReminders(remindersIn(task.reminders), now)[0];
-    if (next && (earliest === null || next.getTime() < earliest.getTime())) {
-      earliest = next;
+  for (const { at } of remindersOfOpenTasks(tasks)) {
+    if (
+      at.getTime() > now.getTime() &&
+      (earliest === null || at.getTime() < earliest.getTime())
+    ) {
+      earliest = at;
     }
   }
   return earliest;
