@@ -2,10 +2,10 @@
 // what is searched, under a tag when the property has a scope. Chosen over
 // `search-blocks-by-text` (no scope, no journal or orphan filter) and
 // `get-blocks-with-tags` (no text, every block of the tag fetched whole)
-// because one `query` does all three. The text condition (`kind: 8`) is not
-// measured: .scratch/spikes/step12-blockref-candidates.js checks it in Orca
-// before it is relied on (CLAUDE.md). Kept behind the repository so it can
-// be swapped.
+// because one `query` does all three. How the text condition (`kind: 8`)
+// matches is measured in docs/spikes/custom-properties.md, "块引用候选的搜索":
+// the block's text with its property values, ignoring case, word-based
+// rather than a substring. Kept behind the repository so it can be swapped.
 import type { QueryDescription2, QueryItem2 } from "../../../orca.d.ts";
 
 /** Group and condition kinds (src/orca.d.ts, QueryKind*). */
