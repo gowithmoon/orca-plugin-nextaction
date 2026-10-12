@@ -5,6 +5,7 @@ import { createLoadDayBoundary } from "./day-boundary";
 import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
 import { createRegistry, type Registry } from "./registry";
+import { createLoadReminderDefaultTime } from "./reminder-default-time";
 import {
   applySettingsSchema,
   readSettings,
@@ -130,6 +131,7 @@ export function createNextActionPlugin(): Plugin {
   const taskChanges = createTaskChangesFeature();
   const day = createLoadDayBoundary();
   const preview = createLoadStartPreviewDays(taskChanges.changes);
+  const reminderTime = createLoadReminderDefaultTime();
   const taskTag = createTaskTagFeature(
     () => taskChanges.changes.changed(),
     day.today,
@@ -142,6 +144,7 @@ export function createNextActionPlugin(): Plugin {
     today: day.today,
     dayBoundary: day.dayBoundary,
     startPreviewDays: preview.startPreviewDays,
+    reminderDefaultTime: reminderTime.reminderDefaultTime,
     taskActions: taskActions.taskActions,
   });
   const taskMenu = createTaskMenuFeature({
@@ -179,6 +182,7 @@ export function createNextActionPlugin(): Plugin {
       day.feature,
       // After the task change signal it gives on a change of the setting.
       preview.feature,
+      reminderTime.feature,
       taskActions.feature,
       // Before the task tag feature, so it hears the outcome of startup.
       createStatusIconFeature(taskTag.names),

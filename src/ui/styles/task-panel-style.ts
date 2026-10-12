@@ -552,6 +552,68 @@ button.nextaction-dependency-task:hover {
   width: 5rem;
 }
 
+/* The reminder popup (reminder-popup.tsx), in the recurrence popup's look:
+   the list, one reminder a row (passed ones greyed), the quick options
+   wrapping, the custom moment with "Add" beside it. */
+.nextaction-reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-reminder-item,
+.nextaction-reminder-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+}
+
+.nextaction-reminder-moment {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.nextaction-reminder-moment-button {
+  gap: var(--orca-spacing-sm);
+  white-space: nowrap;
+}
+
+.nextaction-reminder-moment-button > .ti {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-reminder-item[data-passed] .nextaction-reminder-moment-button,
+.nextaction-reminder-passed {
+  color: var(--orca-color-text-2);
+  opacity: 0.7;
+}
+
+.nextaction-reminder-passed {
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-reminder-item > :last-child {
+  margin-left: auto;
+}
+
+.nextaction-reminder-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.nextaction-reminder-option {
+  gap: var(--orca-spacing-xs);
+}
+
 /* The recurrence rule popup (recurrence-popup.tsx), in the shared window look. */
 .nextaction-recurrence-popup {
   --nextaction-window-width: 26rem;

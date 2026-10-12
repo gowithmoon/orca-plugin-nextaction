@@ -7,6 +7,7 @@
 // "high" up, the full wording as tooltip and accessible name. The others only show with a value. Items are told apart by
 // spacing and their own icon or background, not separators.
 import { isNotAdvanced } from "../../domain/recurrence/recurrence";
+import { showsReminderBell } from "../../domain/reminder/reminder";
 import { isOverdue } from "../../domain/task/overdue";
 import {
   type CalendarDate,
@@ -139,6 +140,21 @@ export function PropertyRow(props: {
               }
               aria-hidden="true"
             />
+          </span>
+        </Tooltip>
+      )}
+      {/* A reminder still to come on a task not done (#107): only the bell,
+          muted, beside the recurrence icon; no time, not clickable. Read
+          against the time of this render: a card renders again whenever its
+          view reads, so a passed reminder's bell goes at the next read. */}
+      {showsReminderBell(task, new Date()) && (
+        <Tooltip text={t("Has reminders")}>
+          <span
+            className="nextaction-property nextaction-property-reminder"
+            role="img"
+            aria-label={t("Has reminders")}
+          >
+            <i className="ti ti-bell" aria-hidden="true" />
           </span>
         </Tooltip>
       )}
