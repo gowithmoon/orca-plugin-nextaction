@@ -414,13 +414,13 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   color: var(--orca-color-text-2);
 }
 
-.nextaction-dependencies-field {
+.nextaction-block-refs-field {
   display: flex;
   flex-direction: column;
   gap: var(--orca-spacing-xs);
 }
 
-.nextaction-dependencies {
+.nextaction-block-refs {
   display: flex;
   flex-direction: column;
   gap: var(--orca-spacing-xs);
@@ -429,14 +429,14 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   list-style: none;
 }
 
-.nextaction-dependency {
+.nextaction-block-ref {
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-sm);
   line-height: var(--orca-lineheight-md);
 }
 
-.nextaction-dependency-task {
+.nextaction-block-ref-target {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
@@ -450,20 +450,20 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   cursor: pointer;
 }
 
-span.nextaction-dependency-task {
+span.nextaction-block-ref-target {
   color: var(--orca-color-text-2);
   cursor: default;
 }
 
-button.nextaction-dependency-task:hover {
+button.nextaction-block-ref-target:hover {
   text-decoration: underline;
 }
 
-.nextaction-dependency-task[data-empty] {
+.nextaction-block-ref-target[data-empty] {
   font-style: italic;
 }
 
-.nextaction-dependency[data-stale] .nextaction-dependency-task {
+.nextaction-block-ref[data-struck] .nextaction-block-ref-target {
   text-decoration: line-through;
   color: var(--orca-color-text-2);
 }
