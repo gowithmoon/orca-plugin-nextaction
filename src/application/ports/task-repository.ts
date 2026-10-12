@@ -4,6 +4,10 @@ import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
 import type { Reminders } from "../../domain/reminder/reminder";
 import type { ReviewPlan } from "../../domain/review/review";
 import type { CompletionHistory } from "../../domain/task/completion-history";
+import type {
+  CustomPropertyDefinition,
+  CustomPropertyValue,
+} from "../../domain/task/custom-property";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
@@ -287,4 +291,28 @@ export interface TaskRepository {
    * it, or the write fails.
    */
   moveTask(id: TaskId, target: TaskId, placement: MovePlacement): Promise<void>;
+
+  /**
+   * The task tag's custom property definitions (GLOSSARY: 自定义属性, ADR
+   * 0023) as they are now, in Orca's order. Read afresh on every call, so a
+   * property added, renamed, reordered or deleted in Orca shows on the next
+   * read (the task change signal follows the edit, ADR 0007).
+   */
+  readCustomPropertyDefinitions(): Promise<CustomPropertyDefinition[]>;
+
+  /**
+   * Writes one custom property value of a task, an empty value clearing it;
+   * the task's other properties are left as they are. `now` is when it is
+   * written (a time of day is stored on that day). The user undoes it with
+   * one undo. Fails, writing nothing, with `CustomPropertyChangedError` when
+   * the property is no longer defined or its kind is not the value's, or
+   * when the block is not a task or the write fails. A mirror block's ID
+   * writes to its source block.
+   */
+  writeCustomProperty(
+    id: TaskId,
+    name: string,
+    value: CustomPropertyValue,
+    now: Date,
+  ): Promise<void>;
 }

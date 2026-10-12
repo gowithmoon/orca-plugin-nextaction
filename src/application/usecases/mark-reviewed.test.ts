@@ -110,6 +110,7 @@ describe("whether the task menu offers Mark reviewed", () => {
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
     ...partial,
   });

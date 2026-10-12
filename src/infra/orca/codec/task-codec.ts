@@ -2,12 +2,14 @@
 // task tag block (tag-operations): `refs[]` with `type === 2` and `to` equal
 // to the tag block ID, its `data` holding one item per property.
 
+import type { CustomPropertyDefinition } from "../../../domain/task/custom-property";
 import {
   type CalendarDate,
   type DependencyMode,
   type Task,
   taskFromNotes,
 } from "../../../domain/task/task";
+import { decodeCustomPropertyValues, textValue } from "./custom-property-codec";
 import {
   findDependencyModeKey,
   findPropertyKey,
@@ -23,6 +25,8 @@ export interface TaskTagContext {
   tagBlockId: number;
   /** Plugin properties whose definition conflicts; they read as empty (#19). */
   invalidated: readonly PropertyKey[];
+  /** The task tag's custom property definitions; none when absent (#113). */
+  customProperties?: readonly CustomPropertyDefinition[];
 }
 
 /**
@@ -157,6 +161,10 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       recurrence: recurrenceOf(block),
       review: reviewOf(block),
       reminders: remindersOf(block),
+      customProperties: decodeCustomPropertyValues(
+        ref.data,
+        tag.customProperties ?? [],
+      ),
     }),
   };
 }
@@ -181,10 +189,6 @@ function taskText(block: RawBlock): string {
 
 function numberValue(value: unknown): number | null {
   return typeof value === "number" ? value : null;
-}
-
-function textValue(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 /**

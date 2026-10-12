@@ -49,6 +49,7 @@ function task(
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    customProperties: {},
     anomalies: [],
   };
   return {

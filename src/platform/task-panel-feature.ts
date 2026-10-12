@@ -13,8 +13,12 @@ import { createPreviewNextOccurrence } from "../application/usecases/preview-nex
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
-import { createReadTask } from "../application/usecases/read-task";
+import {
+  createReadTask,
+  createReadTaskForPanel,
+} from "../application/usecases/read-task";
 import { createRepairNotAdvanced } from "../application/usecases/repair-not-advanced";
+import { createSetCustomProperty } from "../application/usecases/set-custom-property";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
 import { createSetRecurrence } from "../application/usecases/set-recurrence";
@@ -114,7 +118,11 @@ export function createTaskPanelFeature(deps: {
     render: (node) => renderReviewPopup(node),
   });
   const formDeps: TaskPanelFormDeps = {
-    readTask,
+    readTaskForPanel: createReadTaskForPanel({ repository }),
+    setCustomProperty: createSetCustomProperty({
+      repository,
+      clock: systemClock,
+    }),
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),
