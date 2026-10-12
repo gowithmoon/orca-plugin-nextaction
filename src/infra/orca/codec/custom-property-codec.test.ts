@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { tagBlocks } from "../../../../tests/task-block-fixtures";
+import { blocks, tagBlocks } from "../../../../tests/task-block-fixtures";
 import type { CustomPropertyDefinition } from "../../../domain/task/custom-property";
 import { CustomPropertyChangedError } from "../../../domain/task/custom-property";
 import {
+  blockCandidates,
   customPropertyDefinitions,
   decodeCustomPropertyValues,
+  encodeBlockRefs,
+  planBlockRefsWrite,
   planCustomChoiceAdditions,
   planCustomPropertyWrite,
+  resolveBlockRefTargets,
 } from "./custom-property-codec";
 
 // Definitions as the custom-properties spike recorded them: added in Orca's
@@ -556,5 +560,160 @@ describe("planCustomPropertyWrite", () => {
           ).value,
       ),
     ).toEqual([null, null, null, null, null]);
+  });
+});
+
+describe("block reference custom properties", () => {
+  const delegatedTo = [
+    { name: "委托给", kind: "blockRefs", scope: "人" },
+  ] as const satisfies readonly CustomPropertyDefinition[];
+  // As the custom-properties spike recorded it: the value holds reference
+  // IDs, each a `type: 3` reference of the task block to its target.
+  const refs = [
+    { id: 44, type: 3, to: 26 },
+    { id: 45, type: 3, to: 27 },
+    { id: 46, type: 1, to: 28 },
+  ];
+
+  it("reads reference IDs as the blocks their type 3 references point at", () => {
+    expect(
+      decodeCustomPropertyValues(
+        [{ name: "委托给", value: [45, 44] }],
+        delegatedTo,
+        refs,
+      ).委托给,
+    ).toEqual({ kind: "blockRefs", value: [27, 26] });
+  });
+
+  it("ignores a reference ID with no type 3 reference of that ID", () => {
+    expect(
+      decodeCustomPropertyValues(
+        [{ name: "委托给", value: [99, 46, 44] }],
+        delegatedTo,
+        refs,
+      ).委托给,
+    ).toEqual({ kind: "blockRefs", value: [26] });
+  });
+
+  describe("planning a write", () => {
+    const tagBlockId = tagBlocks.zh.id;
+    // A task delegated to block 26 through reference 44; reference 47 is
+    // another `type: 3` reference (e.g. a date's to a journal), not in the
+    // value.
+    const task = {
+      refs: [
+        {
+          id: 61,
+          type: 2,
+          to: tagBlockId,
+          data: [{ name: "委托给", value: [44] }],
+        },
+        { id: 44, type: 3, to: 26 },
+        { id: 47, type: 3, to: 27 },
+      ],
+    };
+
+    it("keeps the reference of a target already held and creates one for a new target, as for dependencies", () => {
+      expect(
+        planBlockRefsWrite(delegatedTo, task, tagBlockId, "委托给", [27, 26]),
+      ).toEqual([
+        { kind: "new", target: 27 },
+        { kind: "existing", refId: 44 },
+      ]);
+    });
+
+    it("writes an empty list to remove every target", () => {
+      expect(
+        planBlockRefsWrite(delegatedTo, task, tagBlockId, "委托给", []),
+      ).toEqual([]);
+    });
+
+    it("refuses a property that is no longer defined, or is no longer a block reference", () => {
+      expect(() =>
+        planBlockRefsWrite(delegatedTo, task, tagBlockId, "下发人", [26]),
+      ).toThrow(CustomPropertyChangedError);
+      expect(() =>
+        planBlockRefsWrite(
+          [{ name: "委托给", kind: "text" }],
+          task,
+          tagBlockId,
+          "委托给",
+          [26],
+        ),
+      ).toThrow(CustomPropertyChangedError);
+    });
+
+    it("writes the reference IDs under the property's name with the block reference type", () => {
+      expect(encodeBlockRefs("委托给", [44, 70])).toEqual({
+        name: "委托给",
+        type: 2,
+        value: [44, 70],
+      });
+    });
+  });
+
+  describe("candidates from the blocks found", () => {
+    const journal = {
+      ...blocks.plain,
+      id: 213,
+      parent: null,
+      content: [],
+      properties: [
+        {
+          name: "_repr",
+          value: { type: "journal", date: "2026-10-20T00:00:00.000Z" },
+        },
+      ],
+    };
+    const page = {
+      ...blocks.plain,
+      id: 30,
+      parent: null,
+      content: [],
+      aliases: ["张三"],
+    };
+
+    it("reads a mirror as its source block, each block once, journals and orphans left out", () => {
+      // blocks.mirror (242) mirrors 201, also found itself.
+      const source = {
+        ...blocks.plain,
+        id: 201,
+        content: [{ t: "t", v: "A" }],
+      };
+      expect(
+        blockCandidates(
+          [blocks.mirror, source, journal, blocks.orphan, blocks.plain, page],
+          new Map([[201, source]]),
+        ),
+      ).toEqual([
+        { id: 201, text: "A" },
+        { id: 250, text: "Just a note" },
+        { id: 30, text: "张三" },
+      ]);
+    });
+
+    it("leaves out a mirror whose source was not read", () => {
+      expect(blockCandidates([blocks.mirror], new Map())).toEqual([]);
+    });
+  });
+
+  it("reads a target that is a mirror as its source block", () => {
+    // blocks.mirror (242) mirrors 201 (block-properties-json M1).
+    const values = {
+      委托给: { kind: "blockRefs", value: [242, 250] },
+      下发人: { kind: "text", value: "张三" },
+    } as const;
+    expect(
+      resolveBlockRefTargets(
+        values,
+        new Map<number, { properties: readonly { name: string }[] }>([
+          [242, blocks.mirror],
+          [250, blocks.plain],
+        ]),
+      ),
+    ).toEqual({
+      委托给: { kind: "blockRefs", value: [201, 250] },
+      下发人: { kind: "text", value: "张三" },
+    });
   });
 });

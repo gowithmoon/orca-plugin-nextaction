@@ -11,7 +11,21 @@ import {
 import { PropType } from "../prop-type";
 import { missingChoices } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
+import {
+  type DependencyWriteItem,
+  planBlockRefWrite,
+} from "./dependency-write";
 import { findPropertyKey } from "./names";
+// task-codec imports this module too; only functions cross, called after
+// both have loaded.
+import {
+  findTaskTagRef,
+  isOrphan,
+  mirrorSourceId,
+  type RawBlock,
+  resolveDependencyTargets,
+  taskText,
+} from "./task-codec";
 import type { RefDataItem } from "./task-encode";
 
 /** A property definition on the task tag block, as get-blocks returns it. */
@@ -137,6 +151,46 @@ export function planCustomChoiceAdditions(
       ],
     },
   };
+}
+
+/**
+ * What to write so the block reference custom property `name` of the task
+ * holds exactly `targets` (block IDs of source blocks), as dependencies are
+ * written (tag-operations A2, A4, A5): a target already held keeps its
+ * reference, a new one gets a reference created first. Throws
+ * `CustomPropertyChangedError` when `name` is not a block reference property
+ * now.
+ */
+export function planBlockRefsWrite(
+  definitions: readonly CustomPropertyDefinition[],
+  block: Pick<RawBlock, "refs">,
+  tagBlockId: number,
+  name: string,
+  targets: readonly number[],
+): DependencyWriteItem[] {
+  checkCustomPropertyValue(definitions, name, {
+    kind: "blockRefs",
+    value: targets,
+  });
+  const data = findTaskTagRef(block.refs, tagBlockId)?.data ?? [];
+  const held = data.find((d) => d.name === name)?.value;
+  return planBlockRefWrite(
+    block,
+    new Set(Array.isArray(held) ? held : []),
+    targets,
+  );
+}
+
+/**
+ * The item to write with `setRefData` for a block reference custom
+ * property: reference IDs, never block IDs (tag-operations A2); `[]` removes
+ * the value with its references (A4).
+ */
+export function encodeBlockRefs(
+  name: string,
+  refIds: readonly number[],
+): RefDataItem {
+  return { name, type: PropType.BlockRefs, value: [...refIds] };
 }
 
 /**
@@ -283,17 +337,110 @@ function momentValue(value: unknown): Date | null {
   return at && !Number.isNaN(at.getTime()) ? at : null;
 }
 
+/** A reference of the task block, as get-blocks returns it. */
+export interface BlockRef {
+  id: number;
+  type: number;
+  to: number;
+}
+
+/** Orca `RefType.RefData`: what a block reference property's value points through. */
+const refDataRef = 3;
+
+/**
+ * The target block IDs of a block reference value. The value holds
+ * reference IDs, never block IDs (tag-operations A2): each is resolved
+ * through the block's own `type: 3` reference of that ID, as dependencies
+ * are; one with no such reference is left out. Mirrors are resolved by the
+ * repository, which reads the targets.
+ */
+function blockRefTargets(value: unknown, refs: readonly BlockRef[]): number[] {
+  if (!Array.isArray(value)) return [];
+  const targets: number[] = [];
+  for (const refId of value) {
+    const ref = refs.find((r) => r.id === refId && r.type === refDataRef);
+    if (ref && !targets.includes(ref.to)) targets.push(ref.to);
+  }
+  return targets;
+}
+
+/** A block offered as a block reference target. */
+export interface FoundBlock {
+  id: number;
+  text: string;
+}
+
+type CandidateBlock = Pick<
+  RawBlock,
+  "id" | "parent" | "aliases" | "content" | "properties"
+>;
+
+/**
+ * Block reference candidates from the blocks a search found, in order: a
+ * mirror as its source block (from `sources`, read for it; left out when not
+ * there), each block once. Journal blocks and orphans (no parent, no alias,
+ * ADR 0013) are left out; a page reads as its alias.
+ */
+export function blockCandidates(
+  found: readonly CandidateBlock[],
+  sources: ReadonlyMap<number, CandidateBlock>,
+): FoundBlock[] {
+  const candidates: FoundBlock[] = [];
+  const seen = new Set<number>();
+  for (const block of found) {
+    const sourceId = mirrorSourceId(block);
+    const source = sourceId === undefined ? block : sources.get(sourceId);
+    if (!source || mirrorSourceId(source) !== undefined) continue;
+    if (isOrphan(source) || seen.has(source.id)) continue;
+    seen.add(source.id);
+    candidates.push({ id: source.id, text: taskText(source) });
+  }
+  return candidates;
+}
+
+/**
+ * The values with every block reference target that is a mirror replaced by
+ * its source block (block-properties-json M1), each once, in order. `blocks`
+ * holds the target blocks as read; a target not among them stays as it is.
+ * One hop only, as for dependencies.
+ */
+export function resolveBlockRefTargets(
+  values: CustomPropertyValues,
+  blocks: ReadonlyMap<number, Pick<RawBlock, "properties">>,
+): CustomPropertyValues {
+  const resolved: Record<string, CustomPropertyValue> = {};
+  for (const [name, value] of Object.entries(values)) {
+    resolved[name] =
+      value.kind === "blockRefs"
+        ? {
+            kind: "blockRefs",
+            value: resolveDependencyTargets(value.value, blocks),
+          }
+        : value;
+  }
+  return resolved;
+}
+
 /**
  * A task's custom property values, from the `data` of its reference to the
- * task tag, by definition name.
+ * task tag, by definition name. `refs` are the task block's references, which
+ * block reference values point through.
  */
 export function decodeCustomPropertyValues(
   data: readonly RefDataValue[] | null | undefined,
   definitions: readonly CustomPropertyDefinition[],
+  refs: readonly BlockRef[] = [],
 ): CustomPropertyValues {
   const values: Record<string, CustomPropertyValue> = {};
   for (const definition of definitions) {
     const item = (data ?? []).find((i) => i.name === definition.name);
+    if (definition.kind === "blockRefs") {
+      values[definition.name] = {
+        kind: "blockRefs",
+        value: blockRefTargets(item?.value, refs),
+      };
+      continue;
+    }
     const decoded = decodeValue(definition.kind, item?.value);
     if (decoded) values[definition.name] = decoded;
   }

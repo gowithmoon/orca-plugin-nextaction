@@ -36,6 +36,13 @@ export interface ValuesFilter {
   excludes?: readonly string[];
 }
 
+/** A block offered as a block reference target (#115). */
+export interface BlockCandidate {
+  readonly id: number;
+  /** Its text as the notes hold it; may be empty. */
+  readonly text: string;
+}
+
 /** The multi-value properties whose values the user picks from candidates. */
 export type ChoiceProperty = "contexts" | "labels";
 
@@ -299,6 +306,25 @@ export interface TaskRepository {
    * read (the task change signal follows the edit, ADR 0007).
    */
   readCustomPropertyDefinitions(): Promise<CustomPropertyDefinition[]>;
+
+  /**
+   * The text of each of the blocks `ids` (block reference targets, #115),
+   * read when asked for. A block that is gone, or deleted while still
+   * referenced (left behind as an orphan, tag-operations X2), is not in the
+   * result.
+   */
+  readBlockTexts(ids: readonly number[]): Promise<ReadonlyMap<number, string>>;
+
+  /**
+   * Blocks offered as targets of a block reference custom property (#115)
+   * whose text holds `search`: only blocks carrying the tag `scope` when
+   * given, every block otherwise. Journal blocks and orphans are left out; a
+   * mirror reads as its source block, each once.
+   */
+  searchBlocks(
+    search: string,
+    scope: string | null,
+  ): Promise<readonly BlockCandidate[]>;
 
   /**
    * Writes one custom property value of a task, an empty value clearing it;

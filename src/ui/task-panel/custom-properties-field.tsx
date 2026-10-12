@@ -2,9 +2,10 @@
 // row per property the task tag defines, in Orca's order, each shaped like
 // the panel's built-in field of its kind. Property names are shown as the
 // notes hold them (ADR 0009 is about the plugin's own names). Block
-// reference properties are not shown yet (#115). Verified by
+// reference properties are shaped like dependencies (#115). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { ReadBlockRefCandidates } from "../../application/usecases/read-block-ref-candidates";
 import type { TaskCustomProperty } from "../../application/usecases/read-task";
 import type {
   CustomPropertyDefinition,
@@ -16,6 +17,8 @@ import { t } from "../../shared/l10n/l10n";
 import { formatClock } from "../components/format";
 import { DatePicker } from "../components/popup-controls";
 import { formatMoment } from "../components/reminder-text";
+import type { Notify } from "../notify";
+import { BlockRefPropertyField } from "./block-ref-property-field";
 import { ChoicesField } from "./choices-field";
 import { DateField, Field, NoteField } from "./task-panel-fields";
 
@@ -29,6 +32,7 @@ const shownKinds = new Set<CustomPropertyValue["kind"]>([
   "time",
   "single",
   "multi",
+  "blockRefs",
 ]);
 
 /**
@@ -42,6 +46,8 @@ export function CustomPropertiesField(props: {
   saveOnLeave: () => boolean;
   /** Resolves to whether the write succeeded. */
   onChange: (name: string, value: CustomPropertyValue) => Promise<boolean>;
+  /** For block reference properties (#115). */
+  blockRefs?: BlockRefsDeps;
 }) {
   const shown = props.properties.filter((p) => shownKinds.has(p.value.kind));
   if (shown.length === 0) return null;
@@ -66,6 +72,8 @@ export function CustomPropertiesField(props: {
             <CustomPropertyControl
               labelId={labelId}
               definition={property.definition}
+              targets={property.targets}
+              blockRefs={props.blockRefs}
               value={property.value}
               today={props.today}
               saveOnLeave={props.saveOnLeave}
@@ -80,9 +88,19 @@ export function CustomPropertiesField(props: {
   );
 }
 
+/** What block reference properties need beyond the value (#115). */
+export interface BlockRefsDeps {
+  readBlockRefCandidates: ReadBlockRefCandidates;
+  notify: Notify;
+  /** Opens a target block in the notes. */
+  onOpen: (blockId: number) => void;
+}
+
 function CustomPropertyControl(props: {
   labelId: string;
   definition: CustomPropertyDefinition;
+  targets: TaskCustomProperty["targets"];
+  blockRefs: BlockRefsDeps | undefined;
   value: CustomPropertyValue;
   today: CalendarDate;
   saveOnLeave: () => boolean;
@@ -175,6 +193,20 @@ function CustomPropertyControl(props: {
           }
         />
       );
+    case "blockRefs":
+      return props.blockRefs ? (
+        <BlockRefPropertyField
+          labelId={props.labelId}
+          name={props.definition.name}
+          targets={props.targets ?? []}
+          readBlockRefCandidates={props.blockRefs.readBlockRefCandidates}
+          notify={props.blockRefs.notify}
+          onOpen={props.blockRefs.onOpen}
+          onChange={(targets) =>
+            void onChange({ kind: "blockRefs", value: targets })
+          }
+        />
+      ) : null;
     default:
       return null;
   }

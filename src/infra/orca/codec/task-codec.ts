@@ -99,7 +99,7 @@ export function mirrorSourceId(
  * it can be a task. Reading by ID agrees with the task query’s "has a parent
  * or an alias" (page-task P2).
  */
-function isOrphan(block: RawBlock): boolean {
+export function isOrphan(block: Pick<RawBlock, "parent" | "aliases">): boolean {
   return block.parent == null && block.aliases.length === 0;
 }
 
@@ -164,6 +164,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       customProperties: decodeCustomPropertyValues(
         ref.data,
         tag.customProperties ?? [],
+        block.refs,
       ),
     }),
   };
@@ -173,7 +174,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
  * The block's own text. A page's title is its alias, its content empty
  * (plugin-panel-writes), so a page without content reads as its first alias.
  */
-function taskText(block: RawBlock): string {
+export function taskText(block: Pick<RawBlock, "content" | "aliases">): string {
   const text = (block.content ?? [])
     .map((fragment) => (typeof fragment.v === "string" ? fragment.v : ""))
     .join("");
