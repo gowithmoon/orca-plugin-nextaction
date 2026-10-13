@@ -74,6 +74,7 @@ export function BlockRefsField(props: {
                 <Tooltip text={props.removeLabel}>
                   <Button
                     variant="plain"
+                    className="nextaction-block-ref-remove"
                     aria-label={props.removeLabel}
                     onClick={() => props.onRemove(item.id)}
                   >

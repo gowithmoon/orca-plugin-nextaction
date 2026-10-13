@@ -333,7 +333,7 @@ function Fields(props: {
           <DependencyModeField
             labelId={id("dependency-mode")}
             mode={task.dependencyMode}
-            onChange={(mode) => void actions.setDependencyMode(mode)}
+            onChange={(mode) => actions.setDependencyMode(mode)}
           />
         </Field>
       )}
