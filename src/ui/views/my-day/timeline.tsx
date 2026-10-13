@@ -10,10 +10,9 @@
 // `momentAtY`); each card (`data-nextaction-timeline-card`) has its body to
 // drag, and a top and a bottom edge (`.nextaction-timeline-card-edge`) to
 // change its start or its end; the unscheduled area is the other drop target
-// (my-day-view.tsx). A card is positioned and clips its content, so its
-// menus (the task menu, the status menu) go into the view's areas instead:
-// Orca puts a popup without a container into its anchor's `offsetParent`,
-// the card (orca-popup-container).
+// (my-day-view.tsx). A card is positioned and clips its content; its menus
+// (the task menu, the status menu) go into the plugin panel's popup layer
+// like every other menu (popup-controls.tsx), not into the card.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ScheduledMyDayItem } from "../../../application/usecases/read-my-day";
@@ -25,6 +24,7 @@ import {
   formatTimeRange,
   shownText,
 } from "../../components/format";
+import { ContextMenu } from "../../components/popup-controls";
 import { StatusButton } from "../../components/task-card";
 import type { TaskActions } from "../../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
@@ -52,8 +52,6 @@ export interface TimelineCardActions {
   readonly onOpen: (item: ScheduledMyDayItem) => void;
   /** Opens the schedule popup. */
   readonly onSchedule: (item: ScheduledMyDayItem) => void;
-  /** Where the card's menus go: the view's areas, not the card. */
-  readonly menuContainer: React.RefObject<HTMLElement>;
 }
 
 /** The button that opens the schedule popup, on every card in My Day. */
@@ -85,7 +83,6 @@ export function TimelineCard(props: {
   card: TimelineCardActions;
 }) {
   const { item, range, slot, selected, card } = props;
-  const { ContextMenu } = orca.components;
   const { task } = item;
   const box = scheduleBox(range, item.schedule);
   const compact = box.height < compactBelowPx;
@@ -155,11 +152,7 @@ export function TimelineCard(props: {
       <div className="nextaction-timeline-card-body">
         {!compact && (
           <div className="nextaction-timeline-card-status">
-            <StatusButton
-              task={task}
-              actions={card.actions}
-              menuContainer={card.menuContainer}
-            />
+            <StatusButton task={task} actions={card.actions} />
           </div>
         )}
         <div className="nextaction-timeline-card-main">
@@ -208,7 +201,6 @@ export function TimelineCard(props: {
   const menuItems = card.menuItems;
   return (
     <ContextMenu
-      container={card.menuContainer}
       menu={(close) => (
         <TaskMenu
           items={menuItems}

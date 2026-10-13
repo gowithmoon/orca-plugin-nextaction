@@ -216,9 +216,8 @@ function TimelineArea(props: {
   read: TodaysMyDay;
   deps: MyDayViewDeps;
   onSchedule: (item: ScheduleTarget) => void;
-  menuContainer: React.RefObject<HTMLElement>;
 }) {
-  const { read, deps, onSchedule, menuContainer } = props;
+  const { read, deps, onSchedule } = props;
   const now = useNow(deps.now);
   const actions = useTaskActions(deps.taskActions);
   const menuItems = deps.menuItems();
@@ -230,9 +229,8 @@ function TimelineArea(props: {
       menuPlace: { selectTask },
       onOpen: (item: ScheduledMyDayItem) => selectTask(item.task.id),
       onSchedule,
-      menuContainer,
     }),
-    [actions, menuItems, selectTask, onSchedule, menuContainer],
+    [actions, menuItems, selectTask, onSchedule],
   );
   return (
     <Timeline
@@ -321,12 +319,7 @@ function MyDayAreas(props: {
           unscheduled={unscheduled}
           timeline={
             read && (
-              <TimelineArea
-                read={read}
-                deps={deps}
-                onSchedule={onSchedule}
-                menuContainer={root}
-              />
+              <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
             )
           }
         />

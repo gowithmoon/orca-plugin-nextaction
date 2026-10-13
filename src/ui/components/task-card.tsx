@@ -11,6 +11,7 @@ import type { TaskActions } from "../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../task-menu/menu-items";
 import { TaskMenu } from "../task-menu/task-menu";
 import { shownText } from "./format";
+import { ContextMenu } from "./popup-controls";
 import { PropertyRow } from "./property-row";
 import { StatusIcon } from "./status-icon";
 import { markedStatus, StatusMenu } from "./status-menu";
@@ -74,21 +75,10 @@ function selectsText(): boolean {
 }
 
 /** The status icon that opens the status menu; shared with My Day's timeline cards. */
-export function StatusButton(props: {
-  task: Task;
-  actions: TaskActions;
-  /**
-   * Where the status menu goes. Without it Orca puts it into the button's
-   * `offsetParent` (orca-popup-container): a positioned card that clips its
-   * content (My Day's timeline cards) would clip the menu.
-   */
-  menuContainer?: React.RefObject<HTMLElement>;
-}) {
-  const { task, actions, menuContainer } = props;
-  const { ContextMenu } = orca.components;
+export function StatusButton(props: { task: Task; actions: TaskActions }) {
+  const { task, actions } = props;
   return (
     <ContextMenu
-      container={menuContainer}
       menu={(close) => (
         <StatusMenu
           current={markedStatus(task)}
@@ -172,7 +162,6 @@ export function TaskCard(props: TaskCardProps) {
     doneToday,
     skippedToday,
   } = props;
-  const { ContextMenu } = orca.components;
   const text = shownText(task);
 
   const card = (onContextMenu?: (event: React.MouseEvent) => void) => (

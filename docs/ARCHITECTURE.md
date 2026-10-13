@@ -164,7 +164,7 @@ tests/
 - 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件中使用；其他 `ui` 代码仍然只用英文键。
 
 弹出层（`orca-popup-container`）：
-- `ui` 中的下拉选择和日期选择器一律用 `ui/components/popup-controls.tsx` 的 `Select`、`DatePicker`，不直接从 `orca.components` 取。Orca 的弹出层没有 `menuContainer` 时挂进锚点的 `offsetParent`，在插件窗口里会被窗口截断；这两个包装默认把弹出层放进窗口的弹出层（`usePopupLayer()`），窗口外沿用 Orca 的默认摆放。`tests/architecture.test.ts` 检查这条规矩。
+- `ui` 中的下拉选择、日期选择器和菜单一律用 `ui/components/popup-controls.tsx` 的 `Select`、`DatePicker`、`ContextMenu`，不直接从 `orca.components` 取。Orca 的弹出层没有容器时挂进锚点的 `offsetParent`，并在它的矩形内摆放，在插件窗口里会被窗口截断，在插件面板里会被面板截断（面板窄时子菜单显示不全）；这三个包装默认把弹出层放进窗口或插件面板的弹出层（`usePopupLayer()`），两者之外沿用 Orca 的默认摆放。插件面板的弹出层挂在 `document.body` 下：放在面板里会和面板一起被右边的面板盖住。`tests/architecture.test.ts` 检查这条规矩。
 
 ### 注册与清理
 

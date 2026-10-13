@@ -20,7 +20,7 @@
 | [inbox-anomalous-status.md](./inbox-anomalous-status.md) | #37 | 状态为空或无法识别的任务与"状态为收集箱"的查询（第四步补测） | 第四步起按状态筛选的视图 |
 | [plugin-panel-writes.md](./plugin-panel-writes.md) | #39、#40 | 从插件面板写入、日期值的类型、页面任务的文字、插件面板的宽度（第四步验收补测） | 第四步起所有写入和日期读取 |
 | [capture-initial-properties.md](./capture-initial-properties.md) | #49 | 快速捕获带初始属性一次写入与撤销；`--orca-radius-md`、`--orca-shadow-popup` | 快速捕获；插件的圆角与弹窗阴影 |
-| [orca-popup-container.md](./orca-popup-container.md) | #45 | Orca 弹出层的容器、截断与指针处理（读源码，待实测） | 插件窗口中的日期选择器和下拉菜单 |
+| [orca-popup-container.md](./orca-popup-container.md) | #45 | Orca 弹出层的容器、截断与指针处理（读源码）；第二轮实测插件面板里的菜单与子菜单、弹出层的层级；`orca-popup-pointer-logic` 留在 body 上的卡死 | 插件窗口和插件面板中的日期选择器、下拉菜单和右键菜单 |
 | [next-action-hierarchy-boolean-deps.md](./next-action-hierarchy-boolean-deps.md) | #52 | 块层级与先后顺序的读法和耗时、布尔属性、依赖的反向查找（第五步开工前） | 第五步的任务图、顺序执行、依赖、放弃 |
 | [blockrefs-scope.md](./blockrefs-scope.md) | — | 块引用属性的搜索范围 `typeArgs.scope`，标签改名时的表现（第五步验收补测） | 第五步起的依赖属性 |
 | [move-blocks.md](./move-blocks.md) | #64 | 从插件面板移动块：目标块须在缓存中、撤销、子块、页面块、`autoMatchType`；笔记与插件面板之间的拖拽（第六步开工前） | 第六步的拖拽移动 |

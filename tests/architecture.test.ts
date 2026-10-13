@@ -11,7 +11,7 @@ import {
 // `notChecked` with the reason. Change both together. The register*, CSS
 // injection, DOM listener and global React usage rules come from section 4
 // ("注册与清理", "React"); the editor command rule from section 4 ("读写
-// Orca") and ADR 0014; the Select/DatePicker rule from section 4 ("Orca
+// Orca") and ADR 0014; the Select/DatePicker/ContextMenu rule from section 4 ("Orca
 // 行为约束", 弹出层) and docs/spikes/orca-popup-container.md.
 const rules: ArchitectureRules = {
   layers: {
@@ -106,13 +106,13 @@ const rules: ArchitectureRules = {
         "listen through platform/registry.ts so unload removes the listener",
     },
     {
-      name: "takes Select or DatePicker from orca.components",
+      name: "takes Select, DatePicker or ContextMenu from orca.components",
       pattern:
-        /\{[^{}]*\b(?:Select|DatePicker)\b[^{}]*\}\s*=\s*orca\s*\.\s*components\b|\borca\s*\.\s*components\s*\.\s*(?:Select|DatePicker)\b/,
+        /\{[^{}]*\b(?:Select|DatePicker|ContextMenu)\b[^{}]*\}\s*=\s*orca\s*\.\s*components\b|\borca\s*\.\s*components\s*\.\s*(?:Select|DatePicker|ContextMenu)\b/,
       forbiddenIn: ["ui"],
       exceptIn: ["src/ui/components/popup-controls.tsx"],
       allowed:
-        "use Select and DatePicker from src/ui/components/popup-controls.tsx, which put their popups in the window's popup layer (docs/spikes/orca-popup-container.md)",
+        "use Select, DatePicker and ContextMenu from src/ui/components/popup-controls.tsx, which put their popups in the popup layer of the window or the plugin panel (docs/spikes/orca-popup-container.md)",
     },
     {
       name: "uses the global React",
@@ -233,8 +233,9 @@ describe("architecture rules", () => {
     [
       "src/ui/takes-popup-controls-from-orca.ts",
       [
-        "ui takes Select or DatePicker from orca.components",
-        "ui takes Select or DatePicker from orca.components",
+        "ui takes Select, DatePicker or ContextMenu from orca.components",
+        "ui takes Select, DatePicker or ContextMenu from orca.components",
+        "ui takes Select, DatePicker or ContextMenu from orca.components",
       ],
     ],
     [

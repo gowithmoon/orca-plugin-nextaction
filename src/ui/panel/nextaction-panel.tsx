@@ -6,6 +6,7 @@ import * as React from "react";
 import type { TaskId } from "../../domain/task/task";
 import type { PanelProps } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
+import { PanelPopupLayer } from "../components/popup-layer";
 import type { OpenTaskPanelPopup } from "../task-panel/task-panel-popup";
 import type { TaskPanelSidePaneProps } from "../task-panel/task-panel-side-pane";
 import { type EditorHost, HiddenEditor } from "./hidden-editor";
@@ -198,34 +199,36 @@ export function createNextActionPanel(
         />
         {context && (
           <PanelContext.Provider value={context}>
-            <PanelNavigation
-              views={list}
-              currentId={current?.id}
-              onSelect={showView}
-              onRefresh={onRefresh}
-            />
-            <div className="nextaction-panel-body">
-              <div
-                className="nextaction-panel-view"
-                role="tabpanel"
-                id={current && `${props.panelId}-${current.id}`}
-                aria-label={current?.label()}
-              >
-                {View && <View />}
-              </div>
-              {tier === "wide" && (
-                <aside
-                  className="nextaction-panel-side"
-                  aria-label={t("Task panel")}
+            <PanelPopupLayer>
+              <PanelNavigation
+                views={list}
+                currentId={current?.id}
+                onSelect={showView}
+                onRefresh={onRefresh}
+              />
+              <div className="nextaction-panel-body">
+                <div
+                  className="nextaction-panel-view"
+                  role="tabpanel"
+                  id={current && `${props.panelId}-${current.id}`}
+                  aria-label={current?.label()}
                 >
-                  <SidePane
-                    taskId={selectedTaskId}
-                    onClose={clearSelection}
-                    onSelectTask={selectTask}
-                  />
-                </aside>
-              )}
-            </div>
+                  {View && <View />}
+                </div>
+                {tier === "wide" && (
+                  <aside
+                    className="nextaction-panel-side"
+                    aria-label={t("Task panel")}
+                  >
+                    <SidePane
+                      taskId={selectedTaskId}
+                      onClose={clearSelection}
+                      onSelectTask={selectTask}
+                    />
+                  </aside>
+                )}
+              </div>
+            </PanelPopupLayer>
           </PanelContext.Provider>
         )}
       </div>

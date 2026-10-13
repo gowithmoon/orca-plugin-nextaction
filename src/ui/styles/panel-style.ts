@@ -33,6 +33,23 @@ export const panelCss = `
   display: none;
 }
 
+/*
+ * The panel's popup layer (ui/components/popup-layer.tsx), under body: over
+ * every panel (each .orca-hideable is z-index 10), under Orca's windows
+ * (ModalOverlay, 400 and up). Measured in Orca (orca-popup-container,
+ * round 2). Like the windows' layer, it lets the pointer through until
+ * Orca's popup in it takes it while open.
+ */
+.nextaction-panel-popup-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+:where(.nextaction-panel-popup-layer) {
+  pointer-events: none;
+}
+
 .nextaction-panel *,
 .nextaction-panel *::before,
 .nextaction-panel *::after {
