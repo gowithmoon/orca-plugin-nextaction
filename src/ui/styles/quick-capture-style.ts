@@ -24,7 +24,7 @@ export const quickCaptureCss = `
 .nextaction-capture-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
   font-weight: var(--orca-fontweight-lg);
 }
 
@@ -75,6 +75,6 @@ export const quickCaptureCss = `
   flex: 1 1 auto;
   min-width: 0;
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
 }
 `;

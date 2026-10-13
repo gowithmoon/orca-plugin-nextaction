@@ -23,7 +23,7 @@ export const panelCss = `
   background-color: var(--orca-color-bg-1);
   color: var(--orca-color-text-1);
   font-family: var(--orca-fontfamily-ui);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   /* Orca panels do not let text be selected (editor-sidetool-panel). */
   user-select: text;
 }
@@ -110,7 +110,7 @@ export const panelCss = `
 
 .nextaction-panel-nav-item > .ti {
   flex: 0 0 auto;
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
 }
 
 .nextaction-panel-nav-label {
@@ -123,12 +123,12 @@ export const panelCss = `
    current item's fill as well as on the panel's background. */
 .nextaction-panel-nav-count {
   flex: 0 0 auto;
-  min-width: calc(var(--nextaction-fontsize-xs) * 1.6);
+  min-width: calc(var(--orca-fontsize-xs) * 1.6);
   padding: 0 var(--orca-spacing-xs);
-  border-radius: calc(var(--nextaction-fontsize-xs) * var(--orca-lineheight-sm));
+  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
   background-color: color-mix(in srgb, var(--orca-color-text-2) 15%, transparent);
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
   font-weight: normal;
   line-height: var(--orca-lineheight-sm);
   text-align: center;
@@ -192,7 +192,7 @@ export const panelCss = `
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: var(--nextaction-fontsize-lg);
+  font-size: var(--orca-fontsize-lg);
   font-weight: var(--orca-fontweight-xl);
   line-height: var(--orca-lineheight-sm);
 }
@@ -201,7 +201,7 @@ export const panelCss = `
 .nextaction-view-count {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
   font-variant-numeric: tabular-nums;
 }
 
@@ -216,7 +216,7 @@ export const panelCss = `
 
 .nextaction-review-start-status {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
 }
 
 .nextaction-review-entries {
@@ -273,7 +273,7 @@ export const panelCss = `
   background: transparent;
   color: var(--orca-color-text-2);
   font: inherit;
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   cursor: pointer;
 }
 
@@ -305,7 +305,7 @@ export const panelCss = `
   height: 1.4em;
   border-radius: 999px;
   border: 1px solid var(--orca-color-border);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -382,14 +382,14 @@ export const panelCss = `
 .nextaction-review-group-title {
   margin: 0 0 var(--orca-spacing-xs);
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   font-weight: var(--orca-fontweight-lg);
   line-height: var(--orca-lineheight-sm);
 }
 
 .nextaction-review-look-back-empty {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-review-look-back-list {
@@ -439,7 +439,7 @@ export const panelCss = `
 .nextaction-review-look-back-when {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   font-variant-numeric: tabular-nums;
 }
 

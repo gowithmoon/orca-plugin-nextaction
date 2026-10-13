@@ -52,7 +52,7 @@ function initialProperties(draft: Draft): InitialProperties {
 const captureTextStyle: React.CSSProperties = {
   padding: "var(--orca-spacing-md)",
   borderRadius: "var(--orca-radius-md)",
-  fontSize: "var(--nextaction-fontsize-md)",
+  fontSize: "var(--orca-fontsize-md)",
 };
 
 function QuickCapturePopup(props: {

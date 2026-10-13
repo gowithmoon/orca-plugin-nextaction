@@ -54,9 +54,9 @@ export const taskPanelCss = `
 /* The header's text and icons, one size up: the task is what the panel is about. */
 .nextaction-task-panel-header > .nextaction-status-icon {
   /* One text line high, so the icon sits on the first line. */
-  height: calc(var(--nextaction-fontsize-lg) * var(--orca-lineheight-md));
+  height: calc(var(--orca-fontsize-lg) * var(--orca-lineheight-md));
   align-items: center;
-  font-size: var(--nextaction-fontsize-lg);
+  font-size: var(--orca-fontsize-lg);
 }
 
 .nextaction-task-panel-title {
@@ -64,7 +64,7 @@ export const taskPanelCss = `
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  font-size: var(--nextaction-fontsize-lg);
+  font-size: var(--orca-fontsize-lg);
   line-height: var(--orca-lineheight-md);
   font-weight: var(--orca-fontweight-lg);
   user-select: text;
@@ -98,7 +98,7 @@ export const taskPanelCss = `
 
 .nextaction-task-field-label {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-task-field-control {
@@ -116,7 +116,7 @@ export const taskPanelCss = `
 
 .nextaction-custom-properties-heading {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   font-weight: 600;
 }
 
@@ -157,13 +157,13 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   background-color: transparent;
   color: var(--orca-color-text-2);
   font: inherit;
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
   cursor: pointer;
 }
 
 .nextaction-status-button > .ti {
   color: var(--nextaction-status-color);
-  font-size: var(--nextaction-fontsize-lg);
+  font-size: var(--orca-fontsize-lg);
 }
 
 .nextaction-status-button:hover {
@@ -264,7 +264,7 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   /* Level names are mostly two characters wide: the meter keeps its length. */
   min-width: 3em;
   color: var(--orca-color-text-1);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-date-field {
@@ -324,7 +324,7 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
 .nextaction-note-saved {
   flex: 0 0 auto;
   color: var(--orca-color-text-green);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
   animation: nextaction-fade-out 2s ease-in forwards;
 }
 
@@ -478,7 +478,7 @@ button.nextaction-block-ref-target:hover {
 .nextaction-dependency-hint,
 .nextaction-not-next-action-reason-hint {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-dependency-stale {
@@ -608,7 +608,7 @@ button.nextaction-block-ref-target:hover {
 }
 
 .nextaction-reminder-passed {
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
 }
 
 .nextaction-reminder-item > :last-child {
@@ -645,7 +645,7 @@ button.nextaction-block-ref-target:hover {
   background-color: transparent;
   color: var(--orca-color-text-2);
   font: inherit;
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -696,7 +696,7 @@ button.nextaction-block-ref-target:hover {
 }
 
 .nextaction-recurrence-popup-title {
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
   font-weight: var(--orca-fontweight-lg);
 }
 
@@ -705,7 +705,7 @@ button.nextaction-block-ref-target:hover {
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-recurrence-popup-body {
@@ -736,12 +736,12 @@ button.nextaction-block-ref-target:hover {
 
 .nextaction-recurrence-popup-label {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-recurrence-popup-hint {
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
 }
 
 /* Pause (#92): the switch, what it does beside it. */
@@ -753,7 +753,7 @@ button.nextaction-block-ref-target:hover {
 
 .nextaction-recurrence-popup-warning {
   color: var(--orca-color-dangerous-5);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-recurrence-popup-footer {
@@ -787,7 +787,7 @@ button.nextaction-block-ref-target:hover {
   background-color: transparent;
   color: var(--orca-color-text-2);
   font: inherit;
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   cursor: pointer;
 }
 
@@ -843,6 +843,6 @@ button.nextaction-block-ref-target:hover {
 /* The next occurrence of the rule being edited (#88). */
 .nextaction-recurrence-popup-preview {
   color: var(--orca-color-text-1);
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
 }
 `;

@@ -130,9 +130,9 @@ export const componentCss = `
 .nextaction-task-card-open,
 .nextaction-task-card-extra {
   /* One text line high, level with the first line of the text. */
-  height: calc(var(--nextaction-fontsize-sm) * var(--orca-lineheight-md));
+  height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
   aspect-ratio: 1;
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
 }
 
 /* Only on hover or focus, unless the pointer cannot hover. */
@@ -148,12 +148,12 @@ export const componentCss = `
   display: flex;
   align-items: center;
   /* One text line high, so the icon sits on the first line. */
-  height: calc(var(--nextaction-fontsize-sm) * var(--orca-lineheight-md));
+  height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
 }
 
 .nextaction-status-icon {
   display: inline-flex;
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
   line-height: 1;
 }
 
@@ -189,7 +189,7 @@ export const componentCss = `
   gap: var(--orca-spacing-xs);
   min-width: 0;
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
   line-height: var(--orca-lineheight-sm);
 }
 
@@ -338,7 +338,7 @@ export const componentCss = `
   gap: var(--orca-spacing-xs) var(--orca-spacing-lg);
   min-width: 0;
   color: var(--orca-color-text-2);
-  font-size: var(--nextaction-fontsize-xs);
+  font-size: var(--orca-fontsize-xs);
   line-height: var(--orca-lineheight-sm);
 }
 
@@ -357,7 +357,7 @@ export const componentCss = `
 .nextaction-property-chip {
   display: inline-block;
   padding: 0 var(--orca-spacing-md);
-  border-radius: calc(var(--nextaction-fontsize-xs) * var(--orca-lineheight-sm));
+  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
   background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
   color: var(--orca-color-text-1);
 }
@@ -526,19 +526,19 @@ export const componentCss = `
 
 .nextaction-view-notice > .ti {
   margin-bottom: var(--orca-spacing-sm);
-  font-size: calc(var(--nextaction-fontsize-lg) * 2);
+  font-size: calc(var(--orca-fontsize-lg) * 2);
   line-height: 1;
 }
 
 .nextaction-view-notice-title {
   color: var(--orca-color-text-1);
-  font-size: var(--nextaction-fontsize-md);
+  font-size: var(--orca-fontsize-md);
   font-weight: var(--orca-fontweight-lg);
 }
 
 .nextaction-view-notice-detail {
   max-width: 36em;
-  font-size: var(--nextaction-fontsize-sm);
+  font-size: var(--orca-fontsize-sm);
   line-height: var(--orca-lineheight-md);
 }
 
