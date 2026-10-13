@@ -333,7 +333,11 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   100% { opacity: 0; }
 }
 
-/* Why not a next action (#54, #78): read only, one line per kind; task names are links. */
+/*
+ * Why not a next action (#54, #78): read only, one line per reason, a bullet
+ * each when there are several; task names are links. Text the size of the
+ * Orca controls in the other rows (sm).
+ */
 .nextaction-not-next-action-reasons {
   display: flex;
   flex-direction: column;
@@ -341,11 +345,24 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   margin: 0;
   padding: 0;
   list-style: none;
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-not-next-action-reason {
+  position: relative;
   overflow-wrap: anywhere;
   line-height: var(--orca-lineheight-md);
+}
+
+.nextaction-not-next-action-reasons[data-several] > .nextaction-not-next-action-reason {
+  padding-inline-start: 1em;
+}
+
+.nextaction-not-next-action-reasons[data-several] > .nextaction-not-next-action-reason::before {
+  content: "•";
+  position: absolute;
+  inset-inline-start: 0;
+  color: var(--orca-color-text-2);
 }
 
 .nextaction-not-next-action-reason-kind {
@@ -406,12 +423,11 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   min-width: 0;
 }
 
-.nextaction-delay-hint {
-  color: var(--orca-color-text-2);
-}
-
+/* The size of the Orca control beside them (sm). */
+.nextaction-delay-hint,
 .nextaction-sequential-hint {
   color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-block-refs-field {

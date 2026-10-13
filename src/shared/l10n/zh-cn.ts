@@ -195,21 +195,21 @@ const zhCN: Record<string, string> = {
   "Changed to ${status}": "已改为${status}",
   "Open a journal or page first: Orca saves changes to tasks through a note panel.":
     "请先打开一个日记或页面：Orca 需要通过笔记面板保存对任务的修改。",
-  "Why not a next action": "为什么不是下一步行动",
-  "Ancestor task done": "祖先任务已完成",
-  "In a parked subtree": "位于搁置子树",
-  "Not started yet": "还没到开始日期",
-  " starts on ${date}": " 的开始日期是${date}",
-  Subtasks: "子任务",
+  "Why not a next action": "阻塞原因",
+  "Ancestor task ": "祖先任务 ",
+  " — ": " ",
+  Parked: "已搁置",
+  "Not started yet": "未到开始日期",
+  "Subtasks not done": "子任务未完成",
+  "Earlier tasks first": "须先完成前面的任务",
+  "Dependencies not done": "依赖未完成",
+  "Dependencies not done (any one is enough)": "依赖未完成（完成任一即可）",
+  "In a dependency cycle": "处于循环依赖",
   "${kind}: ": "${kind}：",
   ", ": "、",
   "Could not read why the task is not a next action: ${reason}":
-    "无法读取为什么不是下一步行动：${reason}",
+    "无法读取阻塞原因：${reason}",
   Sequential: "顺序执行",
-  "${kind} (from ": "${kind}（来自 ",
-  "${kind} (any): ": "${kind}（任一）：",
-  "${kind} (any, from ": "${kind}（任一，来自 ",
-  "): ": "）：",
   "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
   Dependencies: "依赖",
   "(No longer a task)": "（已不是任务）",
@@ -231,15 +231,14 @@ const zhCN: Record<string, string> = {
   "Dependency mode": "依赖模式",
   All: "全部",
   Any: "任一",
-  "Dependency cycle": "循环依赖",
   "Dependency delay": "依赖延迟",
   "days after the dependencies are met": "天（依赖满足之后再等）",
   "In dependency delay": "依赖延迟中",
-  "let in on ${date} (1 day left), counting from when ":
-    "${date}放行（还剩 1 天），从",
-  "let in on ${date} (${days} days left), counting from when ":
-    "${date}放行（还剩 ${days} 天），从",
-  " was done": "完成起算",
+  "counting from when ": "从 ",
+  " was done, let in on ${date} (1 day left)":
+    " 完成起算，${date}放行（还剩 1 天）",
+  " was done, let in on ${date} (${days} days left)":
+    " 完成起算，${date}放行（还剩 ${days} 天）",
   "Would make a dependency cycle: it is below this task":
     "会造成循环依赖：它在这个任务下面",
   "Would make a dependency cycle: it already waits for this task":

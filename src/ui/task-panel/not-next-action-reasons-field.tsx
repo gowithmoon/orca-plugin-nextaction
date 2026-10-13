@@ -1,11 +1,13 @@
 // The task panel's "why not a next action" row (#54, #78, GLOSSARY: 下一步
-// 行动): read only, shown only while a task to do or in progress is not a
-// next action, e.g. "Subtasks: Write the introduction, Collect the data" or
-// "Not started yet: Trip starts on 10/20 Tue"; the use case gives no reasons
-// otherwise. Each task name switches the task panel to that task. A recurring
-// task holding the task back under a sequential parent is marked, with a hint
-// that it keeps doing so until it no longer recurs (#94, ADR 0021). Verified
-// by hand in Orca (docs/ARCHITECTURE.md §5).
+// 行动), shown as "阻塞原因": read only, shown only while a task to do or in
+// progress is not a next action, e.g. "Subtasks not done: Write the
+// introduction, Collect the data" or, passed down from an ancestor task,
+// "Ancestor task Trip — Not started yet: 10/20 Tue"; the use case gives no
+// reasons otherwise. Several reasons are listed with a bullet each. Each task
+// name switches the task panel to that task. A recurring task holding the
+// task back under a sequential parent is marked, with a hint that it keeps
+// doing so until it no longer recurs (#94, ADR 0021). Verified by hand in
+// Orca (docs/ARCHITECTURE.md §5).
 import {
   isNotBlocking,
   type NotNextActionReason,
@@ -21,39 +23,55 @@ import { useNotNextActionReasons } from "../hooks/use-not-next-action-reasons";
 import type { Notify } from "../notify";
 import { Field } from "./task-panel-fields";
 
-/** What a reason of this kind is called before the tasks it names. */
-function kindLabel(reason: NotNextActionReason): string {
+/**
+ * What keeps the reason's source out, said of it: the task itself, or the
+ * ancestor task named before it, e.g. "Subtasks not done", "Done".
+ */
+function predicate(reason: NotNextActionReason): string {
   switch (reason.kind) {
     case "doneAncestor":
-      return t("Ancestor task done");
+      return t("Done");
     case "parked":
-      return t("In a parked subtree");
+      return t("Parked");
     case "notStarted":
       return t("Not started yet");
     case "subtasks":
-      return t("Subtasks");
+      return t("Subtasks not done");
     case "sequential":
-      return t("Sequential");
+      return t("Earlier tasks first");
     case "dependencies":
-      return t("Dependencies");
+      // One of them done is enough (#58).
+      return reason.mode === "any"
+        ? t("Dependencies not done (any one is enough)")
+        : t("Dependencies not done");
     case "cycle":
-      return t("Dependency cycle");
+      return t("In a dependency cycle");
     case "dependencyDelay":
       return t("In dependency delay");
   }
 }
 
+/** Whether the reason goes on after its predicate: a date or tasks. */
+function hasDetails(reason: NotNextActionReason): boolean {
+  return (
+    reason.kind === "notStarted" ||
+    reason.kind === "dependencyDelay" ||
+    reason.waitingFor.length > 0
+  );
+}
+
 /**
- * When a dependency delay lets the task in and how many days are left, e.g.
- * "let in on 10/11 Sun (2 days left), counting from when ", worked out from
- * `today` (#77). The release day is always after today while it blocks.
+ * When a dependency delay lets the task in and how many days are left, after
+ * the task it counts from, e.g. " was done, let in on 10/11 Sun (2 days
+ * left)", worked out from `today` (#77). The release day is always after
+ * today while it blocks.
  */
 function releaseText(releasedOn: CalendarDate, today: CalendarDate): string {
   const date = formatDate(releasedOn, today);
   const days = daysBetween(today, releasedOn);
   return days === 1
-    ? t("let in on ${date} (1 day left), counting from when ", { date })
-    : t("let in on ${date} (${days} days left), counting from when ", {
+    ? t(" was done, let in on ${date} (1 day left)", { date })
+    : t(" was done, let in on ${date} (${days} days left)", {
         date,
         days: String(days),
       });
@@ -71,11 +89,6 @@ function waitsForRecurring(
     reason.kind === "sequential" &&
     reason.waitingFor.some((id) => tasks.get(id)?.recurring)
   );
-}
-
-/** Dependencies in mode "any": waiting for one of them, not all. */
-function anyMode(reason: NotNextActionReason): boolean {
-  return reason.kind === "dependencies" && reason.mode === "any";
 }
 
 export function NotNextActionReasonsField(props: {
@@ -119,6 +132,7 @@ export function NotNextActionReasonsField(props: {
     <Field label={t("Why not a next action")} labelId={props.labelId}>
       <ul
         className="nextaction-not-next-action-reasons"
+        data-several={reasons.length > 1 || undefined}
         aria-labelledby={props.labelId}
       >
         {reasons.map((reason) => (
@@ -126,49 +140,34 @@ export function NotNextActionReasonsField(props: {
             key={`${reason.kind}-${reason.source}`}
             className="nextaction-not-next-action-reason"
           >
-            {isNotBlocking(reason) ? (
-              // Not blocking (#78): its source is the task it names, so it
-              // reads "Kind: Source …", never "Kind (from Source): …".
-              // E.g. "Ancestor task done: Move house",
-              // "In a parked subtree: Find a teacher", "Not started yet:
-              // Trip starts on 10/20 Tue" (the task itself or an ancestor).
+            {reason.source !== props.taskId && (
+              // Passed down from an ancestor task (ADR 0015, #78), named
+              // first, e.g. "Ancestor task Move house — Done",
+              // "Ancestor task Draft — Earlier tasks first: Outline".
               <>
                 <span className="nextaction-not-next-action-reason-kind">
-                  {t("${kind}: ", { kind: kindLabel(reason) })}
+                  {t("Ancestor task ")}
                 </span>
                 {taskButton(reason.source)}
-                {reason.kind === "notStarted" &&
-                  t(" starts on ${date}", {
-                    date: formatDate(reason.startsOn, props.today),
-                  })}
+                <span className="nextaction-not-next-action-reason-kind">
+                  {t(" — ")}
+                </span>
               </>
-            ) : reason.source === props.taskId ? (
-              <span className="nextaction-not-next-action-reason-kind">
-                {anyMode(reason)
-                  ? // One of them done is enough (#58), e.g.
-                    // "Dependencies (any): Book, Pack".
-                    t("${kind} (any): ", { kind: kindLabel(reason) })
-                  : t("${kind}: ", { kind: kindLabel(reason) })}
-              </span>
-            ) : (
-              // Passed down from an ancestor task (ADR 0015), e.g.
-              // "Sequential (from Draft): Outline",
-              // "Dependencies (any, from Trip): Book".
-              <span className="nextaction-not-next-action-reason-kind">
-                {anyMode(reason)
-                  ? t("${kind} (any, from ", { kind: kindLabel(reason) })
-                  : t("${kind} (from ", { kind: kindLabel(reason) })}
-                {taskButton(reason.source)}
-                {t("): ")}
-              </span>
             )}
+            <span className="nextaction-not-next-action-reason-kind">
+              {hasDetails(reason)
+                ? t("${kind}: ", { kind: predicate(reason) })
+                : predicate(reason)}
+            </span>
+            {reason.kind === "notStarted" &&
+              formatDate(reason.startsOn, props.today)}
             {reason.kind === "dependencyDelay" && (
-              // e.g. "In dependency delay: let in on 10/11 Sun (2
-              // days left), counting from when Paint the wall was done".
+              // e.g. "In dependency delay: counting from when Paint the wall
+              // was done, let in on 10/11 Sun (2 days left)".
               <span>
-                {releaseText(reason.releasedOn, props.today)}
+                {t("counting from when ")}
                 {taskButton(reason.countedFrom)}
-                {t(" was done")}
+                {releaseText(reason.releasedOn, props.today)}
               </span>
             )}
             {reason.waitingFor.map((id, index) => {
