@@ -5,7 +5,7 @@
 // pointer capture, not
 // the browser's drag and drop, so Orca's note panels never take a drag from
 // here and a drag from the notes is never taken here (move-blocks 64c).
-// A drag starts from the handle on a card once the pointer has gone a few
+// A drag starts from the handle in a card's left padding once the pointer has gone a few
 // pixels, so a click and selecting text stay as they are. Letting go
 // anywhere but on a card or a gap in the area cancels it. The list scrolls while the
 // pointer is near its top or bottom edge. Verified by hand in Orca

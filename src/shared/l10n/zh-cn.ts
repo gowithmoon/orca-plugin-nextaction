@@ -133,6 +133,7 @@ const zhCN: Record<string, string> = {
   "No tasks match the filter": "没有符合筛选的任务",
   "Clear filter": "清除筛选",
   Filter: "筛选",
+  "Filter (${count} set)": "筛选（已设 ${count} 项）",
   "(None)": "（无）",
   "Any context": "全部上下文",
   "Any label": "全部标记",

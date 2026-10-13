@@ -180,6 +180,8 @@ export const panelCss = `
 }
 
 .nextaction-view-header {
+  /* The filter panel hangs from it (component-style.ts). */
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: var(--orca-spacing-sm);

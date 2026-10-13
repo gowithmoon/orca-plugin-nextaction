@@ -2,11 +2,9 @@
 // (#71) in the all tasks view. Only Orca's theme variables; verified by hand
 // in Orca (docs/ARCHITECTURE.md §5).
 export const taskDragCss = `
-/* A card with its drag handle, in a row; the card takes the rest. */
+/* A card's wrapper, the card filling it. */
 [data-nextaction-drop-task] {
   display: flex;
-  align-items: flex-start;
-  gap: var(--orca-spacing-xs);
   min-width: 0;
   border-radius: var(--orca-radius-md);
 }
@@ -17,25 +15,57 @@ export const taskDragCss = `
   min-width: 0;
 }
 
-/* As tall as the card, its grip in the middle: easy to find on a tall card. */
+/*
+ * The handle lives in the card's left padding (task-card.tsx \`handle\`), as
+ * tall as the card, its grip in the middle: it takes none of the text's
+ * width and is easy to find on a tall card. Shown while the card is hovered
+ * or holds the focus; faint where the pointer cannot hover.
+ */
+.nextaction-task-card[data-handle] {
+  position: relative;
+}
+
 .nextaction-drag-handle {
-  flex: 0 0 auto;
-  align-self: stretch;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  min-height: 28px;
+  width: var(--orca-spacing-lg);
+  border-radius: var(--orca-radius-md) 0 0 var(--orca-radius-md);
   color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
   cursor: grab;
-  opacity: 0.4;
   touch-action: none;
   user-select: none;
 }
 
-[data-nextaction-drop-task]:hover > .nextaction-drag-handle,
+.nextaction-drag-handle:hover,
 .nextaction-drag-handle[data-dragging] {
-  opacity: 1;
+  background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
+  color: var(--orca-color-text-1);
+}
+
+@media (hover: hover) {
+  .nextaction-task-card:not(:hover, :focus-within)
+    > .nextaction-drag-handle:not([data-dragging]) {
+    opacity: 0;
+  }
+}
+
+@media (hover: none) {
+  .nextaction-drag-handle {
+    opacity: 0.45;
+  }
+}
+
+/* A narrow list's cards have less padding: the handle follows it. */
+@container nextaction-task-list (max-width: 320px) {
+  .nextaction-drag-handle {
+    width: var(--orca-spacing-md);
+  }
 }
 
 .nextaction-drag-handle[data-dragging] {

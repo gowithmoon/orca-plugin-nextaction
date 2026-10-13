@@ -1,6 +1,6 @@
 // The next action view (GLOSSARY: 下一步行动视图, #53): the tasks that can be
 // done now, highest score first, as task cards with their actions and their
-// parent task's text, under a filter bar (#55). First in
+// parent task's text, filtered from a button by the title (#55). First in
 // the navigation, so the plugin panel opens on it. It reads when the plugin
 // panel opens and again on every task change signal (ADR 0007). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
@@ -36,7 +36,7 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
-import { NextActionFilterBar } from "./next-action-filter-bar";
+import { NextActionFilterButton } from "./next-action-filter-button";
 import type { NextActionFilterStore } from "./next-action-filter-store";
 
 export interface NextActionViewDeps {
@@ -211,11 +211,14 @@ export function createNextActionView(deps: NextActionViewDeps): PanelView {
           // The navigation shows the total; a filtered count shows here in
           // every tier, or it would show nowhere outside the narrow one.
           countInEveryTier={filtering}
-        />
-        <NextActionFilterBar
-          filter={filter}
-          candidates={candidates}
-          onChange={deps.filter.set}
+          actions={
+            <NextActionFilterButton
+              filter={filter}
+              candidates={candidates}
+              onChange={deps.filter.set}
+              onClear={deps.filter.clear}
+            />
+          }
         />
         <NextActionContent
           query={query}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "./task";
-import { filterChoosesAny, filterLets } from "./task-filter";
+import { chosenDimensions, filterChoosesAny, filterLets } from "./task-filter";
 
 const nothing = { values: [], none: false };
 
@@ -52,6 +52,34 @@ describe("filterChoosesAny", () => {
     expect(filterChoosesAny({ labels: { values: [], none: true } })).toBe(true);
     expect(filterChoosesAny({ importance: [7] })).toBe(true);
     expect(filterChoosesAny({ urgency: [1] })).toBe(true);
+  });
+});
+
+describe("chosenDimensions", () => {
+  it("counts each dimension holding a choice once, however many it holds", () => {
+    expect(chosenDimensions({})).toBe(0);
+    expect(
+      chosenDimensions({
+        contexts: nothing,
+        labels: nothing,
+        importance: [],
+        urgency: [],
+      }),
+    ).toBe(0);
+    expect(
+      chosenDimensions({
+        contexts: { values: ["home", "office"], none: true },
+        importance: [6, 7],
+      }),
+    ).toBe(2);
+    expect(
+      chosenDimensions({
+        contexts: { values: [], none: true },
+        labels: { values: ["writing"], none: false },
+        importance: [1],
+        urgency: [7],
+      }),
+    ).toBe(4);
   });
 });
 

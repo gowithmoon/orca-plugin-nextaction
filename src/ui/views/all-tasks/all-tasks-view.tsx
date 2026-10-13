@@ -4,7 +4,7 @@
 // blocked; below it the done section (GLOSSARY: 已完成区, #66), collapsed by
 // default. After the inbox in the navigation, with no count there. It reads
 // when the plugin panel opens and again on every task change signal (ADR
-// 0007). Nodes with children collapse (#67). The filter bar and the search
+// 0007). Nodes with children collapse (#67). The filter panel and the search
 // box narrow the tree to what matches, its ancestor tasks showing where it
 // sits (#69). A card dragged onto another becomes its subtask (#70), into a
 // gap goes there (#71). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
@@ -44,7 +44,10 @@ import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
-import { AllTasksFilterBar, AllTasksSearchBox } from "./all-tasks-filter-bar";
+import {
+  AllTasksFilterButton,
+  AllTasksSearchBox,
+} from "./all-tasks-filter-button";
 import {
   type AllTasksFilterStore,
   isFilteringAllTasks,
@@ -209,9 +212,9 @@ function TreeNodes(props: {
               {/* Only tree cards are dragged and dropped on, never the done
                   section's (#70). */}
               <TaskDropTarget id={node.task.id}>
-                <TaskDragHandle task={node.task} />
                 <TaskCard
                   task={node.task}
+                  handle={<TaskDragHandle task={node.task} />}
                   today={cards.today}
                   actions={cards.actions}
                   menuItems={cards.menuItems}
@@ -514,9 +517,9 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
           // searching, shows in every tier.
           countInEveryTier={filtering}
         />
-        {/* The search box, the controls of how the tree shows (sort,
-            direction, collapse or expand all), then the filter fields; the
-            toolbar's styles lay them out for the width at hand. */}
+        {/* One row: the search box, then the controls of how the tree
+            shows (sort, direction, collapse or expand all) and the filter
+            button, whose panel opens over the tree. */}
         <div className="nextaction-toolbar">
           <AllTasksSearchBox
             search={filter.search}
@@ -529,12 +532,12 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
               selectedTaskId={selectedTaskId}
               collapse={deps.collapse}
             />
+            <AllTasksFilterButton
+              state={filter}
+              candidates={candidates}
+              onChange={deps.filter.set}
+            />
           </div>
-          <AllTasksFilterBar
-            state={filter}
-            candidates={candidates}
-            onChange={deps.filter.set}
-          />
         </div>
         <AllTasksContent
           query={query}

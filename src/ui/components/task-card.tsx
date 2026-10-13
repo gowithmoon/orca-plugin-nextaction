@@ -2,7 +2,9 @@
 // the one card every view uses: its status icon, its text
 // (up to three lines, selectable), the "open in notes" button and its
 // property row. The status icon opens the status menu; a right-click opens the
-// task menu; a click elsewhere on the card calls `onOpen` (the task panel).
+// task menu; a click elsewhere on the card calls `onOpen` (the task panel). A
+// view may put a handle in the card's left padding (the all tasks view's drag
+// handle), so it takes none of the text's width.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { CalendarDate, Task } from "../../domain/task/task";
@@ -56,6 +58,12 @@ export interface TaskCardProps {
    * also open the task panel.
    */
   buttons?: React.ReactNode;
+  /**
+   * A handle in the card's left padding, over its whole height (the all
+   * tasks view's drag handle, #70). Its clicks must stop propagating, or they
+   * also open the task panel.
+   */
+  handle?: React.ReactNode;
   /**
    * A recurring task completed today that has advanced already (My Day,
    * #95): faded as done, saying so.
@@ -159,6 +167,7 @@ export function TaskCard(props: TaskCardProps) {
     parentText,
     blocked,
     buttons,
+    handle,
     doneToday,
     skippedToday,
   } = props;
@@ -170,6 +179,7 @@ export function TaskCard(props: TaskCardProps) {
       data-clickable={onOpen ? true : undefined}
       data-selected={selected || undefined}
       data-kept={kept || doneToday || skippedToday || undefined}
+      data-handle={handle ? true : undefined}
       aria-current={selected || undefined}
       onClick={
         onOpen &&
@@ -201,6 +211,7 @@ export function TaskCard(props: TaskCardProps) {
         })
       }
     >
+      {handle}
       <div className="nextaction-task-card-status">
         {actions ? (
           <StatusButton task={task} actions={actions} />

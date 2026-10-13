@@ -1,14 +1,18 @@
-// The all tasks view's filter bar (#69): a multiple choice of the five
+// The all tasks view's filter (#69): a filter button in the toolbar, after
+// the view controls, opening a panel of a multiple choice of the five
 // statuses a task not done can have and the next action view's contexts,
-// labels, importance and urgency fields; and the search box for the task text, which
-// sits in the toolbar's first row. The candidates are the task panel's.
+// labels, importance and urgency fields; and the search box for the task
+// text, at the toolbar's start. The candidates are the task panel's.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { Candidates } from "../../../application/ports/task-repository";
 import type { OpenStatus } from "../../../application/usecases/read-all-tasks";
+import { chosenDimensions } from "../../../domain/task/task-filter";
 import type { SelectOption } from "../../../orca.d.ts";
 import { t } from "../../../shared/l10n/l10n";
+import { FilterPanelButton } from "../../components/filter-panel";
 import {
+  FilterField,
   ImportanceSelect,
   UrgencySelect,
   ValuesSelect,
@@ -16,7 +20,10 @@ import {
 import { formatContext } from "../../components/format";
 import { Select } from "../../components/popup-controls";
 import { statusLabel } from "../../components/status-label";
-import type { AllTasksFilterState } from "./all-tasks-filter-store";
+import {
+  type AllTasksFilterState,
+  noAllTasksFilter,
+} from "./all-tasks-filter-store";
 
 const openStatuses: readonly OpenStatus[] = [
   "inbox",
@@ -35,7 +42,7 @@ function StatusSelect(props: {
     label: statusLabel(status),
   }));
   return (
-    <fieldset className="nextaction-filter" aria-label={t("Status")}>
+    <FilterField label={t("Status")}>
       <Select
         selected={[...props.chosen]}
         options={options}
@@ -51,7 +58,7 @@ function StatusSelect(props: {
           )
         }
       />
-    </fieldset>
+    </FilterField>
   );
 }
 
@@ -92,7 +99,11 @@ export function AllTasksSearchBox(props: {
   );
 }
 
-export function AllTasksFilterBar(props: {
+/**
+ * The filter button and its panel. The search text is not in the panel:
+ * clearing the panel keeps it, and the button counts only the fields.
+ */
+export function AllTasksFilterButton(props: {
   state: AllTasksFilterState;
   candidates: Candidates;
   onChange: (state: AllTasksFilterState) => void;
@@ -101,8 +112,13 @@ export function AllTasksFilterBar(props: {
   const { filter } = state;
   const setFilter = (next: AllTasksFilterState["filter"]) =>
     onChange({ ...state, filter: next });
+  const chosen =
+    chosenDimensions(filter) + (filter.statuses.length > 0 ? 1 : 0);
   return (
-    <fieldset className="nextaction-filter-bar" aria-label={t("Filter")}>
+    <FilterPanelButton
+      chosen={chosen}
+      onClear={() => setFilter(noAllTasksFilter.filter)}
+    >
       <StatusSelect
         chosen={filter.statuses}
         onChange={(statuses) => setFilter({ ...filter, statuses })}
@@ -131,6 +147,6 @@ export function AllTasksFilterBar(props: {
         chosen={filter.urgency}
         onChange={(urgency) => setFilter({ ...filter, urgency })}
       />
-    </fieldset>
+    </FilterPanelButton>
   );
 }

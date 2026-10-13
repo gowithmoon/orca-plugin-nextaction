@@ -29,7 +29,7 @@ ${sizes.map((size) => `  --orca-fontsize-${size}: calc(var(--nextaction-orca-fon
  * list is narrowed, not what it shows. Orca's buttons and selects take
  * \`sm\`, so it is given the \`xs\` size here.
  */
-:is(.nextaction-toolbar, .nextaction-filter-bar, .nextaction-my-day-search) {
+:is(.nextaction-toolbar, .nextaction-filter-panel, .nextaction-my-day-search) {
   --orca-fontsize-sm: var(--orca-fontsize-xs);
   font-size: var(--orca-fontsize-xs);
 }

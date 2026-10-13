@@ -222,42 +222,14 @@ export const componentCss = `
 }
 
 /*
- * The filter bars (#55, #69): the fields side by side, sharing the row while
- * it is short and stopping at a width that reads well when it is long;
- * wrapping only when the view is really narrow, never wider than it.
- */
-.nextaction-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--orca-spacing-sm);
-  min-width: 0;
-  margin: 0 0 var(--orca-spacing-md);
-  padding: 0;
-  border: 0;
-}
-
-.nextaction-filter {
-  flex: 1 1 7em;
-  min-width: 0;
-  max-width: 12em;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-/*
- * The all tasks view's toolbar (#69). Its parts, in reading order: the
- * search box, the view controls (sort, direction, collapse or expand all),
- * then the filter fields. Laid out by its own width:
- * - narrow: the search box and the view controls share the first row, the
- *   five filters fill rows of two below, the last one alone;
- * - medium: the same two rows;
- * - wide: one row, the filters after the search box and the view controls
- *   at the far end, where controls of how a list shows usually sit.
- * The search box and the filters stop growing at a width that reads well.
+ * The all tasks view's toolbar (#69), one row: the search box, then the
+ * view controls (sort, direction, collapse or expand all, the filter
+ * button) at the far end. The search box stops growing at a width that
+ * reads well; in a really narrow view it wraps above the controls.
  */
 .nextaction-toolbar {
-  container: nextaction-toolbar / inline-size;
+  /* The filter panel hangs from it. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -276,32 +248,102 @@ export const componentCss = `
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-xs);
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-inline-start: auto;
 }
 
-/* Its own row below the others. */
-.nextaction-toolbar > .nextaction-filter-bar {
-  flex: 1 1 100%;
+/* Controls at the end of a view's title row (the next action view's filter). */
+.nextaction-view-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  margin-inline-start: auto;
+  /* As tall as the title, not taller: the row keeps its height. */
+  margin-block: calc(var(--orca-spacing-xs) * -1);
+  align-self: center;
+}
+
+/*
+ * The filter button (filter-panel.tsx). While something is chosen it is
+ * tinted in the primary colour and counts the fields holding a choice.
+ */
+.nextaction-filter-anchor {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.nextaction-filter-button {
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-filter-button[data-active],
+.nextaction-filter-button[data-active]:hover {
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 12%, transparent);
+  color: var(--orca-color-primary-5);
+}
+
+.nextaction-filter-badge {
+  min-width: 1.5em;
+  padding: 0 var(--orca-spacing-xs);
+  border-radius: 0.75em;
+  background-color: var(--orca-color-primary-5);
+  color: var(--orca-color-bg-1);
+  font-size: var(--orca-fontsize-xs);
+  font-weight: var(--orca-fontweight-lg);
+  line-height: 1.5;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The filter panel: over the list, below the row its button ends (the
+ * toolbar, or the view's title row), its right edge on the row's and never
+ * wider than it. It scrolls with the row.
+ */
+.nextaction-filter-panel {
+  position: absolute;
+  z-index: 21;
+  top: 100%;
+  right: 0;
+  width: min(20em, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  margin: var(--orca-spacing-xs) 0 0;
+  padding: var(--orca-spacing-md);
+  border: var(--orca-border-box);
+  border-radius: var(--orca-radius-md);
+  background-color: var(--orca-color-bg-1);
+  box-shadow: var(--orca-shadow-popup);
+}
+
+/* Behind the open panel, over the rest of the plugin panel: a press closes it. */
+.nextaction-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.nextaction-filter {
+  display: grid;
+  grid-template-columns: minmax(3.5em, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--orca-spacing-md);
+  min-width: 0;
   margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-@container nextaction-toolbar (max-width: 440px) {
-  .nextaction-toolbar .nextaction-filter {
-    flex: 1 1 40%;
-    max-width: none;
-  }
+.nextaction-filter-label {
+  color: var(--orca-color-text-2);
+  white-space: nowrap;
 }
 
-@container nextaction-toolbar (min-width: 1000px) {
-  .nextaction-toolbar > .nextaction-filter-bar {
-    order: 1;
-    flex: 1 1 36em;
-    max-width: 60em;
-  }
-  .nextaction-toolbar-view {
-    order: 2;
-  }
+.nextaction-filter-panel-foot {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* The sort picker (#68): as wide as its longest choice needs. */

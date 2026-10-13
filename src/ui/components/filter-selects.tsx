@@ -1,8 +1,9 @@
-// The filter fields both filter bars share: contexts and labels, each a
-// multiple choice with "(None)" for a task holding no value, and the seven
-// importance levels and the seven urgency levels (#55, #69, #74). Verified
-// by hand in Orca
+// The filter fields both filter panels share (filter-panel.tsx): contexts and
+// labels, each a multiple choice with "(None)" for a task holding no value,
+// and the seven importance levels and the seven urgency levels (#55, #69,
+// #74). Each is a row: its name, then its select. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
+import type * as React from "react";
 import type { Importance, Rating, Urgency } from "../../domain/task/task";
 import type { ValuesChoice } from "../../domain/task/task-filter";
 import type { SelectOption } from "../../orca.d.ts";
@@ -17,6 +18,21 @@ import { Select } from "./popup-controls";
 const noneValue = "\u0000none";
 
 const levels: readonly Rating[] = [1, 2, 3, 4, 5, 6, 7];
+
+/** A field of a filter panel: its name, then its select. */
+export function FilterField(props: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="nextaction-filter" aria-label={props.label}>
+      <span className="nextaction-filter-label" aria-hidden="true">
+        {props.label}
+      </span>
+      {props.children}
+    </fieldset>
+  );
+}
 
 export function ValuesSelect(props: {
   label: string;
@@ -37,7 +53,7 @@ export function ValuesSelect(props: {
   ];
   const selected = [...(choice.none ? [noneValue] : []), ...choice.values];
   return (
-    <fieldset className="nextaction-filter" aria-label={props.label}>
+    <FilterField label={props.label}>
       <Select
         selected={selected}
         options={options}
@@ -57,7 +73,7 @@ export function ValuesSelect(props: {
           })
         }
       />
-    </fieldset>
+    </FilterField>
   );
 }
 
@@ -74,7 +90,7 @@ function RatingSelect(props: {
     label: props.name(level),
   }));
   return (
-    <fieldset className="nextaction-filter" aria-label={props.label}>
+    <FilterField label={props.label}>
       <Select
         selected={props.chosen.map(String)}
         options={options}
@@ -90,7 +106,7 @@ function RatingSelect(props: {
           )
         }
       />
-    </fieldset>
+    </FilterField>
   );
 }
 
