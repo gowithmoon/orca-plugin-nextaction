@@ -312,7 +312,8 @@ export const componentCss = `
   gap: var(--orca-spacing-sm);
   margin: var(--orca-spacing-xs) 0 0;
   padding: var(--orca-spacing-md);
-  border: var(--orca-border-box);
+  /* The windows' border; --orca-border-box is what the focus outlines use. */
+  border: 1px solid var(--orca-color-border);
   border-radius: var(--orca-radius-md);
   background-color: var(--orca-color-bg-1);
   box-shadow: var(--orca-shadow-popup);

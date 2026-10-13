@@ -11,8 +11,10 @@
 // The window is narrower, so its labels go to the left sooner and take less
 // room (`--nextaction-field-label-width`, quick-capture-style.ts).
 //
-// Ratings and dates fill their row up to one width, so a wide panel does not
-// stretch them and a narrow window leaves no gap to their right.
+// Ratings fill their row up to one width, so a wide panel does not stretch
+// them and a narrow window leaves no gap to their right. The fields that read
+// like inputs (dates, repeat, reminders, review) fill the row, ending where
+// context, label and note do.
 
 /** Labels to the left from `minWidth`, for the fields inside `container`. */
 const wideFieldsCss = (container: string, minWidth: string) => `
@@ -272,7 +274,6 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   align-items: center;
   gap: var(--orca-spacing-sm);
   min-width: 0;
-  max-width: 18rem;
 }
 
 .nextaction-date-trigger {
@@ -436,20 +437,30 @@ ${wideFieldsCss("nextaction-capture-fields", "300px")}
   gap: var(--orca-spacing-xs);
 }
 
+/* One compact line per block, in the size of the Orca controls around (sm). */
 .nextaction-block-refs {
   display: flex;
   flex-direction: column;
-  gap: var(--orca-spacing-xs);
   margin: 0;
   padding: 0;
   list-style: none;
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-block-ref {
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-sm);
-  line-height: var(--orca-lineheight-md);
+  line-height: var(--orca-lineheight-sm);
+}
+
+/* Scoped to the row so it outweighs the padding of Orca's plain Button. */
+.nextaction-block-ref .nextaction-block-ref-remove {
+  flex: 0 0 auto;
+  min-height: 0;
+  height: auto;
+  padding: calc(var(--orca-spacing-xs) / 2) var(--orca-spacing-xs);
+  font-size: var(--orca-fontsize-sm);
 }
 
 .nextaction-block-ref-target {
@@ -532,7 +543,6 @@ button.nextaction-block-ref-target:hover {
   display: flex;
   align-items: center;
   min-width: 0;
-  max-width: 18rem;
 }
 
 .nextaction-recurrence-field .nextaction-recurrence-button {

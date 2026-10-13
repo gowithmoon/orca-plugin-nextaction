@@ -390,6 +390,35 @@ export function SequentialField(props: {
 }
 
 /**
+ * A choice shown as soon as it is made, while its write is under way. Given
+ * the value from the notes, the control would show the new choice, fall back
+ * to the old one until the notes are read again, then show the new one (the
+ * dependency mode flickered so). It follows `value` again once no write is
+ * under way; after a failed write it shows what the notes hold.
+ */
+function useChosen<T>(
+  value: T,
+  write: (next: T) => Promise<boolean>,
+): [T, (next: T) => void] {
+  const [shown, setShown] = React.useState(value);
+  const writing = React.useRef(0);
+  const latest = React.useRef(value);
+  latest.current = value;
+  React.useEffect(() => {
+    if (writing.current === 0) setShown(value);
+  }, [value]);
+  const choose = (next: T) => {
+    setShown(next);
+    writing.current += 1;
+    void write(next).then((written) => {
+      writing.current -= 1;
+      if (writing.current === 0 && !written) setShown(latest.current);
+    });
+  };
+  return [shown, choose];
+}
+
+/**
  * Dependency mode (GLOSSARY: 依赖模式, #58): Orca's segmented control, all or
  * any. Choosing the current mode writes nothing; each change is one write,
  * undone in Orca.
@@ -397,9 +426,11 @@ export function SequentialField(props: {
 export function DependencyModeField(props: {
   labelId: string;
   mode: DependencyMode;
-  onChange: (mode: DependencyMode) => void;
+  /** Resolves to whether the write succeeded. */
+  onChange: (mode: DependencyMode) => Promise<boolean>;
 }) {
   const { Segmented } = orca.components;
+  const [shown, choose] = useChosen(props.mode, props.onChange);
   const options: { value: DependencyMode; label: string }[] = [
     { value: "all", label: t("All") },
     { value: "any", label: t("Any") },
@@ -408,11 +439,11 @@ export function DependencyModeField(props: {
     <Segmented
       role="group"
       aria-labelledby={props.labelId}
-      selected={props.mode}
+      selected={shown}
       options={options}
       onChange={(value) => {
         const mode = options.find((option) => option.value === value)?.value;
-        if (mode !== undefined && mode !== props.mode) props.onChange(mode);
+        if (mode !== undefined && mode !== shown) choose(mode);
       }}
     />
   );
