@@ -11,12 +11,12 @@ import type {
   NotConvertibleReason,
   TaskFilter,
   TaskRepository,
+  TaskWrite,
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { TaskMove } from "../src/domain/blocking/task-move";
 import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
-  type CompletionEntry,
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../src/domain/task/completion-history";
@@ -28,7 +28,6 @@ import {
 } from "../src/domain/task/custom-property";
 import type { MyDayRead } from "../src/domain/task/my-day";
 import type { CalendarDate, Task, TaskId } from "../src/domain/task/task";
-import type { TaskChanges } from "../src/domain/task/task-changes";
 
 interface StoredBlock {
   text: string;
@@ -200,23 +199,32 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     return block as StoredBlock & { task: Task };
   };
 
-  /** My Day entries this plugin cannot read are never overwritten. */
-  const refuseUnreadableMyDay = (block: StoredBlock, id: TaskId) => {
-    const current = block.myDay;
-    if (current?.kind === "unreadable") {
-      throw new Error(
-        `the My Day entries of block ${id} hold a value this plugin cannot read (${current.reason})`,
-      );
-    }
-  };
-
-  /** A completion history this plugin cannot read is never overwritten. */
-  const refuseUnreadable = (block: StoredBlock, id: TaskId) => {
-    const current = block.completionHistory;
-    if (current?.kind === "unreadable") {
-      throw new Error(
-        `the completion history of block ${id} holds a value this plugin cannot read (${current.reason})`,
-      );
+  /**
+   * Plugin block properties this plugin cannot read are never overwritten:
+   * a write replacing one fails, writing nothing.
+   */
+  const refuseUnreadable = (
+    block: StoredBlock & { task: Task },
+    id: TaskId,
+    taskWrite: Omit<TaskWrite, "id">,
+  ) => {
+    const replaced = [
+      [
+        taskWrite.completionHistory,
+        block.completionHistory,
+        "completion history",
+      ],
+      [taskWrite.recurrence, block.task.recurrence, "recurrence rule"],
+      [taskWrite.reminders, block.task.reminders, "reminders"],
+      [taskWrite.myDay, block.myDay, "My Day entries"],
+      [taskWrite.review, block.task.review, "review plan"],
+    ] as const;
+    for (const [value, current, what] of replaced) {
+      if (value !== undefined && current?.kind === "unreadable") {
+        throw new Error(
+          `the ${what} of block ${id} cannot be read by this plugin (${current.reason})`,
+        );
+      }
     }
   };
 
@@ -228,11 +236,11 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   };
 
   /** Applies a task write to a block, as Orca applies it. */
-  const applyChanges = (
+  const applyWrite = (
     block: StoredBlock & { task: Task },
-    changes: TaskChanges,
-    completionHistory: readonly CompletionEntry[] | undefined,
+    taskWrite: Omit<TaskWrite, "id">,
   ) => {
+    const changes = taskWrite.changes ?? {};
     // Written contexts and labels become choices of the task tag, as in
     // Orca (multi-choices-created), so they stay candidates.
     for (const property of ["contexts", "labels"] as const) {
@@ -258,35 +266,38 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         ),
       };
     }
-    if (completionHistory) {
+    if (taskWrite.completionHistory) {
       block.completionHistory = {
         kind: "readable",
-        history: [...completionHistory],
+        history: [...taskWrite.completionHistory],
       };
     }
-  };
-
-  /** A recurrence rule this plugin cannot read is never overwritten. */
-  const refuseUnreadableRecurrence = (
-    block: StoredBlock & { task: Task },
-    id: TaskId,
-  ) => {
-    if (block.task.recurrence.kind === "unreadable") {
-      throw new Error(
-        `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
-      );
+    if (taskWrite.recurrence !== undefined) {
+      block.task = {
+        ...block.task,
+        recurrence: taskWrite.recurrence
+          ? { kind: "rule", rule: taskWrite.recurrence }
+          : { kind: "none" },
+      };
     }
-  };
-
-  /** Reminders this plugin cannot read are never overwritten. */
-  const refuseUnreadableReminders = (
-    block: StoredBlock & { task: Task },
-    id: TaskId,
-  ) => {
-    if (block.task.reminders.kind === "unreadable") {
-      throw new Error(
-        `the reminders of block ${id} hold a value this plugin cannot read (${block.task.reminders.reason})`,
-      );
+    if (taskWrite.reminders !== undefined) {
+      // Stored ascending and each once, as the codec writes them.
+      block.task = {
+        ...block.task,
+        reminders: {
+          kind: "list",
+          reminders: normalizeReminders(taskWrite.reminders),
+        },
+      };
+    }
+    if (taskWrite.myDay !== undefined) {
+      block.myDay = { kind: "readable", entries: [...taskWrite.myDay] };
+    }
+    if (taskWrite.review !== undefined) {
+      block.task = {
+        ...block.task,
+        review: { kind: "plan", plan: taskWrite.review },
+      };
     }
   };
 
@@ -491,43 +502,20 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       // them all as they were.
       const checked = taskWrites.map((taskWrite) => {
         const block = taskToWrite(taskWrite.id);
-        if (taskWrite.completionHistory) refuseUnreadable(block, taskWrite.id);
-        if (taskWrite.recurrence !== undefined) {
-          refuseUnreadableRecurrence(block, taskWrite.id);
-        }
-        if (taskWrite.reminders !== undefined) {
-          refuseUnreadableReminders(block, taskWrite.id);
-        }
+        refuseUnreadable(block, taskWrite.id, taskWrite);
         return { block, taskWrite };
       });
       write(() => {
         for (const { block, taskWrite } of checked) {
-          applyChanges(block, taskWrite.changes, taskWrite.completionHistory);
-          if (taskWrite.recurrence !== undefined) {
-            block.task = {
-              ...block.task,
-              recurrence: taskWrite.recurrence
-                ? { kind: "rule", rule: taskWrite.recurrence }
-                : { kind: "none" },
-            };
-          }
-          if (taskWrite.reminders !== undefined) {
-            block.task = {
-              ...block.task,
-              reminders: {
-                kind: "list",
-                reminders: normalizeReminders(taskWrite.reminders),
-              },
-            };
-          }
+          applyWrite(block, taskWrite);
         }
       });
     },
 
-    async updateTask(id, changes: TaskChanges, completionHistory) {
+    async updateTask(id, taskWrite) {
       const block = taskToWrite(id);
-      if (completionHistory) refuseUnreadable(block, id);
-      write(() => applyChanges(block, changes, completionHistory));
+      refuseUnreadable(block, id, taskWrite);
+      write(() => applyWrite(block, taskWrite));
     },
 
     async readTaskGraph() {
@@ -595,55 +583,6 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const empty: MyDayRead = { kind: "readable", entries: [] };
       if (!block?.task) return empty;
       return block.myDay ?? empty;
-    },
-
-    async writeMyDay(id, entries) {
-      const block = taskToWrite(id);
-      refuseUnreadableMyDay(block, id);
-      write(() => {
-        block.myDay = { kind: "readable", entries: [...entries] };
-      });
-    },
-
-    async writeRecurrence(id, rule) {
-      const block = taskToWrite(id);
-      // A rule this plugin cannot read is never overwritten.
-      if (block.task.recurrence.kind === "unreadable") {
-        throw new Error(
-          `the recurrence rule of block ${id} holds a value this plugin cannot read (${block.task.recurrence.reason})`,
-        );
-      }
-      write(() => {
-        block.task = {
-          ...block.task,
-          recurrence: rule ? { kind: "rule", rule } : { kind: "none" },
-        };
-      });
-    },
-
-    async writeReview(id, plan) {
-      const block = taskToWrite(id);
-      // A review plan this plugin cannot read is never overwritten.
-      if (block.task.review.kind === "unreadable") {
-        throw new Error(
-          `the review plan of block ${id} holds a value this plugin cannot read (${block.task.review.reason})`,
-        );
-      }
-      write(() => {
-        block.task = { ...block.task, review: { kind: "plan", plan } };
-      });
-    },
-
-    async writeReminders(id, reminders) {
-      const block = taskToWrite(id);
-      refuseUnreadableReminders(block, id);
-      write(() => {
-        // Stored ascending and each once, as the codec writes them.
-        block.task = {
-          ...block.task,
-          reminders: { kind: "list", reminders: normalizeReminders(reminders) },
-        };
-      });
     },
 
     async discardUnreadable(id, data) {

@@ -16,5 +16,5 @@ export type TaskEdits = Omit<TaskChanges, "status">;
 export type EditTask = (id: TaskId, edits: TaskEdits) => Promise<void>;
 
 export function createEditTask(deps: { repository: TaskRepository }): EditTask {
-  return (id, edits) => deps.repository.updateTask(id, edits);
+  return (id, edits) => deps.repository.updateTask(id, { changes: edits });
 }

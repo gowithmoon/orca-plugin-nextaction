@@ -35,6 +35,6 @@ export function createSetDependencies(deps: {
         })),
       });
     }
-    await deps.repository.updateTask(id, { dependencies: kept });
+    await deps.repository.updateTask(id, { changes: { dependencies: kept } });
   };
 }

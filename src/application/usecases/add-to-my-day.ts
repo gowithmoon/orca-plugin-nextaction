@@ -35,7 +35,7 @@ export function createAddToMyDay(deps: {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const entries = addToday(read.entries, today);
     if (entries === read.entries) return { kind: "unchanged" };
-    await deps.repository.writeMyDay(id, entries);
+    await deps.repository.updateTask(id, { myDay: entries });
     return { kind: "changed" };
   };
 }

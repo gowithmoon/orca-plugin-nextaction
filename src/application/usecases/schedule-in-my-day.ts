@@ -45,7 +45,7 @@ export function createScheduleInMyDay(deps: {
     );
     const entries = scheduleToday(read.entries, today, schedule);
     if (entries === read.entries) return { kind: "unchanged" };
-    await deps.repository.writeMyDay(id, entries);
+    await deps.repository.updateTask(id, { myDay: entries });
     return { kind: "changed" };
   };
 }

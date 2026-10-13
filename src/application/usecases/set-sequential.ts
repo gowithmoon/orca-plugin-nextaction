@@ -36,6 +36,6 @@ export function createSetSequential(deps: {
         });
       }
     }
-    await deps.repository.updateTask(id, { sequential });
+    await deps.repository.updateTask(id, { changes: { sequential } });
   };
 }

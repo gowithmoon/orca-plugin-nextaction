@@ -59,6 +59,6 @@ export function createMarkReviewed(deps: {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const plan = planMarkReviewed(task, today);
     if (plan.kind === "refused") throw new NotMarkableError(plan.reason);
-    await deps.repository.writeReview(id, plan.plan);
+    await deps.repository.updateTask(id, { review: plan.plan });
   };
 }

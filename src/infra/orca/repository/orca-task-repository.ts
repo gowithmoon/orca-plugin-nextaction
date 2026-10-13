@@ -13,11 +13,7 @@ import {
 } from "../../../application/ports/task-repository";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
-import type { RecurrenceRule } from "../../../domain/recurrence/recurrence";
-import type { Reminders } from "../../../domain/reminder/reminder";
-import type { ReviewPlan } from "../../../domain/review/review";
 import {
-  type CompletionHistory,
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../../../domain/task/completion-history";
@@ -25,7 +21,7 @@ import type {
   CustomPropertyDefinition,
   CustomPropertyValue,
 } from "../../../domain/task/custom-property";
-import type { MyDayEntries, MyDayRead } from "../../../domain/task/my-day";
+import type { MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block } from "../../../orca.d.ts";
@@ -518,9 +514,10 @@ export function createOrcaTaskRepository(
     state: ReadyTag,
     write: TaskWrite,
   ): Promise<{ block: Block; run: () => Promise<void> } | undefined> => {
+    const changes = write.changes ?? {};
     // Encoded first: an invalidated property fails before anything is read
     // or written.
-    const items = encodeTaskChanges(write.changes, {
+    const items = encodeTaskChanges(changes, {
       language: state.language,
       invalidated: state.invalidated,
     });
@@ -547,20 +544,28 @@ export function createOrcaTaskRepository(
       ...(write.reminders !== undefined
         ? [plannedWrite(block, planRemindersWrite(block, write.reminders))]
         : []),
+      // The My Day entries likewise.
+      ...(write.myDay !== undefined
+        ? [plannedWrite(block, planMyDayWrite(block, write.myDay))]
+        : []),
+      // The review plan likewise.
+      ...(write.review !== undefined
+        ? [plannedWrite(block, planReviewWrite(block, write.review))]
+        : []),
     ];
     // Dependency targets are block IDs coming in: mirrors resolve to their
     // sources first, as every block ID does (block-properties-json M3).
     const dependencyPlan =
-      write.changes.dependencies === undefined
+      changes.dependencies === undefined
         ? undefined
         : planDependencyWrite(
             block,
             state.tagBlockId,
-            write.changes.dependencies.length === 0
+            changes.dependencies.length === 0
               ? []
               : resolveDependencyTargets(
-                  write.changes.dependencies,
-                  await getBlocks(write.changes.dependencies),
+                  changes.dependencies,
+                  await getBlocks(changes.dependencies),
                 ),
           );
     if (
@@ -575,7 +580,7 @@ export function createOrcaTaskRepository(
     // Values missing from the tag's choices are stored but not shown
     // (multi-choices-created): the whole list is checked every write, so
     // values stored earlier without a choice show again too.
-    const choiceWrites = await planChoiceWrites(state, write.changes);
+    const choiceWrites = await planChoiceWrites(state, changes);
     const run = async () => {
       // The choices first, in the same group: one undo takes back both
       // (multi-choices-created §3–4).
@@ -807,16 +812,11 @@ export function createOrcaTaskRepository(
 
     getTaskWithDefinitions,
 
-    async updateTask(
-      id: TaskId,
-      changes: TaskChanges,
-      completionHistory?: CompletionHistory,
-    ): Promise<void> {
-      const plan = await planTaskWrite(readyTag(), {
-        id,
-        changes,
-        ...(completionHistory && { completionHistory }),
-      });
+    async updateTask(id: TaskId, write: Omit<TaskWrite, "id">): Promise<void> {
+      // Mirrors resolve to their source blocks (block-properties-json M3).
+      const plan = await planTaskWrite(readyTag(), { ...write, id });
+      // One group, one undo; setProperties replaces a property of the same
+      // name and keeps the others (block-properties-json J2).
       if (plan) await writeTo(plan.block, plan.run);
     },
 
@@ -872,78 +872,6 @@ export function createOrcaTaskRepository(
         );
       }
       return read ?? { kind: "readable", entries: [] };
-    },
-
-    async writeMyDay(id: TaskId, entries: MyDayEntries): Promise<void> {
-      // Mirrors resolve to their source blocks (block-properties-json M3).
-      const block = await taskBlockToWrite(id, currentTag());
-      // Planned before anything is written: a value this plugin cannot read
-      // fails the write, writing nothing.
-      const property = plannedWrite(block, planMyDayWrite(block, entries));
-      // setProperties replaces a property of the same name and keeps the
-      // others (block-properties-json J2); one command in one group, one undo.
-      await writeTo(block, async () => {
-        await invokeEditorCommand(
-          "core.editor.setProperties",
-          [block.id],
-          [property],
-        );
-      });
-    },
-
-    async writeRecurrence(
-      id: TaskId,
-      rule: RecurrenceRule | null,
-    ): Promise<void> {
-      // Mirrors resolve to their source blocks (block-properties-json M3).
-      const block = await taskBlockToWrite(id, currentTag());
-      // Planned before anything is written: a value this plugin cannot read
-      // fails the write, writing nothing.
-      const property = plannedWrite(block, planRecurrenceWrite(block, rule));
-      // setProperties replaces a property of the same name and keeps the
-      // others (block-properties-json J2); one command in one group, one undo.
-      await writeTo(block, async () => {
-        await invokeEditorCommand(
-          "core.editor.setProperties",
-          [block.id],
-          [property],
-        );
-      });
-    },
-
-    async writeReview(id: TaskId, plan: ReviewPlan): Promise<void> {
-      // Mirrors resolve to their source blocks (block-properties-json M3).
-      const block = await taskBlockToWrite(id, currentTag());
-      // Planned before anything is written: a value this plugin cannot read
-      // fails the write, writing nothing.
-      const property = plannedWrite(block, planReviewWrite(block, plan));
-      // As for the recurrence rule: one setProperties in one group, one undo.
-      await writeTo(block, async () => {
-        await invokeEditorCommand(
-          "core.editor.setProperties",
-          [block.id],
-          [property],
-        );
-      });
-    },
-
-    async writeReminders(id: TaskId, reminders: Reminders): Promise<void> {
-      // Mirrors resolve to their source blocks (block-properties-json M3).
-      const block = await taskBlockToWrite(id, currentTag());
-      // Planned before anything is written: a value this plugin cannot read
-      // fails the write, writing nothing.
-      const property = plannedWrite(
-        block,
-        planRemindersWrite(block, reminders),
-      );
-      // As for the review plan: one setProperties in one group, one undo.
-      await writeTo(block, async () => {
-        await invokeEditorCommand(
-          "core.editor.setProperties",
-          [block.id],
-          [property],
-        );
-      });
     },
 
     async discardUnreadable(id: TaskId, data: DiscardableData): Promise<void> {
