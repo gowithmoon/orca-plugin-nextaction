@@ -1,5 +1,4 @@
-// Focus handling shared by the plugin's popups (the task panel popup, the
-// quick capture window). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// Focus handling of the plugin's windows (ui/components/plugin-window.tsx). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 
 /**

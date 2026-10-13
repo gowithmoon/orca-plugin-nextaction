@@ -2,8 +2,7 @@
 // (minutes, 60 by default) for a task in today's My Day; scheduling snaps
 // them through the domain (`normalizeSchedule`). A scheduled task can be
 // unscheduled here too, so every schedule change works without dragging.
-// In Orca's ModalOverlay with the shared window look, rendered into its own
-// React root (the view's container query would otherwise hold the fixed
+// In a plugin window, rendered into its own React root (the view's container query would otherwise hold the fixed
 // window inside the view). At most one at a time. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -19,9 +18,13 @@ import {
   momentOn,
 } from "../../../domain/time/logical-day";
 import { t } from "../../../shared/l10n/l10n";
-import { formatTimeRange, shownText } from "../../components/format";
-import { PopupLayer } from "../../components/popup-layer";
-import { useFocusInside } from "../../hooks/use-focus-inside";
+import { formatTimeRange } from "../../components/format";
+import {
+  PluginWindow,
+  WindowFooter,
+  WindowHeader,
+  WindowSpacer,
+} from "../../components/plugin-window";
 import {
   createMyDayScheduleActions,
   type MyDayScheduleActions,
@@ -69,7 +72,7 @@ function SchedulePopup(props: {
   onClose: () => void;
 }) {
   const { args, actions, onClose } = props;
-  const { Button, Input, ModalOverlay, Tooltip } = orca.components;
+  const { Button, Input } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const [start, setStart] = React.useState(() =>
@@ -87,8 +90,6 @@ function SchedulePopup(props: {
   );
   const [busy, setBusy] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
-  const restoreFocus = React.useRef(true);
-  useFocusInside(input, restoreFocus);
 
   const time = parseTime(start);
   const length = Number(minutes);
@@ -111,116 +112,86 @@ function SchedulePopup(props: {
     );
   };
 
+  // Esc is the window's (PluginWindow); Enter in a field schedules.
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.nativeEvent.isComposing || e.defaultPrevented) return;
-    // Keys from a popup rendered elsewhere still bubble here through React.
-    if (!e.currentTarget.contains(e.target as Node)) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    } else if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+    if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
       e.preventDefault();
       e.stopPropagation();
       submit();
     }
   };
 
-  const text = shownText(args.task);
   return (
-    <ModalOverlay visible={true} canClose={true} onClose={onClose}>
-      <PopupLayer>
-        <div
-          className="nextaction-window nextaction-schedule-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={id("title")}
-          onKeyDown={onKeyDown}
-        >
-          <header className="nextaction-schedule-popup-header">
-            <div className="nextaction-schedule-popup-heading">
-              <div className="nextaction-schedule-popup-title" id={id("title")}>
-                {t("Schedule")}
-              </div>
-              <div
-                className="nextaction-schedule-popup-task"
-                data-empty={text.empty || undefined}
-                title={text.text}
-              >
-                {text.text}
-              </div>
-            </div>
-            <Tooltip text={t("Close")}>
-              <Button variant="plain" aria-label={t("Close")} onClick={onClose}>
-                <i className="ti ti-x" aria-hidden="true" />
-              </Button>
-            </Tooltip>
-          </header>
-          <div className="nextaction-schedule-popup-body">
-            <div className="nextaction-schedule-popup-field">
-              <span
-                className="nextaction-schedule-popup-label"
-                id={id("start")}
-              >
-                {t("Start time")}
-              </span>
-              <Input
-                ref={input}
-                aria-labelledby={id("start")}
-                type="time"
-                step={scheduleStepMinutes * 60}
-                value={start}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setStart(e.target.value)
-                }
-              />
-            </div>
-            <div className="nextaction-schedule-popup-field">
-              <span
-                className="nextaction-schedule-popup-label"
-                id={id("minutes")}
-              >
-                {t("Length (minutes)")}
-              </span>
-              <Input
-                aria-labelledby={id("minutes")}
-                type="number"
-                min={scheduleStepMinutes}
-                step={scheduleStepMinutes}
-                inputMode="numeric"
-                value={minutes}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setMinutes(e.target.value)
-                }
-              />
-            </div>
-            <div className="nextaction-schedule-popup-hint">
-              {args.schedule
-                ? t("Now ${times}", { times: formatTimeRange(args.schedule) })
-                : t("Snaps to 15 minutes, within today")}
-            </div>
-          </div>
-          <footer className="nextaction-schedule-popup-footer">
-            {args.schedule && (
-              <Button
-                variant="plain"
-                disabled={busy}
-                onClick={() => void run(() => actions.unschedule(args.task.id))}
-              >
-                {t("Unschedule")}
-              </Button>
-            )}
-            <span className="nextaction-schedule-popup-spacer" />
-            <Button variant="plain" onClick={onClose}>
-              {t("Cancel")}
-            </Button>
-            <Button variant="solid" disabled={!valid || busy} onClick={submit}>
-              {t("Schedule")}
-            </Button>
-          </footer>
+    <PluginWindow
+      onClose={onClose}
+      className="nextaction-schedule-popup"
+      labelledBy={id("title")}
+      focus={input}
+      onKeyDown={onKeyDown}
+    >
+      <WindowHeader
+        title={t("Schedule")}
+        titleId={id("title")}
+        task={args.task}
+        onClose={onClose}
+      />
+      <div className="nextaction-schedule-popup-body">
+        <div className="nextaction-schedule-popup-field">
+          <span className="nextaction-schedule-popup-label" id={id("start")}>
+            {t("Start time")}
+          </span>
+          <Input
+            ref={input}
+            aria-labelledby={id("start")}
+            type="time"
+            step={scheduleStepMinutes * 60}
+            value={start}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setStart(e.target.value)
+            }
+          />
         </div>
-      </PopupLayer>
-    </ModalOverlay>
+        <div className="nextaction-schedule-popup-field">
+          <span className="nextaction-schedule-popup-label" id={id("minutes")}>
+            {t("Length (minutes)")}
+          </span>
+          <Input
+            aria-labelledby={id("minutes")}
+            type="number"
+            min={scheduleStepMinutes}
+            step={scheduleStepMinutes}
+            inputMode="numeric"
+            value={minutes}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setMinutes(e.target.value)
+            }
+          />
+        </div>
+        <div className="nextaction-schedule-popup-hint">
+          {args.schedule
+            ? t("Now ${times}", { times: formatTimeRange(args.schedule) })
+            : t("Snaps to 15 minutes, within today")}
+        </div>
+      </div>
+      <WindowFooter>
+        {args.schedule && (
+          <Button
+            variant="plain"
+            disabled={busy}
+            onClick={() => void run(() => actions.unschedule(args.task.id))}
+          >
+            {t("Unschedule")}
+          </Button>
+        )}
+        <WindowSpacer />
+        <Button variant="plain" onClick={onClose}>
+          {t("Cancel")}
+        </Button>
+        <Button variant="solid" disabled={!valid || busy} onClick={submit}>
+          {t("Schedule")}
+        </Button>
+      </WindowFooter>
+    </PluginWindow>
   );
 }
 

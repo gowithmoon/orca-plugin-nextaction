@@ -2,9 +2,9 @@
 // interval (none, or every N days / weeks / months) and the review-on day,
 // the last reviewed day read only and the next review day the draft would
 // give. Saving writes both in one undo; a task with a plan can have it
-// removed, and a task that can be marked can be marked reviewed here. In
-// Orca's ModalOverlay with the shared window look, rendered into its own
-// React root, as the recurrence rule popup. Verified by hand in Orca
+// removed, and a task that can be marked can be marked reviewed here. In a
+// plugin window, rendered into its own React root, as the recurrence rule
+// popup. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
@@ -24,8 +24,14 @@ import {
 } from "../../domain/review/review";
 import type { CalendarDate, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { formatDate, shownText } from "../components/format";
-import { PopupLayer } from "../components/popup-layer";
+import { formatDate } from "../components/format";
+import {
+  createTaskWindow,
+  PluginWindow,
+  WindowFooter,
+  WindowHeader,
+  WindowSpacer,
+} from "../components/plugin-window";
 import {
   reviewMonthPlacementText,
   reviewUnitName,
@@ -34,7 +40,6 @@ import {
   type DiscardUnreadableDeps,
   useDiscardUnreadable,
 } from "../hooks/use-discard-unreadable";
-import { useFocusInside } from "../hooks/use-focus-inside";
 import {
   type Notify,
   notifyMarkReviewedFailure,
@@ -262,7 +267,7 @@ function ReviewPopup(props: {
   onReopen: (task: Task) => void;
 }) {
   const { task, deps, onClose, onReopen } = props;
-  const { Button, Input, ModalOverlay, Segmented, Tooltip } = orca.components;
+  const { Button, Input, Segmented } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const plan = task.review.kind === "plan" ? task.review.plan : null;
@@ -277,9 +282,6 @@ function ReviewPopup(props: {
     plan?.reviewOn ?? null,
   );
   const [busy, setBusy] = React.useState(false);
-  const focus = React.useRef<HTMLDivElement>(null);
-  const restoreFocus = React.useRef(true);
-  useFocusInside(focus, restoreFocus);
   // Discarded (#106): shown afresh with the empty value to edit, or closed
   // when the block is no longer a task.
   const discard = useDiscardUnreadable(
@@ -350,180 +352,150 @@ function ReviewPopup(props: {
       (error) => notifyMarkReviewedFailure(deps.notify, error),
     );
 
+  // Esc is the window's (PluginWindow); Enter in a field saves.
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.nativeEvent.isComposing || e.defaultPrevented) return;
-    // Keys from a popup rendered elsewhere still bubble here through React.
-    if (!e.currentTarget.contains(e.target as Node)) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    } else if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+    if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
       e.preventDefault();
       e.stopPropagation();
       save();
     }
   };
 
-  const text = shownText(task);
   return (
-    <ModalOverlay visible={true} canClose={true} onClose={onClose}>
-      <PopupLayer>
-        <div
-          ref={focus}
-          tabIndex={-1}
-          className="nextaction-window nextaction-recurrence-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={id("title")}
-          onKeyDown={onKeyDown}
-        >
-          <header className="nextaction-recurrence-popup-header">
-            <div className="nextaction-recurrence-popup-heading">
-              <div
-                className="nextaction-recurrence-popup-title"
-                id={id("title")}
-              >
-                {t("Review")}
-              </div>
-              <div
-                className="nextaction-recurrence-popup-task"
-                data-empty={text.empty || undefined}
-                title={text.text}
-              >
-                {text.text}
-              </div>
-            </div>
-            <Tooltip text={t("Close")}>
-              <Button variant="plain" aria-label={t("Close")} onClick={onClose}>
-                <i className="ti ti-x" aria-hidden="true" />
-              </Button>
-            </Tooltip>
-          </header>
-          <div className="nextaction-recurrence-popup-body">
-            {task.review.kind === "unreadable" && (
-              <div className="nextaction-recurrence-popup-warning">
-                {t(
-                  "This task's review plan cannot be read (${reason}). It is kept as it is and cannot be changed here.",
-                  { reason: task.review.reason },
-                )}
-              </div>
-            )}
-            {unreadable && (
-              <DiscardUnreadableField
-                busy={discard.busy}
-                onDiscard={discard.discard}
-              />
-            )}
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("interval")}
-              >
-                {t("Review interval")}
-              </span>
-              <div className="nextaction-review-popup-interval">
-                {unit !== "none" && (
-                  <>
-                    <span>{t("Every")}</span>
-                    <Input
-                      aria-labelledby={id("interval")}
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      value={every}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setEvery(e.target.value)
-                      }
-                    />
-                  </>
-                )}
-                <Segmented
-                  role="group"
-                  aria-labelledby={id("interval")}
-                  selected={unit}
-                  options={unitChoices.map((value) => ({
-                    value,
-                    label: value === "none" ? t("None") : reviewUnitName(value),
-                  }))}
-                  onChange={(value) => {
-                    const chosen = unitChoices.find((u) => u === value);
-                    if (chosen) setUnit(chosen);
-                  }}
-                />
-              </div>
-            </div>
-            <ReviewPlacementField
-              labelId={id("placement")}
-              unit={unit}
-              draft={placement}
-              onChange={setPlacement}
-            />
-            <div className="nextaction-recurrence-popup-field">
-              <span className="nextaction-recurrence-popup-label" id={id("on")}>
-                {t("Review on")}
-              </span>
-              <DateField
-                labelId={id("on")}
-                value={reviewOn}
-                today={today}
-                onChange={setReviewOn}
-              />
-              <div className="nextaction-recurrence-popup-hint">
-                {t("A one-off day; cleared once the task is marked reviewed.")}
-              </div>
-            </div>
-            <div className="nextaction-recurrence-popup-field">
-              <span className="nextaction-recurrence-popup-label">
-                {t("Last reviewed")}
-              </span>
-              <span>
-                {plan?.lastReviewed
-                  ? formatDate(plan.lastReviewed, today)
-                  : t("Not yet")}
-              </span>
-            </div>
-            {next && (
-              <div
-                className="nextaction-recurrence-popup-preview"
-                aria-live="polite"
-              >
-                {t("Next review: ${date}", { date: formatDate(next, today) })}
-              </div>
+    <PluginWindow
+      onClose={onClose}
+      className="nextaction-recurrence-popup"
+      labelledBy={id("title")}
+      onKeyDown={onKeyDown}
+    >
+      <WindowHeader
+        title={t("Review")}
+        titleId={id("title")}
+        task={task}
+        onClose={onClose}
+      />
+      <div className="nextaction-recurrence-popup-body">
+        {task.review.kind === "unreadable" && (
+          <div className="nextaction-recurrence-popup-warning">
+            {t(
+              "This task's review plan cannot be read (${reason}). It is kept as it is and cannot be changed here.",
+              { reason: task.review.reason },
             )}
           </div>
-          <footer className="nextaction-recurrence-popup-footer">
-            {task.review.kind === "plan" && (
-              <Button
-                variant="plain"
-                disabled={busy}
-                onClick={() => void write({ interval: null, reviewOn: null })}
-              >
-                {t("Remove review")}
-              </Button>
+        )}
+        {unreadable && (
+          <DiscardUnreadableField
+            busy={discard.busy}
+            onDiscard={discard.discard}
+          />
+        )}
+        <div className="nextaction-recurrence-popup-field">
+          <span
+            className="nextaction-recurrence-popup-label"
+            id={id("interval")}
+          >
+            {t("Review interval")}
+          </span>
+          <div className="nextaction-review-popup-interval">
+            {unit !== "none" && (
+              <>
+                <span>{t("Every")}</span>
+                <Input
+                  aria-labelledby={id("interval")}
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={every}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setEvery(e.target.value)
+                  }
+                />
+              </>
             )}
-            {markable && (
-              <Button variant="plain" disabled={busy} onClick={mark}>
-                <i className="ti ti-checks" aria-hidden="true" />
-                {t("Mark reviewed")}
-              </Button>
-            )}
-            <span className="nextaction-recurrence-popup-spacer" />
-            <Button variant="plain" onClick={onClose}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              variant="solid"
-              disabled={setting === undefined || unreadable || busy}
-              onClick={save}
-            >
-              {t("Save")}
-            </Button>
-          </footer>
+            <Segmented
+              role="group"
+              aria-labelledby={id("interval")}
+              selected={unit}
+              options={unitChoices.map((value) => ({
+                value,
+                label: value === "none" ? t("None") : reviewUnitName(value),
+              }))}
+              onChange={(value) => {
+                const chosen = unitChoices.find((u) => u === value);
+                if (chosen) setUnit(chosen);
+              }}
+            />
+          </div>
         </div>
-      </PopupLayer>
-    </ModalOverlay>
+        <ReviewPlacementField
+          labelId={id("placement")}
+          unit={unit}
+          draft={placement}
+          onChange={setPlacement}
+        />
+        <div className="nextaction-recurrence-popup-field">
+          <span className="nextaction-recurrence-popup-label" id={id("on")}>
+            {t("Review on")}
+          </span>
+          <DateField
+            labelId={id("on")}
+            value={reviewOn}
+            today={today}
+            onChange={setReviewOn}
+          />
+          <div className="nextaction-recurrence-popup-hint">
+            {t("A one-off day; cleared once the task is marked reviewed.")}
+          </div>
+        </div>
+        <div className="nextaction-recurrence-popup-field">
+          <span className="nextaction-recurrence-popup-label">
+            {t("Last reviewed")}
+          </span>
+          <span>
+            {plan?.lastReviewed
+              ? formatDate(plan.lastReviewed, today)
+              : t("Not yet")}
+          </span>
+        </div>
+        {next && (
+          <div
+            className="nextaction-recurrence-popup-preview"
+            aria-live="polite"
+          >
+            {t("Next review: ${date}", { date: formatDate(next, today) })}
+          </div>
+        )}
+      </div>
+      <WindowFooter>
+        {task.review.kind === "plan" && (
+          <Button
+            variant="plain"
+            disabled={busy}
+            onClick={() => void write({ interval: null, reviewOn: null })}
+          >
+            {t("Remove review")}
+          </Button>
+        )}
+        {markable && (
+          <Button variant="plain" disabled={busy} onClick={mark}>
+            <i className="ti ti-checks" aria-hidden="true" />
+            {t("Mark reviewed")}
+          </Button>
+        )}
+        <WindowSpacer />
+        <Button variant="plain" onClick={onClose}>
+          {t("Cancel")}
+        </Button>
+        <Button
+          variant="solid"
+          disabled={setting === undefined || unreadable || busy}
+          onClick={save}
+        >
+          {t("Save")}
+        </Button>
+      </WindowFooter>
+    </PluginWindow>
   );
 }
 
@@ -532,24 +504,5 @@ export function createReviewPopup(options: {
   deps: ReviewPopupDeps;
   render: (node: React.ReactNode) => void;
 }): OpenReviewPopup {
-  let shown = 0;
-  const open: OpenReviewPopup = (task) => {
-    shown += 1;
-    const mine = shown;
-    options.render(
-      <ReviewPopup
-        // Another task, or the same one read again, starts afresh.
-        key={mine}
-        task={task}
-        deps={options.deps}
-        onClose={() => {
-          if (mine === shown) options.render(null);
-        }}
-        onReopen={(read) => {
-          if (mine === shown) open(read);
-        }}
-      />,
-    );
-  };
-  return open;
+  return createTaskWindow(ReviewPopup, options);
 }

@@ -13,21 +13,6 @@ export const quickCaptureCss = `
   --nextaction-field-label-width: 4.5rem;
 }
 
-.nextaction-capture-header {
-  display: flex;
-  align-items: center;
-  gap: var(--orca-spacing-sm);
-  flex: 0 0 auto;
-  padding: var(--orca-spacing-md) var(--orca-spacing-md) 0 var(--orca-spacing-lg);
-}
-
-.nextaction-capture-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--orca-fontsize-md);
-  font-weight: var(--orca-fontweight-lg);
-}
-
 .nextaction-capture-body {
   display: flex;
   flex-direction: column;
@@ -55,17 +40,6 @@ export const quickCaptureCss = `
 
 .nextaction-capture-fields .nextaction-task-fields {
   gap: var(--orca-spacing-sm);
-}
-
-.nextaction-capture-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--orca-spacing-sm);
-  flex: 0 0 auto;
-  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
-  border-top: var(--orca-border-separator);
-  background-color: var(--orca-color-bg-2);
 }
 
 .nextaction-capture-hint {

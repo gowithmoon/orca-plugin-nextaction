@@ -13,8 +13,11 @@ import {
 import type { CommandFn } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { effortName, importanceName, urgencyName } from "../components/format";
-import { PopupLayer } from "../components/popup-layer";
-import { useFocusInside } from "../hooks/use-focus-inside";
+import {
+  PluginWindow,
+  WindowFooter,
+  WindowHeader,
+} from "../components/plugin-window";
 import { useQuickCapture } from "../hooks/use-quick-capture";
 import { DateField, Field, RatingField } from "../task-panel/task-panel-fields";
 
@@ -62,16 +65,13 @@ function QuickCapturePopup(props: {
   /** Closes the popup by unmounting it. */
   onClose: () => void;
 }) {
-  const { Button, CompositionInput, ModalOverlay, Tooltip } = orca.components;
+  const { Button, CompositionInput } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const [text, setText] = React.useState("");
   const [draft, setDraft] = React.useState(emptyDraft);
+  // Into the text on opening, back where it was (e.g. the editor) on closing.
   const input = React.useRef<HTMLInputElement>(null);
-  // Into the text on opening, back where it was (e.g. the editor) on closing,
-  // as the task panel popup does.
-  const restoreFocus = React.useRef(true);
-  useFocusInside(input, restoreFocus);
   const capture = useQuickCapture(props.quickCapture, props.pluginName);
   const today = props.today();
   const blank = text.trim() === "";
@@ -97,126 +97,92 @@ function QuickCapturePopup(props: {
     void submit();
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // As in the task panel popup: a key a control inside already handled
-    // (e.g. a picker closing) is left alone.
-    if (e.key !== "Escape" || e.defaultPrevented) return;
-    if (e.nativeEvent.isComposing) return;
-    // Keys from a picker rendered elsewhere in the page (a portal) still
-    // bubble here through React: Esc there closes the picker, not the window.
-    if (!e.currentTarget.contains(e.target as Node)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    props.onClose();
-  };
-
-  // Always visible while mounted: closing unmounts it at once instead of
-  // waiting for `onClosed`, whose timing is not documented, so the command
-  // can reopen it right away, afresh.
   return (
-    <ModalOverlay visible={true} canClose={true} onClose={props.onClose}>
-      <PopupLayer>
-        <div
-          // The shared window look (window-style.ts), narrower than the task
-          // panel's: four fields and a line of text (quick-capture-style.ts).
-          className="nextaction-window nextaction-capture"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={id("title")}
-          onKeyDown={onKeyDown}
-        >
-          <header className="nextaction-capture-header">
-            <div className="nextaction-capture-title" id={id("title")}>
-              {t("Create task")}
-            </div>
-            <Tooltip text={t("Close")}>
-              <Button
-                variant="plain"
-                aria-label={t("Close")}
-                onClick={props.onClose}
-              >
-                <i className="ti ti-x" aria-hidden="true" />
-              </Button>
-            </Tooltip>
-          </header>
-          <div className="nextaction-capture-body">
-            <CompositionInput
-              ref={input}
-              className="nextaction-capture-text"
-              // Orca's Input puts `style` on the input element itself.
-              style={captureTextStyle}
-              aria-label={t("Task name")}
-              placeholder={t("Task name, press Enter to create")}
-              value={text}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setText(e.target.value)
-              }
-              onKeyDown={onTextKeyDown}
-            />
-            <div className="nextaction-capture-fields">
-              <div className="nextaction-task-fields">
-                <Field label={t("Importance")} labelId={id("importance")}>
-                  <RatingField
-                    labelId={id("importance")}
-                    value={draft.importance}
-                    name={importanceName}
-                    onChange={set("importance")}
-                  />
-                </Field>
-                <Field label={t("Urgency")} labelId={id("urgency")}>
-                  <RatingField
-                    labelId={id("urgency")}
-                    value={draft.urgency}
-                    name={urgencyName}
-                    onChange={set("urgency")}
-                  />
-                </Field>
-                <Field label={t("Effort")} labelId={id("effort")}>
-                  <RatingField
-                    labelId={id("effort")}
-                    value={draft.effort}
-                    name={effortName}
-                    onChange={set("effort")}
-                  />
-                </Field>
-                <Field label={t("Start")} labelId={id("start")}>
-                  <DateField
-                    labelId={id("start")}
-                    value={draft.start}
-                    today={today}
-                    onChange={set("start")}
-                  />
-                </Field>
-                <Field label={t("Due")} labelId={id("due")}>
-                  <DateField
-                    labelId={id("due")}
-                    value={draft.due}
-                    today={today}
-                    onChange={set("due")}
-                  />
-                </Field>
-              </div>
-            </div>
+    <PluginWindow
+      onClose={props.onClose}
+      // Narrower than the task panel's: four fields and a line of text
+      // (quick-capture-style.ts).
+      className="nextaction-capture"
+      labelledBy={id("title")}
+      focus={input}
+    >
+      <WindowHeader
+        title={t("Create task")}
+        titleId={id("title")}
+        onClose={props.onClose}
+      />
+      <div className="nextaction-capture-body">
+        <CompositionInput
+          ref={input}
+          className="nextaction-capture-text"
+          // Orca's Input puts `style` on the input element itself.
+          style={captureTextStyle}
+          aria-label={t("Task name")}
+          placeholder={t("Task name, press Enter to create")}
+          value={text}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setText(e.target.value)
+          }
+          onKeyDown={onTextKeyDown}
+        />
+        <div className="nextaction-capture-fields">
+          <div className="nextaction-task-fields">
+            <Field label={t("Importance")} labelId={id("importance")}>
+              <RatingField
+                labelId={id("importance")}
+                value={draft.importance}
+                name={importanceName}
+                onChange={set("importance")}
+              />
+            </Field>
+            <Field label={t("Urgency")} labelId={id("urgency")}>
+              <RatingField
+                labelId={id("urgency")}
+                value={draft.urgency}
+                name={urgencyName}
+                onChange={set("urgency")}
+              />
+            </Field>
+            <Field label={t("Effort")} labelId={id("effort")}>
+              <RatingField
+                labelId={id("effort")}
+                value={draft.effort}
+                name={effortName}
+                onChange={set("effort")}
+              />
+            </Field>
+            <Field label={t("Start")} labelId={id("start")}>
+              <DateField
+                labelId={id("start")}
+                value={draft.start}
+                today={today}
+                onChange={set("start")}
+              />
+            </Field>
+            <Field label={t("Due")} labelId={id("due")}>
+              <DateField
+                labelId={id("due")}
+                value={draft.due}
+                today={today}
+                onChange={set("due")}
+              />
+            </Field>
           </div>
-          <footer className="nextaction-capture-footer">
-            <span className="nextaction-capture-hint">
-              <i className="ti ti-inbox" aria-hidden="true" />
-              {t("Goes to today's journal, into the inbox")}
-            </span>
-            <Button variant="plain" onClick={props.onClose}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              variant="solid"
-              disabled={blank}
-              onClick={() => void submit()}
-            >
-              {t("Create")}
-            </Button>
-          </footer>
         </div>
-      </PopupLayer>
-    </ModalOverlay>
+      </div>
+      <WindowFooter>
+        <span className="nextaction-capture-hint">
+          <i className="ti ti-inbox" aria-hidden="true" />
+          {t("Goes to today's journal, into the inbox")}
+        </span>
+        <Button variant="plain" onClick={props.onClose}>
+          {t("Cancel")}
+        </Button>
+        <Button variant="solid" disabled={blank} onClick={() => void submit()}>
+          {t("Create")}
+        </Button>
+      </WindowFooter>
+    </PluginWindow>
   );
 }
 

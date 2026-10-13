@@ -165,6 +165,7 @@ tests/
 
 弹出层（`orca-popup-container`）：
 - `ui` 中的下拉选择、日期选择器和菜单一律用 `ui/components/popup-controls.tsx` 的 `Select`、`DatePicker`、`ContextMenu`，不直接从 `orca.components` 取。Orca 的弹出层没有容器时挂进锚点的 `offsetParent`，并在它的矩形内摆放，在插件窗口里会被窗口截断，在插件面板里会被面板截断（面板窄时子菜单显示不全）；这三个包装默认把弹出层放进窗口或插件面板的弹出层（`usePopupLayer()`），两者之外沿用 Orca 的默认摆放。插件面板的弹出层挂在 `document.body` 下：放在面板里会和面板一起被右边的面板盖住。`tests/architecture.test.ts` 检查这条规矩。
+- 插件的窗口一律用 `ui/components/plugin-window.tsx` 的 `PluginWindow`（窗口外观、弹出层、打开时取得焦点、关闭后焦点回到原处、Esc 关闭），标准的标题区和底部用同一文件的 `WindowHeader`、`WindowFooter`。不直接从 `orca.components` 取 `ModalOverlay`，由架构测试检查（#118）。
 
 ### 注册与清理
 

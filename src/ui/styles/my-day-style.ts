@@ -471,35 +471,6 @@ export const myDayCss = `
   --nextaction-window-width: 22rem;
 }
 
-.nextaction-schedule-popup-header {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--orca-spacing-sm);
-  flex: 0 0 auto;
-  padding: var(--orca-spacing-md) var(--orca-spacing-md) 0 var(--orca-spacing-lg);
-}
-
-.nextaction-schedule-popup-heading {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--orca-spacing-xs) / 2);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.nextaction-schedule-popup-title {
-  font-size: var(--orca-fontsize-md);
-  font-weight: var(--orca-fontweight-lg);
-}
-
-.nextaction-schedule-popup-task {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-sm);
-}
-
 .nextaction-schedule-popup-body {
   display: flex;
   flex-direction: column;
@@ -522,20 +493,6 @@ export const myDayCss = `
 .nextaction-schedule-popup-hint {
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-xs);
-}
-
-.nextaction-schedule-popup-footer {
-  display: flex;
-  align-items: center;
-  gap: var(--orca-spacing-sm);
-  flex: 0 0 auto;
-  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
-  border-top: var(--orca-border-separator);
-  background-color: var(--orca-color-bg-2);
-}
-
-.nextaction-schedule-popup-spacer {
-  flex: 1 1 auto;
 }
 
 @container nextaction-my-day (min-width: ${myDaySideBySideWidth}px) {
