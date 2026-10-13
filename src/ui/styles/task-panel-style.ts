@@ -631,12 +631,6 @@ button.nextaction-block-ref-target:hover {
   margin-left: auto;
 }
 
-/* Held from the top, not centred: as reminders are added the window only
-   grows downwards, so what is picked from stays where it was. */
-.nextaction-reminder-popup {
-  margin: max(var(--orca-spacing-lg), 12vh) auto auto;
-}
-
 /* The quick options: toggles in a two-column grid of fixed cells, so
    choosing one changes neither its size nor anything around it. */
 .nextaction-reminder-options {
@@ -695,35 +689,6 @@ button.nextaction-block-ref-target:hover {
   --nextaction-window-width: 26rem;
 }
 
-.nextaction-recurrence-popup-header {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--orca-spacing-sm);
-  flex: 0 0 auto;
-  padding: var(--orca-spacing-md) var(--orca-spacing-md) 0 var(--orca-spacing-lg);
-}
-
-.nextaction-recurrence-popup-heading {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--orca-spacing-xs) / 2);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.nextaction-recurrence-popup-title {
-  font-size: var(--orca-fontsize-md);
-  font-weight: var(--orca-fontweight-lg);
-}
-
-.nextaction-recurrence-popup-task {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-sm);
-}
-
 .nextaction-recurrence-popup-body {
   display: flex;
   flex-direction: column;
@@ -770,20 +735,6 @@ button.nextaction-block-ref-target:hover {
 .nextaction-recurrence-popup-warning {
   color: var(--orca-color-dangerous-5);
   font-size: var(--orca-fontsize-sm);
-}
-
-.nextaction-recurrence-popup-footer {
-  display: flex;
-  align-items: center;
-  gap: var(--orca-spacing-sm);
-  flex: 0 0 auto;
-  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
-  border-top: var(--orca-border-separator);
-  background-color: var(--orca-color-bg-2);
-}
-
-.nextaction-recurrence-popup-spacer {
-  flex: 1 1 auto;
 }
 
 /* The days of a weekly placement (#88): seven toggles in a row. */

@@ -41,7 +41,7 @@ import {
   createTaskPanelPopup,
   type OpenTaskPanelPopup,
 } from "../ui/task-panel/task-panel-popup";
-import type { FeatureModule } from "./bootstrap";
+import type { FeatureContext, FeatureModule } from "./bootstrap";
 
 /**
  * The task panel (#40, #42): the popup's own React root, unmounted on unload;
@@ -74,12 +74,11 @@ export function createTaskPanelFeature(deps: {
   const { repository } = deps;
   // Until a load says otherwise, writing on leaving is allowed.
   let releasing = () => false;
-  // The recurrence rule popup's root (#95) exists only while loaded.
-  let renderRecurrencePopup: (node: React.ReactNode) => void = () => {};
-  // The review popup's root (#103), likewise.
-  let renderReviewPopup: (node: React.ReactNode) => void = () => {};
-  // The reminder popup's root (#107), likewise.
-  let renderReminderPopup: (node: React.ReactNode) => void = () => {};
+  // The recurrence rule (#95), review (#103) and reminder (#107) popups'
+  // roots.
+  const recurrenceRoot = rootWhileLoaded("recurrencePopup");
+  const reviewRoot = rootWhileLoaded("reviewPopup");
+  const reminderRoot = rootWhileLoaded("reminderPopup");
   const readTask = createReadTask({ repository });
   // The popups' "Discard and reset" (#106): the task read again afterwards.
   const discard = {
@@ -102,7 +101,7 @@ export function createTaskPanelFeature(deps: {
       discard,
     },
     // Into the load's root; nothing outside a load.
-    render: (node) => renderReminderPopup(node),
+    render: (node) => reminderRoot.render(node),
   });
   const markReviewed = createMarkReviewed(clockDeps);
   const canMarkReviewed = createCanMarkReviewed();
@@ -116,7 +115,7 @@ export function createTaskPanelFeature(deps: {
       discard,
     },
     // Into the load's root; nothing outside a load.
-    render: (node) => renderReviewPopup(node),
+    render: (node) => reviewRoot.render(node),
   });
   const formDeps: TaskPanelFormDeps = {
     readTaskForPanel: createReadTaskForPanel({ repository }),
@@ -154,7 +153,7 @@ export function createTaskPanelFeature(deps: {
         discard,
       },
       // Into the load's root; nothing outside a load.
-      render: (node) => renderRecurrencePopup(node),
+      render: (node) => recurrenceRoot.render(node),
     }),
     repairNotAdvanced: createRepairNotAdvanced({
       repository,
@@ -176,25 +175,11 @@ export function createTaskPanelFeature(deps: {
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
     releasing = context.releasing;
-    // Its own root, created before the task panel's so it is released after
-    // it: a rule popup opened from the task panel goes with the load.
-    const recurrenceRoot = registry.reactRoot("recurrencePopup", null);
-    renderRecurrencePopup = recurrenceRoot.render;
-    registry.add(`${pluginName}.recurrencePopupOpen`, () => {
-      renderRecurrencePopup = () => {};
-    });
-    // The review popup's root, also before the task panel's (#103).
-    const reviewRoot = registry.reactRoot("reviewPopup", null);
-    renderReviewPopup = reviewRoot.render;
-    registry.add(`${pluginName}.reviewPopupOpen`, () => {
-      renderReviewPopup = () => {};
-    });
-    // The reminder popup's root, also before the task panel's (#107).
-    const reminderRoot = registry.reactRoot("reminderPopup", null);
-    renderReminderPopup = reminderRoot.render;
-    registry.add(`${pluginName}.reminderPopupOpen`, () => {
-      renderReminderPopup = () => {};
-    });
+    // Created before the task panel's root so they are released after it: a
+    // popup opened from the task panel goes with the load.
+    recurrenceRoot.load(context);
+    reviewRoot.load(context);
+    reminderRoot.load(context);
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;
     const open = createTaskPanelPopup({
@@ -220,5 +205,22 @@ export function createTaskPanelFeature(deps: {
       current?.(taskId, onClose, onSelect) ?? (() => {}),
     formDeps,
     openReviewPopup,
+  };
+}
+
+/**
+ * A popup's own React root, which exists only while loaded: rendering outside
+ * a load does nothing.
+ */
+function rootWhileLoaded(name: string) {
+  let render: (node: React.ReactNode) => void = () => {};
+  return {
+    render: (node: React.ReactNode) => render(node),
+    load({ pluginName, registry }: FeatureContext) {
+      render = registry.reactRoot(name, null).render;
+      registry.add(`${pluginName}.${name}Open`, () => {
+        render = () => {};
+      });
+    },
   };
 }

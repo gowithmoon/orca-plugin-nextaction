@@ -1,12 +1,11 @@
 // The reminder popup (GLOSSARY: 提醒, #107): the quick options (the due and
 // start dates' days at the reminder default time) as toggles and a custom
 // date and time to add, then the task's reminders in order, each with its
-// time to change and a delete button, the passed ones greyed. The parts to
-// pick from stay put while the list grows below them. Saving writes the list in one
-// undo; "Clear all" removes every reminder. Moments not later than now
-// cannot be added. In Orca's ModalOverlay with the shared window look,
-// rendered into its own React root, as the review popup. Verified by hand in
-// Orca (docs/ARCHITECTURE.md §5).
+// time to change and a delete button, the passed ones greyed. Centred as
+// the other windows are (#118), so it shifts up a little as the list grows.
+// Saving writes the list in one undo; "Clear all" removes every reminder. Moments not later than now
+// cannot be added. In a plugin window, rendered into its own React root, as
+// the review popup. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ReminderDefaultTimeSetting } from "../../application/ports/reminder-default-time-setting";
 import type { SetReminders } from "../../application/usecases/set-reminders";
@@ -24,15 +23,19 @@ import {
   type TimeOfDay,
 } from "../../domain/time/time-of-day";
 import { t } from "../../shared/l10n/l10n";
-import { shownText } from "../components/format";
+import {
+  createTaskWindow,
+  PluginWindow,
+  WindowFooter,
+  WindowHeader,
+  WindowSpacer,
+} from "../components/plugin-window";
 import { DatePicker } from "../components/popup-controls";
-import { PopupLayer } from "../components/popup-layer";
 import { formatMoment, quickOptionName } from "../components/reminder-text";
 import {
   type DiscardUnreadableDeps,
   useDiscardUnreadable,
 } from "../hooks/use-discard-unreadable";
-import { useFocusInside } from "../hooks/use-focus-inside";
 import { useNow } from "../hooks/use-now";
 import { type Notify, notifySetRemindersFailure } from "../notify";
 import { DiscardUnreadableField } from "./discard-unreadable-field";
@@ -129,7 +132,7 @@ function ReminderPopup(props: {
   onReopen: (task: Task) => void;
 }) {
   const { task, deps, onClose, onReopen } = props;
-  const { Button, ModalOverlay, Tooltip } = orca.components;
+  const { Button, Tooltip } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const now = useNow(deps.now);
@@ -140,9 +143,6 @@ function ReminderPopup(props: {
     customStart(deps.now(), deps.reminderDefaultTime.current()),
   );
   const [busy, setBusy] = React.useState(false);
-  const focus = React.useRef<HTMLDivElement>(null);
-  const restoreFocus = React.useRef(true);
-  useFocusInside(focus, restoreFocus);
   // Discarded (#106): shown afresh with the empty value to edit, or closed
   // when the block is no longer a task.
   const discard = useDiscardUnreadable(
@@ -204,236 +204,187 @@ function ReminderPopup(props: {
     else void write(draft);
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.nativeEvent.isComposing || e.defaultPrevented) return;
-    // Keys from a popup rendered elsewhere still bubble here through React.
-    if (!e.currentTarget.contains(e.target as Node)) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    }
-  };
-
-  const text = shownText(task);
   return (
-    <ModalOverlay visible={true} canClose={true} onClose={onClose}>
-      <PopupLayer>
-        <div
-          ref={focus}
-          tabIndex={-1}
-          className="nextaction-window nextaction-recurrence-popup nextaction-reminder-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={id("title")}
-          onKeyDown={onKeyDown}
-        >
-          <header className="nextaction-recurrence-popup-header">
-            <div className="nextaction-recurrence-popup-heading">
-              <div
-                className="nextaction-recurrence-popup-title"
-                id={id("title")}
-              >
-                {t("Reminders")}
-              </div>
-              <div
-                className="nextaction-recurrence-popup-task"
-                data-empty={text.empty || undefined}
-                title={text.text}
-              >
-                {text.text}
-              </div>
-            </div>
-            <Tooltip text={t("Close")}>
-              <Button variant="plain" aria-label={t("Close")} onClick={onClose}>
-                <i className="ti ti-x" aria-hidden="true" />
-              </Button>
-            </Tooltip>
-          </header>
-          <div className="nextaction-recurrence-popup-body">
-            {task.reminders.kind === "unreadable" && (
-              <div className="nextaction-recurrence-popup-warning">
-                {t(
-                  "This task's reminders cannot be read (${reason}). They are kept as they are and cannot be changed here.",
-                  { reason: task.reminders.reason },
-                )}
-              </div>
+    <PluginWindow
+      onClose={onClose}
+      className="nextaction-recurrence-popup"
+      labelledBy={id("title")}
+    >
+      <WindowHeader
+        title={t("Reminders")}
+        titleId={id("title")}
+        task={task}
+        onClose={onClose}
+      />
+      <div className="nextaction-recurrence-popup-body">
+        {task.reminders.kind === "unreadable" && (
+          <div className="nextaction-recurrence-popup-warning">
+            {t(
+              "This task's reminders cannot be read (${reason}). They are kept as they are and cannot be changed here.",
+              { reason: task.reminders.reason },
             )}
-            {unreadable && (
-              <DiscardUnreadableField
-                busy={discard.busy}
-                onDiscard={discard.discard}
-              />
-            )}
-            {/* The parts to pick from come first and keep their size; only the
-                list below grows, so picking several in a row never moves them. */}
-            {options.length > 0 && (
-              <div className="nextaction-recurrence-popup-field">
-                <span
-                  className="nextaction-recurrence-popup-label"
-                  id={id("quick")}
-                >
-                  {t("Quick add")}
-                </span>
-                <fieldset
-                  className="nextaction-reminder-options"
-                  aria-labelledby={id("quick")}
-                >
-                  {options.map((option) => {
-                    const added = has(draft, option.at);
-                    const name = quickOptionName(option);
-                    // A toggle: chosen again, it takes its reminder out. Its
-                    // text never changes, so the grid keeps its shape.
-                    return (
-                      <Tooltip
-                        key={`${option.from}:${option.daysBefore}`}
-                        text={formatMoment(option.at, today)}
-                      >
-                        <button
-                          type="button"
-                          className="nextaction-reminder-option"
-                          aria-pressed={added}
-                          data-chosen={added || undefined}
-                          disabled={!added && !option.selectable}
-                          aria-label={
-                            !added && !option.selectable
-                              ? t("${name} (passed)", { name })
-                              : name
-                          }
-                          onClick={() =>
-                            added ? remove(option.at) : add(option.at)
-                          }
-                        >
-                          <i
-                            className="ti ti-check nextaction-reminder-option-check"
-                            aria-hidden="true"
-                          />
-                          {name}
-                        </button>
-                      </Tooltip>
-                    );
-                  })}
-                </fieldset>
-              </div>
-            )}
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("custom")}
-              >
-                {t("Custom")}
-              </span>
-              <div className="nextaction-reminder-custom">
-                <MomentButton
-                  at={custom}
-                  today={today}
-                  label={t("Choose the date and time")}
-                  onChange={setCustom}
-                />
-                <Button
-                  variant="outline"
-                  disabled={!later(custom, now) || has(draft, custom)}
-                  onClick={() => add(custom)}
-                >
-                  <i className="ti ti-plus" aria-hidden="true" />
-                  {t("Add")}
-                </Button>
-              </div>
-              {!later(custom, now) && (
-                <div className="nextaction-recurrence-popup-hint">
-                  {t("A reminder cannot be set in the past.")}
-                </div>
-              )}
-            </div>
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("list")}
-              >
-                {t("Reminders")}
-              </span>
-              {draft.length === 0 ? (
-                <span className="nextaction-recurrence-popup-hint">
-                  {t("No reminders yet")}
-                </span>
-              ) : (
-                <ul
-                  className="nextaction-reminder-list"
-                  aria-labelledby={id("list")}
-                >
-                  {draft.map((at) => {
-                    const passed = !later(at, now);
-                    const moment = formatMoment(at, today);
-                    return (
-                      <li
-                        key={at.getTime()}
-                        className="nextaction-reminder-item"
-                        data-passed={passed || undefined}
-                      >
-                        <MomentButton
-                          at={at}
-                          today={today}
-                          passed={passed}
-                          label={t(
-                            "Change the time of the reminder at ${moment}",
-                            {
-                              moment,
-                            },
-                          )}
-                          onChange={(to) => {
-                            if (to.getTime() === at.getTime()) return;
-                            if (!addable(to)) pastNotice();
-                            else replace(at, to);
-                          }}
-                        />
-                        {passed && (
-                          <span className="nextaction-reminder-passed">
-                            {t("Passed")}
-                          </span>
-                        )}
-                        <Tooltip text={t("Delete reminder")}>
-                          <Button
-                            variant="plain"
-                            aria-label={t("Delete the reminder at ${moment}", {
-                              moment,
-                            })}
-                            onClick={() => remove(at)}
-                          >
-                            <i className="ti ti-trash" aria-hidden="true" />
-                          </Button>
-                        </Tooltip>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
           </div>
-          <footer className="nextaction-recurrence-popup-footer">
-            {original.length > 0 && (
-              <Button
-                variant="plain"
-                disabled={busy || unreadable}
-                onClick={() => void write([])}
-              >
-                {t("Clear all")}
-              </Button>
-            )}
-            <span className="nextaction-recurrence-popup-spacer" />
-            <Button variant="plain" onClick={onClose}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              variant="solid"
-              disabled={unreadable || busy}
-              onClick={save}
+        )}
+        {unreadable && (
+          <DiscardUnreadableField
+            busy={discard.busy}
+            onDiscard={discard.discard}
+          />
+        )}
+        {/* The parts to pick from come first and keep their size; only the
+                list below grows, so picking several in a row never moves them. */}
+        {options.length > 0 && (
+          <div className="nextaction-recurrence-popup-field">
+            <span
+              className="nextaction-recurrence-popup-label"
+              id={id("quick")}
             >
-              {t("Save")}
+              {t("Quick add")}
+            </span>
+            <fieldset
+              className="nextaction-reminder-options"
+              aria-labelledby={id("quick")}
+            >
+              {options.map((option) => {
+                const added = has(draft, option.at);
+                const name = quickOptionName(option);
+                // A toggle: chosen again, it takes its reminder out. Its
+                // text never changes, so the grid keeps its shape.
+                return (
+                  <Tooltip
+                    key={`${option.from}:${option.daysBefore}`}
+                    text={formatMoment(option.at, today)}
+                  >
+                    <button
+                      type="button"
+                      className="nextaction-reminder-option"
+                      aria-pressed={added}
+                      data-chosen={added || undefined}
+                      disabled={!added && !option.selectable}
+                      aria-label={
+                        !added && !option.selectable
+                          ? t("${name} (passed)", { name })
+                          : name
+                      }
+                      onClick={() =>
+                        added ? remove(option.at) : add(option.at)
+                      }
+                    >
+                      <i
+                        className="ti ti-check nextaction-reminder-option-check"
+                        aria-hidden="true"
+                      />
+                      {name}
+                    </button>
+                  </Tooltip>
+                );
+              })}
+            </fieldset>
+          </div>
+        )}
+        <div className="nextaction-recurrence-popup-field">
+          <span className="nextaction-recurrence-popup-label" id={id("custom")}>
+            {t("Custom")}
+          </span>
+          <div className="nextaction-reminder-custom">
+            <MomentButton
+              at={custom}
+              today={today}
+              label={t("Choose the date and time")}
+              onChange={setCustom}
+            />
+            <Button
+              variant="outline"
+              disabled={!later(custom, now) || has(draft, custom)}
+              onClick={() => add(custom)}
+            >
+              <i className="ti ti-plus" aria-hidden="true" />
+              {t("Add")}
             </Button>
-          </footer>
+          </div>
+          {!later(custom, now) && (
+            <div className="nextaction-recurrence-popup-hint">
+              {t("A reminder cannot be set in the past.")}
+            </div>
+          )}
         </div>
-      </PopupLayer>
-    </ModalOverlay>
+        <div className="nextaction-recurrence-popup-field">
+          <span className="nextaction-recurrence-popup-label" id={id("list")}>
+            {t("Reminders")}
+          </span>
+          {draft.length === 0 ? (
+            <span className="nextaction-recurrence-popup-hint">
+              {t("No reminders yet")}
+            </span>
+          ) : (
+            <ul
+              className="nextaction-reminder-list"
+              aria-labelledby={id("list")}
+            >
+              {draft.map((at) => {
+                const passed = !later(at, now);
+                const moment = formatMoment(at, today);
+                return (
+                  <li
+                    key={at.getTime()}
+                    className="nextaction-reminder-item"
+                    data-passed={passed || undefined}
+                  >
+                    <MomentButton
+                      at={at}
+                      today={today}
+                      passed={passed}
+                      label={t("Change the time of the reminder at ${moment}", {
+                        moment,
+                      })}
+                      onChange={(to) => {
+                        if (to.getTime() === at.getTime()) return;
+                        if (!addable(to)) pastNotice();
+                        else replace(at, to);
+                      }}
+                    />
+                    {passed && (
+                      <span className="nextaction-reminder-passed">
+                        {t("Passed")}
+                      </span>
+                    )}
+                    <Tooltip text={t("Delete reminder")}>
+                      <Button
+                        variant="plain"
+                        aria-label={t("Delete the reminder at ${moment}", {
+                          moment,
+                        })}
+                        onClick={() => remove(at)}
+                      >
+                        <i className="ti ti-trash" aria-hidden="true" />
+                      </Button>
+                    </Tooltip>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+      <WindowFooter>
+        {original.length > 0 && (
+          <Button
+            variant="plain"
+            disabled={busy || unreadable}
+            onClick={() => void write([])}
+          >
+            {t("Clear all")}
+          </Button>
+        )}
+        <WindowSpacer />
+        <Button variant="plain" onClick={onClose}>
+          {t("Cancel")}
+        </Button>
+        <Button variant="solid" disabled={unreadable || busy} onClick={save}>
+          {t("Save")}
+        </Button>
+      </WindowFooter>
+    </PluginWindow>
   );
 }
 
@@ -442,24 +393,5 @@ export function createReminderPopup(options: {
   deps: ReminderPopupDeps;
   render: (node: React.ReactNode) => void;
 }): OpenReminderPopup {
-  let shown = 0;
-  const open: OpenReminderPopup = (task) => {
-    shown += 1;
-    const mine = shown;
-    options.render(
-      <ReminderPopup
-        // Another task, or the same one read again, starts afresh.
-        key={mine}
-        task={task}
-        deps={options.deps}
-        onClose={() => {
-          if (mine === shown) options.render(null);
-        }}
-        onReopen={(read) => {
-          if (mine === shown) open(read);
-        }}
-      />,
-    );
-  };
-  return open;
+  return createTaskWindow(ReminderPopup, options);
 }

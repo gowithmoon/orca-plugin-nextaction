@@ -5,8 +5,7 @@
 // Each unit offers its placement, and the next occurrence is previewed
 // before saving (#88). The end condition (never / on a day / after N times,
 // #89) ends the recurrence once the next occurrence would fall outside it.
-// In Orca's ModalOverlay with the shared
-// window look, rendered into its own React root, as the schedule popup.
+// In a plugin window, rendered into its own React root, as the schedule popup.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { PreviewNextOccurrence } from "../../application/usecases/preview-next-occurrence";
@@ -22,14 +21,19 @@ import {
 } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
-import { formatDate, shownText } from "../components/format";
-import { PopupLayer } from "../components/popup-layer";
+import { formatDate } from "../components/format";
+import {
+  createTaskWindow,
+  PluginWindow,
+  WindowFooter,
+  WindowHeader,
+  WindowSpacer,
+} from "../components/plugin-window";
 import { basisName, unitName } from "../components/recurrence-text";
 import {
   type DiscardUnreadableDeps,
   useDiscardUnreadable,
 } from "../hooks/use-discard-unreadable";
-import { useFocusInside } from "../hooks/use-focus-inside";
 import { type Notify, notifyActionFailure, notifyAdvanced } from "../notify";
 import { DiscardUnreadableField } from "./discard-unreadable-field";
 import {
@@ -84,8 +88,7 @@ function RecurrencePopup(props: {
   onReopen: (task: Task) => void;
 }) {
   const { task, deps, onClose, onReopen } = props;
-  const { Button, Input, ModalOverlay, Segmented, Switch, Tooltip } =
-    orca.components;
+  const { Button, Input, Segmented, Switch } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const current =
@@ -115,8 +118,6 @@ function RecurrencePopup(props: {
   const [paused, setPaused] = React.useState(current?.paused === true);
   const [busy, setBusy] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
-  const restoreFocus = React.useRef(true);
-  useFocusInside(input, restoreFocus);
   // Discarded (#106): shown afresh with the empty value to edit, or closed
   // when the block is no longer a task.
   const discard = useDiscardUnreadable(
@@ -191,274 +192,241 @@ function RecurrencePopup(props: {
     void write(draft);
   };
 
+  // Esc is the window's (PluginWindow); Enter in a field saves.
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.nativeEvent.isComposing || e.defaultPrevented) return;
-    // Keys from a popup rendered elsewhere still bubble here through React.
-    if (!e.currentTarget.contains(e.target as Node)) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    } else if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+    if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
       e.preventDefault();
       e.stopPropagation();
       save();
     }
   };
 
-  const text = shownText(task);
   return (
-    <ModalOverlay visible={true} canClose={true} onClose={onClose}>
-      <PopupLayer>
-        <div
-          className="nextaction-window nextaction-recurrence-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={id("title")}
-          onKeyDown={onKeyDown}
-        >
-          <header className="nextaction-recurrence-popup-header">
-            <div className="nextaction-recurrence-popup-heading">
-              <div
-                className="nextaction-recurrence-popup-title"
-                id={id("title")}
-              >
-                {t("Repeat")}
-              </div>
-              <div
-                className="nextaction-recurrence-popup-task"
-                data-empty={text.empty || undefined}
-                title={text.text}
-              >
-                {text.text}
-              </div>
-            </div>
-            <Tooltip text={t("Close")}>
-              <Button variant="plain" aria-label={t("Close")} onClick={onClose}>
-                <i className="ti ti-x" aria-hidden="true" />
-              </Button>
-            </Tooltip>
-          </header>
-          <div className="nextaction-recurrence-popup-body">
-            {unreadable && (
-              <div className="nextaction-recurrence-popup-warning">
-                {t(
-                  "This task's recurrence rule cannot be read (${reason}). It is kept as it is and cannot be changed here.",
-                  { reason: task.recurrence.reason },
-                )}
-              </div>
-            )}
-            {unreadable && (
-              <DiscardUnreadableField
-                busy={discard.busy}
-                onDiscard={discard.discard}
-              />
-            )}
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("interval")}
-              >
-                {t("Every")}
-              </span>
-              <div className="nextaction-recurrence-popup-period">
-                <Input
-                  ref={input}
-                  aria-labelledby={id("interval")}
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={interval}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setInterval(e.target.value)
-                  }
-                />
-                <Segmented
-                  role="group"
-                  aria-labelledby={id("interval")}
-                  selected={unit}
-                  options={recurrenceUnits.map((value) => ({
-                    value,
-                    label: unitName(value),
-                  }))}
-                  onChange={(value) => {
-                    const chosen = recurrenceUnits.find((u) => u === value);
-                    if (chosen) setUnit(chosen);
-                  }}
-                />
-              </div>
-            </div>
-            <RecurrencePlacementField
-              labelId={id("placement")}
-              unit={unit}
-              draft={placement}
-              onChange={setPlacement}
-            />
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("basis")}
-              >
-                {t("Next occurrence counts from")}
-              </span>
-              <Segmented
-                role="group"
-                aria-labelledby={id("basis")}
-                selected={basis}
-                options={recurrenceBases.map((value) => ({
-                  value,
-                  label: basisName(value),
-                }))}
-                onChange={(value) => {
-                  const chosen = recurrenceBases.find((b) => b === value);
-                  if (chosen) setBasis(chosen);
-                }}
-              />
-              <div className="nextaction-recurrence-popup-hint">
-                {basis === "schedule"
-                  ? t(
-                      "From the task's due date (or start date), whenever it is done.",
-                    )
-                  : t("From the day it is done.")}
-              </div>
-            </div>
-            <div className="nextaction-recurrence-popup-field">
-              <span
-                className="nextaction-recurrence-popup-label"
-                id={id("end")}
-              >
-                {t("Ends")}
-              </span>
-              <Segmented
-                role="group"
-                aria-labelledby={id("end")}
-                selected={endKind}
-                options={endKinds.map((value) => ({
-                  value,
-                  label: endKindName(value),
-                }))}
-                onChange={(value) => {
-                  const chosen = endKinds.find((k) => k === value);
-                  if (chosen) setEndKind(chosen);
-                }}
-              />
-              {endKind === "until" && (
-                <DateField
-                  labelId={id("end")}
-                  value={endDay}
-                  today={today}
-                  onChange={setEndDay}
-                />
-              )}
-              {endKind === "count" && (
-                <div className="nextaction-recurrence-popup-period">
-                  <Input
-                    aria-labelledby={id("end")}
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    value={endTotal}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setEndTotal(e.target.value)
-                    }
-                  />
-                  <span>{t("times")}</span>
-                  {current?.end?.kind === "count" &&
-                    end?.kind === "count" &&
-                    end.total === current.end.total && (
-                      <span className="nextaction-recurrence-popup-hint">
-                        {t("${remaining} left", {
-                          remaining: String(end.remaining),
-                        })}
-                      </span>
-                    )}
-                </div>
-              )}
-            </div>
-            {/* Pause (GLOSSARY: 暂停重复, #92): only for a rule already set. */}
-            {task.recurrence.kind === "rule" && (
-              <div className="nextaction-recurrence-popup-field">
-                <span
-                  className="nextaction-recurrence-popup-label"
-                  id={id("paused")}
-                >
-                  {t("Pause")}
-                </span>
-                <div className="nextaction-recurrence-popup-pause">
-                  <Switch
-                    role="switch"
-                    aria-checked={paused}
-                    aria-labelledby={id("paused")}
-                    aria-describedby={id("paused-hint")}
-                    on={paused}
-                    onChange={(on) => setPaused(on)}
-                  />
-                  <span
-                    className="nextaction-recurrence-popup-hint"
-                    id={id("paused-hint")}
-                  >
-                    {paused
-                      ? task.status === "done" && current?.paused
-                        ? t(
-                            "The rule is kept but does not apply. Turning this off moves the done task to its next occurrence.",
-                          )
-                        : t(
-                            "The rule is kept but does not apply: done, the task stays done.",
-                          )
-                      : t("Keep the rule but stop it applying for a while.")}
-                  </span>
-                </div>
-              </div>
-            )}
-            {preview !== undefined && (
-              <div
-                className="nextaction-recurrence-popup-preview"
-                aria-live="polite"
-              >
-                {preview === null
-                  ? t(
-                      "This is the last occurrence: once it is done, the task stays done and the rule is removed.",
-                    )
-                  : t("Done today, next: ${date}", {
-                      date: formatDate(preview, today),
-                    })}
-              </div>
-            )}
-            {task.due !== null && task.start === null && (
-              <div className="nextaction-recurrence-popup-hint">
-                {t(
-                  "Once done, it shows again right away. To have it show only when due, set a start date.",
-                )}
-              </div>
+    <PluginWindow
+      onClose={onClose}
+      className="nextaction-recurrence-popup"
+      labelledBy={id("title")}
+      focus={input}
+      onKeyDown={onKeyDown}
+    >
+      <WindowHeader
+        title={t("Repeat")}
+        titleId={id("title")}
+        task={task}
+        onClose={onClose}
+      />
+      <div className="nextaction-recurrence-popup-body">
+        {unreadable && (
+          <div className="nextaction-recurrence-popup-warning">
+            {t(
+              "This task's recurrence rule cannot be read (${reason}). It is kept as it is and cannot be changed here.",
+              { reason: task.recurrence.reason },
             )}
           </div>
-          <footer className="nextaction-recurrence-popup-footer">
-            {task.recurrence.kind === "rule" && (
-              <Button
-                variant="plain"
-                disabled={busy}
-                onClick={() => void write(null)}
-              >
-                {t("Remove rule")}
-              </Button>
-            )}
-            <span className="nextaction-recurrence-popup-spacer" />
-            <Button variant="plain" onClick={onClose}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              variant="solid"
-              disabled={draft === undefined || unreadable || busy}
-              onClick={save}
-            >
-              {t("Save")}
-            </Button>
-          </footer>
+        )}
+        {unreadable && (
+          <DiscardUnreadableField
+            busy={discard.busy}
+            onDiscard={discard.discard}
+          />
+        )}
+        <div className="nextaction-recurrence-popup-field">
+          <span
+            className="nextaction-recurrence-popup-label"
+            id={id("interval")}
+          >
+            {t("Every")}
+          </span>
+          <div className="nextaction-recurrence-popup-period">
+            <Input
+              ref={input}
+              aria-labelledby={id("interval")}
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              value={interval}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setInterval(e.target.value)
+              }
+            />
+            <Segmented
+              role="group"
+              aria-labelledby={id("interval")}
+              selected={unit}
+              options={recurrenceUnits.map((value) => ({
+                value,
+                label: unitName(value),
+              }))}
+              onChange={(value) => {
+                const chosen = recurrenceUnits.find((u) => u === value);
+                if (chosen) setUnit(chosen);
+              }}
+            />
+          </div>
         </div>
-      </PopupLayer>
-    </ModalOverlay>
+        <RecurrencePlacementField
+          labelId={id("placement")}
+          unit={unit}
+          draft={placement}
+          onChange={setPlacement}
+        />
+        <div className="nextaction-recurrence-popup-field">
+          <span className="nextaction-recurrence-popup-label" id={id("basis")}>
+            {t("Next occurrence counts from")}
+          </span>
+          <Segmented
+            role="group"
+            aria-labelledby={id("basis")}
+            selected={basis}
+            options={recurrenceBases.map((value) => ({
+              value,
+              label: basisName(value),
+            }))}
+            onChange={(value) => {
+              const chosen = recurrenceBases.find((b) => b === value);
+              if (chosen) setBasis(chosen);
+            }}
+          />
+          <div className="nextaction-recurrence-popup-hint">
+            {basis === "schedule"
+              ? t(
+                  "From the task's due date (or start date), whenever it is done.",
+                )
+              : t("From the day it is done.")}
+          </div>
+        </div>
+        <div className="nextaction-recurrence-popup-field">
+          <span className="nextaction-recurrence-popup-label" id={id("end")}>
+            {t("Ends")}
+          </span>
+          <Segmented
+            role="group"
+            aria-labelledby={id("end")}
+            selected={endKind}
+            options={endKinds.map((value) => ({
+              value,
+              label: endKindName(value),
+            }))}
+            onChange={(value) => {
+              const chosen = endKinds.find((k) => k === value);
+              if (chosen) setEndKind(chosen);
+            }}
+          />
+          {endKind === "until" && (
+            <DateField
+              labelId={id("end")}
+              value={endDay}
+              today={today}
+              onChange={setEndDay}
+            />
+          )}
+          {endKind === "count" && (
+            <div className="nextaction-recurrence-popup-period">
+              <Input
+                aria-labelledby={id("end")}
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={endTotal}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEndTotal(e.target.value)
+                }
+              />
+              <span>{t("times")}</span>
+              {current?.end?.kind === "count" &&
+                end?.kind === "count" &&
+                end.total === current.end.total && (
+                  <span className="nextaction-recurrence-popup-hint">
+                    {t("${remaining} left", {
+                      remaining: String(end.remaining),
+                    })}
+                  </span>
+                )}
+            </div>
+          )}
+        </div>
+        {/* Pause (GLOSSARY: 暂停重复, #92): only for a rule already set. */}
+        {task.recurrence.kind === "rule" && (
+          <div className="nextaction-recurrence-popup-field">
+            <span
+              className="nextaction-recurrence-popup-label"
+              id={id("paused")}
+            >
+              {t("Pause")}
+            </span>
+            <div className="nextaction-recurrence-popup-pause">
+              <Switch
+                role="switch"
+                aria-checked={paused}
+                aria-labelledby={id("paused")}
+                aria-describedby={id("paused-hint")}
+                on={paused}
+                onChange={(on) => setPaused(on)}
+              />
+              <span
+                className="nextaction-recurrence-popup-hint"
+                id={id("paused-hint")}
+              >
+                {paused
+                  ? task.status === "done" && current?.paused
+                    ? t(
+                        "The rule is kept but does not apply. Turning this off moves the done task to its next occurrence.",
+                      )
+                    : t(
+                        "The rule is kept but does not apply: done, the task stays done.",
+                      )
+                  : t("Keep the rule but stop it applying for a while.")}
+              </span>
+            </div>
+          </div>
+        )}
+        {preview !== undefined && (
+          <div
+            className="nextaction-recurrence-popup-preview"
+            aria-live="polite"
+          >
+            {preview === null
+              ? t(
+                  "This is the last occurrence: once it is done, the task stays done and the rule is removed.",
+                )
+              : t("Done today, next: ${date}", {
+                  date: formatDate(preview, today),
+                })}
+          </div>
+        )}
+        {task.due !== null && task.start === null && (
+          <div className="nextaction-recurrence-popup-hint">
+            {t(
+              "Once done, it shows again right away. To have it show only when due, set a start date.",
+            )}
+          </div>
+        )}
+      </div>
+      <WindowFooter>
+        {task.recurrence.kind === "rule" && (
+          <Button
+            variant="plain"
+            disabled={busy}
+            onClick={() => void write(null)}
+          >
+            {t("Remove rule")}
+          </Button>
+        )}
+        <WindowSpacer />
+        <Button variant="plain" onClick={onClose}>
+          {t("Cancel")}
+        </Button>
+        <Button
+          variant="solid"
+          disabled={draft === undefined || unreadable || busy}
+          onClick={save}
+        >
+          {t("Save")}
+        </Button>
+      </WindowFooter>
+    </PluginWindow>
   );
 }
 
@@ -467,24 +435,5 @@ export function createRecurrencePopup(options: {
   deps: RecurrencePopupDeps;
   render: (node: React.ReactNode) => void;
 }): OpenRecurrencePopup {
-  let shown = 0;
-  const open: OpenRecurrencePopup = (task) => {
-    shown += 1;
-    const mine = shown;
-    options.render(
-      <RecurrencePopup
-        // Another task, or the same one read again, starts afresh.
-        key={mine}
-        task={task}
-        deps={options.deps}
-        onClose={() => {
-          if (mine === shown) options.render(null);
-        }}
-        onReopen={(read) => {
-          if (mine === shown) open(read);
-        }}
-      />,
-    );
-  };
-  return open;
+  return createTaskWindow(RecurrencePopup, options);
 }
