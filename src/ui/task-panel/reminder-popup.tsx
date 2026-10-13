@@ -1,9 +1,9 @@
 // The reminder popup (GLOSSARY: 提醒, #107): the quick options (the due and
 // start dates' days at the reminder default time) as toggles and a custom
 // date and time to add, then the task's reminders in order, each with its
-// time to change and a delete button, the passed ones greyed. The parts to
-// pick from stay put while the list grows below them. Saving writes the list in one
-// undo; "Clear all" removes every reminder. Moments not later than now
+// time to change and a delete button, the passed ones greyed. Centred as
+// the other windows are (#118), so it shifts up a little as the list grows.
+// Saving writes the list in one undo; "Clear all" removes every reminder. Moments not later than now
 // cannot be added. In a plugin window, rendered into its own React root, as
 // the review popup. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -207,7 +207,7 @@ function ReminderPopup(props: {
   return (
     <PluginWindow
       onClose={onClose}
-      className="nextaction-recurrence-popup nextaction-reminder-popup"
+      className="nextaction-recurrence-popup"
       labelledBy={id("title")}
     >
       <WindowHeader

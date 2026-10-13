@@ -631,12 +631,6 @@ button.nextaction-block-ref-target:hover {
   margin-left: auto;
 }
 
-/* Held from the top, not centred: as reminders are added the window only
-   grows downwards, so what is picked from stays where it was. */
-.nextaction-reminder-popup {
-  margin: max(var(--orca-spacing-lg), 12vh) auto auto;
-}
-
 /* The quick options: toggles in a two-column grid of fixed cells, so
    choosing one changes neither its size nor anything around it. */
 .nextaction-reminder-options {
