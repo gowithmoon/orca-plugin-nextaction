@@ -72,7 +72,7 @@ export const myDayCss = `
   min-width: 0;
   margin: 0;
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
   font-weight: var(--orca-fontweight-lg);
   line-height: var(--orca-lineheight-sm);
 }
@@ -119,7 +119,7 @@ export const myDayCss = `
   min-height: 2.5em;
   padding: var(--orca-spacing-sm) 0;
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
   line-height: var(--orca-lineheight-md);
 }
 
@@ -176,7 +176,7 @@ export const myDayCss = `
   padding-right: var(--orca-spacing-xs);
   background-color: var(--orca-color-bg-1);
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-xs);
+  font-size: var(--nextaction-fontsize-xs);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -266,7 +266,7 @@ export const myDayCss = `
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
+  height: calc(var(--nextaction-fontsize-sm) * var(--orca-lineheight-md));
 }
 
 .nextaction-timeline-card-main {
@@ -279,14 +279,14 @@ export const myDayCss = `
 .nextaction-timeline-card-text {
   overflow: hidden;
   overflow-wrap: anywhere;
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
   line-height: var(--orca-lineheight-md);
 }
 
 .nextaction-timeline-card[data-compact] .nextaction-timeline-card-text {
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: var(--orca-fontsize-xs);
+  font-size: var(--nextaction-fontsize-xs);
 }
 
 .nextaction-timeline-card-text[data-empty] {
@@ -299,7 +299,7 @@ export const myDayCss = `
   align-items: center;
   gap: var(--orca-spacing-xs);
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-xs);
+  font-size: var(--nextaction-fontsize-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -408,7 +408,7 @@ export const myDayCss = `
   border-radius: var(--orca-radius-sm);
   background-color: color-mix(in srgb, var(--orca-color-primary-5) 18%, var(--orca-color-bg-1));
   color: var(--orca-color-text-1);
-  font-size: var(--orca-fontsize-xs);
+  font-size: var(--nextaction-fontsize-xs);
   line-height: var(--orca-lineheight-sm);
   pointer-events: none;
 }
@@ -435,7 +435,7 @@ export const myDayCss = `
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
   color: var(--orca-color-text-1);
   background-color: var(--orca-color-bg-1);
   border: var(--orca-border-box);
@@ -488,7 +488,7 @@ export const myDayCss = `
 }
 
 .nextaction-schedule-popup-title {
-  font-size: var(--orca-fontsize-md);
+  font-size: var(--nextaction-fontsize-md);
   font-weight: var(--orca-fontweight-lg);
 }
 
@@ -497,7 +497,7 @@ export const myDayCss = `
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
 }
 
 .nextaction-schedule-popup-body {
@@ -516,12 +516,12 @@ export const myDayCss = `
 
 .nextaction-schedule-popup-label {
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
 }
 
 .nextaction-schedule-popup-hint {
   color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-xs);
+  font-size: var(--nextaction-fontsize-xs);
 }
 
 .nextaction-schedule-popup-footer {

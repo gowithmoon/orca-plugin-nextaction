@@ -110,7 +110,7 @@ export const taskDragCss = `
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: var(--orca-fontsize-sm);
+  font-size: var(--nextaction-fontsize-sm);
   color: var(--orca-color-text-1);
   background-color: var(--orca-color-bg-1);
   border: var(--orca-border-box);
