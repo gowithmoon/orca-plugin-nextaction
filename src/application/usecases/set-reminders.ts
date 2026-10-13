@@ -49,6 +49,6 @@ export function createSetReminders(deps: {
     );
     if (plan.kind === "refused") throw new PastReminderError(plan.past);
     // A block that is no longer a task fails in the write, writing nothing.
-    await deps.repository.writeReminders(id, plan.reminders);
+    await deps.repository.updateTask(id, { reminders: plan.reminders });
   };
 }

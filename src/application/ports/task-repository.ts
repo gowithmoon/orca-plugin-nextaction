@@ -112,20 +112,37 @@ export type InitialProperties = Pick<
   readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
 };
 
-/** One task's part of a write to several tasks (`updateTasks`). */
+/**
+ * A write to one task (`updateTask`, `updateTasks`). Every part is optional:
+ * what is absent is left as it is. The plugin block properties (completion
+ * history, recurrence rule, reminders, My Day entries, review plan) are each
+ * replaced whole; one this plugin cannot read fails the write, writing
+ * nothing (only `discardUnreadable` overwrites it).
+ */
 export interface TaskWrite {
   readonly id: TaskId;
   /** The properties to write; those absent are left as they are. */
-  readonly changes: TaskChanges;
-  /** Replaces the task's completion history; absent leaves it. */
+  readonly changes?: TaskChanges;
+  /** Replaces the task's completion history. */
   readonly completionHistory?: CompletionHistory;
-  /** Replaces the task's recurrence rule, `null` removes it; absent leaves it. */
+  /** Replaces the task's recurrence rule, `null` removing it. */
   readonly recurrence?: RecurrenceRule | null;
   /**
-   * Replaces the task's reminders (GLOSSARY: 提醒), an empty list clearing
-   * them; absent leaves them.
+   * Replaces the task's reminders (GLOSSARY: 提醒), ascending and each once;
+   * an empty list clears them, the property kept.
    */
   readonly reminders?: Reminders;
+  /**
+   * Replaces the task's My Day entries (GLOSSARY: 我的一天记录), past ones
+   * included as given (ADR 0020); an empty list clears them, the property
+   * kept.
+   */
+  readonly myDay?: MyDayEntries;
+  /**
+   * Replaces the task's review plan (GLOSSARY: 回顾周期, 指定回顾日); a plan
+   * with no fields is written as such, the property kept.
+   */
+  readonly review?: ReviewPlan;
 }
 
 /**
@@ -165,30 +182,20 @@ export interface TaskRepository {
   readCandidates(): Promise<Candidates>;
 
   /**
-   * Writes the properties present in `changes` and leaves the others as they
-   * are; with `completionHistory`, also replaces the task's completion
-   * history with it. Contexts and labels written are made choices of the
-   * task tag first, so they show in the notes and become candidates. The
-   * user undoes the whole write with one undo. Fails, writing nothing, when
-   * the block is not a task, a property is invalidated, or the completion
-   * history is to be replaced but reads as unreadable. A mirror block's ID
-   * writes to its source block.
+   * Writes the task as `write` says (`TaskWrite`), leaving what it leaves
+   * out as it is. Contexts and labels written are made choices of the task
+   * tag first, so they show in the notes and become candidates. The user
+   * undoes the whole write with one undo. Fails, writing nothing, when the
+   * block is not a task, a property is invalidated, or a plugin block
+   * property to be replaced reads as unreadable. A mirror block's ID writes
+   * to its source block.
    */
-  updateTask(
-    id: TaskId,
-    changes: TaskChanges,
-    completionHistory?: CompletionHistory,
-  ): Promise<void>;
+  updateTask(id: TaskId, write: Omit<TaskWrite, "id">): Promise<void>;
 
   /**
    * Writes several tasks as `updateTask` writes one, each as its `TaskWrite`
-   * says, and with `recurrence` also replaces its recurrence rule (`null`
-   * removes it, the property kept, as `writeRecurrence` does), with
-   * `reminders` its reminders (as `writeReminders` does). The user undoes
-   * every task's write with one undo. Fails, writing nothing at all, when
-   * any block is not a task, a property is invalidated, or a completion
-   * history, recurrence rule or reminders to be replaced read as unreadable. A mirror
-   * block's ID writes to its source block.
+   * says. The user undoes every task's write with one undo. Fails, writing
+   * nothing at all, when any task's write would fail.
    */
   updateTasks(writes: readonly TaskWrite[]): Promise<void>;
 
@@ -204,45 +211,6 @@ export interface TaskRepository {
    * some. A mirror block's ID reads its source block.
    */
   readMyDay(id: TaskId): Promise<MyDayRead>;
-
-  /**
-   * Replaces the task's My Day entries with `entries`, past ones included as
-   * given (ADR 0020); none writes an empty list, the property kept. The user
-   * undoes it with one undo. Fails, writing nothing, when the block is not a
-   * task, its entries read as unreadable, or the write fails. A mirror
-   * block's ID writes to its source block.
-   */
-  writeMyDay(id: TaskId, entries: MyDayEntries): Promise<void>;
-
-  /**
-   * Writes the task's recurrence rule (GLOSSARY: 重复规则), replacing what it
-   * holds; `null` removes it, writing no rule with the property kept. The
-   * task's other properties and its dates are left as they are. The user
-   * undoes it with one undo. Fails, writing nothing, when the block is not a
-   * task, its rule reads as unreadable, or the write fails. A mirror block's
-   * ID writes to its source block.
-   */
-  writeRecurrence(id: TaskId, rule: RecurrenceRule | null): Promise<void>;
-
-  /**
-   * Writes the task's review plan (GLOSSARY: 回顾周期, 指定回顾日), replacing
-   * what it holds; a plan with no fields is written as such, the property
-   * kept. The task's other properties are left as they are. The user undoes
-   * it with one undo. Fails, writing nothing, when the block is not a task,
-   * its review plan reads as unreadable, or the write fails. A mirror block's
-   * ID writes to its source block.
-   */
-  writeReview(id: TaskId, plan: ReviewPlan): Promise<void>;
-
-  /**
-   * Writes the task's reminders (GLOSSARY: 提醒), replacing what it holds,
-   * ascending and each once; none writes an empty list, the property kept.
-   * The task's other properties are left as they are. The user undoes it
-   * with one undo. Fails, writing nothing, when the block is not a task, its
-   * reminders read as unreadable, or the write fails. A mirror block's ID
-   * writes to its source block.
-   */
-  writeReminders(id: TaskId, reminders: Reminders): Promise<void>;
 
   /**
    * Discards the task's `data` when this plugin cannot read it, writing its

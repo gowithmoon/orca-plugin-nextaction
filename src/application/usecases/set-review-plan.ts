@@ -32,9 +32,8 @@ export function createSetReviewPlan(deps: {
     }
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     // A block that is no longer a task fails in the write, writing nothing.
-    await deps.repository.writeReview(
-      id,
-      planSetReview(current, setting, today),
-    );
+    await deps.repository.updateTask(id, {
+      review: planSetReview(current, setting, today),
+    });
   };
 }

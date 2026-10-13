@@ -18,5 +18,5 @@ export function createSetDependencyMode(deps: {
   repository: TaskRepository;
 }): SetDependencyMode {
   return (id, dependencyMode) =>
-    deps.repository.updateTask(id, { dependencyMode });
+    deps.repository.updateTask(id, { changes: { dependencyMode } });
 }

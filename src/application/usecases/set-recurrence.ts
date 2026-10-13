@@ -51,7 +51,7 @@ export function createSetRecurrence(deps: {
     // Anything but a resume only writes the rule (a block that is no longer
     // a task fails there, writing nothing).
     if (!task || !isResume(task, rule)) {
-      await deps.repository.writeRecurrence(id, rule);
+      await deps.repository.updateTask(id, { recurrence: rule });
       return { kind: "set" };
     }
     const read = await deps.repository.readCompletionHistory(id);

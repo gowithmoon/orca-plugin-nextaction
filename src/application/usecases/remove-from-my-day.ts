@@ -29,7 +29,7 @@ export function createRemoveFromMyDay(deps: {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const entries = removeToday(read.entries, today);
     if (entries === read.entries) return { kind: "unchanged" };
-    await deps.repository.writeMyDay(id, entries);
+    await deps.repository.updateTask(id, { myDay: entries });
     return { kind: "changed" };
   };
 }

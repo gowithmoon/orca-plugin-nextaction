@@ -63,7 +63,7 @@ export function createChangeStatus(deps: {
     }
     // A block that is no longer a task fails in updateTask, writing nothing.
     if (!task || !recordsCompletion(task.status, status)) {
-      await deps.repository.updateTask(id, { status });
+      await deps.repository.updateTask(id, { changes: { status } });
       return { kind: "changed" };
     }
     if (task.recurrence.kind === "unreadable") {
