@@ -119,8 +119,9 @@ interface CardDrag {
     x: number,
     y: number,
   ): void;
-  move(x: number, y: number): void;
-  drop(x: number, y: number): void;
+  /** `alt`: Alt (Option on macOS) is held, for a mirror (#126). */
+  move(x: number, y: number, alt: boolean): void;
+  drop(x: number, y: number, alt: boolean): void;
   cancel(): void;
   /** One frame while dragging: cancels if the card went away, else scrolls near an edge. */
   frame(): void;
@@ -136,7 +137,15 @@ interface CardDrag {
   ): void;
 }
 
-/** What a drop on the block would write; only references so far (#126 adds Alt). */
+/**
+ * What a drop with Alt (Option on macOS) held writes: a mirror; without it,
+ * a reference (#126). No menu, no hint.
+ */
+function modeFor(alt: boolean): NoteDropMode {
+  return alt ? "mirror" : "ref";
+}
+
+/** What a drop on the block would write in `mode`. */
 function planFor(probe: NoteDropProbe, mode: NoteDropMode): NoteDropPlan {
   return resolveNoteDrop({
     mode,
@@ -183,11 +192,29 @@ function scrollStep(scroller: HTMLElement, y: number): number {
   return 0;
 }
 
+/** The drags under way told of Alt going down or up (#126). */
+const altListeners = new Set<(alt: boolean) => void>();
+
+/**
+ * Alt (Option on macOS) going down or up, for a drag under way to switch
+ * between a reference and a mirror while the pointer stays still (#126).
+ * `platform` listens for `keydown` and `keyup` on the window, capturing,
+ * through the registry, and hands every event here; nothing is prevented,
+ * so Orca still sees the key. The drop itself reads Alt from the release's
+ * pointer event.
+ */
+export function cardDragKey(event: KeyboardEvent): void {
+  if (event.key !== "Alt") return;
+  for (const listener of [...altListeners]) listener(event.altKey);
+}
+
 function createCardDrag(
   onNoteDrop: () => ((drop: NoteCardDrop) => void) | undefined,
 ) {
   let dragging: Dragging | null = null;
   let point = { x: 0, y: 0 };
+  /** Alt (Option on macOS) is held: a drop writes a mirror (#126). */
+  let alt = false;
   let clickTaken = false;
   let chip: HTMLElement | null = null;
   let line: HTMLElement | null = null;
@@ -267,9 +294,20 @@ function createCardDrag(
     if (!drag) return;
     // Nothing drops in the notes: no probing, the drag stays the view's own.
     const probe = noteDropOf(drag) ? probeNoteDrop(point.x, point.y) : null;
-    drag.over = probe ? { probe, plan: planFor(probe, "ref") } : null;
+    drag.over = probe ? { probe, plan: planFor(probe, modeFor(alt)) } : null;
     if (!probe) drag.inPanel?.move(point.x, point.y);
     place();
+  };
+
+  /**
+   * Alt going down or up while the pointer stays still: the line and the
+   * insertion caret switch at once (#126). Heard only while dragging: joined
+   * in `begin`, left in `end`, which the area's unmount runs too.
+   */
+  const onAlt = (held: boolean) => {
+    if (held === alt) return;
+    alt = held;
+    update();
   };
 
   /** Ends the drag, leaving the DOM as it was. */
@@ -278,6 +316,7 @@ function createCardDrag(
     if (!drag) return null;
     dragging = null;
     stopScrolling();
+    altListeners.delete(onAlt);
     clickTaken = true;
     drag.source.removeAttribute(sourceAttribute);
     document.documentElement.removeAttribute(sourceAttribute);
@@ -297,6 +336,7 @@ function createCardDrag(
       if (dragging) return;
       point = { x, y };
       dragging = { task, source, inPanel, over: null };
+      altListeners.add(onAlt);
       source.setAttribute(sourceAttribute, "");
       // The cursor everywhere (card-drag-style.ts), and no text selected in the notes.
       document.documentElement.setAttribute(
@@ -306,18 +346,21 @@ function createCardDrag(
       inPanel?.begin?.(x, y);
       emit();
     },
-    move(x, y) {
+    move(x, y, altHeld) {
       if (!dragging) return;
       point = { x, y };
+      alt = altHeld;
       // Text selected before is not what is dragged.
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) selection.removeAllRanges();
       update();
       scrollSoon();
     },
-    drop(x, y) {
+    drop(x, y, altHeld) {
       if (!dragging) return;
       point = { x, y };
+      // As the release's pointer event says, whatever the keys said before.
+      alt = altHeld;
       update();
       const { task, over, inPanel } = dragging;
       // Handed over before the drag ends, so what the drop wrote and the
@@ -504,12 +547,12 @@ export function useCardDrag(
         event.currentTarget.setPointerCapture(event.pointerId);
         drag.begin(task, event.currentTarget, start.inPanel, x, y);
       }
-      drag.move(event.clientX, event.clientY);
+      drag.move(event.clientX, event.clientY, event.altKey);
     },
     onPointerUp(event) {
       const wasDragging = dragging.current;
       reset();
-      if (wasDragging) drag.drop(event.clientX, event.clientY);
+      if (wasDragging) drag.drop(event.clientX, event.clientY, event.altKey);
     },
     onPointerCancel() {
       reset();

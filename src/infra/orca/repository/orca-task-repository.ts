@@ -136,6 +136,36 @@ async function getBlocks(ids: readonly number[]): Promise<Map<number, Block>> {
 }
 
 /**
+ * The children of block `id` as the backend holds them now, for finding the
+ * block `batchInsertReprs` added, which it does not return (drag-to-note
+ * 写入, as the spike did with `get-block`).
+ */
+async function childIds(id: number): Promise<number[]> {
+  const block = await invokeBackend("get-block", id);
+  if (typeof block !== "object" || block === null || !("children" in block)) {
+    throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
+  }
+  const { children } = block as Block;
+  return Array.isArray(children) ? [...children] : [];
+}
+
+/**
+ * Where the caret goes at the end of `block`'s text, as an index into its
+ * content and an offset in that fragment: after the last text fragment's
+ * last character, or past a last fragment that is no text (a reference:
+ * index 1, offset 0 after a block's only reference, drag-to-note 光标). The
+ * text case is not measured; to check by hand in Orca (#126).
+ */
+function contentEnd(block: Block): { index: number; offset: number } {
+  const content = block.content ?? [];
+  const last = content.at(-1);
+  if (last?.t === "t" && typeof last.v === "string") {
+    return { index: content.length - 1, offset: last.v.length };
+  }
+  return { index: content.length, offset: 0 };
+}
+
+/**
  * The block an ID stands for: the block itself, or the source block of a
  * mirror (block-properties-json M1–M4: writes through a mirror's ID land on
  * the mirror). One hop only: whether a mirror can show another mirror is not
@@ -1068,10 +1098,6 @@ export function createOrcaTaskRepository(
     ): Promise<void> {
       // A mirror's ID links its source block, so the link points at the task.
       const block = await taskBlockToWrite(id, currentTag());
-      if (plan.kind === "newBlock" && plan.content !== "ref") {
-        // Mirror blocks come with #126.
-        throw new OrcaError(`linking as ${JSON.stringify(plan)} is not built`);
-      }
       const { panelId, rootBlockId } = target;
       const cursorAt = (at: CursorData["anchor"]): CursorData => ({
         anchor: at,
@@ -1092,6 +1118,63 @@ export function createOrcaTaskRepository(
               caret,
               true,
               block.id,
+            );
+          });
+          return;
+        }
+        if (plan.content === "mirror") {
+          await invokeInNotePanel(panelId, async () => {
+            await invokeGroup(async () => {
+              const targetBlock = await cachedBlock(target.blockId);
+              // The new block's siblings: the target's children for a first
+              // child, else its parent's. A root block only takes a first
+              // child (resolveNoteDrop).
+              const parentId =
+                plan.placement === "firstChild"
+                  ? targetBlock.id
+                  : targetBlock.parent;
+              if (parentId === undefined) {
+                throw new OrcaError(`block ${targetBlock.id} has no parent`);
+              }
+              const before = new Set(await childIds(parentId));
+              // A mirror repr, then its type 5 reference, in one group: as a
+              // mirror Orca's interface makes, with no text of its own, so
+              // the global search finds the task once. insertBlock with a
+              // mirror repr would store the task's text (drag-to-note 写入).
+              await invokeEditorCommand(
+                "core.editor.batchInsertReprs",
+                targetBlock,
+                plan.placement,
+                [{ type: "mirror", mirroredId: block.id }],
+              );
+              // batchInsertReprs returns no ID: the new block is the child
+              // that was not there before (drag-to-note 写入).
+              const added = (await childIds(parentId)).filter(
+                (child) => !before.has(child),
+              );
+              const [created] = added;
+              if (added.length !== 1 || created === undefined) {
+                throw new OrcaError(
+                  `batchInsertReprs added ${JSON.stringify(added)} under block ${parentId}`,
+                );
+              }
+              await invokeEditorCommand(
+                "core.editor.createRef",
+                created,
+                block.id,
+                5,
+              );
+            });
+            // The caret at the target block's end, not in the mirror: typing
+            // there would change the task (drag-to-note 光标, round 6). For a
+            // root block, that is its title.
+            const targetBlock = await cachedBlock(target.blockId);
+            await setCaret(
+              cursorAt({
+                blockId: targetBlock.id,
+                isInline: true,
+                ...contentEnd(targetBlock),
+              }),
             );
           });
           return;
