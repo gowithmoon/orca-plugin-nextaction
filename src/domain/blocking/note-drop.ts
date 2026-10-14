@@ -42,16 +42,29 @@ export type NoteDropPlan =
     };
 
 /**
- * What a drop on a block writes. So far (#123) a new block before the
- * target from the upper half of its row, after it from the lower half; an
- * edge lies within its half. Inline references, root blocks and expanded
- * blocks follow in #125, mirrors in #126.
+ * What a drop on a block writes (#122, #125):
+ * - on a panel's root block (a journal's or page's title): a new first
+ *   child, whatever the mode and zone, never in the title's text;
+ * - a reference on the block's text (not an edge) with an inline caret
+ *   there: inline, at the caret;
+ * - otherwise a new block: before from the top edge or upper half, after
+ *   from the bottom edge or lower half, or the first child instead of after
+ *   when the block shows its children, so it lands right at the line.
+ * Mirrors (#126) take the same halves and never go inline.
  */
 export function resolveNoteDrop(facts: NoteDropFacts): NoteDropPlan {
+  if (facts.root) {
+    return { kind: "newBlock", content: facts.mode, placement: "firstChild" };
+  }
+  const onText = facts.zone === "upperHalf" || facts.zone === "lowerHalf";
+  if (facts.mode === "ref" && onText && facts.inlineCaret) {
+    return { kind: "inline" };
+  }
   const upper = facts.zone === "topEdge" || facts.zone === "upperHalf";
+  const below = facts.expanded ? "firstChild" : "after";
   return {
     kind: "newBlock",
     content: facts.mode,
-    placement: upper ? "before" : "after",
+    placement: upper ? "before" : below,
   };
 }
