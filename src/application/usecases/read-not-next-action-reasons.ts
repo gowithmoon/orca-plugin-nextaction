@@ -47,30 +47,20 @@ interface OtherReasonBase {
 /**
  * Every kind of reason, the one place they are listed (the type checks none
  * is missing): `order` is where it is listed, whichever link it comes from,
- * lower first (#78); `blocking` is false for those not blocking.
+ * lower first (#78).
  */
 const reasonKinds: {
-  readonly [K in NotNextActionReason["kind"]]: {
-    readonly order: number;
-    readonly blocking: K extends BlockingReason["kind"] ? true : false;
-  };
+  readonly [K in NotNextActionReason["kind"]]: { readonly order: number };
 } = {
-  doneAncestor: { order: 0, blocking: false },
-  parked: { order: 1, blocking: false },
-  subtasks: { order: 2, blocking: true },
-  dependencies: { order: 3, blocking: true },
-  dependencyDelay: { order: 4, blocking: true },
-  sequential: { order: 5, blocking: true },
-  cycle: { order: 6, blocking: true },
-  notStarted: { order: 7, blocking: false },
+  doneAncestor: { order: 0 },
+  parked: { order: 1 },
+  subtasks: { order: 2 },
+  dependencies: { order: 3 },
+  dependencyDelay: { order: 4 },
+  sequential: { order: 5 },
+  cycle: { order: 6 },
+  notStarted: { order: 7 },
 };
-
-/** Whether `reason` is not blocking (#78) rather than one from the graph. */
-export function isNotBlocking(
-  reason: NotNextActionReason,
-): reason is NotBlockingReason {
-  return !reasonKinds[reason.kind].blocking;
-}
 
 /** Why `entry` is not a next action; empty when it is one. */
 function reasonsOf(entry: TaskGraphEntry): NotNextActionReason[] {
