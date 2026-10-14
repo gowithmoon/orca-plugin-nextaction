@@ -54,11 +54,22 @@ export function CompletionDistribution(props: {
    * shows the bars.
    */
   emptyMessage: string | null;
+  /** The item selected below the charts (#137), pressed. */
+  isSelected?: (item: DistributionItem) => boolean;
+  /** An item pressed, by click or by key (#137). */
+  onSelect?: (item: DistributionItem) => void;
+  /** Another dimension shown: the selection is cleared (#137). */
+  onDimension?: () => void;
 }) {
   const { Tooltip } = orca.components;
   const headingId = React.useId();
   const [dimension, setDimension] =
     React.useState<DistributionDimension>("context");
+  const showDimension = (value: DistributionDimension) => {
+    if (value === dimension) return;
+    setDimension(value);
+    props.onDimension?.();
+  };
   const items = props.distributions[dimension];
   const most = Math.max(1, ...items.map((item) => item.completions));
 
@@ -78,7 +89,7 @@ export function CompletionDistribution(props: {
               type="button"
               className="nextaction-stats-segment"
               aria-pressed={value === dimension}
-              onClick={() => setDimension(value)}
+              onClick={() => showDimension(value)}
             >
               {dimensionName(value)}
             </button>
@@ -101,47 +112,47 @@ export function CompletionDistribution(props: {
               completions: String(item.completions),
             });
             return (
-              <Tooltip
-                key={itemKey(item)}
-                text={description}
-                defaultPlacement="top"
-              >
-                <li
-                  className="nextaction-stats-distribution-item"
-                  data-not-set={item.value === null ? "" : undefined}
-                >
-                  <span className="nextaction-visually-hidden">
-                    {description}
-                  </span>
-                  <span
-                    className="nextaction-stats-distribution-name"
-                    aria-hidden="true"
+              // A button, so the keyboard reaches and presses it (#137).
+              <li key={itemKey(item)}>
+                <Tooltip text={description} defaultPlacement="top">
+                  <button
+                    type="button"
+                    className="nextaction-stats-distribution-item"
+                    data-not-set={item.value === null ? "" : undefined}
+                    aria-label={description}
+                    aria-pressed={props.isSelected?.(item) ?? false}
+                    onClick={() => props.onSelect?.(item)}
                   >
-                    {name}
-                  </span>
-                  <svg
-                    className="nextaction-stats-distribution-track"
-                    width="100%"
-                    height="10"
-                    aria-hidden="true"
-                  >
-                    {item.completions > 0 && (
-                      <rect
-                        className="nextaction-stats-bar-completions"
-                        width={`${(item.completions / most) * 100}%`}
-                        height="10"
-                        rx="2"
-                      />
-                    )}
-                  </svg>
-                  <span
-                    className="nextaction-stats-distribution-count"
-                    aria-hidden="true"
-                  >
-                    {item.completions}
-                  </span>
-                </li>
-              </Tooltip>
+                    <span
+                      className="nextaction-stats-distribution-name"
+                      aria-hidden="true"
+                    >
+                      {name}
+                    </span>
+                    <svg
+                      className="nextaction-stats-distribution-track"
+                      width="100%"
+                      height="10"
+                      aria-hidden="true"
+                    >
+                      {item.completions > 0 && (
+                        <rect
+                          className="nextaction-stats-bar-completions"
+                          width={`${(item.completions / most) * 100}%`}
+                          height="10"
+                          rx="2"
+                        />
+                      )}
+                    </svg>
+                    <span
+                      className="nextaction-stats-distribution-count"
+                      aria-hidden="true"
+                    >
+                      {item.completions}
+                    </span>
+                  </button>
+                </Tooltip>
+              </li>
             );
           })}
         </ul>

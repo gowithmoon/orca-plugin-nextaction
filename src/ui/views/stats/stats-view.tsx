@@ -10,6 +10,7 @@ import type {
   ReadStats,
   ReadStatsResult,
 } from "../../../application/usecases/read-stats";
+import type { StatsSelection } from "../../../domain/stats/stats-selection";
 import type { CalendarDate } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
@@ -35,8 +36,18 @@ import {
   noCompletionText,
 } from "./stats-period-text";
 import type { StatsScaleStore } from "./stats-scale-store";
+import {
+  StatsSelectionList,
+  type StatsSelectionListDeps,
+} from "./stats-selection-list";
+import {
+  createStatsSelectionStore,
+  itemSelection,
+  type StatsSelectionStore,
+  sameSelection,
+} from "./stats-selection-store";
 
-export interface StatsViewDeps extends StatsNowDeps {
+export interface StatsViewDeps extends StatsNowDeps, StatsSelectionListDeps {
   readStats: ReadStats;
   /** The current logical day, for the dates shown and today's cell. */
   today: () => CalendarDate;
@@ -46,14 +57,41 @@ export interface StatsViewDeps extends StatsNowDeps {
   scale: StatsScaleStore;
 }
 
+/**
+ * A read with the selection it was read for (#137): until the read for a
+ * new selection ends, its list shows loading, not the last selection's.
+ */
+type StatsRead = ReadStatsResult & {
+  readonly readFor: StatsSelection | undefined;
+};
+
+/** A cell's days, as its selection holds them. */
+function cellDays(cell: {
+  readonly first: CalendarDate;
+  readonly last: CalendarDate;
+}) {
+  return { first: cell.first, last: cell.last };
+}
+
 function StatsContent(props: {
-  query: ViewQuery<ReadStatsResult>;
+  query: ViewQuery<StatsRead>;
   today: CalendarDate;
   scale: StatsScaleStore;
   onPage: (anchor: CalendarDate | undefined) => void;
+  selection: StatsSelectionStore;
+  /** Selects, or clears the selection when it is the one selected (#137). */
+  onSelect: (selection: StatsSelection) => void;
+  /** Clears the selection (#137). */
+  onClearSelection: () => void;
+  listDeps: StatsSelectionListDeps;
 }) {
   const { query, today } = props;
   const state = useViewQuery(query);
+  // Followed at once, so a press shows before the list is read again.
+  const selected = React.useSyncExternalStore(
+    props.selection.subscribe,
+    props.selection.current,
+  );
 
   if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -99,6 +137,10 @@ function StatsContent(props: {
         cellLabel={(cell) => cellLabel(period.scale, cell)}
         cellDescription={(cell) => cellDescription(period.scale, cell, today)}
         isToday={(cell) => holdsToday(cell, today)}
+        isSelected={(cell) =>
+          sameSelection(selected, { kind: "cell", ...cellDays(cell) })
+        }
+        onSelect={(cell) => props.onSelect({ kind: "cell", ...cellDays(cell) })}
       />
       <div className="nextaction-stats-legend" aria-hidden="true">
         <span className="nextaction-stats-legend-completions">
@@ -120,7 +162,21 @@ function StatsContent(props: {
               ? noCompletionText(period.scale, paging.current)
               : null
         }
+        isSelected={(item) => sameSelection(selected, itemSelection(item))}
+        onSelect={(item) => props.onSelect(itemSelection(item))}
+        onDimension={props.onClearSelection}
       />
+      {selected !== undefined &&
+      !sameSelection(selected, state.data.readFor) ? (
+        <TaskListPlaceholder />
+      ) : (
+        <StatsSelectionList
+          entries={state.data.selected}
+          selected={selected !== undefined}
+          today={today}
+          deps={props.listDeps}
+        />
+      )}
     </section>
   );
 }
@@ -134,10 +190,20 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
   // The period paged to (#135), while the view shows; none is the current
   // period, its anchor today's logical day at every read.
   let anchor: CalendarDate | undefined;
-  const query = createViewQuery(
-    () => deps.readStats({ scale: deps.scale.current(), anchor }),
-    deps.changes,
-  );
+  // What is selected below the charts (#137), while the view shows.
+  const selection = createStatsSelectionStore();
+  const query = createViewQuery(async (): Promise<StatsRead> => {
+    const readFor = selection.current();
+    const read = await deps.readStats({
+      scale: deps.scale.current(),
+      anchor,
+      selection: readFor,
+    });
+    return { ...read, readFor };
+  }, deps.changes);
+  selection.subscribe(() => query.reload());
+  // Another scale is another period: nothing in it is selected.
+  deps.scale.subscribe(() => selection.clear());
   // A new scale shows its current period; the store lives as long as the
   // plugin instance.
   deps.scale.subscribe(() => {
@@ -146,6 +212,8 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
   });
   const page = (next: CalendarDate | undefined) => {
     anchor = next;
+    // Another period: nothing in it is selected (#137).
+    selection.clear();
     query.reload();
   };
 
@@ -154,6 +222,7 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
     React.useEffect(
       () => () => {
         anchor = undefined;
+        selection.clear();
       },
       [],
     );
@@ -166,6 +235,10 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
           today={deps.today()}
           scale={deps.scale}
           onPage={page}
+          selection={selection}
+          onSelect={selection.toggle}
+          onClearSelection={selection.clear}
+          listDeps={deps}
         />
       </>
     );

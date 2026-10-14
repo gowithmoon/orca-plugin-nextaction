@@ -60,6 +60,10 @@ export function CompletionChart(props: {
   isToday: (cell: StatsCellRead) => boolean;
   /** Names the bars as a group, e.g. "Completions by day". */
   label: string;
+  /** The cell selected below the chart (#137), its bar pressed. */
+  isSelected?: (cell: StatsCellRead) => boolean;
+  /** A bar pressed, by click or by key (#137). */
+  onSelect?: (cell: StatsCellRead) => void;
 }) {
   const { cells } = props;
   const { Tooltip } = orca.components;
@@ -180,6 +184,8 @@ export function CompletionChart(props: {
                 type="button"
                 className="nextaction-stats-bar-hit"
                 aria-label={description}
+                aria-pressed={props.isSelected?.(cell) ?? false}
+                onClick={() => props.onSelect?.(cell)}
                 style={{ left: band * index, width: band }}
               />
             </Tooltip>
