@@ -36,6 +36,7 @@ import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
+import { statsNowCss } from "../ui/styles/stats-now-style";
 import { statsCss } from "../ui/styles/stats-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
@@ -236,9 +237,14 @@ export function createPanelFeature(deps: {
   );
   views.register(
     createStatsView({
-      readStats: createReadStats(myDayDeps),
+      readStats: createReadStats({
+        ...myDayDeps,
+        startPreviewDays: deps.startPreviewDays,
+      }),
       today: deps.today,
       changes,
+      allTasksFilter,
+      reviewPage,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -291,6 +297,7 @@ export function createPanelFeature(deps: {
     );
     registry.css("myDayStyle", myDayCss);
     registry.css("statsStyle", statsCss);
+    registry.css("statsNowStyle", statsNowCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,
     // so it is released after it; then nothing renders into it any more.
