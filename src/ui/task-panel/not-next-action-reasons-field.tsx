@@ -8,11 +8,10 @@
 // task back under a sequential parent is marked, with a hint that it keeps
 // doing so until it no longer recurs (#94, ADR 0021). Verified by hand in
 // Orca (docs/ARCHITECTURE.md §5).
-import {
-  isNotBlocking,
-  type NotNextActionReason,
-  type ReadNotNextActionReasons,
-  type RelatedTask,
+import type {
+  NotNextActionReason,
+  ReadNotNextActionReasons,
+  RelatedTask,
 } from "../../application/usecases/read-not-next-action-reasons";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { daysBetween } from "../../domain/time/calendar-days";
