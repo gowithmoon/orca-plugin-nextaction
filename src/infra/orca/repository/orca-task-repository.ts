@@ -187,7 +187,18 @@ function noteCursor(target: NoteTarget, at: CursorData["anchor"]): CursorData {
  */
 async function linkInline(taskId: number, target: NoteTarget): Promise<void> {
   if (!target.caret) throw new OrcaError("no inline caret at the drop");
-  const caret = fromNoteCaret(target.caret);
+  const given = fromNoteCaret(target.caret);
+  // An empty block gives a block-level cursor (drag-to-note 空块); the
+  // reference goes at the start of its text, the cursor a new block's
+  // reference is written at (measured, drag-to-note 写入).
+  const caret = given.anchor.isInline
+    ? given
+    : noteCursor(target, {
+        blockId: given.anchor.blockId,
+        isInline: true,
+        index: 0,
+        offset: 0,
+      });
   await invokeInNotePanel(target.panelId, async () => {
     await invokeEditorCommandAt("core.editor.insertLink", caret, true, taskId);
   });

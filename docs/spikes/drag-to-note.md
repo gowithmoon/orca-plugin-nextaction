@@ -18,6 +18,7 @@
 - 插件面板里用指针事件拖（`setPointerCapture`，与第六、七步的拖拽相同），松开时用 `document.elementFromPoint` 取元素。块是最近的 `.orca-block`，ID 在 `data-id`；面板是最近的 `.orca-panel`，ID 在 `data-panel-id`。插件面板同样是 `.orca-panel`，靠它里面的 `.nextaction-panel` 区分（第一轮 ⑤）。
 - `document.caretRangeFromPoint` 加 `orca.utils.getCursorDataFromRange` 直接得到 Orca 的 `CursorData`（`panelId`、`rootBlockId`、`anchor.blockId/index/offset`、`isInline: true`），可以原样传给 `insertLink`（第一轮 ①）。
 - 块首尾相接，块之间没有缝隙：指针在两个块之间时落到下一个块的顶边上（第一轮 ③）。行末之后的空白给出行末的行内光标（第一轮 ②）。
+- **空块**（2026-10-14 验收补测，`.scratch/spikes/step13-empty-block.js`）：空块那一行的 `.orca-repr-main-content` 里没有任何文字节点（`textContent` 为空）。指针在空块上时，`caretRangeFromPoint` 落在这个 div 上，offset 0，range 没有矩形（宽高都是 0）；换算出的光标是块级的（`isInline: false, index: 0, offset: 0`），`panelId` 和 `rootBlockId` 照常正确。从块那一行的第一个文字节点取光标的退路在空块上取不到（没有文字节点）。所以落在空块上时，要把这个块级光标当作行内插入点：引用写进空块本身，插入光标画在 `.orca-repr-main-content` 的左上角、一行高。写入时把光标改成 `isInline: true, index: 0, offset: 0` 再 `insertLink`，与新建引用块时在新空块里写引用的做法相同（已实测）。
 - 笔记面板底部没有块的空白是 `.orca-block-editor-placeholder`，取不到块和光标（第一轮 ④）。
 - 块自己那一行是 `.orca-block > .orca-repr > .orca-repr-main`；`.orca-block` 的矩形包含展开的子块。
 - 拖动中 Orca 不显示任何高亮或插入线，没有辅助线时很难判断落点（用户反馈），插件要自己画。

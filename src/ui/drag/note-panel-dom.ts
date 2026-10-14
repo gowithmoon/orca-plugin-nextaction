@@ -47,6 +47,24 @@ function rowOf(block: Element): Element {
   return block.querySelector(":scope > .orca-repr > .orca-repr-main") ?? block;
 }
 
+/** The block's row holds no text: an empty block (drag-to-note 空块). */
+function emptyRow(block: Element): boolean {
+  return (
+    rowOf(block).querySelector(".orca-repr-main-content")?.textContent === ""
+  );
+}
+
+/**
+ * Where an insertion caret shows in an empty block, which gives the caret
+ * no box (drag-to-note 空块): at the start of its text area, a line high.
+ */
+function emptyCaretBox(block: Element): DOMRect | null {
+  const content = rowOf(block).querySelector(".orca-repr-main-content");
+  if (!content) return null;
+  const box = content.getBoundingClientRect();
+  return box.height > 0 ? new DOMRect(box.left, box.top, 0, box.height) : null;
+}
+
 /** The cursor data at the point (drag-to-note 落点), and the caret's box on screen. */
 function cursorAt(
   cursors: NoteCursorSource,
@@ -167,7 +185,12 @@ export function probeNoteDrop(
   const rootBlockId =
     cursor?.rootBlockId ?? rootBlockOf(cursors, panel, panelId, block);
   if (rootBlockId === null) return null;
-  const caret = cursor?.inline && cursor.blockId === blockId ? cursor : null;
+  // An empty block gives a block-level cursor at its start (drag-to-note 空块):
+  // a reference written there is inline all the same.
+  const caret =
+    cursor?.blockId === blockId && (cursor.inline || emptyRow(block))
+      ? cursor
+      : null;
   const row = rowOf(block).getBoundingClientRect();
   return {
     target: {
@@ -180,7 +203,7 @@ export function probeNoteDrop(
     row,
     zone: zoneAt(row, y),
     inlineCaret: caret !== null,
-    caretBox: caret ? (at?.box ?? null) : null,
+    caretBox: caret ? (at?.box ?? emptyCaretBox(block)) : null,
     root: blockId === rootBlockId,
     expanded: block.getBoundingClientRect().height > row.height + 1,
   };
