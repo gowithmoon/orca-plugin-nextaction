@@ -8,6 +8,7 @@ import {
   type Distributions,
   distributions,
 } from "../../domain/stats/distributions";
+import { type NowCounts, nowCounts } from "../../domain/stats/now-counts";
 import {
   inCell,
   type StatsPeriod,
@@ -18,6 +19,7 @@ import type { CalendarDate } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
+import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
 
 export interface ReadStatsOptions {
@@ -44,6 +46,8 @@ export interface ReadStatsResult {
   readonly cells: readonly StatsCellRead[];
   /** The completions and skips in the whole period. */
   readonly totals: { readonly completions: number; readonly skips: number };
+  /** The header's numbers: how things stand now, whatever the period. */
+  readonly now: NowCounts;
   /**
    * The period's completions by their task's contexts, labels and
    * importance as they are now; skips are left out (#136).
@@ -58,10 +62,12 @@ export function createReadStats(deps: {
   repository: TaskRepository;
   clock: Clock;
   dayBoundary: DayBoundarySetting;
+  startPreviewDays: StartPreviewDaysSetting;
 }): ReadStats {
   return async (options) => {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const { tasks } = await deps.repository.readTaskGraph();
+    const snapshot = await deps.repository.readTaskGraph();
+    const { tasks } = snapshot;
     const { cells, ...period } = statsPeriod(
       options.scale,
       options.anchor ?? today,
@@ -85,6 +91,10 @@ export function createReadStats(deps: {
         completions: cellReads.reduce((sum, cell) => sum + cell.completions, 0),
         skips: cellReads.reduce((sum, cell) => sum + cell.skips, 0),
       },
+      now: nowCounts(snapshot, {
+        today,
+        previewDays: deps.startPreviewDays.current(),
+      }),
       distributions: distributions(
         tasks.map((item) => ({
           task: item.task,
