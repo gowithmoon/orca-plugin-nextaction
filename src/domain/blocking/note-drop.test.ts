@@ -94,3 +94,82 @@ describe("note drop", () => {
     ).toEqual({ kind: "newBlock", content: "ref", placement: "firstChild" });
   });
 });
+
+/** A mirror dropped on a plain, collapsed block, with no inline caret. */
+function mirrorDrop(facts: Partial<NoteDropFacts>): NoteDropFacts {
+  return refDrop({ mode: "mirror", ...facts });
+}
+
+describe("note drop as a mirror", () => {
+  it.each(["topEdge", "upperHalf"] as const)(
+    "puts a mirror dropped on the upper half of a block's row (%s) in a new block before it",
+    (zone) => {
+      expect(resolveNoteDrop(mirrorDrop({ zone }))).toEqual({
+        kind: "newBlock",
+        content: "mirror",
+        placement: "before",
+      });
+    },
+  );
+
+  it.each(["bottomEdge", "lowerHalf"] as const)(
+    "puts a mirror dropped on the lower half of a block's row (%s) in a new block after it",
+    (zone) => {
+      expect(resolveNoteDrop(mirrorDrop({ zone }))).toEqual({
+        kind: "newBlock",
+        content: "mirror",
+        placement: "after",
+      });
+    },
+  );
+
+  it("never puts a mirror dropped on a block's text inline, even with an inline caret", () => {
+    expect(
+      resolveNoteDrop(mirrorDrop({ zone: "upperHalf", inlineCaret: true })),
+    ).toEqual({ kind: "newBlock", content: "mirror", placement: "before" });
+    expect(
+      resolveNoteDrop(mirrorDrop({ zone: "lowerHalf", inlineCaret: true })),
+    ).toEqual({ kind: "newBlock", content: "mirror", placement: "after" });
+  });
+
+  it.each(["topEdge", "bottomEdge", "upperHalf", "lowerHalf"] as const)(
+    "puts a mirror dropped on a panel's root block (%s) in its first child",
+    (zone) => {
+      for (const inlineCaret of [false, true]) {
+        for (const expanded of [false, true]) {
+          expect(
+            resolveNoteDrop(
+              mirrorDrop({ zone, root: true, inlineCaret, expanded }),
+            ),
+          ).toEqual({
+            kind: "newBlock",
+            content: "mirror",
+            placement: "firstChild",
+          });
+        }
+      }
+    },
+  );
+
+  it.each(["bottomEdge", "lowerHalf"] as const)(
+    "puts a mirror dropped on the lower half (%s) of a block that shows its children in its first child",
+    (zone) => {
+      expect(resolveNoteDrop(mirrorDrop({ zone, expanded: true }))).toEqual({
+        kind: "newBlock",
+        content: "mirror",
+        placement: "firstChild",
+      });
+    },
+  );
+
+  it.each(["topEdge", "upperHalf"] as const)(
+    "still puts a mirror dropped on the upper half (%s) of a block that shows its children before it",
+    (zone) => {
+      expect(resolveNoteDrop(mirrorDrop({ zone, expanded: true }))).toEqual({
+        kind: "newBlock",
+        content: "mirror",
+        placement: "before",
+      });
+    },
+  );
+});

@@ -24,6 +24,7 @@ import type { CalendarDate } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
+import { cardDragKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
@@ -255,6 +256,11 @@ export function createPanelFeature(deps: {
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
     registry.css("cardDragStyle", cardDragCss);
+    // Alt going down or up switches a card drag under way between a
+    // reference and a mirror (#126). Capturing, so the notes' editor cannot
+    // keep the key from it; nothing is prevented.
+    registry.listener(window, "keydown", cardDragKey as EventListener, true);
+    registry.listener(window, "keyup", cardDragKey as EventListener, true);
     registry.css("myDayStyle", myDayCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,
