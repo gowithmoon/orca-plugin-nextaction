@@ -92,6 +92,11 @@ function StatsContent(props: {
     props.selection.subscribe,
     props.selection.current,
   );
+  // Likewise the scale: its buttons follow a press before the read ends.
+  const chosen = React.useSyncExternalStore(
+    props.scale.subscribe,
+    props.scale.current,
+  );
 
   if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -114,6 +119,7 @@ function StatsContent(props: {
         period={period}
         paging={paging}
         today={today}
+        chosen={chosen}
         onScale={(scale) => props.scale.set(scale)}
         onPage={props.onPage}
       />

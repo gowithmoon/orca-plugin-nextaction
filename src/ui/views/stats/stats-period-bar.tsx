@@ -54,6 +54,12 @@ export function StatsPeriodBar(props: {
   };
   paging: StatsPaging;
   today: CalendarDate;
+  /**
+   * The scale chosen, as its store holds it now: while a read for another
+   * scale is under way it is not yet the period's.
+   */
+  chosen: StatsScale;
+  /** Chooses `scale`; choosing the one chosen changes nothing. */
   onScale: (scale: StatsScale) => void;
   /** Reads the period holding `anchor`; none for the current period. */
   onPage: (anchor: CalendarDate | undefined) => void;
@@ -73,8 +79,8 @@ export function StatsPeriodBar(props: {
             key={choice}
             type="button"
             className="nextaction-stats-scale"
-            aria-pressed={choice === scale}
-            onClick={() => choice === scale || props.onScale(choice)}
+            aria-pressed={choice === props.chosen}
+            onClick={() => props.onScale(choice)}
           >
             {scaleName(choice)}
           </button>
