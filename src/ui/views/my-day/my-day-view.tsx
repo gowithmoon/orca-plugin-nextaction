@@ -33,6 +33,7 @@ import { TaskCard } from "../../components/task-card";
 import { taskSearchFilter } from "../../components/task-search-filter";
 import { ViewHeader } from "../../components/view-header";
 import { FailedNotice, PausedNotice } from "../../components/view-notice";
+import { CardDragArea, useCardDrag } from "../../drag/card-drag";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
 import { useMyDayCandidates } from "../../hooks/use-my-day-candidates";
 import { useNow } from "../../hooks/use-now";
@@ -51,12 +52,10 @@ import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import {
   createMyDayDrag,
-  DragChip,
-  DragWatch,
   type MyDayDrag,
   MyDayDragProvider,
   type MyDayDragSetup,
-  useDragSource,
+  useMyDayDrag,
 } from "./my-day-drag";
 import type { MyDayScheduleActions } from "./my-day-schedule-actions";
 import { useOptimisticMyDay } from "./optimistic-my-day";
@@ -204,7 +203,12 @@ function UnscheduledItem(props: {
   children: React.ReactNode;
 }) {
   const { task } = props.item;
-  const drag = useDragSource(() => ({ kind: "add", task }));
+  const myDay = useMyDayDrag();
+  const inPanel = React.useMemo(
+    () => myDay?.target({ kind: "add", task }),
+    [myDay, task],
+  );
+  const drag = useCardDrag(task, inPanel ? { inPanel } : {});
   return (
     <li className="nextaction-my-day-unscheduled-item" {...drag}>
       {props.children}
@@ -312,21 +316,22 @@ function MyDayAreas(props: {
   }
 
   return (
-    <MyDayDragProvider value={drag.current}>
-      <div className="nextaction-my-day-layout" ref={root}>
-        <MyDaySections
-          search={search}
-          unscheduled={unscheduled}
-          timeline={
-            read && (
-              <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
-            )
-          }
-        />
-        <DragChip />
-        <DragWatch root={root} />
-      </div>
-    </MyDayDragProvider>
+    // The cards' drag (#124); their drops in the panel are My Day's.
+    <CardDragArea>
+      <MyDayDragProvider value={drag.current}>
+        <div className="nextaction-my-day-layout" ref={root}>
+          <MyDaySections
+            search={search}
+            unscheduled={unscheduled}
+            timeline={
+              read && (
+                <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
+              )
+            }
+          />
+        </div>
+      </MyDayDragProvider>
+    </CardDragArea>
   );
 }
 

@@ -6,10 +6,13 @@
 // dragging the card fades and a chip with the task's text follows the
 // pointer; over a block in a note panel a line shows where the new block
 // would go, or a caret where an inline reference would, and near a note
-// panel's top or bottom the panel scrolls (#125). Letting go there hands the drop to `onNoteDrop`; letting go
-// within the plugin panel hands it to the card's `inPanel` drop, if it has
-// one (the all tasks view's move and My Day's scheduling join in #124);
-// anywhere else cancels.
+// panel's top or bottom the panel scrolls (#125). Letting go there hands
+// the drop to `onNoteDrop`; letting go within the plugin panel hands it to the card's `inPanel` drop, if it has
+// one (the all tasks view's move and My Day's scheduling, #124); anywhere
+// else cancels. An area without `onNoteDrop` drops nothing in the notes (the
+// all tasks view and My Day until #127). While dragging, the `inPanel`
+// drop's scrollers scroll near their top and bottom edges (auto-scroll.ts),
+// and the card going away (e.g. the task removed in the notes) cancels it.
 //
 // Smooth by design, as My Day's drag: the state lives outside React; a move
 // sets the chip's and the line's positions on the DOM and renders nothing.
@@ -26,6 +29,7 @@ import {
 } from "../../domain/blocking/note-drop";
 import type { Task } from "../../domain/task/task";
 import { shownText } from "../components/format";
+import { scrollNearEdge } from "./auto-scroll";
 import {
   type NoteDropProbe,
   noteScrollerAt,
@@ -51,13 +55,36 @@ export interface NoteCardDrop {
 /**
  * A view's own drop places inside the plugin panel (#124). Told of every
  * move while the pointer is not over a note panel, and of the drop there;
- * `drop` says whether it took it. `end` follows every drag, dropped or not.
+ * `drop` says whether it took it. `end` follows every drag, dropped or not,
+ * after the drop.
  */
 export interface PanelDropTarget {
+  /** The drag began with the pointer at (x, y), before its first move. */
+  begin?(x: number, y: number): void;
   move(x: number, y: number): void;
   drop(x: number, y: number): boolean;
   end(): void;
+  /** Whether the chip shows now (My Day's timeline shows a preview instead); shown if absent. */
+  showsChip?(): boolean;
+  /** What scrolls while the pointer is near its top or bottom edge, the first that can first. */
+  scrollers?(): readonly HTMLElement[];
+  /**
+   * The element holds the pointer from the press on, not only once it is a
+   * drag: for a thin strip the pointer leaves before it has gone far enough
+   * (My Day's card edges). A click then lands on the element itself.
+   */
+  readonly captureOnPress?: boolean;
+  /** The cursor while dragging: grabbing (the default), or a vertical resize. */
+  readonly cursor?: "grab" | "resize";
 }
+
+/**
+ * A card's drops in the plugin panel: the same for every press, or picked by
+ * what the press was on (`null`: none, the card is still dragged).
+ */
+export type PanelDrop =
+  | PanelDropTarget
+  | ((pressed: Element) => PanelDropTarget | null);
 
 /** Where a new block would go, as the line shows it. */
 interface LineBox {
@@ -83,11 +110,15 @@ interface CardDrag {
     task: Task,
     source: HTMLElement,
     inPanel: PanelDropTarget | undefined,
+    x: number,
+    y: number,
   ): void;
   /** `alt`: Alt (Option on macOS) is held, for a mirror (#126). */
   move(x: number, y: number, alt: boolean): void;
   drop(x: number, y: number, alt: boolean): void;
   cancel(): void;
+  /** One frame while dragging: cancels if the card went away, else scrolls near an edge. */
+  frame(): void;
   /** Whether a click ends a drag (and so is no click); asks once. */
   takeClick(): boolean;
   /** A new press: a click left over from a drag is gone. */
@@ -171,7 +202,9 @@ export function cardDragKey(event: KeyboardEvent): void {
   for (const listener of [...altListeners]) listener(event.altKey);
 }
 
-function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
+function createCardDrag(
+  onNoteDrop: () => ((drop: NoteCardDrop) => void) | undefined,
+) {
   let dragging: Dragging | null = null;
   let point = { x: 0, y: 0 };
   /** Alt (Option on macOS) is held: a drop writes a mirror (#126). */
@@ -189,6 +222,7 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
 
   const place = () => {
     if (chip) {
+      chip.hidden = dragging?.inPanel?.showsChip?.() === false;
       chip.style.setProperty(
         "transform",
         `translate(${point.x + 12}px, ${point.y + 8}px)`,
@@ -226,7 +260,8 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
    */
   const scroll = () => {
     scrollFrame = null;
-    if (!dragging) return;
+    // Nothing drops in the notes: they are not scrolled either.
+    if (!dragging || !onNoteDrop()) return;
     const scroller = noteScrollerAt(point.x, point.y);
     const step = scroller ? scrollStep(scroller, point.y) : 0;
     if (!scroller || step === 0) return;
@@ -248,7 +283,8 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
   const update = () => {
     const drag = dragging;
     if (!drag) return;
-    const probe = probeNoteDrop(point.x, point.y);
+    // Nothing drops in the notes: no probing, the drag stays the view's own.
+    const probe = onNoteDrop() ? probeNoteDrop(point.x, point.y) : null;
     drag.over = probe ? { probe, plan: planFor(probe, modeFor(alt)) } : null;
     if (!probe) drag.inPanel?.move(point.x, point.y);
     place();
@@ -287,13 +323,18 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
       };
     },
     task: () => dragging?.task ?? null,
-    begin(task, source, inPanel) {
+    begin(task, source, inPanel, x, y) {
       if (dragging) return;
+      point = { x, y };
       dragging = { task, source, inPanel, over: null };
       altListeners.add(onAlt);
       source.setAttribute(sourceAttribute, "");
-      // A grabbing cursor everywhere, and no text selected in the notes.
-      document.documentElement.setAttribute(sourceAttribute, "");
+      // The cursor everywhere (card-drag-style.ts), and no text selected in the notes.
+      document.documentElement.setAttribute(
+        sourceAttribute,
+        inPanel?.cursor === "resize" ? "resize" : "",
+      );
+      inPanel?.begin?.(x, y);
       emit();
     },
     move(x, y, altHeld) {
@@ -312,22 +353,34 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
       // As the release's pointer event says, whatever the keys said before.
       alt = altHeld;
       update();
-      const over = dragging.over;
-      const ended = end();
-      if (!ended) return;
-      if (over) {
-        onNoteDrop()({
-          task: ended.task,
-          plan: over.plan,
-          target: over.probe.target,
-        });
-      } else {
-        ended.inPanel?.drop(x, y);
+      const { task, over, inPanel } = dragging;
+      // Handed over before the drag ends, so what the drop wrote and the
+      // drag's end show in one frame.
+      try {
+        const noteDrop = onNoteDrop();
+        if (over && noteDrop) {
+          noteDrop({ task, plan: over.plan, target: over.probe.target });
+        } else {
+          inPanel?.drop(x, y);
+        }
+      } finally {
+        if (end()) emit();
       }
-      emit();
     },
     cancel() {
       if (end()) emit();
+    },
+    frame() {
+      const current = dragging;
+      if (!current) return;
+      // Its pointer events went with it: nothing else would end the drag.
+      if (!current.source.isConnected) {
+        drag.cancel();
+        return;
+      }
+      const scrollers = current.inPanel?.scrollers?.() ?? [];
+      // What lies under a still pointer moved.
+      if (scrollNearEdge(scrollers, point.x, point.y)) update();
     },
     takeClick() {
       const taken = clickTaken;
@@ -365,6 +418,18 @@ function CardDragOverlay(props: { drag: CardDrag }) {
     drag.attach(chip.current, line.current, caret.current);
     return () => drag.attach(null, null, null);
   });
+  // One frame at a time while dragging; stops with the drag, and when the
+  // area goes (ARCHITECTURE §4's exception for component timers).
+  React.useEffect(() => {
+    if (!task) return;
+    let frame = 0;
+    const step = () => {
+      drag.frame();
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [drag, task]);
   if (!task) return null;
   return createPortal(
     <>
@@ -390,10 +455,11 @@ function CardDragOverlay(props: { drag: CardDrag }) {
 
 /**
  * An area whose task cards can be dragged out of the plugin panel; a drop
- * on a block in a note panel calls `onNoteDrop`.
+ * on a block in a note panel calls `onNoteDrop`. Without it nothing drops
+ * in the notes, only on the cards' `inPanel` drops.
  */
 export function CardDragArea(props: {
-  onNoteDrop: (drop: NoteCardDrop) => void;
+  onNoteDrop?: (drop: NoteCardDrop) => void;
   children: React.ReactNode;
 }) {
   const onNoteDrop = React.useRef(props.onNoteDrop);
@@ -412,15 +478,20 @@ export function CardDragArea(props: {
 /**
  * The pointer handlers, and the marker, that make an element holding a task
  * card a drag source; spread them on it. Nothing outside a `CardDragArea`.
- * `inPanel`: the view's own drop places in the plugin panel, if any.
+ * `inPanel`: the view's own drop places in the plugin panel, if any; as a
+ * function, picked by what a press is on.
  */
 export function useCardDrag(
   task: Task,
-  options: { inPanel?: PanelDropTarget } = {},
+  options: { inPanel?: PanelDrop } = {},
 ): React.HTMLAttributes<HTMLElement> {
   const drag = React.useContext(CardDragContext);
-  /** Where the press began, while pressed. */
-  const press = React.useRef<{ x: number; y: number } | null>(null);
+  /** Where the press began and its drop places, while pressed. */
+  const press = React.useRef<{
+    readonly x: number;
+    readonly y: number;
+    readonly inPanel: PanelDropTarget | undefined;
+  } | null>(null);
   const dragging = React.useRef(false);
   // Subscribed so the handlers stay current; nothing renders per move.
   React.useSyncExternalStore(
@@ -442,8 +513,15 @@ export function useCardDrag(
       const { target } = event;
       if (event.button !== 0 || !(target instanceof Element)) return;
       if (target.closest(ownPress)) return;
+      const { inPanel } = options;
+      const picked =
+        (typeof inPanel === "function" ? inPanel(target) : inPanel) ??
+        undefined;
       // Not prevented: clicks, focus and the right-click menu stay as they are.
-      press.current = { x: event.clientX, y: event.clientY };
+      press.current = { x: event.clientX, y: event.clientY, inPanel: picked };
+      if (picked?.captureOnPress) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
     },
     onPointerMove(event) {
       const start = press.current;
@@ -458,7 +536,7 @@ export function useCardDrag(
         if (Math.hypot(x - start.x, y - start.y) < dragThreshold) return;
         dragging.current = true;
         event.currentTarget.setPointerCapture(event.pointerId);
-        drag.begin(task, event.currentTarget, options.inPanel);
+        drag.begin(task, event.currentTarget, start.inPanel, x, y);
       }
       drag.move(event.clientX, event.clientY, event.altKey);
     },

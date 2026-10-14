@@ -26,10 +26,11 @@ import {
 } from "../../components/format";
 import { ContextMenu } from "../../components/popup-controls";
 import { StatusButton } from "../../components/task-card";
+import { useCardDrag } from "../../drag/card-drag";
 import type { TaskActions } from "../../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { TaskMenu } from "../../task-menu/task-menu";
-import { TimelinePreview, useDragSource } from "./my-day-drag";
+import { TimelinePreview, useMyDayDrag } from "./my-day-drag";
 import {
   hourTicks,
   scheduleBox,
@@ -90,21 +91,29 @@ export function TimelineCard(props: {
   const times = formatTimeRange(item.schedule);
   // The body moves it, the top edge changes its start, the bottom edge its
   // end (#85); done cards too, as the timeline records the day.
-  const drag = useDragSource((target) => {
-    const edge = target
-      .closest(".nextaction-timeline-card-edge")
-      ?.getAttribute("data-edge");
-    return {
-      kind:
-        edge === "start"
-          ? "resize-start"
-          : edge === "end"
-            ? "resize-end"
-            : "move",
-      task,
-      schedule: item.schedule,
-    };
-  });
+  const myDay = useMyDayDrag();
+  const drag = useCardDrag(
+    task,
+    myDay
+      ? {
+          inPanel: (target) => {
+            const edge = target
+              .closest(".nextaction-timeline-card-edge")
+              ?.getAttribute("data-edge");
+            return myDay.target({
+              kind:
+                edge === "start"
+                  ? "resize-start"
+                  : edge === "end"
+                    ? "resize-end"
+                    : "move",
+              task,
+              schedule: item.schedule,
+            });
+          },
+        }
+      : {},
+  );
   const style = {
     top: `${box.top}px`,
     height: `${box.height}px`,

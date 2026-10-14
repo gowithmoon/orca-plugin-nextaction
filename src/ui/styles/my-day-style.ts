@@ -102,14 +102,8 @@ export const myDayCss = `
 
 /*
  * A press anywhere on a card in My Day starts a drag (#85): its text is not
- * selectable here, as in the all tasks view's handle; the task panel shows
- * the text to copy.
+ * selectable (card-drag-style.ts); the task panel shows the text to copy.
  */
-.nextaction-my-day-unscheduled-item,
-.nextaction-my-day-unscheduled-item .nextaction-task-card-text,
-.nextaction-timeline-card {
-  user-select: none;
-}
 
 /*
  * Nothing unscheduled: one quiet line, so the timeline keeps the room. Tall
@@ -356,30 +350,17 @@ export const myDayCss = `
 }
 
 /*
- * Dragging (#85, my-day-drag.tsx). The chip and the preview take no pointer,
- * so what lies under it is the place to drop.
+ * Dragging (#85, my-day-drag.tsx); the cursor, the fading and the chip are
+ * the shared card drag's (card-drag-style.ts, #124). The preview takes no
+ * pointer, so what lies under it is the place to drop.
  */
 .nextaction-my-day-layout {
   position: relative;
 }
 
-.nextaction-my-day-layout[data-dragging] {
-  user-select: none;
-  cursor: grabbing;
-}
-
-.nextaction-my-day-layout[data-dragging="resize-start"],
-.nextaction-my-day-layout[data-dragging="resize-end"] {
-  cursor: ns-resize;
-}
-
-.nextaction-my-day-layout[data-dragging] * {
-  cursor: inherit;
-}
-
 /* The card being dragged stays where it is, faded. */
 /* Over a done card's own fading (same weight, later). */
-.nextaction-my-day-layout [data-nextaction-drag-source] {
+.nextaction-my-day-layout [data-nextaction-card-drag-source] {
   opacity: 0.4;
 }
 
@@ -422,26 +403,6 @@ export const myDayCss = `
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-/* The dragged task under the pointer, off the timeline; placed by transform. */
-.nextaction-my-day-drag-chip {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 3;
-  max-width: 240px;
-  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: var(--orca-fontsize-sm);
-  color: var(--orca-color-text-1);
-  background-color: var(--orca-color-bg-1);
-  border: var(--orca-border-box);
-  border-radius: var(--orca-radius-sm);
-  box-shadow: var(--orca-shadow-popup);
-  pointer-events: none;
 }
 
 /* The current time: a line across the track, with a dot at its start; under the cards. */

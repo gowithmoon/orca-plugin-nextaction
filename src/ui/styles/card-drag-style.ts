@@ -22,6 +22,12 @@ export const cardDragCss = `
   user-select: none !important;
 }
 
+/* A card's edge changes a length (My Day's timeline, #85). */
+:root[data-nextaction-card-drag-source="resize"],
+:root[data-nextaction-card-drag-source="resize"] * {
+  cursor: ns-resize !important;
+}
+
 .nextaction-card-drag-chip {
   position: fixed;
   top: 0;
@@ -39,6 +45,11 @@ export const cardDragCss = `
   border-radius: var(--orca-radius-sm);
   box-shadow: var(--orca-shadow-popup);
   pointer-events: none;
+}
+
+/* Hidden where the view shows the drag itself (My Day's timeline preview). */
+.nextaction-card-drag-chip[hidden] {
+  display: none;
 }
 
 /* Where the new block would go in the note panel: Orca draws nothing (drag-to-note). */
