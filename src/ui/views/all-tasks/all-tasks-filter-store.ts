@@ -3,7 +3,10 @@
 // view's filter: switching views and closing the plugin panel keep them;
 // unloading clears them (platform/panel-feature.ts), and they are never
 // written with `plugins.setData`.
-import type { AllTasksFilter } from "../../../application/usecases/read-all-tasks";
+import type {
+  AllTasksFilter,
+  OpenStatus,
+} from "../../../application/usecases/read-all-tasks";
 import { filterChoosesAny } from "../../../domain/task/task-filter";
 import { createMemoryStore } from "../../components/memory-store";
 
@@ -39,11 +42,24 @@ export interface AllTasksFilterStore {
   set(state: AllTasksFilterState): void;
   /** Back to no filter and no search text. */
   clear(): void;
+  /**
+   * Only tasks in `status`: that status chosen, every other filter and the
+   * search text cleared. Another view jumping here uses it (#133).
+   */
+  showOnlyStatus(status: OpenStatus): void;
   /** Calls `listener` on every change; returns the unsubscribe function. */
   subscribe(listener: () => void): () => void;
 }
 
 export function createAllTasksFilterStore(): AllTasksFilterStore {
   const store = createMemoryStore(noAllTasksFilter);
-  return { ...store, clear: () => store.set(noAllTasksFilter) };
+  return {
+    ...store,
+    clear: () => store.set(noAllTasksFilter),
+    showOnlyStatus: (status) =>
+      store.set({
+        ...noAllTasksFilter,
+        filter: { ...noAllTasksFilter.filter, statuses: [status] },
+      }),
+  };
 }
