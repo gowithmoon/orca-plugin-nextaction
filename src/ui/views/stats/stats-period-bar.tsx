@@ -54,9 +54,20 @@ export function StatsPeriodBar(props: {
   };
   paging: StatsPaging;
   today: CalendarDate;
+  /**
+   * The scale chosen, as its store holds it now: while a read for another
+   * scale is under way it is not yet the period's.
+   */
+  chosen: StatsScale;
+  /** Chooses `scale`; choosing the one chosen changes nothing. */
   onScale: (scale: StatsScale) => void;
   /** Reads the period holding `anchor`; none for the current period. */
   onPage: (anchor: CalendarDate | undefined) => void;
+  /**
+   * Pages one period back or forward from the period the view is set to,
+   * which a read under way may not show yet.
+   */
+  onStep: (direction: "previous" | "next") => void;
 }) {
   const { Button, Tooltip } = orca.components;
   const { period, paging } = props;
@@ -73,8 +84,8 @@ export function StatsPeriodBar(props: {
             key={choice}
             type="button"
             className="nextaction-stats-scale"
-            aria-pressed={choice === scale}
-            onClick={() => choice === scale || props.onScale(choice)}
+            aria-pressed={choice === props.chosen}
+            onClick={() => props.onScale(choice)}
           >
             {scaleName(choice)}
           </button>
@@ -85,7 +96,7 @@ export function StatsPeriodBar(props: {
           <Button
             variant="plain"
             aria-label={previousLabel(scale)}
-            onClick={() => props.onPage(paging.previous)}
+            onClick={() => props.onStep("previous")}
           >
             <i className="ti ti-chevron-left" aria-hidden="true" />
           </Button>
@@ -98,7 +109,7 @@ export function StatsPeriodBar(props: {
             variant="plain"
             aria-label={nextLabel(scale)}
             disabled={!next}
-            onClick={() => next && props.onPage(next)}
+            onClick={() => props.onStep("next")}
           >
             <i className="ti ti-chevron-right" aria-hidden="true" />
           </Button>

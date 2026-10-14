@@ -1,8 +1,8 @@
 // The stats view's selection (GLOSSARY: 统计视图, #137): a cell of the
 // completion chart or an item of a distribution, one at a time. It lives as
-// long as the view shows; switching the scale, paging and switching the
-// distribution's dimension clear it (stats-view.tsx). Pressing the selected
-// one again clears it too.
+// long as the view shows; switching the scale, paging, a new period
+// starting while the view shows and switching the distribution's dimension
+// clear it (stats-view.tsx). Pressing the selected one again clears it too.
 import type { DistributionPick } from "../../../domain/stats/distributions";
 import type { StatsSelection } from "../../../domain/stats/stats-selection";
 import { compareDays } from "../../../domain/time/calendar-days";

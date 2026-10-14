@@ -1,8 +1,9 @@
 // Use case: read the stats (GLOSSARY: 统计视图, 统计周期), for the stats view:
-// one read of the task graph gives the period's cells with their
-// completions and skips (#132). Later issues add the other scales and
-// paging (#135), the distributions (#136), a selection (#137) and the
-// header's numbers (#134).
+// one read of the task graph gives the period of the scale (week, month or
+// year) holding the anchor, its cells with their completions and skips and
+// its paging (#132, #135); the period's distributions of completions
+// (#136); the selection's completions and skips (#137); and the header's
+// numbers on how things stand now (#134).
 import { countedEntries } from "../../domain/stats/counted-completions";
 import {
   type Distributions,
