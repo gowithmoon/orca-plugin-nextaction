@@ -8,9 +8,9 @@ import type { CountedEntry } from "./counted-completions";
 export type DistributionDimension = "context" | "label" | "importance";
 
 /**
- * One item of a distribution: a dimension and a value, so an item can later
- * be picked as a selection (#137). For contexts and labels `null` is "not
- * set", one value like the others; importance is always set.
+ * One item of a distribution: a dimension and a value, which is what a
+ * selection of the item holds (#137). For contexts and labels `null` is
+ * "not set", one value like the others; importance is always set.
  */
 export type DistributionPick =
   | {

@@ -94,6 +94,9 @@ export function StatsSelectionList(props: {
 /**
  * An entry's list item, dragged by a press anywhere on it: whether it was
  * done or skipped and when, as in the review's look back, then its card.
+ * "When" is the date and time it happened, not the logical day it counts
+ * on, so one done before the day boundary shows why it falls on the day
+ * before.
  */
 function StatsEntryItem(props: {
   entry: SelectedEntry<Task>;

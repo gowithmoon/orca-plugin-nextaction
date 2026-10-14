@@ -1,10 +1,12 @@
-// The stats view (GLOSSARY: 统计视图, #132): a period's completions and
-// skips, a bar per cell, with the period's totals above the chart; the
-// period switches between week, month and year and pages (#135). It
-// reads when the plugin panel opens and again on every task change signal
-// (ADR 0007). Later issues add the scales and paging (#135), the
-// distributions (#136), a selection (#137) and the header's numbers (#134).
-// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// The stats view (GLOSSARY: 统计视图, #132): the header's numbers on how
+// things stand now (#134); then a period, switched between week, month and
+// year and paged (#135), with its totals, a bar per cell for its
+// completions and skips (#132) and its completions' distributions (#136);
+// a bar or a distribution's item picked lists what it holds below (#137).
+// Switching the scale, paging and a new period starting while the view
+// shows clear the selection. It reads when the plugin panel opens and again
+// on every task change signal (ADR 0007). Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   ReadStats,
