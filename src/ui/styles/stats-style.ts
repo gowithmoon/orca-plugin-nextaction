@@ -79,7 +79,7 @@ export const statsCss = `
 }
 
 .nextaction-stats-bar-skips {
-  fill: oklch(from var(--orca-color-primary-5) l c h / 40%);
+  fill: color-mix(in srgb, var(--orca-color-primary-5) 40%, transparent);
 }
 
 /* Buttons over the bars: focus, tooltip and label; the SVG only draws. */
@@ -105,7 +105,7 @@ export const statsCss = `
 }
 
 .nextaction-stats-bar-hit:hover {
-  background-color: oklch(from var(--orca-color-text-1) l c h / 8%);
+  background-color: color-mix(in srgb, var(--orca-color-text-1) 8%, transparent);
 }
 
 .nextaction-stats-bar-hit:focus-visible {
@@ -136,7 +136,7 @@ export const statsCss = `
 }
 
 .nextaction-stats-legend-skips::before {
-  background-color: oklch(from var(--orca-color-primary-5) l c h / 40%);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 40%, transparent);
 }
 
 .nextaction-stats-empty {
