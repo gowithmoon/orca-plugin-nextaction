@@ -104,7 +104,7 @@ tests/
 ### 读写 Orca
 
 - 所有写操作都经过仓储，涉及多个步骤的写操作包在 `orca.commands.invokeGroup` 里，让用户能一次撤销。
-- `invokeGroup` 和编辑器命令都通过**活动面板的编辑器**（`viewState.editor`）执行，没有编辑器的面板写不进去，而且不报错。插件面板里藏着一个 Orca 的块面板渲染器（`ui/panel/hidden-editor.tsx`），插件面板因此能自己写入，撤销也在插件面板里。活动面板没有编辑器时，`infra/orca/orca-calls.ts` 先切到一个有编辑器的面板，写完再切回（ADR 0014，`plugin-panel-writes`）。只经过 `orca-calls` 调用它们，由架构测试检查；不要改用后端接口直接写，那样写入进不了 Orca 的撤销历史。
+- `invokeGroup` 和编辑器命令都通过**活动面板的编辑器**（`viewState.editor`）执行，没有编辑器的面板写不进去，而且不报错。插件面板里藏着一个 Orca 的块面板渲染器（`ui/panel/hidden-editor.tsx`），插件面板因此能自己写入，撤销也在插件面板里。活动面板没有编辑器时，`infra/orca/orca-calls.ts` 先切到一个有编辑器的面板，写完再切回（ADR 0014，`plugin-panel-writes`）。唯一的例外是把任务卡片拖到笔记：写入经过落点所在的笔记面板，撤销记在那里（ADR 0024，`drag-to-note`）。只经过 `orca-calls` 调用它们，由架构测试检查；不要改用后端接口直接写，那样写入进不了 Orca 的撤销历史。
 - 属性名、类型码（`PropType`）、标签别名只在 `infra/orca` 中出现。
 - 读写块属性中的 JSON 时，必须经过带版本号的编解码函数；遇到无法解析的数据时保留原值并记录警告，禁止静默覆盖。唯一的例外是用户在重复、回顾、提醒弹窗里明确点"丢弃并重置"：这时把该属性写成空值，经编辑器、一次撤销（#106）。
 - 插件块属性（JSON）里以 ISO 字符串写入的时间，读回时是 `Date`；解码时两种都接受（#72 验收）。
