@@ -134,11 +134,11 @@ describe("read stats", () => {
       ]);
     });
 
-    it("counts the skips in its history, though it is not done", async () => {
+    it("does not count the skips in its history", async () => {
       const { repository, readStats } = setup();
       // Its rule removed after a skip and a completion: a plain task now.
       repository.addTask(
-        { id: 1, status: "todo" },
+        { id: 1, status: "done" },
         history(
           recorded("2026-10-12T10:00:00", 12, "skip"),
           recorded("2026-10-13T10:00:00", 13),
@@ -148,14 +148,33 @@ describe("read stats", () => {
       const read = await readStats({ scale: "week" });
 
       expect(counts(read)).toEqual([
-        [0, 1],
         [0, 0],
+        [1, 0],
         [0, 0],
         [0, 0],
         [0, 0],
         [0, 0],
         [0, 0],
       ]);
+    });
+
+    it("counts a task whose recurrence rule cannot be read as a plain task", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        {
+          id: 1,
+          status: "todo",
+          recurrence: { kind: "unreadable", reason: "unknown version" },
+        },
+        history(
+          recorded("2026-10-12T10:00:00", 12),
+          recorded("2026-10-13T10:00:00", 13, "skip"),
+        ),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.totals).toEqual({ completions: 0, skips: 0 });
     });
 
     it("does not count the past completions of a recurring task's subtask set back to todo", async () => {
