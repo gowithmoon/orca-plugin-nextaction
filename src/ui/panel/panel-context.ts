@@ -25,6 +25,13 @@ export interface PanelContextValue {
    * plugin panel narrows now. The popup would cover the block.
    */
   readonly openedInNotes: () => void;
+  /**
+   * Shows the view registered as `viewId`, as its navigation item does: the
+   * selection ends with the view it was made in. The current view or an
+   * unknown one changes nothing. A view that jumps with a preset sets it in
+   * the target view's store first (`showOnlyStatus`, `openFullReviewStep`).
+   */
+  readonly showView: (viewId: string) => void;
 }
 
 export const PanelContext = React.createContext<PanelContextValue | undefined>(
