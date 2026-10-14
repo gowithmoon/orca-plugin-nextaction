@@ -1,6 +1,7 @@
 // Scrolling while dragging a task card (#122): a scroller scrolls while the
 // pointer stays near its top or bottom edge, faster the nearer, one step a
-// frame (card-drag.tsx runs the frames). Shared by every view's drag.
+// frame (card-drag.tsx runs the frames). Shared by every view's drag, for
+// the plugin panel's scrollers and the note panels' alike.
 
 /** How close to a scroller's top or bottom edge it scrolls. */
 const scrollEdge = 40;

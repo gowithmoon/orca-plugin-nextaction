@@ -1,6 +1,7 @@
 // A task in a view's list (#35 "任务卡片与组件", restyled in #45 "任务卡片"),
-// the one card every view uses: its status icon, its text
-// (up to three lines, selectable), the "open in notes" button and its
+// the one card every view uses: its status icon, its text (up to three
+// lines; not selectable where the card can be dragged, card-drag-style.ts),
+// the "open in notes" button and its
 // property row. The status icon opens the status menu; a right-click opens the
 // task menu; a click elsewhere on the card calls `onOpen` (the task panel).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).

@@ -12,7 +12,10 @@ import {
   type TaskRepository,
   type TaskWrite,
 } from "../../../application/ports/task-repository";
-import type { NoteDropPlan } from "../../../domain/blocking/note-drop";
+import type {
+  NoteDropPlacement,
+  NoteDropPlan,
+} from "../../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import {
@@ -76,6 +79,7 @@ import {
   encodeTaskChanges,
   type RefDataItem,
 } from "../codec/task-encode";
+import { fromNoteCaret } from "../note-cursor-source";
 import {
   cachedBlock,
   invokeBackend,
@@ -163,6 +167,142 @@ function contentEnd(block: Block): { index: number; offset: number } {
     return { index: content.length - 1, offset: last.v.length };
   }
   return { index: content.length, offset: 0 };
+}
+
+/** A collapsed cursor at `at` in the target's note panel. */
+function noteCursor(target: NoteTarget, at: CursorData["anchor"]): CursorData {
+  return {
+    anchor: at,
+    focus: at,
+    isForward: true,
+    panelId: target.panelId,
+    rootBlockId: target.rootBlockId,
+  };
+}
+
+/**
+ * A reference to `taskId` at the drop's inline caret, as Orca gave it; one
+ * command, one undo. It leaves the caret right after the reference
+ * (drag-to-note 写入, 光标).
+ */
+async function linkInline(taskId: number, target: NoteTarget): Promise<void> {
+  if (!target.caret) throw new OrcaError("no inline caret at the drop");
+  const caret = fromNoteCaret(target.caret);
+  await invokeInNotePanel(target.panelId, async () => {
+    await invokeEditorCommandAt("core.editor.insertLink", caret, true, taskId);
+  });
+}
+
+/**
+ * A new block holding only a reference to `taskId`, then the reference at
+ * its start, in one group: one undo (drag-to-note 写入). The caret goes to
+ * the new block's end, after the reference, to go on typing there
+ * (drag-to-note 光标, round 6).
+ */
+async function linkInNewRefBlock(
+  taskId: number,
+  placement: NoteDropPlacement,
+  target: NoteTarget,
+): Promise<void> {
+  await invokeInNotePanel(target.panelId, async () => {
+    let created: number | undefined;
+    await invokeGroup(async () => {
+      const targetBlock = await cachedBlock(target.blockId);
+      const id = await invokeEditorCommand(
+        "core.editor.insertBlock",
+        targetBlock,
+        placement,
+        [],
+      );
+      if (typeof id !== "number") {
+        throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+      }
+      created = id;
+      await invokeEditorCommandAt(
+        "core.editor.insertLink",
+        noteCursor(target, {
+          blockId: id,
+          isInline: true,
+          index: 0,
+          offset: 0,
+        }),
+        true,
+        taskId,
+      );
+    });
+    if (created === undefined) return;
+    await setCaret(
+      noteCursor(target, {
+        blockId: created,
+        isInline: true,
+        index: 1,
+        offset: 0,
+      }),
+    );
+  });
+}
+
+/**
+ * A mirror block of `taskId`: a mirror repr, then its type 5 reference, in
+ * one group, as a mirror Orca's interface makes, with no text of its own, so
+ * the global search finds the task once. insertBlock with a mirror repr
+ * would store the task's text (drag-to-note 写入).
+ *
+ * The caret then goes to the end of the dropped-on block, never into the
+ * new mirror: typing there would change the task (#122 user story 16,
+ * drag-to-note 光标, round 6). A root block is its title. When the
+ * dropped-on block is a mirror itself, its end is its source's text, so the
+ * caret goes to the end of the panel's root block's title instead.
+ */
+async function linkInMirrorBlock(
+  taskId: number,
+  placement: NoteDropPlacement,
+  target: NoteTarget,
+): Promise<void> {
+  await invokeInNotePanel(target.panelId, async () => {
+    const targetBlock = await cachedBlock(target.blockId);
+    await invokeGroup(async () => {
+      // The new block's siblings: the target's children for a first child,
+      // else its parent's. A root block only takes a first child
+      // (resolveNoteDrop).
+      const parentId =
+        placement === "firstChild" ? targetBlock.id : targetBlock.parent;
+      if (parentId === undefined) {
+        throw new OrcaError(`block ${targetBlock.id} has no parent`);
+      }
+      const before = new Set(await childIds(parentId));
+      await invokeEditorCommand(
+        "core.editor.batchInsertReprs",
+        targetBlock,
+        placement,
+        [{ type: "mirror", mirroredId: taskId }],
+      );
+      // batchInsertReprs returns no ID: the new block is the child that was
+      // not there before (drag-to-note 写入).
+      const added = (await childIds(parentId)).filter(
+        (child) => !before.has(child),
+      );
+      const [created] = added;
+      if (added.length !== 1 || created === undefined) {
+        throw new OrcaError(
+          `batchInsertReprs added ${JSON.stringify(added)} under block ${parentId}`,
+        );
+      }
+      await invokeEditorCommand("core.editor.createRef", created, taskId, 5);
+    });
+    // Neither insert changes the dropped-on block's own content.
+    const caretBlock =
+      mirrorSourceId(targetBlock) === undefined
+        ? targetBlock
+        : await cachedBlock(target.rootBlockId);
+    await setCaret(
+      noteCursor(target, {
+        blockId: caretBlock.id,
+        isInline: true,
+        ...contentEnd(caretBlock),
+      }),
+    );
+  });
 }
 
 /**
@@ -1098,117 +1238,14 @@ export function createOrcaTaskRepository(
     ): Promise<void> {
       // A mirror's ID links its source block, so the link points at the task.
       const block = await taskBlockToWrite(id, currentTag());
-      const { panelId, rootBlockId } = target;
-      const cursorAt = (at: CursorData["anchor"]): CursorData => ({
-        anchor: at,
-        focus: at,
-        isForward: true,
-        panelId,
-        rootBlockId,
-      });
       try {
         if (plan.kind === "inline") {
-          // At the drop's caret, as Orca gave it; one command, one undo. It
-          // leaves the caret right after the reference (drag-to-note 写入, 光标).
-          const caret = target.caret as CursorData | null;
-          if (!caret) throw new OrcaError("no inline caret at the drop");
-          await invokeInNotePanel(panelId, async () => {
-            await invokeEditorCommandAt(
-              "core.editor.insertLink",
-              caret,
-              true,
-              block.id,
-            );
-          });
-          return;
+          await linkInline(block.id, target);
+        } else if (plan.content === "mirror") {
+          await linkInMirrorBlock(block.id, plan.placement, target);
+        } else {
+          await linkInNewRefBlock(block.id, plan.placement, target);
         }
-        if (plan.content === "mirror") {
-          await invokeInNotePanel(panelId, async () => {
-            await invokeGroup(async () => {
-              const targetBlock = await cachedBlock(target.blockId);
-              // The new block's siblings: the target's children for a first
-              // child, else its parent's. A root block only takes a first
-              // child (resolveNoteDrop).
-              const parentId =
-                plan.placement === "firstChild"
-                  ? targetBlock.id
-                  : targetBlock.parent;
-              if (parentId === undefined) {
-                throw new OrcaError(`block ${targetBlock.id} has no parent`);
-              }
-              const before = new Set(await childIds(parentId));
-              // A mirror repr, then its type 5 reference, in one group: as a
-              // mirror Orca's interface makes, with no text of its own, so
-              // the global search finds the task once. insertBlock with a
-              // mirror repr would store the task's text (drag-to-note 写入).
-              await invokeEditorCommand(
-                "core.editor.batchInsertReprs",
-                targetBlock,
-                plan.placement,
-                [{ type: "mirror", mirroredId: block.id }],
-              );
-              // batchInsertReprs returns no ID: the new block is the child
-              // that was not there before (drag-to-note 写入).
-              const added = (await childIds(parentId)).filter(
-                (child) => !before.has(child),
-              );
-              const [created] = added;
-              if (added.length !== 1 || created === undefined) {
-                throw new OrcaError(
-                  `batchInsertReprs added ${JSON.stringify(added)} under block ${parentId}`,
-                );
-              }
-              await invokeEditorCommand(
-                "core.editor.createRef",
-                created,
-                block.id,
-                5,
-              );
-            });
-            // The caret at the target block's end, not in the mirror: typing
-            // there would change the task (drag-to-note 光标, round 6). For a
-            // root block, that is its title.
-            const targetBlock = await cachedBlock(target.blockId);
-            await setCaret(
-              cursorAt({
-                blockId: targetBlock.id,
-                isInline: true,
-                ...contentEnd(targetBlock),
-              }),
-            );
-          });
-          return;
-        }
-        await invokeInNotePanel(panelId, async () => {
-          let created: number | undefined;
-          await invokeGroup(async () => {
-            const targetBlock = await cachedBlock(target.blockId);
-            // A new block holding only the reference, then the reference at
-            // its start, in one group: one undo (drag-to-note 写入).
-            const id = await invokeEditorCommand(
-              "core.editor.insertBlock",
-              targetBlock,
-              plan.placement,
-              [],
-            );
-            if (typeof id !== "number") {
-              throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
-            }
-            created = id;
-            await invokeEditorCommandAt(
-              "core.editor.insertLink",
-              cursorAt({ blockId: id, isInline: true, index: 0, offset: 0 }),
-              true,
-              block.id,
-            );
-          });
-          if (created === undefined) return;
-          // The caret at the new block's end, after the reference, to go on
-          // typing there (drag-to-note 光标, round 6).
-          await setCaret(
-            cursorAt({ blockId: created, isInline: true, index: 1, offset: 0 }),
-          );
-        });
       } finally {
         // The task gained a reference; views read again (ADR 0007).
         onWritten(block.id);

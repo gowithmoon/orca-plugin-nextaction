@@ -12,6 +12,7 @@ import type {
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
+import type { NoteCaret } from "./note-cursor";
 
 /**
  * What a task's completion history (GLOSSARY: 完成历史) reads as. A task
@@ -160,9 +161,9 @@ export interface NoteTarget {
   readonly blockId: number;
   /**
    * Orca's cursor data at the pointer when it lay in the block's text, else
-   * `null`. Only `infra` reads it, as Orca's `CursorData` (drag-to-note).
+   * `null`. Only `infra` reads it (NoteCursorSource, drag-to-note).
    */
-  readonly caret: unknown;
+  readonly caret: NoteCaret | null;
 }
 
 /**

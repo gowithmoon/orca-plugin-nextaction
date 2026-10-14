@@ -22,9 +22,10 @@ import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-da
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
+import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
-import { cardDragKey } from "../ui/drag/card-drag";
+import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
@@ -238,6 +239,7 @@ export function createPanelFeature(deps: {
     openPopup: taskPanel.openPopup,
     onRefresh: refresh,
     editorHost: deps.editorHost,
+    noteCursors: orcaNoteCursorSource,
     // Changes made elsewhere without a hook (e.g. sync) show on return.
     onActivated: refresh,
   });
@@ -265,8 +267,18 @@ export function createPanelFeature(deps: {
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.
-    registry.listener(window, "keydown", cardDragKey as EventListener, true);
-    registry.listener(window, "keyup", cardDragKey as EventListener, true);
+    registry.listener(
+      window,
+      "keydown",
+      handleCardDragAltKey as EventListener,
+      true,
+    );
+    registry.listener(
+      window,
+      "keyup",
+      handleCardDragAltKey as EventListener,
+      true,
+    );
     registry.css("myDayStyle", myDayCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,

@@ -101,11 +101,6 @@ export const myDayCss = `
 }
 
 /*
- * A press anywhere on a card in My Day starts a drag (#85): its text is not
- * selectable (card-drag-style.ts); the task panel shows the text to copy.
- */
-
-/*
  * Nothing unscheduled: one quiet line, so the timeline keeps the room. Tall
  * enough still to drop a timeline card on (#85).
  */

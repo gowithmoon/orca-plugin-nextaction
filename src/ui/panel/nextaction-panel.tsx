@@ -3,10 +3,12 @@
 // current view and, in the wide tier, the side pane. It knows nothing about
 // any view's content. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { NoteCursorSource } from "../../application/ports/note-cursor";
 import type { TaskId } from "../../domain/task/task";
 import type { PanelProps } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { PanelPopupLayer } from "../components/popup-layer";
+import { NoteCursorContext } from "../drag/card-drag";
 import type { OpenTaskPanelPopup } from "../task-panel/task-panel-popup";
 import type { TaskPanelSidePaneProps } from "../task-panel/task-panel-side-pane";
 import { type EditorHost, HiddenEditor } from "./hidden-editor";
@@ -44,6 +46,8 @@ export interface NextActionPanelOptions {
    * opens active, and its views read then).
    */
   onActivated: () => void;
+  /** Orca's cursor data in a note panel, for dragging cards into the notes (#122). */
+  noteCursors: NoteCursorSource;
 }
 
 /** Calls `onActivated` each time `active` turns true after the first render. */
@@ -105,6 +109,7 @@ export function createNextActionPanel(
     onRefresh,
     onActivated,
     editorHost,
+    noteCursors,
   } = options;
 
   return function NextActionPanel(props) {
@@ -199,36 +204,38 @@ export function createNextActionPanel(
         />
         {context && (
           <PanelContext.Provider value={context}>
-            <PanelPopupLayer>
-              <PanelNavigation
-                views={list}
-                currentId={current?.id}
-                onSelect={showView}
-                onRefresh={onRefresh}
-              />
-              <div className="nextaction-panel-body">
-                <div
-                  className="nextaction-panel-view"
-                  role="tabpanel"
-                  id={current && `${props.panelId}-${current.id}`}
-                  aria-label={current?.label()}
-                >
-                  {View && <View />}
-                </div>
-                {tier === "wide" && (
-                  <aside
-                    className="nextaction-panel-side"
-                    aria-label={t("Task panel")}
+            <NoteCursorContext.Provider value={noteCursors}>
+              <PanelPopupLayer>
+                <PanelNavigation
+                  views={list}
+                  currentId={current?.id}
+                  onSelect={showView}
+                  onRefresh={onRefresh}
+                />
+                <div className="nextaction-panel-body">
+                  <div
+                    className="nextaction-panel-view"
+                    role="tabpanel"
+                    id={current && `${props.panelId}-${current.id}`}
+                    aria-label={current?.label()}
                   >
-                    <SidePane
-                      taskId={selectedTaskId}
-                      onClose={clearSelection}
-                      onSelectTask={selectTask}
-                    />
-                  </aside>
-                )}
-              </div>
-            </PanelPopupLayer>
+                    {View && <View />}
+                  </div>
+                  {tier === "wide" && (
+                    <aside
+                      className="nextaction-panel-side"
+                      aria-label={t("Task panel")}
+                    >
+                      <SidePane
+                        taskId={selectedTaskId}
+                        onClose={clearSelection}
+                        onSelectTask={selectTask}
+                      />
+                    </aside>
+                  )}
+                </div>
+              </PanelPopupLayer>
+            </NoteCursorContext.Provider>
           </PanelContext.Provider>
         )}
       </div>

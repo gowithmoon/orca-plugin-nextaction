@@ -6,7 +6,8 @@
 // dragging the card fades and a chip with the task's text follows the
 // pointer; over a block in a note panel a line shows where the new block
 // would go, or a caret where an inline reference would, and near a note
-// panel's top or bottom the panel scrolls (#125). Letting go there hands
+// panel's top or bottom the panel scrolls (#125), as the plugin panel's
+// scrollers do (auto-scroll.ts). Letting go there hands
 // the drop to `onNoteDrop`; letting go within the plugin panel hands it to the card's `inPanel` drop, if it has
 // one (the all tasks view's move and My Day's scheduling, #124); anywhere
 // else cancels. An area without `onNoteDrop`, or an `inPanel` drop that
@@ -22,6 +23,7 @@
 // the note panels. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import { createPortal } from "react-dom";
+import type { NoteCursorSource } from "../../application/ports/note-cursor";
 import type { NoteTarget } from "../../application/ports/task-repository";
 import {
   type NoteDropMode,
@@ -30,7 +32,7 @@ import {
 } from "../../domain/blocking/note-drop";
 import type { Task } from "../../domain/task/task";
 import { shownText } from "../components/format";
-import { scrollNearEdge } from "./auto-scroll";
+import { scrollAmount, scrollNearEdge } from "./auto-scroll";
 import {
   type NoteDropProbe,
   noteScrollerAt,
@@ -171,27 +173,6 @@ function caretBox(probe: NoteDropProbe, plan: NoteDropPlan): DOMRect | null {
   return plan.kind === "inline" ? probe.caretBox : null;
 }
 
-/** How near a note panel's top or bottom the pointer scrolls it (#122). */
-const scrollZonePx = 32;
-/** How far a note panel scrolls per frame there, at the very edge. */
-const scrollStepPx = 12;
-
-/** How far to scroll `scroller` per frame for the pointer at `y`: 0 outside its edges. */
-function scrollStep(scroller: HTMLElement, y: number): number {
-  const box = scroller.getBoundingClientRect();
-  const fromTop = y - box.top;
-  const fromBottom = box.bottom - y;
-  if (fromTop < scrollZonePx) {
-    return -Math.ceil((scrollStepPx * (scrollZonePx - fromTop)) / scrollZonePx);
-  }
-  if (fromBottom < scrollZonePx) {
-    return Math.ceil(
-      (scrollStepPx * (scrollZonePx - fromBottom)) / scrollZonePx,
-    );
-  }
-  return 0;
-}
-
 /** The drags under way told of Alt going down or up (#126). */
 const altListeners = new Set<(alt: boolean) => void>();
 
@@ -203,13 +184,23 @@ const altListeners = new Set<(alt: boolean) => void>();
  * so Orca still sees the key. The drop itself reads Alt from the release's
  * pointer event.
  */
-export function cardDragKey(event: KeyboardEvent): void {
+export function handleCardDragAltKey(event: KeyboardEvent): void {
   if (event.key !== "Alt") return;
   for (const listener of [...altListeners]) listener(event.altKey);
 }
 
+/**
+ * Orca's cursor data at a place in a note panel (infra, through the
+ * NoteCursorSource port), given by the plugin panel to every card drag in
+ * it. Without it no drop lands in the notes.
+ */
+export const NoteCursorContext = React.createContext<
+  NoteCursorSource | undefined
+>(undefined);
+
 function createCardDrag(
   onNoteDrop: () => ((drop: NoteCardDrop) => void) | undefined,
+  cursors: () => NoteCursorSource | undefined,
 ) {
   let dragging: Dragging | null = null;
   let point = { x: 0, y: 0 };
@@ -227,7 +218,7 @@ function createCardDrag(
   };
   /** Where the drag drops in the notes, if it does at all. */
   const noteDropOf = (drag: Dragging) =>
-    drag.inPanel?.keepsToPanel ? undefined : onNoteDrop();
+    drag.inPanel?.keepsToPanel || !cursors() ? undefined : onNoteDrop();
 
   const place = () => {
     if (chip) {
@@ -272,7 +263,7 @@ function createCardDrag(
     // Nothing drops in the notes: they are not scrolled either.
     if (!dragging || !noteDropOf(dragging)) return;
     const scroller = noteScrollerAt(point.x, point.y);
-    const step = scroller ? scrollStep(scroller, point.y) : 0;
+    const step = scroller ? scrollAmount(scroller, point.x, point.y) : 0;
     if (!scroller || step === 0) return;
     const before = scroller.scrollTop;
     scroller.scrollTop = before + step;
@@ -293,7 +284,11 @@ function createCardDrag(
     const drag = dragging;
     if (!drag) return;
     // Nothing drops in the notes: no probing, the drag stays the view's own.
-    const probe = noteDropOf(drag) ? probeNoteDrop(point.x, point.y) : null;
+    const source = cursors();
+    const probe =
+      source && noteDropOf(drag)
+        ? probeNoteDrop(source, point.x, point.y)
+        : null;
     drag.over = probe ? { probe, plan: planFor(probe, modeFor(alt)) } : null;
     if (!probe) drag.inPanel?.move(point.x, point.y);
     place();
@@ -473,7 +468,15 @@ export function CardDragArea(props: {
 }) {
   const onNoteDrop = React.useRef(props.onNoteDrop);
   onNoteDrop.current = props.onNoteDrop;
-  const [drag] = React.useState(() => createCardDrag(() => onNoteDrop.current));
+  const noteCursors = React.useContext(NoteCursorContext);
+  const cursors = React.useRef(noteCursors);
+  cursors.current = noteCursors;
+  const [drag] = React.useState(() =>
+    createCardDrag(
+      () => onNoteDrop.current,
+      () => cursors.current,
+    ),
+  );
   // The view going away (the panel closing, the plugin unloading) ends it.
   React.useEffect(() => () => drag.cancel(), [drag]);
   return (
