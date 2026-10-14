@@ -23,6 +23,7 @@ import {
 } from "../../hooks/use-view-query";
 import type { PanelView } from "../../panel/panel-views";
 import { CompletionChart } from "./completion-chart";
+import { StatsNow, type StatsNowDeps } from "./stats-now";
 import { StatsPeriodBar } from "./stats-period-bar";
 import {
   cellDescription,
@@ -33,7 +34,7 @@ import {
 } from "./stats-period-text";
 import type { StatsScaleStore } from "./stats-scale-store";
 
-export interface StatsViewDeps {
+export interface StatsViewDeps extends StatsNowDeps {
   readStats: ReadStats;
   /** The current logical day, for the dates shown and today's cell. */
   today: () => CalendarDate;
@@ -147,6 +148,7 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
     return (
       <>
         <ViewHeader title={t("Stats")} />
+        <StatsNow query={query} deps={deps} />
         <StatsContent
           query={query}
           today={deps.today()}
