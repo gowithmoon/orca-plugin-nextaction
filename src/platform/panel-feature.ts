@@ -36,6 +36,7 @@ import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
+import { statsPeriodCss } from "../ui/styles/stats-period-style";
 import { statsCss } from "../ui/styles/stats-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
@@ -56,6 +57,7 @@ import { createNextActionFilterStore } from "../ui/views/next-action/next-action
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
+import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
 import { createStatsView } from "../ui/views/stats/stats-view";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
@@ -117,6 +119,8 @@ export function createPanelFeature(deps: {
   const allTasksFilter = createAllTasksFilterStore();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
+  // The stats view's scale (#135): in memory only, likewise.
+  const statsScale = createStatsScaleStore();
   // When the last full review was completed (#101), in `plugins.setData`
   // under the current load's name.
   let loadedPluginName: string | undefined;
@@ -239,6 +243,7 @@ export function createPanelFeature(deps: {
       readStats: createReadStats(myDayDeps),
       today: deps.today,
       changes,
+      scale: statsScale,
     }),
   );
   // Created once, so the panel's renderer keeps the same component.
@@ -270,6 +275,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.doneSection`, doneSection.clear);
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
+    registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
@@ -291,6 +297,7 @@ export function createPanelFeature(deps: {
     );
     registry.css("myDayStyle", myDayCss);
     registry.css("statsStyle", statsCss);
+    registry.css("statsPeriodStyle", statsPeriodCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,
     // so it is released after it; then nothing renders into it any more.

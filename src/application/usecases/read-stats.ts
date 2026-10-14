@@ -5,6 +5,11 @@
 // header's numbers (#134).
 import { countedEntries } from "../../domain/stats/counted-completions";
 import {
+  pagedAnchor,
+  type StatsPaging,
+  statsPaging,
+} from "../../domain/stats/stats-paging";
+import {
   inCell,
   type StatsPeriod,
   type StatsScale,
@@ -21,7 +26,7 @@ export interface ReadStatsOptions {
   readonly scale: StatsScale;
   /**
    * A logical day within the period to read; today's logical day when
-   * absent.
+   * absent or later (no period after the current one is read).
    */
   readonly anchor?: CalendarDate;
 }
@@ -40,6 +45,8 @@ export interface ReadStatsResult {
   readonly cells: readonly StatsCellRead[];
   /** The completions and skips in the whole period. */
   readonly totals: { readonly completions: number; readonly skips: number };
+  /** Where the period pages to (#135). */
+  readonly paging: StatsPaging;
 }
 
 /** Reads the stats. Errors are thrown as they are. */
@@ -55,7 +62,7 @@ export function createReadStats(deps: {
     const { tasks } = await deps.repository.readTaskGraph();
     const { cells, ...period } = statsPeriod(
       options.scale,
-      options.anchor ?? today,
+      pagedAnchor(options.anchor, today),
     );
     const entries = tasks.flatMap((item) =>
       countedEntries(item.task, item.completionHistory ?? []),
@@ -76,6 +83,7 @@ export function createReadStats(deps: {
         completions: cellReads.reduce((sum, cell) => sum + cell.completions, 0),
         skips: cellReads.reduce((sum, cell) => sum + cell.skips, 0),
       },
+      paging: statsPaging(period, today),
     };
   };
 }
