@@ -1,3 +1,4 @@
+import type { NoteDropPlan } from "../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
 import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
@@ -11,6 +12,7 @@ import type {
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
+import type { NoteCaret } from "./note-cursor";
 
 /**
  * What a task's completion history (GLOSSARY: 完成历史) reads as. A task
@@ -146,6 +148,25 @@ export interface TaskWrite {
 }
 
 /**
+ * The block in a note panel a task card was dropped on (#122). Found by
+ * `ui` in the note panel under the pointer and used by `infra` to write
+ * there; `application` and `domain` pass it on without reading it.
+ */
+export interface NoteTarget {
+  /** The note panel the block shows in; the write goes through it (ADR 0024). */
+  readonly panelId: string;
+  /** That panel's root block: the journal or page it shows. */
+  readonly rootBlockId: number;
+  /** The block dropped on, as the panel shows it (a mirror stays a mirror). */
+  readonly blockId: number;
+  /**
+   * Orca's cursor data at the pointer when it lay in the block's text, else
+   * `null`. Only `infra` reads it (NoteCursorSource, drag-to-note).
+   */
+  readonly caret: NoteCaret | null;
+}
+
+/**
  * Where tasks are read from and written to. Implementations hide every Orca
  * detail: mirror blocks, orphans, note-facing names and error conversion.
  *
@@ -266,6 +287,21 @@ export interface TaskRepository {
    * it, or the write fails.
    */
   moveTask(id: TaskId, target: TaskId, placement: MovePlacement): Promise<void>;
+
+  /**
+   * Writes a link to the task into the notes at `target`, as `plan` says
+   * (#122): a reference at the inline caret, or a new block holding only a
+   * reference to the task (#125; mirror blocks come with #126).
+   * Written through the target's note panel, so the user undoes it there
+   * with one undo (ADR 0024). Changes no task relation (ADR 0003). A mirror
+   * block's ID links its source block. Fails when the block is not a task or
+   * the write fails.
+   */
+  linkTaskInNote(
+    id: TaskId,
+    plan: NoteDropPlan,
+    target: NoteTarget,
+  ): Promise<void>;
 
   /**
    * The task tag's custom property definitions (GLOSSARY: 自定义属性, ADR

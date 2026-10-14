@@ -7,10 +7,12 @@
 // the schedule popup (#84). Between the next actions and all tasks in the
 // navigation, with no count there. It reads when the plugin panel opens and
 // again on every task change signal (ADR 0007); open across the day boundary,
-// it moves on to the new day. Verified by hand in Orca (docs/ARCHITECTURE.md
-// §5).
+// it moves on to the new day. An unscheduled card, or a timeline card by its
+// body, dragged onto a block in a note panel links the task there (#127).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { AddToMyDay } from "../../../application/usecases/add-to-my-day";
+import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type {
   MyDayItem,
   ReadMyDay,
@@ -33,7 +35,9 @@ import { TaskCard } from "../../components/task-card";
 import { taskSearchFilter } from "../../components/task-search-filter";
 import { ViewHeader } from "../../components/view-header";
 import { FailedNotice, PausedNotice } from "../../components/view-notice";
+import { CardDragArea, useCardDrag } from "../../drag/card-drag";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
+import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import { useMyDayCandidates } from "../../hooks/use-my-day-candidates";
 import { useNow } from "../../hooks/use-now";
 import {
@@ -51,12 +55,10 @@ import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import {
   createMyDayDrag,
-  DragChip,
-  DragWatch,
   type MyDayDrag,
   MyDayDragProvider,
   type MyDayDragSetup,
-  useDragSource,
+  useMyDayDrag,
 } from "./my-day-drag";
 import type { MyDayScheduleActions } from "./my-day-schedule-actions";
 import { useOptimisticMyDay } from "./optimistic-my-day";
@@ -67,6 +69,8 @@ export interface MyDayViewDeps {
   readMyDay: ReadMyDay;
   readMyDayCandidates: ReadMyDayCandidates;
   addToMyDay: AddToMyDay;
+  /** A card dropped on a block in a note panel links the task there (#127). */
+  linkTaskInNote: LinkTaskInNote;
   /** The current logical day, for dates, overdue and moving to a new day. */
   today: () => CalendarDate;
   /** The current time: the timeline's current time line, a new schedule's start. */
@@ -204,7 +208,12 @@ function UnscheduledItem(props: {
   children: React.ReactNode;
 }) {
   const { task } = props.item;
-  const drag = useDragSource(() => ({ kind: "add", task }));
+  const myDay = useMyDayDrag();
+  const inPanel = React.useMemo(
+    () => myDay?.target({ kind: "add", task }),
+    [myDay, task],
+  );
+  const drag = useCardDrag(task, inPanel ? { inPanel } : {});
   return (
     <li className="nextaction-my-day-unscheduled-item" {...drag}>
       {props.children}
@@ -274,6 +283,10 @@ function MyDayAreas(props: {
     ...setup.current,
     root: root.current,
   }));
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
   const onSchedule = React.useCallback(
     (item: ScheduleTarget) => {
       if (!range) return;
@@ -312,21 +325,24 @@ function MyDayAreas(props: {
   }
 
   return (
-    <MyDayDragProvider value={drag.current}>
-      <div className="nextaction-my-day-layout" ref={root}>
-        <MyDaySections
-          search={search}
-          unscheduled={unscheduled}
-          timeline={
-            read && (
-              <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
-            )
-          }
-        />
-        <DragChip />
-        <DragWatch root={root} />
-      </div>
-    </MyDayDragProvider>
+    // The cards' drag (#124); their drops in the panel are My Day's, on a
+    // block in a note panel a link (#127). The add search's results are no
+    // cards and are not dragged.
+    <CardDragArea onNoteDrop={linkTaskInNote}>
+      <MyDayDragProvider value={drag.current}>
+        <div className="nextaction-my-day-layout" ref={root}>
+          <MyDaySections
+            search={search}
+            unscheduled={unscheduled}
+            timeline={
+              read && (
+                <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
+              )
+            }
+          />
+        </div>
+      </MyDayDragProvider>
+    </CardDragArea>
   );
 }
 

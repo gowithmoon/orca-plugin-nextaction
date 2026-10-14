@@ -6,11 +6,16 @@ import {
   type ConvertToTaskResult,
   type DiscardableData,
   type InitialProperties,
+  type NoteTarget,
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
   type TaskWrite,
 } from "../../../application/ports/task-repository";
+import type {
+  NoteDropPlacement,
+  NoteDropPlan,
+} from "../../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import {
@@ -24,7 +29,7 @@ import type {
 import type { MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
-import type { Block } from "../../../orca.d.ts";
+import type { Block, CursorData } from "../../../orca.d.ts";
 import {
   planCompletionHistoryWrite,
   readCompletionHistory,
@@ -74,11 +79,16 @@ import {
   encodeTaskChanges,
   type RefDataItem,
 } from "../codec/task-encode";
+import { fromNoteCaret } from "../note-cursor-source";
 import {
+  cachedBlock,
   invokeBackend,
   invokeEditorCommand,
+  invokeEditorCommandAt,
   invokeGroup,
+  invokeInNotePanel,
   moveBlocks,
+  setCaret,
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { buildBlockSearchQuery } from "../query/block-search-query";
@@ -127,6 +137,183 @@ async function getBlocks(ids: readonly number[]): Promise<Map<number, Block>> {
     }
   }
   return blocks;
+}
+
+/**
+ * The children of block `id` as the backend holds them now, for finding the
+ * block `batchInsertReprs` added, which it does not return (drag-to-note
+ * 写入, as the spike did with `get-block`).
+ */
+async function childIds(id: number): Promise<number[]> {
+  const block = await invokeBackend("get-block", id);
+  if (typeof block !== "object" || block === null || !("children" in block)) {
+    throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
+  }
+  const { children } = block as Block;
+  return Array.isArray(children) ? [...children] : [];
+}
+
+/**
+ * Where the caret goes at the end of `block`'s text, as an index into its
+ * content and an offset in that fragment: after the last text fragment's
+ * last character, or past a last fragment that is no text (a reference:
+ * index 1, offset 0 after a block's only reference, drag-to-note 光标). The
+ * text case is not measured; to check by hand in Orca (#126).
+ */
+function contentEnd(block: Block): { index: number; offset: number } {
+  const content = block.content ?? [];
+  const last = content.at(-1);
+  if (last?.t === "t" && typeof last.v === "string") {
+    return { index: content.length - 1, offset: last.v.length };
+  }
+  return { index: content.length, offset: 0 };
+}
+
+/** A collapsed cursor at `at` in the target's note panel. */
+function noteCursor(target: NoteTarget, at: CursorData["anchor"]): CursorData {
+  return {
+    anchor: at,
+    focus: at,
+    isForward: true,
+    panelId: target.panelId,
+    rootBlockId: target.rootBlockId,
+  };
+}
+
+/**
+ * A reference to `taskId` at the drop's inline caret, as Orca gave it; one
+ * command, one undo. It leaves the caret right after the reference
+ * (drag-to-note 写入, 光标).
+ */
+async function linkInline(taskId: number, target: NoteTarget): Promise<void> {
+  if (!target.caret) throw new OrcaError("no inline caret at the drop");
+  const given = fromNoteCaret(target.caret);
+  // An empty block gives a block-level cursor (drag-to-note 空块); the
+  // reference goes at the start of its text, the cursor a new block's
+  // reference is written at (measured, drag-to-note 写入).
+  const caret = given.anchor.isInline
+    ? given
+    : noteCursor(target, {
+        blockId: given.anchor.blockId,
+        isInline: true,
+        index: 0,
+        offset: 0,
+      });
+  await invokeInNotePanel(target.panelId, async () => {
+    await invokeEditorCommandAt("core.editor.insertLink", caret, true, taskId);
+  });
+}
+
+/**
+ * A new block holding only a reference to `taskId`, then the reference at
+ * its start, in one group: one undo (drag-to-note 写入). The caret goes to
+ * the new block's end, after the reference, to go on typing there
+ * (drag-to-note 光标, round 6).
+ */
+async function linkInNewRefBlock(
+  taskId: number,
+  placement: NoteDropPlacement,
+  target: NoteTarget,
+): Promise<void> {
+  await invokeInNotePanel(target.panelId, async () => {
+    let created: number | undefined;
+    await invokeGroup(async () => {
+      const targetBlock = await cachedBlock(target.blockId);
+      const id = await invokeEditorCommand(
+        "core.editor.insertBlock",
+        targetBlock,
+        placement,
+        [],
+      );
+      if (typeof id !== "number") {
+        throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+      }
+      created = id;
+      await invokeEditorCommandAt(
+        "core.editor.insertLink",
+        noteCursor(target, {
+          blockId: id,
+          isInline: true,
+          index: 0,
+          offset: 0,
+        }),
+        true,
+        taskId,
+      );
+    });
+    if (created === undefined) return;
+    await setCaret(
+      noteCursor(target, {
+        blockId: created,
+        isInline: true,
+        index: 1,
+        offset: 0,
+      }),
+    );
+  });
+}
+
+/**
+ * A mirror block of `taskId`: a mirror repr, then its type 5 reference, in
+ * one group, as a mirror Orca's interface makes, with no text of its own, so
+ * the global search finds the task once. insertBlock with a mirror repr
+ * would store the task's text (drag-to-note 写入).
+ *
+ * The caret then goes to the end of the dropped-on block, never into the
+ * new mirror: typing there would change the task (#122 user story 16,
+ * drag-to-note 光标, round 6). A root block is its title. When the
+ * dropped-on block is a mirror itself, its end is its source's text, so the
+ * caret goes to the end of the panel's root block's title instead.
+ */
+async function linkInMirrorBlock(
+  taskId: number,
+  placement: NoteDropPlacement,
+  target: NoteTarget,
+): Promise<void> {
+  await invokeInNotePanel(target.panelId, async () => {
+    const targetBlock = await cachedBlock(target.blockId);
+    await invokeGroup(async () => {
+      // The new block's siblings: the target's children for a first child,
+      // else its parent's. A root block only takes a first child
+      // (resolveNoteDrop).
+      const parentId =
+        placement === "firstChild" ? targetBlock.id : targetBlock.parent;
+      if (parentId === undefined) {
+        throw new OrcaError(`block ${targetBlock.id} has no parent`);
+      }
+      const before = new Set(await childIds(parentId));
+      await invokeEditorCommand(
+        "core.editor.batchInsertReprs",
+        targetBlock,
+        placement,
+        [{ type: "mirror", mirroredId: taskId }],
+      );
+      // batchInsertReprs returns no ID: the new block is the child that was
+      // not there before (drag-to-note 写入).
+      const added = (await childIds(parentId)).filter(
+        (child) => !before.has(child),
+      );
+      const [created] = added;
+      if (added.length !== 1 || created === undefined) {
+        throw new OrcaError(
+          `batchInsertReprs added ${JSON.stringify(added)} under block ${parentId}`,
+        );
+      }
+      await invokeEditorCommand("core.editor.createRef", created, taskId, 5);
+    });
+    // Neither insert changes the dropped-on block's own content.
+    const caretBlock =
+      mirrorSourceId(targetBlock) === undefined
+        ? targetBlock
+        : await cachedBlock(target.rootBlockId);
+    await setCaret(
+      noteCursor(target, {
+        blockId: caretBlock.id,
+        isInline: true,
+        ...contentEnd(caretBlock),
+      }),
+    );
+  });
 }
 
 /**
@@ -1053,6 +1240,27 @@ export function createOrcaTaskRepository(
       await writeTo(block, () =>
         moveBlocks(block.id, targetBlock.id, placement),
       );
+    },
+
+    async linkTaskInNote(
+      id: TaskId,
+      plan: NoteDropPlan,
+      target: NoteTarget,
+    ): Promise<void> {
+      // A mirror's ID links its source block, so the link points at the task.
+      const block = await taskBlockToWrite(id, currentTag());
+      try {
+        if (plan.kind === "inline") {
+          await linkInline(block.id, target);
+        } else if (plan.content === "mirror") {
+          await linkInMirrorBlock(block.id, plan.placement, target);
+        } else {
+          await linkInNewRefBlock(block.id, plan.placement, target);
+        }
+      } finally {
+        // The task gained a reference; views read again (ADR 0007).
+        onWritten(block.id);
+      }
     },
 
     async readCustomPropertyDefinitions() {

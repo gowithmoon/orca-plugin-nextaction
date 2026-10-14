@@ -7,8 +7,11 @@
 // 0007). Nodes with children collapse (#67). The filter panel and the search
 // box narrow the tree to what matches, its ancestor tasks showing where it
 // sits (#69). A card dragged onto another becomes its subtask (#70), into a
-// gap goes there (#71). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// gap goes there (#71). Every card, the done section's too, dragged onto a
+// block in a note panel links the task there (#127). Verified by hand in
+// Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   AllTasksNode,
@@ -17,7 +20,7 @@ import type {
   ReadAllTasks,
 } from "../../../application/usecases/read-all-tasks";
 import type { ReadCandidates } from "../../../application/usecases/read-candidates";
-import type { CalendarDate, TaskId } from "../../../domain/task/task";
+import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
@@ -28,7 +31,9 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { CardDragArea, useCardDrag } from "../../drag/card-drag";
 import { useCandidates } from "../../hooks/use-candidates";
+import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import { useMoveTask } from "../../hooks/use-move-task";
 import {
   type TaskActions,
@@ -55,12 +60,7 @@ import {
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
 import type { DoneSectionStore } from "./done-section-store";
-import {
-  TaskDragArea,
-  TaskDragHandle,
-  TaskDropGap,
-  TaskDropTarget,
-} from "./task-drag";
+import { TaskDragArea, TaskDropGap, TaskDropTarget } from "./task-drag";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -87,6 +87,8 @@ export interface AllTasksViewDeps {
   filter: AllTasksFilterStore;
   /** Dragging a card onto another (#70) or into a gap (#71). */
   moveTask: MoveTask;
+  /** A card dropped on a block in a note panel links the task there (#127). */
+  linkTaskInNote: LinkTaskInNote;
 }
 
 /** The node or a node below it is a task not done. */
@@ -211,10 +213,9 @@ function TreeNodes(props: {
               )}
               {/* Only tree cards are dragged and dropped on, never the done
                   section's (#70). */}
-              <TaskDropTarget id={node.task.id}>
+              <TaskDropTarget task={node.task}>
                 <TaskCard
                   task={node.task}
-                  handle={<TaskDragHandle task={node.task} />}
                   today={cards.today}
                   actions={cards.actions}
                   menuItems={cards.menuItems}
@@ -279,7 +280,7 @@ function DoneSectionPart(props: {
           {done.items.length > 0 && (
             <ul className="nextaction-task-list">
               {done.items.map((task) => (
-                <li key={task.id}>
+                <DoneItem key={task.id} task={task}>
                   <TaskCard
                     task={task}
                     today={cards.today}
@@ -289,7 +290,7 @@ function DoneSectionPart(props: {
                     onOpen={(open) => cards.selectTask(open.id)}
                     selected={task.id === cards.selectedTaskId}
                   />
-                </li>
+                </DoneItem>
               ))}
             </ul>
           )}
@@ -308,6 +309,14 @@ function DoneSectionPart(props: {
   );
 }
 
+/**
+ * A done card's list item: dragged by a press anywhere on it into the notes
+ * only, never moved in the plugin panel nor a place to move to (#70, #127).
+ */
+function DoneItem(props: { task: Task; children: React.ReactNode }) {
+  return <li {...useCardDrag(props.task)}>{props.children}</li>;
+}
+
 function AllTasksContent(props: {
   query: ViewQuery<AllTasksRead>;
   today: CalendarDate;
@@ -319,6 +328,10 @@ function AllTasksContent(props: {
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
   const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
@@ -370,7 +383,9 @@ function AllTasksContent(props: {
             </Button>
           }
         />
-        <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
+        <CardDragArea onNoteDrop={linkTaskInNote}>
+          <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
+        </CardDragArea>
       </>
     );
   }
@@ -386,7 +401,7 @@ function AllTasksContent(props: {
     );
   }
   return (
-    <TaskDragArea onMove={moveTask}>
+    <TaskDragArea onMove={moveTask} onNoteDrop={linkTaskInNote}>
       {nodes.length > 0 && <TreeNodes top nodes={nodes} cards={cards} />}
       <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
     </TaskDragArea>

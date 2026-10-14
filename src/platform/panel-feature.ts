@@ -5,6 +5,7 @@ import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createCompleteFullReview } from "../application/usecases/complete-full-review";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createLinkTaskInNote } from "../application/usecases/link-task-in-note";
 import {
   createCanMarkReviewed,
   createMarkReviewed,
@@ -21,13 +22,16 @@ import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-da
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
+import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
+import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
+import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
@@ -115,6 +119,8 @@ export function createPanelFeature(deps: {
   let loadedPluginName: string | undefined;
   const lastFullReview = createPluginDataLastFullReview(() => loadedPluginName);
   const readCandidates = createReadCandidates({ repository });
+  // Every view's cards drag into the notes (#123, #127).
+  const linkTaskInNote = createLinkTaskInNote({ repository });
   views.register(
     createNextActionView({
       readNextActions: createReadNextActions({
@@ -123,6 +129,7 @@ export function createPanelFeature(deps: {
         dayBoundary: deps.dayBoundary,
         startPreviewDays: deps.startPreviewDays,
       }),
+      linkTaskInNote,
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
@@ -151,6 +158,7 @@ export function createPanelFeature(deps: {
       }),
       readMyDayCandidates: createReadMyDayCandidates(myDayDeps),
       addToMyDay: createAddToMyDay(myDayDeps),
+      linkTaskInNote,
       today: deps.today,
       now: () => systemClock.now(),
       changes,
@@ -169,6 +177,7 @@ export function createPanelFeature(deps: {
   views.register(
     createInboxView({
       readInbox: createReadInbox({ repository }),
+      linkTaskInNote,
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
@@ -193,6 +202,7 @@ export function createPanelFeature(deps: {
       readCandidates,
       filter: allTasksFilter,
       moveTask: createMoveTask({ repository }),
+      linkTaskInNote,
     }),
   );
   views.register(
@@ -212,6 +222,7 @@ export function createPanelFeature(deps: {
       addToMyDay: createAddToMyDay(myDayDeps),
       dropTask: createDropTask({ repository }),
       editTask: createEditTask({ repository }),
+      linkTaskInNote,
       openQuickCapture: deps.openQuickCapture,
       today: deps.today,
       changes,
@@ -228,6 +239,7 @@ export function createPanelFeature(deps: {
     openPopup: taskPanel.openPopup,
     onRefresh: refresh,
     editorHost: deps.editorHost,
+    noteCursors: orcaNoteCursorSource,
     // Changes made elsewhere without a hook (e.g. sync) show on return.
     onActivated: refresh,
   });
@@ -251,6 +263,22 @@ export function createPanelFeature(deps: {
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
+    registry.css("cardDragStyle", cardDragCss);
+    // Alt going down or up switches a card drag under way between a
+    // reference and a mirror (#126). Capturing, so the notes' editor cannot
+    // keep the key from it; nothing is prevented.
+    registry.listener(
+      window,
+      "keydown",
+      handleCardDragAltKey as EventListener,
+      true,
+    );
+    registry.listener(
+      window,
+      "keyup",
+      handleCardDragAltKey as EventListener,
+      true,
+    );
     registry.css("myDayStyle", myDayCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,

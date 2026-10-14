@@ -9,11 +9,13 @@ import type {
   CompletionHistoryRead,
   ConvertToTaskResult,
   NotConvertibleReason,
+  NoteTarget,
   TaskFilter,
   TaskRepository,
   TaskWrite,
   ValuesFilter,
 } from "../src/application/ports/task-repository";
+import type { NoteDropPlan } from "../src/domain/blocking/note-drop";
 import type { TaskMove } from "../src/domain/blocking/task-move";
 import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
@@ -95,6 +97,12 @@ export interface InMemoryTaskRepository extends TaskRepository {
   journalOf(id: number): CalendarDate | undefined;
   /** Every `moveTask` that succeeded, oldest first. */
   moves(): readonly TaskMove[];
+  /** Every `linkTaskInNote` that succeeded, oldest first; the notes are not modelled. */
+  noteLinks(): readonly {
+    id: TaskId;
+    plan: NoteDropPlan;
+    target: NoteTarget;
+  }[];
   /**
    * The task tag's custom property definitions (none unless set), as the
    * user would set them in Orca: values of properties no longer defined
@@ -157,6 +165,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   };
   let writes = 0;
   const moves: TaskMove[] = [];
+  const noteLinks: { id: TaskId; plan: NoteDropPlan; target: NoteTarget }[] =
+    [];
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
   /** IDs of new blocks, far from the ones tests pick. */
@@ -357,6 +367,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     journalOf: (id) => journalDays.get(id),
 
     moves: () => [...moves],
+
+    noteLinks: () => [...noteLinks],
+
+    async linkTaskInNote(id, plan, target) {
+      taskToWrite(id);
+      // Only recorded: the reference or mirror lives in the notes, which
+      // this repository does not model, and no task changes (ADR 0003).
+      write(() => {
+        noteLinks.push({ id, plan, target });
+      });
+    },
 
     async moveTask(id, target, placement) {
       taskToWrite(id);

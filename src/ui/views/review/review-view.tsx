@@ -5,12 +5,14 @@
 // glossary's order; the ones not built yet show unavailable. Its query is
 // shared with the count in the navigation (the tasks due for review); it
 // reads when the plugin panel opens and again on every task change signal
-// (ADR 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// (ADR 0007). A step's card dragged onto a block in a note panel links the
+// task there (#127). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { AddToMyDay } from "../../../application/usecases/add-to-my-day";
 import type { CompleteFullReview } from "../../../application/usecases/complete-full-review";
 import type { DropTask } from "../../../application/usecases/drop-task";
 import type { EditTask } from "../../../application/usecases/edit-task";
+import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type {
   CanMarkReviewed,
   MarkReviewed,
@@ -36,7 +38,9 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { CardDragArea, useCardDrag } from "../../drag/card-drag";
 import { useCompleteFullReview } from "../../hooks/use-complete-full-review";
+import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import { useMarkReviewed } from "../../hooks/use-mark-reviewed";
 import { useReviewCardActions } from "../../hooks/use-review-card-actions";
 import {
@@ -86,6 +90,8 @@ export interface ReviewViewDeps {
   dropTask: DropTask;
   /** A card's "Change due date" (overdue, #100). */
   editTask: EditTask;
+  /** A card dropped on a block in a note panel links the task there (#127). */
+  linkTaskInNote: LinkTaskInNote;
   /** Every step's "Create task": the quick capture popup. */
   openQuickCapture: () => void;
   /** The current logical day, for dates and overdue. */
@@ -322,6 +328,10 @@ function StepList(props: {
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
   const today = deps.today();
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
 
   if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -348,25 +358,32 @@ function StepList(props: {
   }
   const shown = cardActions(list);
   return (
-    <ul className="nextaction-task-list">
-      {items.map(({ task, kept }) => (
-        <li key={task.id}>
-          <TaskCard
-            task={task}
-            today={today}
-            actions={actions}
-            menuItems={menuItems}
-            menuPlace={menuPlace}
-            onOpen={(open) => selectTask(open.id)}
-            selected={task.id === selectedTaskId}
-            kept={kept}
-            keptStatusShown={list.keptStatusShown}
-            buttons={shown.map((action) => button(action, task))}
-          />
-        </li>
-      ))}
-    </ul>
+    <CardDragArea onNoteDrop={linkTaskInNote}>
+      <ul className="nextaction-task-list">
+        {items.map(({ task, kept }) => (
+          <StepItem key={task.id} task={task}>
+            <TaskCard
+              task={task}
+              today={today}
+              actions={actions}
+              menuItems={menuItems}
+              menuPlace={menuPlace}
+              onOpen={(open) => selectTask(open.id)}
+              selected={task.id === selectedTaskId}
+              kept={kept}
+              keptStatusShown={list.keptStatusShown}
+              buttons={shown.map((action) => button(action, task))}
+            />
+          </StepItem>
+        ))}
+      </ul>
+    </CardDragArea>
   );
+}
+
+/** A step's card list item, dragged by a press anywhere on it (#127). */
+function StepItem(props: { task: Task; children: React.ReactNode }) {
+  return <li {...useCardDrag(props.task)}>{props.children}</li>;
 }
 
 /** "Create task" beside a step's title: the quick capture popup. */
