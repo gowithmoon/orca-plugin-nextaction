@@ -28,11 +28,29 @@ export interface ReviewPageStore {
   set(page: ReviewPage): void;
   /** Back to the start page; a full review under way is given up. */
   clear(): void;
+  /**
+   * A full review showing `step`: the one under way moves to it, its steps
+   * opened kept; otherwise a new one starts there. Another view jumping here
+   * uses it (#133).
+   */
+  openFullReviewStep(step: FullReviewStepId): void;
   /** Calls `listener` on every change; returns the unsubscribe function. */
   subscribe(listener: () => void): () => void;
 }
 
 export function createReviewPageStore(): ReviewPageStore {
   const store = createMemoryStore(start);
-  return { ...store, clear: () => store.set(start) };
+  return {
+    ...store,
+    clear: () => store.set(start),
+    openFullReviewStep(step) {
+      const page = store.current();
+      const opened = page.kind === "full" ? page.opened : [];
+      store.set({
+        kind: "full",
+        step,
+        opened: opened.includes(step) ? opened : [...opened, step],
+      });
+    },
+  };
 }
