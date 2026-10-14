@@ -18,6 +18,7 @@ import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
 import { createReadReview } from "../application/usecases/read-review";
+import { createReadStats } from "../application/usecases/read-stats";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
@@ -35,6 +36,11 @@ import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
+import { statsDistributionCss } from "../ui/styles/stats-distribution-style";
+import { statsNowCss } from "../ui/styles/stats-now-style";
+import { statsPeriodCss } from "../ui/styles/stats-period-style";
+import { statsSelectionCss } from "../ui/styles/stats-selection-style";
+import { statsCss } from "../ui/styles/stats-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { OpenReviewPopup } from "../ui/task-panel/review-popup";
@@ -54,6 +60,8 @@ import { createNextActionFilterStore } from "../ui/views/next-action/next-action
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
+import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
+import { createStatsView } from "../ui/views/stats/stats-view";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -65,7 +73,7 @@ export function pluginPanelType(pluginName: string): string {
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
  * style sheet, with the next action view (#53), the My Day view (#83), the
- * inbox view (#37), the all tasks view (#65), the review view (#98, #99) and their
+ * inbox view (#37), the all tasks view (#65), the review view (#98, #99), the stats view (#132) and their
  * card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
@@ -114,6 +122,8 @@ export function createPanelFeature(deps: {
   const allTasksFilter = createAllTasksFilterStore();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
+  // The stats view's scale (#135): in memory only, likewise.
+  const statsScale = createStatsScaleStore();
   // When the last full review was completed (#101), in `plugins.setData`
   // under the current load's name.
   let loadedPluginName: string | undefined;
@@ -231,6 +241,22 @@ export function createPanelFeature(deps: {
       page: reviewPage,
     }),
   );
+  views.register(
+    createStatsView({
+      readStats: createReadStats({
+        ...myDayDeps,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      today: deps.today,
+      changes,
+      scale: statsScale,
+      allTasksFilter,
+      reviewPage,
+      linkTaskInNote,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+    }),
+  );
   // Created once, so the panel's renderer keeps the same component.
   const refresh = () => changes.now();
   const panelRenderer = createNextActionPanel({
@@ -260,6 +286,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.doneSection`, doneSection.clear);
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
+    registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
@@ -280,6 +307,11 @@ export function createPanelFeature(deps: {
       true,
     );
     registry.css("myDayStyle", myDayCss);
+    registry.css("statsStyle", statsCss);
+    registry.css("statsPeriodStyle", statsPeriodCss);
+    registry.css("statsNowStyle", statsNowCss);
+    registry.css("statsDistributionStyle", statsDistributionCss);
+    registry.css("statsSelectionStyle", statsSelectionCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,
     // so it is released after it; then nothing renders into it any more.

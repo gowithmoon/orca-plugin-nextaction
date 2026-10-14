@@ -16,7 +16,8 @@ export function shownText(task: Pick<Task, "text">): {
     : { text: task.text, empty: false };
 }
 
-function weekday(date: CalendarDate): string {
+/** The short name of the date's weekday, e.g. "周四". */
+export function weekday(date: CalendarDate): string {
   // Local calendar arithmetic only (ADR 0012); no current time involved.
   switch (new Date(date.year, date.month - 1, date.day).getDay()) {
     case 0:
