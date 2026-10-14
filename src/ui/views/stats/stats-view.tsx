@@ -10,6 +10,8 @@ import type {
   ReadStats,
   ReadStatsResult,
 } from "../../../application/usecases/read-stats";
+import { pagedAnchor, statsPaging } from "../../../domain/stats/stats-paging";
+import { statsPeriod } from "../../../domain/stats/stats-period";
 import type { StatsSelection } from "../../../domain/stats/stats-selection";
 import type { CalendarDate } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -78,6 +80,7 @@ function StatsContent(props: {
   today: CalendarDate;
   scale: StatsScaleStore;
   onPage: (anchor: CalendarDate | undefined) => void;
+  onStep: (direction: "previous" | "next") => void;
   selection: StatsSelectionStore;
   /** Selects, or clears the selection when it is the one selected (#137). */
   onSelect: (selection: StatsSelection) => void;
@@ -122,6 +125,7 @@ function StatsContent(props: {
         chosen={chosen}
         onScale={(scale) => props.scale.set(scale)}
         onPage={props.onPage}
+        onStep={props.onStep}
       />
       <ul className="nextaction-stats-totals">
         <li>
@@ -228,6 +232,20 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
   // A new scale shows its current period; the store lives as long as the
   // plugin instance.
   deps.scale.subscribe(() => showPeriod(undefined));
+  /**
+   * Pages one period back or forward from the period the view is set to,
+   * not the one last read, so every press during a read counts; forward
+   * stops at the current period.
+   */
+  const step = (direction: "previous" | "next") => {
+    const today = deps.today();
+    const paging = statsPaging(
+      statsPeriod(deps.scale.current(), pagedAnchor(anchor, today)),
+      today,
+    );
+    const next = direction === "previous" ? paging.previous : paging.next;
+    if (next) showPeriod(next);
+  };
 
   function StatsView() {
     // Every opening shows the current period of the scale chosen.
@@ -247,6 +265,7 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
           today={deps.today()}
           scale={deps.scale}
           onPage={showPeriod}
+          onStep={step}
           selection={selection}
           onSelect={selection.toggle}
           onClearSelection={selection.clear}
