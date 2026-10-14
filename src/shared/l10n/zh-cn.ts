@@ -484,6 +484,15 @@ const zhCN: Record<string, string> = {
   "Planned but not done": "排了没做",
   "Nothing planned was left undone": "排进我的一天的任务都做了",
   "Orca Note task reminder": "虎鲸笔记任务提醒",
+  Stats: "统计",
+  "Could not read the stats: ${reason}": "无法读取统计：${reason}",
+  "${first} – ${last}": "${first} – ${last}",
+  Completions: "完成",
+  Skips: "跳过",
+  "Completions by day": "每天的完成次数",
+  "${date}: ${completions} completed, ${skips} skipped":
+    "${date}：完成 ${completions} 次，跳过 ${skips} 次",
+  "Nothing completed or skipped this week": "本周还没有记录",
 };
 
 export default zhCN;

@@ -1,0 +1,81 @@
+// Use case: read the stats (GLOSSARY: 统计视图, 统计周期), for the stats view:
+// one read of the task graph gives the period's cells with their
+// completions and skips (#132). Later issues add the other scales and
+// paging (#135), the distributions (#136), a selection (#137) and the
+// header's numbers (#134).
+import { countedEntries } from "../../domain/stats/counted-completions";
+import {
+  inCell,
+  type StatsPeriod,
+  type StatsScale,
+  statsPeriod,
+} from "../../domain/stats/stats-period";
+import type { CalendarDate } from "../../domain/task/task";
+import { logicalDay } from "../../domain/time/logical-day";
+import type { Clock } from "../ports/clock";
+import type { DayBoundarySetting } from "../ports/day-boundary-setting";
+import type { TaskRepository } from "../ports/task-repository";
+
+export interface ReadStatsOptions {
+  /** How long the period is. */
+  readonly scale: StatsScale;
+  /**
+   * A logical day within the period to read; today's logical day when
+   * absent.
+   */
+  readonly anchor?: CalendarDate;
+}
+
+/** One cell of the period with what it counts. */
+export interface StatsCellRead {
+  readonly first: CalendarDate;
+  readonly last: CalendarDate;
+  readonly completions: number;
+  readonly skips: number;
+}
+
+export interface ReadStatsResult {
+  readonly period: Omit<StatsPeriod, "cells">;
+  /** The period's cells, the earliest first. */
+  readonly cells: readonly StatsCellRead[];
+  /** The completions and skips in the whole period. */
+  readonly totals: { readonly completions: number; readonly skips: number };
+}
+
+/** Reads the stats. Errors are thrown as they are. */
+export type ReadStats = (options: ReadStatsOptions) => Promise<ReadStatsResult>;
+
+export function createReadStats(deps: {
+  repository: TaskRepository;
+  clock: Clock;
+  dayBoundary: DayBoundarySetting;
+}): ReadStats {
+  return async (options) => {
+    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
+    const { tasks } = await deps.repository.readTaskGraph();
+    const { cells, ...period } = statsPeriod(
+      options.scale,
+      options.anchor ?? today,
+    );
+    const entries = tasks.flatMap((item) =>
+      countedEntries(item.task, item.completionHistory ?? []),
+    );
+    const cellReads = cells.map((cell) => {
+      const within = entries.filter((entry) => inCell(cell, entry.day));
+      return {
+        ...cell,
+        completions: within.filter((entry) => entry.kind === "completion")
+          .length,
+        skips: within.filter((entry) => entry.kind === "skip").length,
+      };
+    });
+    return {
+      period,
+      cells: cellReads,
+      totals: {
+        completions: cellReads.reduce((sum, cell) => sum + cell.completions, 0),
+        skips: cellReads.reduce((sum, cell) => sum + cell.skips, 0),
+      },
+    };
+  };
+}
