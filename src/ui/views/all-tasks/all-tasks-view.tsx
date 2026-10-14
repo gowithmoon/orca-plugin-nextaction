@@ -55,12 +55,7 @@ import {
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
 import type { DoneSectionStore } from "./done-section-store";
-import {
-  TaskDragArea,
-  TaskDragHandle,
-  TaskDropGap,
-  TaskDropTarget,
-} from "./task-drag";
+import { TaskDragArea, TaskDropGap, TaskDropTarget } from "./task-drag";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -211,10 +206,9 @@ function TreeNodes(props: {
               )}
               {/* Only tree cards are dragged and dropped on, never the done
                   section's (#70). */}
-              <TaskDropTarget id={node.task.id}>
+              <TaskDropTarget task={node.task}>
                 <TaskCard
                   task={node.task}
-                  handle={<TaskDragHandle task={node.task} />}
                   today={cards.today}
                   actions={cards.actions}
                   menuItems={cards.menuItems}

@@ -5,21 +5,16 @@
 // timeline card onto the unscheduled area unschedules it. The domain snaps
 // every one (`normalizeSchedule`, `moveSchedule`, `resizeScheduleStart`).
 //
-// As the all tasks view's dragging (task-drag.tsx): pointer events with
-// pointer capture, not the browser's drag and drop (move-blocks 64c); a
-// press anywhere on a card but its buttons only turns into a drag once the
-// pointer has gone a few pixels, so a click, the buttons and the right-click
-// menu stay as they are. The cards' text cannot be selected (my-day-style.ts):
-// a press on it is the start of a drag. The timeline (or else the panel) scrolls
-// near its top and bottom edges; letting go outside the view cancels.
+// These are the cards' drops in the plugin panel (`PanelDropTarget`) on the
+// shared card drag (ui/drag/card-drag.tsx, #124), which handles the press,
+// the threshold, the chip, the fading and letting go elsewhere (cancelled).
+// The timeline (or else the panel) scrolls near its top and bottom edges.
 //
-// Smooth by design: while dragging only two small parts re-render, the
-// preview on the timeline (when the snapped time changes) and the chip under
-// the pointer (when it shows or hides); the cards, the lists and the view's
-// query are left alone. The source card's fading, the unscheduled area's
-// highlight and the chip's position are set on the DOM directly. A drop hands
-// what it writes to `commit`, once, in the same event that ends the drag.
-// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// Smooth by design: while dragging only the preview on the timeline
+// re-renders (when the snapped time changes); the cards, the lists and the
+// view's query are left alone. The unscheduled area's highlight is set on the
+// DOM directly. A drop hands what it writes to `commit`, once, in the same
+// event that ends the drag. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import {
   type MyDaySchedule,
@@ -31,15 +26,10 @@ import type { Task } from "../../../domain/task/task";
 import { minuteMs } from "../../../domain/time/durations";
 import type { LogicalDayRange } from "../../../domain/time/logical-day";
 import { formatTimeRange, shownText } from "../../components/format";
+import { scrollingAncestor } from "../../drag/auto-scroll";
+import type { PanelDropTarget } from "../../drag/card-drag";
 import { defaultScheduleMinutes } from "./schedule-popup";
 import { momentAtY, scheduleBox, yAt } from "./timeline-geometry";
-
-/** How far the pointer goes before a press is a drag. */
-const dragThreshold = 4;
-/** How close to a scroller's top or bottom edge it scrolls. */
-const scrollEdge = 40;
-/** The most it scrolls per frame, right at the edge. */
-const scrollStep = 14;
 
 /** Marks the two places to drop: "timeline" and "unscheduled" (#84). */
 const dropAttribute = "data-nextaction-my-day-drop";
@@ -47,14 +37,8 @@ const dropAttribute = "data-nextaction-my-day-drop";
 const timelineScrollClass = "nextaction-timeline-scroll";
 /** The timeline's track, where pixels turn into moments. */
 const trackClass = "nextaction-timeline-track";
-/** Set on the card being dragged, which stays in place, faded. */
-const sourceAttribute = "data-nextaction-drag-source";
 /** Set on the unscheduled area while a timeline card would drop there. */
 const overAttribute = "data-drop-over";
-/** Set on the view's areas while dragging: no text selection, a grabbing cursor. */
-const draggingAttribute = "data-dragging";
-/** Presses on these are their own, never a drag. */
-const ownPress = "button, a, input, textarea, select, [contenteditable]";
 
 /**
  * What is dragged: an unscheduled task onto the timeline (`add`), or a
@@ -99,7 +83,6 @@ export interface MyDayDragSetup {
 
 interface Under {
   readonly snapshot: DragSnapshot;
-  readonly source: HTMLElement;
   readonly root: HTMLElement;
   readonly range: LogicalDayRange | undefined;
   /** For `move`: the pointer's distance below the card's top, in pixels. */
@@ -110,22 +93,8 @@ export interface MyDayDrag {
   subscribe(listener: () => void): () => void;
   /** The drag under way, if any: a new object only when the preview changes. */
   current(): DragSnapshot | null;
-  /** The latest pointer position. */
-  pointer(): { x: number; y: number };
-  /** Whether the card being dragged is still in the view. */
-  sourceConnected(): boolean;
-  begin(subject: DragSubject, source: HTMLElement, x: number, y: number): void;
-  move(x: number, y: number): void;
-  /** What lies under a still pointer moved (scrolling). */
-  refresh(): void;
-  drop(x: number, y: number): void;
-  cancel(): void;
-  /** Whether a click ends a drag (and so is no click); asks once. */
-  takeClick(): boolean;
-  /** A new press: a click left over from a drag is gone. */
-  pressed(): void;
-  /** Places the chip under the pointer, within the view's areas. */
-  placeChip(chip: HTMLElement | null): void;
+  /** The drops in the plugin panel of a card dragged as `subject`. */
+  target(subject: DragSubject): PanelDropTarget;
 }
 
 function sameSchedule(
@@ -205,19 +174,15 @@ function previewAt(drag: Under, y: number): MyDaySchedule | null {
 /** The drag of one My Day view: the state outside React, so a move renders nothing. */
 export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
   let under: Under | null = null;
-  let point = { x: 0, y: 0 };
-  /** The click that follows a drag's end is not a click. */
-  let clickTaken = false;
   const listeners = new Set<() => void>();
   const emit = () => {
     for (const listener of [...listeners]) listener();
   };
 
   /** Works out the place and the preview at the pointer; tells only changes. */
-  const update = () => {
+  const update = (x: number, y: number) => {
     const drag = under;
     if (!drag) return;
-    const { x, y } = point;
     const last = drag.snapshot;
     // An edge only changes the length: anywhere in the view it goes by the
     // pointer's height, so straying sideways off the narrow timeline does
@@ -237,32 +202,12 @@ export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
     emit();
   };
 
-  /** Ends the drag, leaving the DOM as it was. */
-  const end = (): Under | null => {
-    const drag = under;
-    if (!drag) return null;
-    under = null;
-    clickTaken = true;
-    drag.source.removeAttribute(sourceAttribute);
-    drag.root.removeAttribute(draggingAttribute);
-    unscheduledAreaOf(drag.root)?.removeAttribute(overAttribute);
-    return drag;
-  };
-
-  return {
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    current: () => under?.snapshot ?? null,
-    pointer: () => point,
-    sourceConnected: () => under?.source.isConnected ?? false,
-    begin(subject, source, x, y) {
+  const target = (subject: DragSubject): PanelDropTarget => ({
+    captureOnPress: isEdge(subject),
+    cursor: isEdge(subject) ? "resize" : "grab",
+    begin(_x, y) {
       const { root, range } = setup();
       if (!root || under) return;
-      point = { x, y };
       const track = trackOf(root);
       const grab =
         subject.kind === "move" && range && track
@@ -272,33 +217,18 @@ export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
           : 0;
       under = {
         snapshot: { subject, over: null, preview: null },
-        source,
         root,
         range,
         grab,
       };
-      source.setAttribute(sourceAttribute, "");
-      // Its kind picks the cursor (my-day-style.ts).
-      root.setAttribute(draggingAttribute, subject.kind);
       emit();
-      update();
     },
-    move(x, y) {
-      if (!under) return;
-      point = { x, y };
-      // Text elsewhere may have been selected before; dragging is not selecting.
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed) selection.removeAllRanges();
-      update();
-    },
-    refresh: update,
+    move: update,
     drop(x, y) {
-      if (!under) return;
-      point = { x, y };
-      update();
-      const drag = end();
-      if (!drag) return;
-      const { subject, over, preview } = drag.snapshot;
+      update(x, y);
+      const drag = under;
+      if (!drag) return false;
+      const { over, preview } = drag.snapshot;
       // Handed over before the drag's end renders, so both show in one frame.
       const { commit } = setup();
       if (over === "timeline" && preview) {
@@ -307,38 +237,49 @@ export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
         if (!unmoved) {
           commit({ kind: "schedule", task: subject.task, schedule: preview });
         }
-      } else if (over === "unscheduled" && subject.kind === "move") {
-        commit({ kind: "unschedule", task: subject.task });
+        return true;
       }
+      if (over === "unscheduled" && subject.kind === "move") {
+        commit({ kind: "unschedule", task: subject.task });
+        return true;
+      }
+      return false;
+    },
+    end() {
+      const drag = under;
+      if (!drag) return;
+      under = null;
+      unscheduledAreaOf(drag.root)?.removeAttribute(overAttribute);
       emit();
     },
-    cancel() {
-      if (end()) emit();
+    // On the timeline the preview shows where it goes; an edge has no chip.
+    showsChip: () => {
+      const snapshot = under?.snapshot;
+      return (
+        !!snapshot && snapshot.over !== "timeline" && !isEdge(snapshot.subject)
+      );
     },
-    takeClick() {
-      const taken = clickTaken;
-      clickTaken = false;
-      return taken;
-    },
-    pressed() {
-      clickTaken = false;
-    },
-    placeChip(chip) {
+    // The timeline, or else the panel around the view: one above the other,
+    // the timeline may be out of sight.
+    scrollers() {
       const root = under?.root;
-      if (!chip || !root) return;
-      // Within the areas: the view is a size container, which would hold a
-      // fixed chip inside it anyway, and one overflowing would scroll it.
-      const box = root.getBoundingClientRect();
-      const left = Math.max(
-        0,
-        Math.min(point.x - box.left + 12, box.width - chip.offsetWidth),
-      );
-      const top = Math.max(
-        0,
-        Math.min(point.y - box.top + 8, box.height - chip.offsetHeight),
-      );
-      chip.style.setProperty("transform", `translate(${left}px, ${top}px)`);
+      if (!root) return [];
+      return [
+        root.querySelector<HTMLElement>(`.${timelineScrollClass}`),
+        scrollingAncestor(root),
+      ].filter((scroller): scroller is HTMLElement => !!scroller);
     },
+  });
+
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    current: () => under?.snapshot ?? null,
+    target,
   };
 }
 
@@ -346,111 +287,21 @@ const DragContext = React.createContext<MyDayDrag | undefined>(undefined);
 
 export const MyDayDragProvider = DragContext.Provider;
 
+/** The view's drag, for its cards' drops in the panel. */
+export function useMyDayDrag(): MyDayDrag | undefined {
+  return React.useContext(DragContext);
+}
+
 const noSnapshot = () => null;
 const noSubscribe = () => () => {};
 
-/** The drag under way, re-rendering only when its preview changes. */
-function useDragSnapshot(drag: MyDayDrag | undefined): DragSnapshot | null {
-  return React.useSyncExternalStore(
+/** Where the dragged task would go: on the timeline's track, snapped, with its times. */
+export function TimelinePreview(props: { range: LogicalDayRange }) {
+  const drag = React.useContext(DragContext);
+  const snapshot = React.useSyncExternalStore(
     drag?.subscribe ?? noSubscribe,
     drag?.current ?? noSnapshot,
   );
-}
-
-/**
- * The pointer handlers that make an element a drag source; `pick` says what
- * a press on `target` drags (`null`: nothing). Renders nothing while
- * dragging: the state is in refs and in the drag.
- */
-export function useDragSource(
-  pick: (target: Element) => DragSubject | null,
-): React.DOMAttributes<HTMLElement> {
-  const drag = React.useContext(DragContext);
-  /** Where the press began and what it drags, while pressed. */
-  const press = React.useRef<{
-    readonly x: number;
-    readonly y: number;
-    readonly subject: DragSubject;
-  } | null>(null);
-  const dragging = React.useRef(false);
-  if (!drag) return {};
-
-  const reset = () => {
-    press.current = null;
-    dragging.current = false;
-  };
-
-  return {
-    onPointerDown(event) {
-      drag.pressed();
-      reset();
-      const { target } = event;
-      if (event.button !== 0 || !(target instanceof Element)) return;
-      if (target.closest(ownPress)) return;
-      const subject = pick(target);
-      if (!subject) return;
-      // Not prevented: clicks, double-click selection and focus stay as they are.
-      press.current = { x: event.clientX, y: event.clientY, subject };
-      // An edge is a thin strip on the card's rim: dragged outwards, the
-      // pointer leaves the card before it has gone far enough to be a drag,
-      // and the card would hear no more of it. Held from the press, it does.
-      // Only edges: held, a click lands on this element, not on the card
-      // inside it (an unscheduled card would no longer open the task panel).
-      if (isEdge(subject)) {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }
-    },
-    onPointerMove(event) {
-      const start = press.current;
-      if (!start) return;
-      if (!dragging.current) {
-        // Let go somewhere this element did not hear.
-        if ((event.buttons & 1) === 0) {
-          reset();
-          return;
-        }
-        const { clientX: x, clientY: y } = event;
-        if (Math.hypot(x - start.x, y - start.y) < dragThreshold) return;
-        dragging.current = true;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        drag.begin(start.subject, event.currentTarget, x, y);
-      }
-      drag.move(event.clientX, event.clientY);
-    },
-    onPointerUp(event) {
-      const wasDragging = dragging.current;
-      reset();
-      if (wasDragging) drag.drop(event.clientX, event.clientY);
-    },
-    onPointerCancel() {
-      reset();
-      drag.cancel();
-    },
-    // Released by anything else (e.g. the window losing focus): cancelled.
-    // After a drop it finds nothing to cancel.
-    onLostPointerCapture() {
-      const wasDragging = dragging.current;
-      reset();
-      if (wasDragging) drag.cancel();
-    },
-    // The browser's own drag of selected text would take the pointer.
-    onDragStart(event) {
-      if (press.current) event.preventDefault();
-    },
-    // The click that ends a drag opens nothing.
-    onClickCapture(event) {
-      // From the keyboard (no pointer, `detail` 0): never a drag's.
-      if (event.detail === 0) return;
-      if (!drag.takeClick()) return;
-      event.preventDefault();
-      event.stopPropagation();
-    },
-  };
-}
-
-/** Where the dragged task would go: on the timeline's track, snapped, with its times. */
-export function TimelinePreview(props: { range: LogicalDayRange }) {
-  const snapshot = useDragSnapshot(React.useContext(DragContext));
   const preview = snapshot?.preview;
   if (!snapshot || !preview) return null;
   const box = scheduleBox(props.range, preview);
@@ -467,112 +318,4 @@ export function TimelinePreview(props: { range: LogicalDayRange }) {
       <span className="nextaction-timeline-preview-text">{text.text}</span>
     </div>
   );
-}
-
-/**
- * The dragged task under the pointer while it is off the timeline (on it,
- * the preview shows where it goes); moved on the DOM once a frame, not by
- * rendering.
- */
-export function DragChip() {
-  const drag = React.useContext(DragContext);
-  const snapshot = useDragSnapshot(drag);
-  const chip = React.useRef<HTMLDivElement>(null);
-  const shown =
-    snapshot !== null &&
-    snapshot.over !== "timeline" &&
-    !isEdge(snapshot.subject);
-  React.useLayoutEffect(() => {
-    if (shown) drag?.placeChip(chip.current);
-  });
-  React.useEffect(() => {
-    if (!drag || !shown) return;
-    let frame = 0;
-    const step = () => {
-      drag.placeChip(chip.current);
-      frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [drag, shown]);
-  if (!snapshot || !shown) return null;
-  return (
-    <div ref={chip} className="nextaction-my-day-drag-chip" aria-hidden="true">
-      {shownText(snapshot.subject.task).text}
-    </div>
-  );
-}
-
-/** The nearest ancestor that scrolls vertically, if any. */
-function scrollingAncestor(element: HTMLElement): HTMLElement | undefined {
-  for (
-    let current = element.parentElement;
-    current;
-    current = current.parentElement
-  ) {
-    const { overflowY } = getComputedStyle(current);
-    if (overflowY === "auto" || overflowY === "scroll") return current;
-  }
-  return undefined;
-}
-
-/** How far to scroll `scroller` this frame with the pointer at (x, y). */
-function scrollAmount(scroller: HTMLElement, x: number, y: number): number {
-  const box = scroller.getBoundingClientRect();
-  if (x < box.left || x > box.right) return 0;
-  const bottom = scroller.scrollHeight - scroller.clientHeight;
-  if (y >= box.top && y < box.top + scrollEdge && scroller.scrollTop > 0) {
-    return -Math.ceil(((box.top + scrollEdge - y) / scrollEdge) * scrollStep);
-  }
-  if (
-    y <= box.bottom &&
-    y > box.bottom - scrollEdge &&
-    scroller.scrollTop < bottom
-  ) {
-    return Math.ceil(
-      ((y - (box.bottom - scrollEdge)) / scrollEdge) * scrollStep,
-    );
-  }
-  return 0;
-}
-
-/**
- * While dragging: scrolls the timeline while the pointer stays near its top
- * or bottom edge, one step a frame, or else the panel around the view (one
- * above the other, the timeline may be out of sight). Stops with the drag,
- * and when the view goes (the panel closing or the plugin unloading unmounts
- * it; ARCHITECTURE §4's exception for component timers).
- */
-export function DragWatch(props: { root: React.RefObject<HTMLElement> }) {
-  const drag = React.useContext(DragContext);
-  const dragging = useDragSnapshot(drag) !== null;
-  React.useEffect(() => {
-    const root = props.root.current;
-    if (!drag || !dragging || !root) return;
-    const scrollers = [
-      root.querySelector<HTMLElement>(`.${timelineScrollClass}`),
-      scrollingAncestor(root),
-    ].filter((scroller): scroller is HTMLElement => !!scroller);
-    let frame = 0;
-    const step = () => {
-      // The card went away (e.g. the task was removed in the notes): its
-      // pointer events with it, so nothing would end the drag.
-      if (!drag.sourceConnected()) {
-        drag.cancel();
-        return;
-      }
-      const { x, y } = drag.pointer();
-      for (const scroller of scrollers) {
-        const by = scrollAmount(scroller, x, y);
-        if (by === 0) continue;
-        scroller.scrollTop += by;
-        drag.refresh();
-        break;
-      }
-      frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [drag, dragging, props.root]);
-  return null;
 }
