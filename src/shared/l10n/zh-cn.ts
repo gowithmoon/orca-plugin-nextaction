@@ -521,6 +521,9 @@ const zhCN: Record<string, string> = {
   "Distribution of completions": "完成的分布",
   "${name}: ${completions} completed": "${name}：完成 ${completions} 次",
   "Nothing completed this week": "本周还没有完成的任务",
+  // The selection list (#137).
+  "Pick a bar or an item above to see its tasks":
+    "点一下上面的柱子或分布中的一项，这里会列出相应的任务",
 };
 
 export default zhCN;

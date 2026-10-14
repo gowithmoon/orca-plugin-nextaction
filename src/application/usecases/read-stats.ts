@@ -20,7 +20,12 @@ import {
   type StatsScale,
   statsPeriod,
 } from "../../domain/stats/stats-period";
-import type { CalendarDate } from "../../domain/task/task";
+import {
+  type SelectedEntry,
+  type StatsSelection,
+  selectedEntries,
+} from "../../domain/stats/stats-selection";
+import type { CalendarDate, Task } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -35,6 +40,8 @@ export interface ReadStatsOptions {
    * absent or later (no period after the current one is read).
    */
   readonly anchor?: CalendarDate;
+  /** What is selected below the charts (#137); nothing when absent. */
+  readonly selection?: StatsSelection;
 }
 
 /** One cell of the period with what it counts. */
@@ -60,6 +67,11 @@ export interface ReadStatsResult {
    * importance as they are now; skips are left out (#136).
    */
   readonly distributions: Distributions;
+  /**
+   * The selection's completions and skips, the latest first, a recurring
+   * task once for each (#137); none without a selection.
+   */
+  readonly selected: readonly SelectedEntry<Task>[];
 }
 
 /** Reads the stats. Errors are thrown as they are. */
@@ -112,6 +124,16 @@ export function createReadStats(deps: {
           ).filter((entry) => inCell(period, entry.day)),
         })),
       ),
+      selected: options.selection
+        ? selectedEntries(
+            tasks.map((item) => ({
+              task: item.task,
+              entries: countedEntries(item.task, item.completionHistory ?? []),
+            })),
+            options.selection,
+            period,
+          )
+        : [],
     };
   };
 }
