@@ -495,6 +495,10 @@ const zhCN: Record<string, string> = {
   "${date}: ${completions} completed, ${skips} skipped":
     "${date}：完成 ${completions} 次，跳过 ${skips} 次",
   "Nothing completed or skipped this week": "本周还没有记录",
+  // The distribution of completions (#136).
+  "Distribution of completions": "完成的分布",
+  "${name}: ${completions} completed": "${name}：完成 ${completions} 次",
+  "Nothing completed this week": "本周还没有完成的任务",
 };
 
 export default zhCN;

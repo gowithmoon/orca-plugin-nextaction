@@ -4,6 +4,10 @@
 // paging (#135), the distributions (#136), a selection (#137) and the
 // header's numbers (#134).
 import { countedEntries } from "../../domain/stats/counted-completions";
+import {
+  type Distributions,
+  distributions,
+} from "../../domain/stats/distributions";
 import { type NowCounts, nowCounts } from "../../domain/stats/now-counts";
 import {
   inCell,
@@ -44,6 +48,11 @@ export interface ReadStatsResult {
   readonly totals: { readonly completions: number; readonly skips: number };
   /** The header's numbers: how things stand now, whatever the period. */
   readonly now: NowCounts;
+  /**
+   * The period's completions by their task's contexts, labels and
+   * importance as they are now; skips are left out (#136).
+   */
+  readonly distributions: Distributions;
 }
 
 /** Reads the stats. Errors are thrown as they are. */
@@ -86,6 +95,15 @@ export function createReadStats(deps: {
         today,
         previewDays: deps.startPreviewDays.current(),
       }),
+      distributions: distributions(
+        tasks.map((item) => ({
+          task: item.task,
+          entries: countedEntries(
+            item.task,
+            item.completionHistory ?? [],
+          ).filter((entry) => inCell(period, entry.day)),
+        })),
+      ),
     };
   };
 }

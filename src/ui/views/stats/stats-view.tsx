@@ -24,6 +24,7 @@ import {
 } from "../../hooks/use-view-query";
 import type { PanelView } from "../../panel/panel-views";
 import { CompletionChart } from "./completion-chart";
+import { CompletionDistribution } from "./completion-distribution";
 import { StatsNow, type StatsNowDeps } from "./stats-now";
 
 export interface StatsViewDeps extends StatsNowDeps {
@@ -105,6 +106,16 @@ function StatsContent(props: {
           {t("Nothing completed or skipped this week")}
         </p>
       )}
+      <CompletionDistribution
+        distributions={state.data.distributions}
+        emptyMessage={
+          empty
+            ? t("Nothing completed or skipped this week")
+            : totals.completions === 0
+              ? t("Nothing completed this week")
+              : null
+        }
+      />
     </section>
   );
 }
