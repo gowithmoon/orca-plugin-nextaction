@@ -16,15 +16,15 @@ export const cardDragCss = `
 }
 
 /* While dragging: a grabbing cursor, and no text selected anywhere. */
-:root[data-nextaction-card-drag-source],
-:root[data-nextaction-card-drag-source] * {
+:root[data-nextaction-card-dragging],
+:root[data-nextaction-card-dragging] * {
   cursor: grabbing !important;
   user-select: none !important;
 }
 
 /* A card's edge changes a length (My Day's timeline, #85). */
-:root[data-nextaction-card-drag-source="resize"],
-:root[data-nextaction-card-drag-source="resize"] * {
+:root[data-nextaction-card-dragging="resize"],
+:root[data-nextaction-card-dragging="resize"] * {
   cursor: ns-resize !important;
 }
 

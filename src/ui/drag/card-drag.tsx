@@ -43,6 +43,12 @@ import {
 const dragThreshold = 4;
 /** Set on the card being dragged, which stays in place, faded. */
 const sourceAttribute = "data-nextaction-card-drag-source";
+/**
+ * Set on the document root while dragging, for the cursor everywhere. Not
+ * `sourceAttribute`: the fade matches that one, and would fade the whole
+ * window (acceptance of #122).
+ */
+const draggingAttribute = "data-nextaction-card-dragging";
 /** Marks a card that can be dragged: its text is not selectable. */
 export const cardDragAttribute = "data-nextaction-card-drag";
 /** Presses on these are their own, never a drag. */
@@ -314,7 +320,7 @@ function createCardDrag(
     altListeners.delete(onAlt);
     clickTaken = true;
     drag.source.removeAttribute(sourceAttribute);
-    document.documentElement.removeAttribute(sourceAttribute);
+    document.documentElement.removeAttribute(draggingAttribute);
     drag.inPanel?.end();
     return drag;
   };
@@ -335,7 +341,7 @@ function createCardDrag(
       source.setAttribute(sourceAttribute, "");
       // The cursor everywhere (card-drag-style.ts), and no text selected in the notes.
       document.documentElement.setAttribute(
-        sourceAttribute,
+        draggingAttribute,
         inPanel?.cursor === "resize" ? "resize" : "",
       );
       inPanel?.begin?.(x, y);
