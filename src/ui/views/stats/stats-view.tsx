@@ -14,6 +14,7 @@ import { pagedAnchor, statsPaging } from "../../../domain/stats/stats-paging";
 import { statsPeriod } from "../../../domain/stats/stats-period";
 import type { StatsSelection } from "../../../domain/stats/stats-selection";
 import type { CalendarDate } from "../../../domain/task/task";
+import { compareDays } from "../../../domain/time/calendar-days";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
@@ -100,6 +101,21 @@ function StatsContent(props: {
     props.scale.subscribe,
     props.scale.current,
   );
+  // The current period moves on by itself when a logical day starts a new
+  // week (month, year) while the view shows: nothing in the new one is
+  // selected (#137).
+  const shownFirst =
+    state.kind === "loaded" ? state.data.period.first : undefined;
+  const lastFirst = React.useRef<CalendarDate | undefined>(undefined);
+  const { onClearSelection } = props;
+  React.useEffect(() => {
+    if (shownFirst === undefined) return;
+    const before = lastFirst.current;
+    lastFirst.current = shownFirst;
+    if (before !== undefined && compareDays(before, shownFirst) !== 0) {
+      onClearSelection();
+    }
+  }, [shownFirst, onClearSelection]);
 
   if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
