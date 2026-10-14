@@ -5,6 +5,7 @@ import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createCompleteFullReview } from "../application/usecases/complete-full-review";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createLinkTaskInNote } from "../application/usecases/link-task-in-note";
 import {
   createCanMarkReviewed,
   createMarkReviewed,
@@ -28,6 +29,7 @@ import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
+import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
@@ -169,6 +171,7 @@ export function createPanelFeature(deps: {
   views.register(
     createInboxView({
       readInbox: createReadInbox({ repository }),
+      linkTaskInNote: createLinkTaskInNote({ repository }),
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
@@ -251,6 +254,7 @@ export function createPanelFeature(deps: {
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
+    registry.css("cardDragStyle", cardDragCss);
     registry.css("myDayStyle", myDayCss);
     // Its own root, as the task panel popup's: the view's container query
     // would hold a fixed window inside the view. Created before the panel,

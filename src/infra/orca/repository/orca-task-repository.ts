@@ -6,11 +6,13 @@ import {
   type ConvertToTaskResult,
   type DiscardableData,
   type InitialProperties,
+  type NoteTarget,
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
   type TaskWrite,
 } from "../../../application/ports/task-repository";
+import type { NoteDropPlan } from "../../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import {
@@ -24,7 +26,7 @@ import type {
 import type { MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
-import type { Block } from "../../../orca.d.ts";
+import type { Block, CursorData } from "../../../orca.d.ts";
 import {
   planCompletionHistoryWrite,
   readCompletionHistory,
@@ -75,9 +77,12 @@ import {
   type RefDataItem,
 } from "../codec/task-encode";
 import {
+  cachedBlock,
   invokeBackend,
   invokeEditorCommand,
+  invokeEditorCommandAt,
   invokeGroup,
+  invokeGroupInNotePanel,
   moveBlocks,
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
@@ -1053,6 +1058,55 @@ export function createOrcaTaskRepository(
       await writeTo(block, () =>
         moveBlocks(block.id, targetBlock.id, placement),
       );
+    },
+
+    async linkTaskInNote(
+      id: TaskId,
+      plan: NoteDropPlan,
+      target: NoteTarget,
+    ): Promise<void> {
+      // A mirror's ID links its source block, so the link points at the task.
+      const block = await taskBlockToWrite(id, currentTag());
+      if (plan.kind !== "newBlock" || plan.content !== "ref") {
+        // Inline references come with #125, mirror blocks with #126.
+        throw new OrcaError(`linking as ${JSON.stringify(plan)} is not built`);
+      }
+      const { panelId, rootBlockId } = target;
+      try {
+        await invokeGroupInNotePanel(panelId, async () => {
+          const targetBlock = await cachedBlock(target.blockId);
+          // A new block holding only the reference, then the reference at its
+          // start, in one group: one undo (drag-to-note 写入).
+          const created = await invokeEditorCommand(
+            "core.editor.insertBlock",
+            targetBlock,
+            plan.placement,
+            [],
+          );
+          if (typeof created !== "number") {
+            throw new OrcaError(
+              `insertBlock returned ${JSON.stringify(created)}`,
+            );
+          }
+          const at = { blockId: created, isInline: true, index: 0, offset: 0 };
+          const cursor: CursorData = {
+            anchor: at,
+            focus: at,
+            isForward: true,
+            panelId,
+            rootBlockId,
+          };
+          await invokeEditorCommandAt(
+            "core.editor.insertLink",
+            cursor,
+            true,
+            block.id,
+          );
+        });
+      } finally {
+        // The task gained a reference; views read again (ADR 0007).
+        onWritten(block.id);
+      }
     },
 
     async readCustomPropertyDefinitions() {

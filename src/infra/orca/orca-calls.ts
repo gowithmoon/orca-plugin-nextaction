@@ -7,6 +7,7 @@ import type {
   APIMsg,
   Block,
   ColumnPanel,
+  CursorData,
   RowPanel,
   ViewPanel,
 } from "../../orca.d.ts";
@@ -34,9 +35,21 @@ export async function invokeEditorCommand(
   command: string,
   ...args: unknown[]
 ): Promise<unknown> {
+  return invokeEditorCommandAt(command, null, ...args);
+}
+
+/**
+ * As `invokeEditorCommand`, at a cursor (Orca's `CursorData`): `insertLink`
+ * writes at it (drag-to-note).
+ */
+export async function invokeEditorCommandAt(
+  command: string,
+  cursor: CursorData | null,
+  ...args: unknown[]
+): Promise<unknown> {
   try {
     return await withEditor(() =>
-      orca.commands.invokeEditorCommand(command, null, ...args),
+      orca.commands.invokeEditorCommand(command, cursor, ...args),
     );
   } catch (error) {
     if (error instanceof OrcaError || error instanceof NoNotePanelError) {
@@ -198,16 +211,73 @@ export async function moveBlocks(
   target: number,
   placement: MovePlacement,
 ): Promise<void> {
-  if (orca.state.blocks[target] === undefined) {
-    const block = await invokeBackend("get-block", target);
-    if (typeof block !== "object" || block === null || !("id" in block)) {
-      throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
-    }
-    // The only write to this front-end cache (docs/ARCHITECTURE.md §4 移动块),
-    // as Orca's own documentation does after a backend call.
-    orca.state.blocks[target] = block as Block;
-  }
+  await cachedBlock(target);
   await invokeEditorCommand("core.editor.moveBlocks", [id], target, placement);
+}
+
+/**
+ * Block `id` from `orca.state.blocks`, fetched with `get-block` and put
+ * there first when missing; one already there is left as it is. Editor
+ * commands that place blocks next to a block want it there (move-blocks;
+ * drag-to-note does the same).
+ */
+export async function cachedBlock(id: number): Promise<Block> {
+  const cached = orca.state.blocks[id];
+  if (cached !== undefined) return cached;
+  const block = await invokeBackend("get-block", id);
+  if (typeof block !== "object" || block === null || !("id" in block)) {
+    throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
+  }
+  // The only write to this front-end cache (docs/ARCHITECTURE.md §4 移动块),
+  // as Orca's own documentation does after a backend call.
+  orca.state.blocks[id] = block as Block;
+  return block as Block;
+}
+
+/**
+ * After a drop, before the focus moves to the note panel: the release's
+ * click lands on the plugin panel, which takes the focus back for a while;
+ * switching at once splits the group's commands between the two panels, and
+ * one undo undoes only part (drag-to-note, rounds 2-4). Measured, not an
+ * Orca contract: check it after every Orca upgrade (ADR 0024).
+ */
+const focusSettleMs = 100;
+
+/**
+ * After the focus moves, before writing: Orca then puts the panel's last
+ * cursor back, over the one the write leaves (drag-to-note, rounds 4-5).
+ * Measured, not an Orca contract: check it after every Orca upgrade (ADR 0024).
+ */
+const caretRestoreMs = 100;
+
+/** A short wait inside a write, which awaits it. */
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/**
+ * Runs `write` as one undo step through note panel `panelId`, made the
+ * active panel first, so the user undoes it there without clicking anywhere
+ * (ADR 0024): waits `focusSettleMs` after the drop, switches the focus,
+ * waits `caretRestoreMs`, then writes (drag-to-note). The focus stays in the
+ * note panel, where the result is. Fails, writing nothing, when the panel is
+ * gone or does not become the active one with an editor.
+ */
+export async function invokeGroupInNotePanel(
+  panelId: string,
+  write: () => Promise<void>,
+): Promise<void> {
+  await wait(focusSettleMs);
+  if (!orca.nav.findViewPanel(panelId, orca.state.panels)) {
+    throw new OrcaError(`note panel ${panelId} is gone`);
+  }
+  orca.nav.switchFocusTo(panelId);
+  await wait(caretRestoreMs);
+  if (orca.state.activePanel !== panelId || !panelHasEditor(panelId)) {
+    throw new OrcaError(`could not write through note panel ${panelId}`);
+  }
+  await invokeGroup(write);
 }
 
 /** The ID of the block whose alias is `name`, or `undefined` when there is none. */

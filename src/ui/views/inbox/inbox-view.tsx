@@ -1,8 +1,10 @@
 // The inbox view (GLOSSARY: 收集箱视图, #37): every task in the inbox, in the
 // order they were captured, as task cards with their actions (#39). It reads
 // when the plugin panel opens and again on every task change signal (#38).
+// A card dragged onto a block in a note panel links the task there (#123).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type { ReadInbox } from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -15,6 +17,8 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { CardDragArea, useCardDrag } from "../../drag/card-drag";
+import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import {
   type TaskActionsDeps,
   useTaskActions,
@@ -30,6 +34,8 @@ import type { TaskMenuItems } from "../../task-menu/menu-items";
 
 export interface InboxViewDeps {
   readInbox: ReadInbox;
+  /** A card dropped on a block in a note panel links the task there (#123). */
+  linkTaskInNote: LinkTaskInNote;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
   /** Tasks may have changed: the inbox is read again. */
@@ -60,6 +66,10 @@ function InboxContent(props: {
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
 
   if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -85,23 +95,30 @@ function InboxContent(props: {
     );
   }
   return (
-    <ul className="nextaction-task-list">
-      {tasks.map((task) => (
-        <li key={task.id}>
-          <TaskCard
-            task={task}
-            today={today}
-            actions={actions}
-            menuItems={menuItems}
-            menuPlace={menuPlace}
-            onOpen={(open) => selectTask(open.id)}
-            selected={task.id === selectedTaskId}
-            kept={task.status !== "inbox"}
-          />
-        </li>
-      ))}
-    </ul>
+    <CardDragArea onNoteDrop={linkTaskInNote}>
+      <ul className="nextaction-task-list">
+        {tasks.map((task) => (
+          <InboxItem key={task.id} task={task}>
+            <TaskCard
+              task={task}
+              today={today}
+              actions={actions}
+              menuItems={menuItems}
+              menuPlace={menuPlace}
+              onOpen={(open) => selectTask(open.id)}
+              selected={task.id === selectedTaskId}
+              kept={task.status !== "inbox"}
+            />
+          </InboxItem>
+        ))}
+      </ul>
+    </CardDragArea>
   );
+}
+
+/** A card's list item, dragged by a press anywhere on it (#123). */
+function InboxItem(props: { task: Task; children: React.ReactNode }) {
+  return <li {...useCardDrag(props.task)}>{props.children}</li>;
 }
 
 /**
