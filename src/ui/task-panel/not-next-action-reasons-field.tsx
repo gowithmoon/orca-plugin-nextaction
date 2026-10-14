@@ -9,7 +9,6 @@
 // doing so until it no longer recurs (#94, ADR 0021). Verified by hand in
 // Orca (docs/ARCHITECTURE.md §5).
 import {
-  isNotBlocking,
   type NotNextActionReason,
   type ReadNotNextActionReasons,
   type RelatedTask,
