@@ -134,11 +134,11 @@ describe("read stats", () => {
       ]);
     });
 
-    it("counts the skips in its history, though it is not done", async () => {
+    it("does not count the skips in its history", async () => {
       const { repository, readStats } = setup();
       // Its rule removed after a skip and a completion: a plain task now.
       repository.addTask(
-        { id: 1, status: "todo" },
+        { id: 1, status: "done" },
         history(
           recorded("2026-10-12T10:00:00", 12, "skip"),
           recorded("2026-10-13T10:00:00", 13),
@@ -148,14 +148,33 @@ describe("read stats", () => {
       const read = await readStats({ scale: "week" });
 
       expect(counts(read)).toEqual([
-        [0, 1],
         [0, 0],
+        [1, 0],
         [0, 0],
         [0, 0],
         [0, 0],
         [0, 0],
         [0, 0],
       ]);
+    });
+
+    it("counts a task whose recurrence rule cannot be read as a plain task", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        {
+          id: 1,
+          status: "todo",
+          recurrence: { kind: "unreadable", reason: "unknown version" },
+        },
+        history(
+          recorded("2026-10-12T10:00:00", 12),
+          recorded("2026-10-13T10:00:00", 13, "skip"),
+        ),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.totals).toEqual({ completions: 0, skips: 0 });
     });
 
     it("does not count the past completions of a recurring task's subtask set back to todo", async () => {
@@ -533,6 +552,190 @@ describe("read stats", () => {
       expect(month.cells[13]).toMatchObject({ completions: 1 });
       expect(counts(year).map(([completions]) => completions)).toEqual([
         0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0,
+      ]);
+    });
+  });
+
+  describe("distributions", () => {
+    it("counts a completion under each of its task's contexts", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        { id: 1, status: "done", contexts: ["home", "phone"] },
+        history(recorded("2026-10-13T10:00:00", 13)),
+      );
+      repository.addTask(
+        { id: 2, status: "done", contexts: ["home"] },
+        history(recorded("2026-10-12T10:00:00", 12)),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.distributions.context).toEqual([
+        { dimension: "context", value: "home", completions: 2 },
+        { dimension: "context", value: "phone", completions: 1 },
+      ]);
+    });
+
+    it("puts the completions of tasks without a context under not set, last", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        { id: 1, status: "todo", recurrence: daily() },
+        history(
+          recorded("2026-10-12T10:00:00", 12),
+          recorded("2026-10-13T10:00:00", 13),
+          recorded("2026-10-14T08:00:00", 14),
+        ),
+      );
+      repository.addTask(
+        { id: 2, status: "done", contexts: ["home"] },
+        history(recorded("2026-10-13T10:00:00", 13)),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.distributions.context).toEqual([
+        { dimension: "context", value: "home", completions: 1 },
+        { dimension: "context", value: null, completions: 3 },
+      ]);
+    });
+
+    it("orders the contexts by their completions, the most first, then by name", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        { id: 1, status: "done", contexts: ["phone"] },
+        history(recorded("2026-10-12T10:00:00", 12)),
+      );
+      repository.addTask(
+        {
+          id: 2,
+          status: "todo",
+          recurrence: daily(),
+          contexts: ["office", "home"],
+        },
+        history(
+          recorded("2026-10-12T10:00:00", 12),
+          recorded("2026-10-13T10:00:00", 13),
+        ),
+      );
+      repository.addTask(
+        { id: 3, status: "done", contexts: ["errands"] },
+        history(recorded("2026-10-13T10:00:00", 13)),
+      );
+      repository.addTask(
+        { id: 4, status: "done", contexts: ["phone"] },
+        history(recorded("2026-10-14T08:00:00", 14)),
+      );
+      repository.addTask(
+        { id: 5, status: "done", contexts: ["phone"] },
+        history(recorded("2026-10-14T08:00:00", 14)),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(
+        read.distributions.context.map((item) => [
+          item.value,
+          item.completions,
+        ]),
+      ).toEqual([
+        ["phone", 3],
+        ["home", 2],
+        ["office", 2],
+        ["errands", 1],
+      ]);
+    });
+
+    it("counts the labels the same way: each one, by completions then name, not set last", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        { id: 1, status: "done", labels: ["writing", "admin"] },
+        history(recorded("2026-10-12T10:00:00", 12)),
+      );
+      repository.addTask(
+        { id: 2, status: "done", labels: ["writing"] },
+        history(recorded("2026-10-13T10:00:00", 13)),
+      );
+      repository.addTask(
+        { id: 3, status: "done", labels: ["chores"] },
+        history(recorded("2026-10-13T10:00:00", 13)),
+      );
+      repository.addTask(
+        { id: 4, status: "done" },
+        history(recorded("2026-10-14T08:00:00", 14)),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.distributions.label).toEqual([
+        { dimension: "label", value: "writing", completions: 2 },
+        { dimension: "label", value: "admin", completions: 1 },
+        { dimension: "label", value: "chores", completions: 1 },
+        { dimension: "label", value: null, completions: 1 },
+      ]);
+    });
+
+    it("shows all seven importance levels, lowest to highest, those without completions too", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        { id: 1, status: "todo", recurrence: daily(), importance: 6 },
+        history(
+          recorded("2026-10-12T10:00:00", 12),
+          recorded("2026-10-13T10:00:00", 13),
+        ),
+      );
+      repository.addTask(
+        { id: 2, status: "done", importance: 4 },
+        history(recorded("2026-10-13T10:00:00", 13)),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.distributions.importance).toEqual([
+        { dimension: "importance", value: 1, completions: 0 },
+        { dimension: "importance", value: 2, completions: 0 },
+        { dimension: "importance", value: 3, completions: 0 },
+        { dimension: "importance", value: 4, completions: 1 },
+        { dimension: "importance", value: 5, completions: 0 },
+        { dimension: "importance", value: 6, completions: 2 },
+        { dimension: "importance", value: 7, completions: 0 },
+      ]);
+    });
+
+    it("sorts by a task's own importance, not its ancestor task's", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask({ id: 1, status: "todo", importance: 7 });
+      repository.addTask(
+        { id: 2, status: "done", importance: 2 },
+        { parentId: 1, ...history(recorded("2026-10-13T10:00:00", 13)) },
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(
+        read.distributions.importance.map((item) => item.completions),
+      ).toEqual([0, 1, 0, 0, 0, 0, 0]);
+    });
+
+    it("leaves out the skips and the completions outside the period", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask(
+        { id: 1, status: "todo", recurrence: daily(), contexts: ["home"] },
+        history(
+          // Last week.
+          recorded("2026-10-09T10:00:00", 9),
+          recorded("2026-10-12T10:00:00", 12, "skip"),
+          recorded("2026-10-13T10:00:00", 13),
+        ),
+      );
+      repository.addTask(
+        { id: 2, status: "todo", recurrence: daily(), contexts: ["office"] },
+        history(recorded("2026-10-12T10:00:00", 12, "skip")),
+      );
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.distributions.context).toEqual([
+        { dimension: "context", value: "home", completions: 1 },
       ]);
     });
   });

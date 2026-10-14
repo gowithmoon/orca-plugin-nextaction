@@ -25,12 +25,14 @@ export function countedEntries(
     at: entry.at,
     day: entry.day,
   }));
-  // A recurring task, paused or not: every completion and skip.
+  // A recurring task, paused or not: every completion and skip. A rule that
+  // cannot be read does not make one.
   if (task.recurrence.kind === "rule") return all;
-  // Any other task: its skips, and its last completion while it is done.
+  // Any other task: only its last completion, while it is done; skips left
+  // from a rule since removed are not counted.
   const last =
     task.status === "done"
       ? all.findLast((entry) => entry.kind === "completion")
       : undefined;
-  return all.filter((entry) => entry.kind === "skip" || entry === last);
+  return last ? [last] : [];
 }

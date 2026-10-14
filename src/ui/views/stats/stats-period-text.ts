@@ -99,3 +99,16 @@ export function emptyText(scale: StatsScale, current: boolean): string {
       return t("Nothing completed or skipped this year");
   }
 }
+
+/** What the distribution shows when the period has skips but no completion. */
+export function noCompletionText(scale: StatsScale, current: boolean): string {
+  if (!current) return t("Nothing completed in this period");
+  switch (scale) {
+    case "week":
+      return t("Nothing completed this week");
+    case "month":
+      return t("Nothing completed this month");
+    case "year":
+      return t("Nothing completed this year");
+  }
+}

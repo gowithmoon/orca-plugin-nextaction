@@ -514,6 +514,13 @@ const zhCN: Record<string, string> = {
   "Nothing completed or skipped this month": "本月还没有记录",
   "Nothing completed or skipped this year": "今年还没有记录",
   "Nothing completed or skipped in this period": "这段时间没有记录",
+  "Nothing completed this month": "本月还没有完成的任务",
+  "Nothing completed this year": "今年还没有完成的任务",
+  "Nothing completed in this period": "这段时间没有完成的任务",
+  // The distribution of completions (#136).
+  "Distribution of completions": "完成的分布",
+  "${name}: ${completions} completed": "${name}：完成 ${completions} 次",
+  "Nothing completed this week": "本周还没有完成的任务",
 };
 
 export default zhCN;

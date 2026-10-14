@@ -23,6 +23,7 @@ import {
 } from "../../hooks/use-view-query";
 import type { PanelView } from "../../panel/panel-views";
 import { CompletionChart } from "./completion-chart";
+import { CompletionDistribution } from "./completion-distribution";
 import { StatsNow, type StatsNowDeps } from "./stats-now";
 import { StatsPeriodBar } from "./stats-period-bar";
 import {
@@ -31,6 +32,7 @@ import {
   chartLabel,
   emptyText,
   holdsToday,
+  noCompletionText,
 } from "./stats-period-text";
 import type { StatsScaleStore } from "./stats-scale-store";
 
@@ -109,6 +111,16 @@ function StatsContent(props: {
           {emptyText(period.scale, paging.current)}
         </p>
       )}
+      <CompletionDistribution
+        distributions={state.data.distributions}
+        emptyMessage={
+          empty
+            ? emptyText(period.scale, paging.current)
+            : totals.completions === 0
+              ? noCompletionText(period.scale, paging.current)
+              : null
+        }
+      />
     </section>
   );
 }
