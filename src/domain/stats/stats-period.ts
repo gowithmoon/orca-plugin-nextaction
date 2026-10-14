@@ -1,13 +1,15 @@
 // The stats period (GLOSSARY: 统计周期): the time span the stats view looks
 // at, cut into cells. Pure: the anchor day is passed in.
 import type { CalendarDate } from "../task/task";
-import { addDays, compareDays, dayOfWeek } from "../time/calendar-days";
+import {
+  addDays,
+  compareDays,
+  dayOfWeek,
+  daysInMonth,
+} from "../time/calendar-days";
 
-/**
- * How long a stats period is (GLOSSARY: 统计周期). Only the week so far; the
- * month and the year come with #135.
- */
-export const statsScales = ["week"] as const;
+/** How long a stats period is (GLOSSARY: 统计周期). */
+export const statsScales = ["week", "month", "year"] as const;
 export type StatsScale = (typeof statsScales)[number];
 
 /**
@@ -31,7 +33,8 @@ export interface StatsPeriod {
 
 /**
  * The period of `scale` that holds the logical day `anchor`. A week runs
- * from Monday to Sunday, a day per cell.
+ * from Monday to Sunday and a month through its days, a day per cell; a
+ * year has a month per cell.
  */
 export function statsPeriod(
   scale: StatsScale,
@@ -46,7 +49,37 @@ export function statsPeriod(
       });
       return { scale, first, last: addDays(first, 6), cells };
     }
+    case "month": {
+      const { year, month } = anchor;
+      const cells = Array.from(
+        { length: daysInMonth(year, month) },
+        (_, index) => {
+          const day = { year, month, day: index + 1 };
+          return { first: day, last: day };
+        },
+      );
+      return { scale, ...span(cells), cells };
+    }
+    case "year": {
+      const { year } = anchor;
+      const cells = Array.from({ length: 12 }, (_, index) => ({
+        first: { year, month: index + 1, day: 1 },
+        last: { year, month: index + 1, day: daysInMonth(year, index + 1) },
+      }));
+      return { scale, ...span(cells), cells };
+    }
   }
+}
+
+/** The first and the last logical day of `cells`, the earliest first. */
+function span(cells: readonly StatsCell[]): {
+  first: CalendarDate;
+  last: CalendarDate;
+} {
+  const first = cells[0];
+  const last = cells[cells.length - 1];
+  if (!first || !last) throw new Error("A period has cells");
+  return { first: first.first, last: last.last };
 }
 
 /** Whether the logical day `day` falls within `cell`. */

@@ -1,19 +1,18 @@
-// The stats view (GLOSSARY: 统计视图, #132): this week's completions and
-// skips, a bar per logical day, with the week's totals above the chart. It
+// The stats view (GLOSSARY: 统计视图, #132): a period's completions and
+// skips, a bar per cell, with the period's totals above the chart; the
+// period switches between week, month and year and pages (#135). It
 // reads when the plugin panel opens and again on every task change signal
 // (ADR 0007). Later issues add the scales and paging (#135), the
 // distributions (#136), a selection (#137) and the header's numbers (#134).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+import * as React from "react";
 import type {
   ReadStats,
   ReadStatsResult,
-  StatsCellRead,
 } from "../../../application/usecases/read-stats";
 import type { CalendarDate } from "../../../domain/task/task";
-import { compareDays } from "../../../domain/time/calendar-days";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
-import { formatDate, weekday } from "../../components/format";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { ViewHeader } from "../../components/view-header";
 import { FailedNotice, PausedNotice } from "../../components/view-notice";
@@ -26,6 +25,16 @@ import type { PanelView } from "../../panel/panel-views";
 import { CompletionChart } from "./completion-chart";
 import { CompletionDistribution } from "./completion-distribution";
 import { StatsNow, type StatsNowDeps } from "./stats-now";
+import { StatsPeriodBar } from "./stats-period-bar";
+import {
+  cellDescription,
+  cellLabel,
+  chartLabel,
+  emptyText,
+  holdsToday,
+  noCompletionText,
+} from "./stats-period-text";
+import type { StatsScaleStore } from "./stats-scale-store";
 
 export interface StatsViewDeps extends StatsNowDeps {
   readStats: ReadStats;
@@ -33,20 +42,15 @@ export interface StatsViewDeps extends StatsNowDeps {
   today: () => CalendarDate;
   /** Tasks may have changed: the stats are read again. */
   changes: ChangeSignalSource;
-}
-
-/** What a cell's bar reads as: its day and its counts. */
-function cellDescription(cell: StatsCellRead, today: CalendarDate): string {
-  return t("${date}: ${completions} completed, ${skips} skipped", {
-    date: formatDate(cell.first, today),
-    completions: String(cell.completions),
-    skips: String(cell.skips),
-  });
+  /** The scale chosen (#135), in the plugin instance's memory. */
+  scale: StatsScaleStore;
 }
 
 function StatsContent(props: {
   query: ViewQuery<ReadStatsResult>;
   today: CalendarDate;
+  scale: StatsScaleStore;
+  onPage: (anchor: CalendarDate | undefined) => void;
 }) {
   const { query, today } = props;
   const state = useViewQuery(query);
@@ -64,16 +68,17 @@ function StatsContent(props: {
       />
     );
   }
-  const { period, cells, totals } = state.data;
+  const { period, cells, totals, paging } = state.data;
   const empty = totals.completions === 0 && totals.skips === 0;
   return (
     <section className="nextaction-stats-period">
-      <div className="nextaction-stats-period-title">
-        {t("${first} – ${last}", {
-          first: formatDate(period.first, today),
-          last: formatDate(period.last, today),
-        })}
-      </div>
+      <StatsPeriodBar
+        period={period}
+        paging={paging}
+        today={today}
+        onScale={(scale) => props.scale.set(scale)}
+        onPage={props.onPage}
+      />
       <ul className="nextaction-stats-totals">
         <li>
           <span className="nextaction-stats-total-count">
@@ -90,10 +95,10 @@ function StatsContent(props: {
       </ul>
       <CompletionChart
         cells={cells}
-        label={t("Completions by day")}
-        cellLabel={(cell) => weekday(cell.first)}
-        cellDescription={(cell) => cellDescription(cell, today)}
-        isToday={(cell) => compareDays(cell.first, today) === 0}
+        label={chartLabel(period.scale)}
+        cellLabel={(cell) => cellLabel(period.scale, cell)}
+        cellDescription={(cell) => cellDescription(period.scale, cell, today)}
+        isToday={(cell) => holdsToday(cell, today)}
       />
       <div className="nextaction-stats-legend" aria-hidden="true">
         <span className="nextaction-stats-legend-completions">
@@ -103,16 +108,16 @@ function StatsContent(props: {
       </div>
       {empty && (
         <p className="nextaction-stats-empty" role="status">
-          {t("Nothing completed or skipped this week")}
+          {emptyText(period.scale, paging.current)}
         </p>
       )}
       <CompletionDistribution
         distributions={state.data.distributions}
         emptyMessage={
           empty
-            ? t("Nothing completed or skipped this week")
+            ? emptyText(period.scale, paging.current)
             : totals.completions === 0
-              ? t("Nothing completed this week")
+              ? noCompletionText(period.scale, paging.current)
               : null
         }
       />
@@ -126,18 +131,42 @@ function StatsContent(props: {
  * starts from what the notes hold then.
  */
 export function createStatsView(deps: StatsViewDeps): PanelView {
-  // This week: the anchor is today's logical day, read at every read.
+  // The period paged to (#135), while the view shows; none is the current
+  // period, its anchor today's logical day at every read.
+  let anchor: CalendarDate | undefined;
   const query = createViewQuery(
-    () => deps.readStats({ scale: "week" }),
+    () => deps.readStats({ scale: deps.scale.current(), anchor }),
     deps.changes,
   );
+  // A new scale shows its current period; the store lives as long as the
+  // plugin instance.
+  deps.scale.subscribe(() => {
+    anchor = undefined;
+    query.reload();
+  });
+  const page = (next: CalendarDate | undefined) => {
+    anchor = next;
+    query.reload();
+  };
 
   function StatsView() {
+    // Every opening shows the current period of the scale chosen.
+    React.useEffect(
+      () => () => {
+        anchor = undefined;
+      },
+      [],
+    );
     return (
       <>
         <ViewHeader title={t("Stats")} />
         <StatsNow query={query} deps={deps} />
-        <StatsContent query={query} today={deps.today()} />
+        <StatsContent
+          query={query}
+          today={deps.today()}
+          scale={deps.scale}
+          onPage={page}
+        />
       </>
     );
   }
