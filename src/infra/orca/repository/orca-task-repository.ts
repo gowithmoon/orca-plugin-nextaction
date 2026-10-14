@@ -82,8 +82,9 @@ import {
   invokeEditorCommand,
   invokeEditorCommandAt,
   invokeGroup,
-  invokeGroupInNotePanel,
+  invokeInNotePanel,
   moveBlocks,
+  setCaret,
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { buildBlockSearchQuery } from "../query/block-search-query";
@@ -1067,40 +1068,62 @@ export function createOrcaTaskRepository(
     ): Promise<void> {
       // A mirror's ID links its source block, so the link points at the task.
       const block = await taskBlockToWrite(id, currentTag());
-      if (plan.kind !== "newBlock" || plan.content !== "ref") {
-        // Inline references come with #125, mirror blocks with #126.
+      if (plan.kind === "newBlock" && plan.content !== "ref") {
+        // Mirror blocks come with #126.
         throw new OrcaError(`linking as ${JSON.stringify(plan)} is not built`);
       }
       const { panelId, rootBlockId } = target;
+      const cursorAt = (at: CursorData["anchor"]): CursorData => ({
+        anchor: at,
+        focus: at,
+        isForward: true,
+        panelId,
+        rootBlockId,
+      });
       try {
-        await invokeGroupInNotePanel(panelId, async () => {
-          const targetBlock = await cachedBlock(target.blockId);
-          // A new block holding only the reference, then the reference at its
-          // start, in one group: one undo (drag-to-note 写入).
-          const created = await invokeEditorCommand(
-            "core.editor.insertBlock",
-            targetBlock,
-            plan.placement,
-            [],
-          );
-          if (typeof created !== "number") {
-            throw new OrcaError(
-              `insertBlock returned ${JSON.stringify(created)}`,
+        if (plan.kind === "inline") {
+          // At the drop's caret, as Orca gave it; one command, one undo. It
+          // leaves the caret right after the reference (drag-to-note 写入, 光标).
+          const caret = target.caret as CursorData | null;
+          if (!caret) throw new OrcaError("no inline caret at the drop");
+          await invokeInNotePanel(panelId, async () => {
+            await invokeEditorCommandAt(
+              "core.editor.insertLink",
+              caret,
+              true,
+              block.id,
             );
-          }
-          const at = { blockId: created, isInline: true, index: 0, offset: 0 };
-          const cursor: CursorData = {
-            anchor: at,
-            focus: at,
-            isForward: true,
-            panelId,
-            rootBlockId,
-          };
-          await invokeEditorCommandAt(
-            "core.editor.insertLink",
-            cursor,
-            true,
-            block.id,
+          });
+          return;
+        }
+        await invokeInNotePanel(panelId, async () => {
+          let created: number | undefined;
+          await invokeGroup(async () => {
+            const targetBlock = await cachedBlock(target.blockId);
+            // A new block holding only the reference, then the reference at
+            // its start, in one group: one undo (drag-to-note 写入).
+            const id = await invokeEditorCommand(
+              "core.editor.insertBlock",
+              targetBlock,
+              plan.placement,
+              [],
+            );
+            if (typeof id !== "number") {
+              throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+            }
+            created = id;
+            await invokeEditorCommandAt(
+              "core.editor.insertLink",
+              cursorAt({ blockId: id, isInline: true, index: 0, offset: 0 }),
+              true,
+              block.id,
+            );
+          });
+          if (created === undefined) return;
+          // The caret at the new block's end, after the reference, to go on
+          // typing there (drag-to-note 光标, round 6).
+          await setCaret(
+            cursorAt({ blockId: created, isInline: true, index: 1, offset: 0 }),
           );
         });
       } finally {

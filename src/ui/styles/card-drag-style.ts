@@ -56,4 +56,21 @@ export const cardDragCss = `
 .nextaction-note-drop-line[hidden] {
   display: none;
 }
+
+/* Where an inline reference would go in the text (#125). */
+.nextaction-note-drop-caret {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background-color: var(--orca-color-primary-5);
+  pointer-events: none;
+}
+
+.nextaction-note-drop-caret[hidden] {
+  display: none;
+}
 `;

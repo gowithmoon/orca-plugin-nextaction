@@ -257,14 +257,17 @@ const wait = (ms: number) =>
   });
 
 /**
- * Runs `write` as one undo step through note panel `panelId`, made the
- * active panel first, so the user undoes it there without clicking anywhere
- * (ADR 0024): waits `focusSettleMs` after the drop, switches the focus,
- * waits `caretRestoreMs`, then writes (drag-to-note). The focus stays in the
- * note panel, where the result is. Fails, writing nothing, when the panel is
- * gone or does not become the active one with an editor.
+ * Runs `write` through note panel `panelId`, made the active panel first,
+ * so the user undoes it there without clicking anywhere (ADR 0024): waits
+ * `focusSettleMs` after the drop, switches the focus, waits
+ * `caretRestoreMs`, then writes (drag-to-note). `write` is one undo step:
+ * a single editor command (the inline reference, rounds 5-6) or one
+ * `invokeGroup`, followed by setting the caret if need be, as measured. The
+ * focus stays in the note panel, where the result is. Fails, writing
+ * nothing, when the panel is gone or does not become the active one with an
+ * editor.
  */
-export async function invokeGroupInNotePanel(
+export async function invokeInNotePanel(
   panelId: string,
   write: () => Promise<void>,
 ): Promise<void> {
@@ -277,7 +280,21 @@ export async function invokeGroupInNotePanel(
   if (orca.state.activePanel !== panelId || !panelHasEditor(panelId)) {
     throw new OrcaError(`could not write through note panel ${panelId}`);
   }
-  await invokeGroup(write);
+  await write();
+}
+
+/**
+ * Puts the caret at `cursor` (Orca's `CursorData`) in the active panel:
+ * after a write, where the user goes on typing (drag-to-note 光标, round 6).
+ */
+export async function setCaret(cursor: CursorData): Promise<void> {
+  try {
+    await orca.utils.setSelectionFromCursorData(cursor);
+  } catch (error) {
+    throw new OrcaError(
+      `setSelectionFromCursorData failed: ${describeError(error)}`,
+    );
+  }
 }
 
 /** The ID of the block whose alias is `name`, or `undefined` when there is none. */

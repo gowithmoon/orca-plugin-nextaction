@@ -5,7 +5,8 @@
 // the browser's drag and drop (move-blocks 64c, drag-to-note 落点). While
 // dragging the card fades and a chip with the task's text follows the
 // pointer; over a block in a note panel a line shows where the new block
-// would go. Letting go there hands the drop to `onNoteDrop`; letting go
+// would go, or a caret where an inline reference would, and near a note
+// panel's top or bottom the panel scrolls (#125). Letting go there hands the drop to `onNoteDrop`; letting go
 // within the plugin panel hands it to the card's `inPanel` drop, if it has
 // one (the all tasks view's move and My Day's scheduling join in #124);
 // anywhere else cancels.
@@ -25,7 +26,11 @@ import {
 } from "../../domain/blocking/note-drop";
 import type { Task } from "../../domain/task/task";
 import { shownText } from "../components/format";
-import { type NoteDropProbe, probeNoteDrop } from "./note-panel-dom";
+import {
+  type NoteDropProbe,
+  noteScrollerAt,
+  probeNoteDrop,
+} from "./note-panel-dom";
 
 /** How far the pointer goes before a press is a drag. */
 const dragThreshold = 4;
@@ -86,8 +91,12 @@ interface CardDrag {
   takeClick(): boolean;
   /** A new press: a click left over from a drag is gone. */
   pressed(): void;
-  /** The chip and the line, placed on every move. */
-  attach(chip: HTMLElement | null, line: HTMLElement | null): void;
+  /** The chip, the line and the insertion caret, placed on every move. */
+  attach(
+    chip: HTMLElement | null,
+    line: HTMLElement | null,
+    caret: HTMLElement | null,
+  ): void;
 }
 
 /** What a drop on the block would write; only references so far (#126 adds Alt). */
@@ -105,9 +114,36 @@ function planFor(probe: NoteDropProbe, mode: NoteDropMode): NoteDropPlan {
 function lineBox(probe: NoteDropProbe, plan: NoteDropPlan): LineBox | null {
   if (plan.kind !== "newBlock") return null;
   const { row } = probe;
-  // A first child comes right below the row (#125 checks it in Orca).
+  // After and a first child both come right below the row: blocks touch,
+  // with no gap (drag-to-note 落点). Checked by hand in Orca (#125).
   const top = plan.placement === "before" ? row.top : row.bottom;
   return { left: row.left, top, width: row.width };
+}
+
+/** The insertion caret at the inline caret, or none (#125). */
+function caretBox(probe: NoteDropProbe, plan: NoteDropPlan): DOMRect | null {
+  return plan.kind === "inline" ? probe.caretBox : null;
+}
+
+/** How near a note panel's top or bottom the pointer scrolls it (#122). */
+const scrollZonePx = 32;
+/** How far a note panel scrolls per frame there, at the very edge. */
+const scrollStepPx = 12;
+
+/** How far to scroll `scroller` per frame for the pointer at `y`: 0 outside its edges. */
+function scrollStep(scroller: HTMLElement, y: number): number {
+  const box = scroller.getBoundingClientRect();
+  const fromTop = y - box.top;
+  const fromBottom = box.bottom - y;
+  if (fromTop < scrollZonePx) {
+    return -Math.ceil((scrollStepPx * (scrollZonePx - fromTop)) / scrollZonePx);
+  }
+  if (fromBottom < scrollZonePx) {
+    return Math.ceil(
+      (scrollStepPx * (scrollZonePx - fromBottom)) / scrollZonePx,
+    );
+  }
+  return 0;
 }
 
 function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
@@ -116,6 +152,9 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
   let clickTaken = false;
   let chip: HTMLElement | null = null;
   let line: HTMLElement | null = null;
+  let caret: HTMLElement | null = null;
+  /** The frame that scrolls a note panel under the pointer, while near its edge. */
+  let scrollFrame: number | null = null;
   const listeners = new Set<() => void>();
   const emit = () => {
     for (const listener of [...listeners]) listener();
@@ -128,8 +167,19 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
         `translate(${point.x + 12}px, ${point.y + 8}px)`,
       );
     }
-    if (!line) return;
     const over = dragging?.over;
+    if (caret) {
+      const at = over ? caretBox(over.probe, over.plan) : null;
+      caret.hidden = !at;
+      if (at) {
+        caret.style.setProperty(
+          "transform",
+          `translate(${at.left}px, ${at.top}px)`,
+        );
+        caret.style.setProperty("height", `${at.height}px`);
+      }
+    }
+    if (!line) return;
     const box = over ? lineBox(over.probe, over.plan) : null;
     if (!box) {
       line.hidden = true;
@@ -141,6 +191,30 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
       `translate(${box.left}px, ${box.top - 1}px)`,
     );
     line.style.setProperty("width", `${box.width}px`);
+  };
+
+  /**
+   * Scrolls the note panel under the pointer while it is near the panel's
+   * top or bottom, a frame at a time, probing again as the blocks move.
+   */
+  const scroll = () => {
+    scrollFrame = null;
+    if (!dragging) return;
+    const scroller = noteScrollerAt(point.x, point.y);
+    const step = scroller ? scrollStep(scroller, point.y) : 0;
+    if (!scroller || step === 0) return;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = before + step;
+    if (scroller.scrollTop === before) return;
+    update();
+    scrollFrame = requestAnimationFrame(scroll);
+  };
+  const scrollSoon = () => {
+    if (scrollFrame === null) scrollFrame = requestAnimationFrame(scroll);
+  };
+  const stopScrolling = () => {
+    if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+    scrollFrame = null;
   };
 
   /** What lies under the pointer now. */
@@ -158,6 +232,7 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
     const drag = dragging;
     if (!drag) return null;
     dragging = null;
+    stopScrolling();
     clickTaken = true;
     drag.source.removeAttribute(sourceAttribute);
     document.documentElement.removeAttribute(sourceAttribute);
@@ -188,6 +263,7 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) selection.removeAllRanges();
       update();
+      scrollSoon();
     },
     drop(x, y) {
       if (!dragging) return;
@@ -218,9 +294,10 @@ function createCardDrag(onNoteDrop: () => (drop: NoteCardDrop) => void) {
     pressed() {
       clickTaken = false;
     },
-    attach(nextChip, nextLine) {
+    attach(nextChip, nextLine, nextCaret) {
       chip = nextChip;
       line = nextLine;
+      caret = nextCaret;
       place();
     },
   };
@@ -238,11 +315,12 @@ function CardDragOverlay(props: { drag: CardDrag }) {
   const task = React.useSyncExternalStore(drag.subscribe, drag.task ?? noTask);
   const chip = React.useRef<HTMLDivElement>(null);
   const line = React.useRef<HTMLDivElement>(null);
-  // After every render (a drag beginning or ending): the chip and the line
-  // exist only while dragging.
+  const caret = React.useRef<HTMLDivElement>(null);
+  // After every render (a drag beginning or ending): the chip, the line and
+  // the caret exist only while dragging.
   React.useLayoutEffect(() => {
-    drag.attach(chip.current, line.current);
-    return () => drag.attach(null, null);
+    drag.attach(chip.current, line.current, caret.current);
+    return () => drag.attach(null, null, null);
   });
   if (!task) return null;
   return createPortal(
@@ -250,6 +328,12 @@ function CardDragOverlay(props: { drag: CardDrag }) {
       <div
         ref={line}
         className="nextaction-note-drop-line"
+        aria-hidden="true"
+        hidden
+      />
+      <div
+        ref={caret}
+        className="nextaction-note-drop-caret"
         aria-hidden="true"
         hidden
       />

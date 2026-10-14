@@ -21,12 +21,17 @@ export interface NoteDropProbe {
   readonly zone: NoteDropZone;
   /** The cursor data at the pointer was inline, in the block's text. */
   readonly inlineCaret: boolean;
+  /**
+   * Where the inline caret is on screen, for the insertion caret to show;
+   * `null` without an inline caret or when the browser gives it no box.
+   */
+  readonly caretBox: DOMRect | null;
   /** The block is the panel's root block (a journal's or page's title). */
   readonly root: boolean;
   /**
    * The block's element is taller than its row: it shows child blocks
-   * (`.orca-block`'s box holds them, drag-to-note). Not used before #125,
-   * which checks it in Orca.
+   * (`.orca-block`'s box holds them, drag-to-note). To check by hand in
+   * Orca (#125).
    */
   readonly expanded: boolean;
 }
@@ -36,16 +41,51 @@ function rowOf(block: Element): Element {
   return block.querySelector(":scope > .orca-repr > .orca-repr-main") ?? block;
 }
 
-/** Orca's cursor data at the point, or `null` (drag-to-note 落点). */
-function cursorAt(x: number, y: number): CursorData | null {
+/**
+ * Orca's cursor data at the point (drag-to-note 落点), and the caret's box
+ * on screen from the same range, or `null`.
+ */
+function cursorAt(
+  x: number,
+  y: number,
+): { cursor: CursorData; box: DOMRect | null } | null {
   const range = document.caretRangeFromPoint(x, y) ?? undefined;
   if (!range) return null;
   try {
-    return orca.utils.getCursorDataFromRange(range);
+    const cursor = orca.utils.getCursorDataFromRange(range);
+    if (!cursor) return null;
+    const box = range.getBoundingClientRect();
+    // A collapsed range can come without a box (e.g. in an empty block).
+    return { cursor, box: box.height > 0 ? box : null };
   } catch (error) {
     console.warn("[nextaction] no cursor data at the drop point", error);
     return null;
   }
+}
+
+/**
+ * What scrolls the note panel under the point, for a drag to scroll it near
+ * its top and bottom, or `null` (not over a note panel, or nothing scrolls).
+ * The nearest element from the point up, inside the panel, that scrolls
+ * vertically and can: found by computed style, not by an Orca class, which
+ * drag-to-note did not measure. Check it by hand in Orca (#125).
+ */
+export function noteScrollerAt(x: number, y: number): HTMLElement | null {
+  const element = document.elementFromPoint(x, y);
+  const panel = element?.closest<HTMLElement>(".orca-panel[data-panel-id]");
+  if (!element || !panel || panel.querySelector(pluginPanelSelector)) {
+    return null;
+  }
+  for (
+    let at: Element | null = element;
+    at && panel.contains(at);
+    at = at.parentElement
+  ) {
+    const { overflowY } = getComputedStyle(at);
+    const scrolls = overflowY === "auto" || overflowY === "scroll";
+    if (scrolls && at.scrollHeight > at.clientHeight) return at as HTMLElement;
+  }
+  return null;
 }
 
 function zoneAt(row: DOMRect, y: number): NoteDropZone {
@@ -72,19 +112,24 @@ export function probeNoteDrop(x: number, y: number): NoteDropProbe | null {
   const blockId = Number(block.dataset.id);
   const panelId = panel.dataset.panelId;
   if (!Number.isInteger(blockId) || !panelId) return null;
-  const cursor = cursorAt(x, y);
-  if (!cursor || cursor.panelId !== panelId) return null;
+  const found = cursorAt(x, y);
+  if (!found || found.cursor.panelId !== panelId) return null;
+  const { cursor } = found;
+  const inlineCaret =
+    cursor.anchor.isInline && cursor.anchor.blockId === blockId;
   const row = rowOf(block).getBoundingClientRect();
   return {
     target: {
       panelId,
       rootBlockId: cursor.rootBlockId,
       blockId,
-      caret: cursor,
+      // Only an inline caret in this block is written at (NoteTarget).
+      caret: inlineCaret ? cursor : null,
     },
     row,
     zone: zoneAt(row, y),
-    inlineCaret: cursor.anchor.isInline && cursor.anchor.blockId === blockId,
+    inlineCaret,
+    caretBox: inlineCaret ? found.box : null,
     root: blockId === cursor.rootBlockId,
     expanded: block.getBoundingClientRect().height > row.height + 1,
   };
