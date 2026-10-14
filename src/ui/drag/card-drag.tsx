@@ -9,8 +9,9 @@
 // panel's top or bottom the panel scrolls (#125). Letting go there hands
 // the drop to `onNoteDrop`; letting go within the plugin panel hands it to the card's `inPanel` drop, if it has
 // one (the all tasks view's move and My Day's scheduling, #124); anywhere
-// else cancels. An area without `onNoteDrop` drops nothing in the notes (the
-// all tasks view and My Day until #127). While dragging, the `inPanel`
+// else cancels. An area without `onNoteDrop`, or an `inPanel` drop that
+// keeps to the panel (My Day's card edges, #127), drops nothing in the
+// notes. While dragging, the `inPanel`
 // drop's scrollers scroll near their top and bottom edges (auto-scroll.ts),
 // and the card going away (e.g. the task removed in the notes) cancels it.
 //
@@ -76,6 +77,11 @@ export interface PanelDropTarget {
   readonly captureOnPress?: boolean;
   /** The cursor while dragging: grabbing (the default), or a vertical resize. */
   readonly cursor?: "grab" | "resize";
+  /**
+   * The drag never drops in the notes, even in an area that does (My Day's
+   * card edges only change the times, #127).
+   */
+  readonly keepsToPanel?: boolean;
 }
 
 /**
@@ -192,6 +198,9 @@ function createCardDrag(
   const emit = () => {
     for (const listener of [...listeners]) listener();
   };
+  /** Where the drag drops in the notes, if it does at all. */
+  const noteDropOf = (drag: Dragging) =>
+    drag.inPanel?.keepsToPanel ? undefined : onNoteDrop();
 
   const place = () => {
     if (chip) {
@@ -234,7 +243,7 @@ function createCardDrag(
   const scroll = () => {
     scrollFrame = null;
     // Nothing drops in the notes: they are not scrolled either.
-    if (!dragging || !onNoteDrop()) return;
+    if (!dragging || !noteDropOf(dragging)) return;
     const scroller = noteScrollerAt(point.x, point.y);
     const step = scroller ? scrollStep(scroller, point.y) : 0;
     if (!scroller || step === 0) return;
@@ -257,7 +266,7 @@ function createCardDrag(
     const drag = dragging;
     if (!drag) return;
     // Nothing drops in the notes: no probing, the drag stays the view's own.
-    const probe = onNoteDrop() ? probeNoteDrop(point.x, point.y) : null;
+    const probe = noteDropOf(drag) ? probeNoteDrop(point.x, point.y) : null;
     drag.over = probe ? { probe, plan: planFor(probe, "ref") } : null;
     if (!probe) drag.inPanel?.move(point.x, point.y);
     place();
@@ -314,7 +323,7 @@ function createCardDrag(
       // Handed over before the drag ends, so what the drop wrote and the
       // drag's end show in one frame.
       try {
-        const noteDrop = onNoteDrop();
+        const noteDrop = noteDropOf(dragging);
         if (over && noteDrop) {
           noteDrop({ task, plan: over.plan, target: over.probe.target });
         } else {

@@ -117,6 +117,8 @@ export function createPanelFeature(deps: {
   let loadedPluginName: string | undefined;
   const lastFullReview = createPluginDataLastFullReview(() => loadedPluginName);
   const readCandidates = createReadCandidates({ repository });
+  // Every view's cards drag into the notes (#123, #127).
+  const linkTaskInNote = createLinkTaskInNote({ repository });
   views.register(
     createNextActionView({
       readNextActions: createReadNextActions({
@@ -125,6 +127,7 @@ export function createPanelFeature(deps: {
         dayBoundary: deps.dayBoundary,
         startPreviewDays: deps.startPreviewDays,
       }),
+      linkTaskInNote,
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
@@ -153,6 +156,7 @@ export function createPanelFeature(deps: {
       }),
       readMyDayCandidates: createReadMyDayCandidates(myDayDeps),
       addToMyDay: createAddToMyDay(myDayDeps),
+      linkTaskInNote,
       today: deps.today,
       now: () => systemClock.now(),
       changes,
@@ -171,7 +175,7 @@ export function createPanelFeature(deps: {
   views.register(
     createInboxView({
       readInbox: createReadInbox({ repository }),
-      linkTaskInNote: createLinkTaskInNote({ repository }),
+      linkTaskInNote,
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
@@ -196,6 +200,7 @@ export function createPanelFeature(deps: {
       readCandidates,
       filter: allTasksFilter,
       moveTask: createMoveTask({ repository }),
+      linkTaskInNote,
     }),
   );
   views.register(
@@ -215,6 +220,7 @@ export function createPanelFeature(deps: {
       addToMyDay: createAddToMyDay(myDayDeps),
       dropTask: createDropTask({ repository }),
       editTask: createEditTask({ repository }),
+      linkTaskInNote,
       openQuickCapture: deps.openQuickCapture,
       today: deps.today,
       changes,

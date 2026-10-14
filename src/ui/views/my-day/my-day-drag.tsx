@@ -7,7 +7,8 @@
 //
 // These are the cards' drops in the plugin panel (`PanelDropTarget`) on the
 // shared card drag (ui/drag/card-drag.tsx, #124), which handles the press,
-// the threshold, the chip, the fading and letting go elsewhere (cancelled).
+// the threshold, the chip, the fading, a drop on a block in a note panel
+// (#127; never for an edge) and letting go elsewhere (cancelled).
 // The timeline (or else the panel) scrolls near its top and bottom edges.
 //
 // Smooth by design: while dragging only the preview on the timeline
@@ -205,6 +206,8 @@ export function createMyDayDrag(setup: () => MyDayDragSetup): MyDayDrag {
   const target = (subject: DragSubject): PanelDropTarget => ({
     captureOnPress: isEdge(subject),
     cursor: isEdge(subject) ? "resize" : "grab",
+    // An edge only changes the times: it never drops in the notes (#127).
+    keepsToPanel: isEdge(subject),
     begin(_x, y) {
       const { root, range } = setup();
       if (!root || under) return;

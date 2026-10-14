@@ -3,15 +3,17 @@
 // parent task's text, filtered from a button by the title (#55). First in
 // the navigation, so the plugin panel opens on it. It reads when the plugin
 // panel opens and again on every task change signal (ADR 0007). Verified by
-// hand in Orca (docs/ARCHITECTURE.md §5).
+// hand in Orca (docs/ARCHITECTURE.md §5). A card dragged onto a block in a
+// note panel links the task there (#127).
 import * as React from "react";
+import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type { ReadCandidates } from "../../../application/usecases/read-candidates";
 import type {
   NextActionItem,
   NextActionsRead,
   ReadNextActions,
 } from "../../../application/usecases/read-next-actions";
-import type { CalendarDate, TaskId } from "../../../domain/task/task";
+import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import { filterChoosesAny } from "../../../domain/task/task-filter";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
@@ -23,7 +25,9 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { CardDragArea, useCardDrag } from "../../drag/card-drag";
 import { useCandidates } from "../../hooks/use-candidates";
+import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import {
   type TaskActionsDeps,
   useTaskActions,
@@ -41,6 +45,8 @@ import type { NextActionFilterStore } from "./next-action-filter-store";
 
 export interface NextActionViewDeps {
   readNextActions: ReadNextActions;
+  /** A card dropped on a block in a note panel links the task there (#127). */
+  linkTaskInNote: LinkTaskInNote;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
   /** Tasks may have changed: the next actions are read again. */
@@ -81,6 +87,10 @@ function NextActionContent(props: {
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
 
   if (state.kind === "loading") return <TaskListPlaceholder />;
   if (state.kind === "paused") return <PausedNotice />;
@@ -122,28 +132,35 @@ function NextActionContent(props: {
     );
   }
   return (
-    <ul className="nextaction-task-list">
-      {items.map(({ task, kept, parentText }) => (
-        <li key={task.id}>
-          <TaskCard
-            task={task}
-            today={today}
-            actions={actions}
-            menuItems={menuItems}
-            menuPlace={menuPlace}
-            onOpen={(open) => selectTask(open.id)}
-            selected={task.id === selectedTaskId}
-            kept={kept}
-            // Only faded: a task leaves for many reasons besides its status
-            // (a filter, something blocking it), so "Changed to" would
-            // often mislead (#53, confirmed 2026-10-10).
-            keptStatusShown={false}
-            parentText={parentText}
-          />
-        </li>
-      ))}
-    </ul>
+    <CardDragArea onNoteDrop={linkTaskInNote}>
+      <ul className="nextaction-task-list">
+        {items.map(({ task, kept, parentText }) => (
+          <NextActionItemRow key={task.id} task={task}>
+            <TaskCard
+              task={task}
+              today={today}
+              actions={actions}
+              menuItems={menuItems}
+              menuPlace={menuPlace}
+              onOpen={(open) => selectTask(open.id)}
+              selected={task.id === selectedTaskId}
+              kept={kept}
+              // Only faded: a task leaves for many reasons besides its status
+              // (a filter, something blocking it), so "Changed to" would
+              // often mislead (#53, confirmed 2026-10-10).
+              keptStatusShown={false}
+              parentText={parentText}
+            />
+          </NextActionItemRow>
+        ))}
+      </ul>
+    </CardDragArea>
   );
+}
+
+/** A card's list item, dragged by a press anywhere on it (#127). */
+function NextActionItemRow(props: { task: Task; children: React.ReactNode }) {
+  return <li {...useCardDrag(props.task)}>{props.children}</li>;
 }
 
 /**

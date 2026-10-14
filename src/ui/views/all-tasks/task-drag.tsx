@@ -7,7 +7,8 @@
 // shared card drag (ui/drag/card-drag.tsx, #124): a press anywhere on a tree
 // card but its buttons becomes a drag once the pointer has gone a few pixels;
 // the card drag shows the chip and fades the card. Letting go anywhere but
-// on a card or a gap in the area cancels it. The list scrolls while the
+// on a card or a gap in the area, or a block in a note panel (#127), cancels
+// it. The list scrolls while the
 // pointer is near its top or bottom edge. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -19,6 +20,7 @@ import type { Task, TaskId } from "../../../domain/task/task";
 import { scrollingAncestor } from "../../drag/auto-scroll";
 import {
   CardDragArea,
+  type NoteCardDrop,
   type PanelDropTarget,
   useCardDrag,
 } from "../../drag/card-drag";
@@ -64,10 +66,12 @@ const DragContext = React.createContext<DragArea | undefined>(undefined);
 /**
  * The area cards can be dragged and dropped in. A drop on a card or a gap
  * calls `onMove` with its task as the target; the use case refuses what
- * cannot be done.
+ * cannot be done. A drop on a block in a note panel calls `onNoteDrop`
+ * (#127).
  */
 export function TaskDragArea(props: {
   onMove: (move: TaskMove) => void;
+  onNoteDrop: (drop: NoteCardDrop) => void;
   children: React.ReactNode;
 }) {
   const area = React.useRef<HTMLDivElement>(null);
@@ -131,7 +135,7 @@ export function TaskDragArea(props: {
   );
 
   return (
-    <CardDragArea>
+    <CardDragArea onNoteDrop={props.onNoteDrop}>
       <DragContext.Provider value={value}>
         <div
           ref={area}
