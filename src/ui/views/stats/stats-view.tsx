@@ -198,6 +198,9 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
   let anchor: CalendarDate | undefined;
   // What is selected below the charts (#137), while the view shows.
   const selection = createStatsSelectionStore();
+  // While another period is set up, clearing the selection reads nothing:
+  // the period's own read is the only one.
+  let settingPeriod = false;
   const query = createViewQuery(async (): Promise<StatsRead> => {
     const readFor = selection.current();
     const read = await deps.readStats({
@@ -207,21 +210,24 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
     });
     return { ...read, readFor };
   }, deps.changes);
-  selection.subscribe(() => query.reload());
-  // Another scale is another period: nothing in it is selected.
-  deps.scale.subscribe(() => selection.clear());
-  // A new scale shows its current period; the store lives as long as the
-  // plugin instance.
-  deps.scale.subscribe(() => {
-    anchor = undefined;
-    query.reload();
-  });
-  const page = (next: CalendarDate | undefined) => {
+  selection.subscribe(() => settingPeriod || query.reload());
+  /**
+   * Shows the period holding `next` (none for the current one) in one
+   * read: nothing in another period is selected (#137).
+   */
+  const showPeriod = (next: CalendarDate | undefined) => {
     anchor = next;
-    // Another period: nothing in it is selected (#137).
-    selection.clear();
+    settingPeriod = true;
+    try {
+      selection.clear();
+    } finally {
+      settingPeriod = false;
+    }
     query.reload();
   };
+  // A new scale shows its current period; the store lives as long as the
+  // plugin instance.
+  deps.scale.subscribe(() => showPeriod(undefined));
 
   function StatsView() {
     // Every opening shows the current period of the scale chosen.
@@ -240,7 +246,7 @@ export function createStatsView(deps: StatsViewDeps): PanelView {
           query={query}
           today={deps.today()}
           scale={deps.scale}
-          onPage={page}
+          onPage={showPeriod}
           selection={selection}
           onSelect={selection.toggle}
           onClearSelection={selection.clear}
