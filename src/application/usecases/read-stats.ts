@@ -5,6 +5,10 @@
 // header's numbers (#134).
 import { countedEntries } from "../../domain/stats/counted-completions";
 import {
+  type Distributions,
+  distributions,
+} from "../../domain/stats/distributions";
+import {
   inCell,
   type StatsPeriod,
   type StatsScale,
@@ -40,6 +44,11 @@ export interface ReadStatsResult {
   readonly cells: readonly StatsCellRead[];
   /** The completions and skips in the whole period. */
   readonly totals: { readonly completions: number; readonly skips: number };
+  /**
+   * The period's completions by their task's contexts, labels and
+   * importance as they are now; skips are left out (#136).
+   */
+  readonly distributions: Distributions;
 }
 
 /** Reads the stats. Errors are thrown as they are. */
@@ -76,6 +85,15 @@ export function createReadStats(deps: {
         completions: cellReads.reduce((sum, cell) => sum + cell.completions, 0),
         skips: cellReads.reduce((sum, cell) => sum + cell.skips, 0),
       },
+      distributions: distributions(
+        tasks.map((item) => ({
+          task: item.task,
+          entries: countedEntries(
+            item.task,
+            item.completionHistory ?? [],
+          ).filter((entry) => inCell(period, entry.day)),
+        })),
+      ),
     };
   };
 }
