@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import type { RecurrenceRead } from "../../domain/recurrence/recurrence";
 import { createReadStats, type ReadStatsResult } from "./read-stats";
@@ -38,6 +39,7 @@ function setup() {
     // in the week of Monday October 12 to Sunday October 18.
     clock: createFixedClock("2026-10-14T09:00:00+08:00"),
     dayBoundary: createFixedDayBoundary(),
+    startPreviewDays: createFixedStartPreviewDays(),
   });
   return { repository, readStats };
 }
@@ -304,6 +306,76 @@ describe("read stats", () => {
         first: { year: 2026, month: 9, day: 28 },
         last: october(4),
       });
+    });
+  });
+
+  describe("the header's numbers", () => {
+    it("counts the next actions as the next action view does, whatever blocks the others", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask({ id: 1, status: "todo" });
+      // Held back by its open subtask 3.
+      repository.addTask({ id: 2, status: "todo" });
+      repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+      repository.addTask({ id: 4, status: "doing" });
+      repository.addTask({ id: 5, status: "waiting" });
+      // Not started yet: it starts tomorrow.
+      repository.addTask({ id: 6, status: "todo", start: october(15) });
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.now.nextActions).toBe(3);
+    });
+
+    it("counts the doing and the waiting tasks by their status, blocked or not", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask({ id: 1, status: "doing" });
+      // Doing, though held back by its open subtask 3.
+      repository.addTask({ id: 2, status: "doing" });
+      repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+      repository.addTask({ id: 4, status: "waiting" });
+      repository.addTask({ id: 5, status: "waiting" }, { parentId: 4 });
+      repository.addTask({ id: 6, status: "waiting" });
+      repository.addTask({ id: 7, status: "someday" });
+      repository.addTask({ id: 8, status: "done" });
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.now).toMatchObject({ doing: 2, waiting: 3 });
+    });
+
+    it("counts the overdue tasks by their due date, the done ones not", async () => {
+      const { repository, readStats } = setup();
+      // Overdue: due yesterday, whatever the status.
+      repository.addTask({ id: 1, status: "todo", due: october(13) });
+      repository.addTask({ id: 2, status: "waiting", due: october(1) });
+      repository.addTask({ id: 3, status: "someday", due: october(12) });
+      // Not overdue: due today, due later, done, no due date.
+      repository.addTask({ id: 4, status: "todo", due: october(14) });
+      repository.addTask({ id: 5, status: "todo", due: october(20) });
+      repository.addTask({ id: 6, status: "done", due: october(2) });
+      repository.addTask({ id: 7, status: "todo" });
+
+      const read = await readStats({ scale: "week" });
+
+      expect(read.now).toMatchObject({ overdue: 3 });
+    });
+
+    it("gives the same numbers whatever period is looked at, as of today", async () => {
+      const { repository, readStats } = setup();
+      repository.addTask({ id: 1, status: "doing" });
+      repository.addTask({ id: 2, status: "waiting" });
+      // Overdue today; not yet overdue in the week of October 4.
+      repository.addTask({ id: 3, status: "todo", due: october(10) });
+
+      const thisWeek = await readStats({ scale: "week" });
+      const weekOfOctober4 = await readStats({
+        scale: "week",
+        anchor: october(4),
+      });
+
+      const expected = { nextActions: 2, doing: 1, waiting: 1, overdue: 1 };
+      expect(thisWeek.now).toEqual(expected);
+      expect(weekOfOctober4.now).toEqual(expected);
     });
   });
 });
