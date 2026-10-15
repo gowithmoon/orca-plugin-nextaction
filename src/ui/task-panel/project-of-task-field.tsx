@@ -6,7 +6,8 @@
 // and cleared. The task's own setting that does not count is struck through,
 // "not in effect" (overridden) or "stale" (no longer a project), and can be
 // removed. Every set, change or clear is one write, so one undo; it replaces
-// whatever the task held, a stale setting too (ADR 0016). Verified by hand
+// whatever the task held, a stale setting too (ADR 0016). While the project
+// tag is paused it reads as no project, with nothing to set (US103). Verified by hand
 // in Orca (docs/ARCHITECTURE.md §5).
 import {
   matchingProjectCandidates,
@@ -117,8 +118,9 @@ export function ProjectOfTaskField(props: {
       after: <span className="nextaction-dependency-stale">{t("Stale")}</span>,
     });
   }
-  // Only a parent task's decision leaves nothing to set (ADR 0025).
-  const searchable = source?.kind !== "parentTask";
+  // Only a parent task's decision leaves nothing to set (ADR 0025); while
+  // the project tag is paused nothing is set or cleared either (US103).
+  const searchable = source?.kind !== "parentTask" && !read.projectsPaused;
   const offered = candidates.filter((c) => c.id !== project?.id);
   const options: SelectOption[] = offered.map((candidate) => ({
     value: String(candidate.id),
@@ -133,6 +135,13 @@ export function ProjectOfTaskField(props: {
       onOpen={props.onOpenProject}
       removeLabel={t("Remove project")}
       onRemove={() => props.onChange(null)}
+      below={
+        read.projectsPaused ? (
+          <span className="nextaction-project-of-task-source">
+            {t("No project")}
+          </span>
+        ) : undefined
+      }
       searchable={searchable}
       options={options}
       filterFunction={(keyword, all) => {

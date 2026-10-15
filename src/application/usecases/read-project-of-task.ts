@@ -53,6 +53,11 @@ export interface ProjectOfTaskRead {
   readonly source: ProjectOfTaskSource | null;
   /** `null` when the task has no setting of its own, or it decides. */
   readonly ownSetting: OwnSettingShown | null;
+  /**
+   * The project tag is paused (US103): the task belongs to no project and
+   * nothing can be set or cleared. Absent when it is not.
+   */
+  readonly projectsPaused?: true;
 }
 
 /** Reads the 所属项目 of task `id`, from one read. Errors are thrown as they are. */
@@ -63,6 +68,14 @@ export function createReadProjectOfTask(deps: {
 }): ReadProjectOfTask {
   return async (id) => {
     const snapshot = await deps.repository.readTaskGraph();
+    if (snapshot.projectsPaused) {
+      return {
+        project: null,
+        source: null,
+        ownSetting: null,
+        projectsPaused: true,
+      };
+    }
     const tasks = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
     const projects = new Map(
       (snapshot.projects ?? []).map(({ project }) => [

@@ -122,6 +122,20 @@ describe("read the project of a task", () => {
     });
   });
 
+  it("while the project tag is paused, a task reads as belonging to no project, nothing to set", async () => {
+    const { repository, readProjectOfTask } = setup();
+    repository.addProject(moveHouse);
+    repository.addTask({ id: 1 }, { parentId: 10, project: [10] });
+    repository.pauseProjectTag(true);
+
+    expect(await readProjectOfTask(1)).toEqual({
+      project: null,
+      source: null,
+      ownSetting: null,
+      projectsPaused: true,
+    });
+  });
+
   it("a block that is not a task reads as none", async () => {
     const { repository, readProjectOfTask } = setup();
     repository.addBlock(7);
