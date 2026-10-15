@@ -773,6 +773,37 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async dropProject(id, tasks) {
+      const block = blocks.get(id);
+      if (!block?.project) throw new Error(`block ${id} is not a project`);
+      const dropped: StoredBlock[] = tasks.map((taskId) => taskToWrite(taskId));
+      const droppedIds = new Set(tasks);
+      write(() => {
+        block.project = undefined;
+        for (const task of dropped) {
+          task.completionHistory = undefined;
+          task.myDay = undefined;
+          task.task = undefined;
+        }
+        for (const other of blocks.values()) {
+          // No 所属项目 setting is left pointing at it, done tasks' included.
+          if (other.projectValues?.some((value) => value.target === id)) {
+            other.projectValues = other.projectValues.filter(
+              (value) => value.target !== id,
+            );
+          }
+          // As dropTask: no dependency is left on a dropped task (ADR 0016).
+          const dependencies = other.task?.dependencies ?? [];
+          if (other.task && dependencies.some((d) => droppedIds.has(d))) {
+            other.task = {
+              ...other.task,
+              dependencies: dependencies.filter((d) => !droppedIds.has(d)),
+            };
+          }
+        }
+      });
+    },
+
     async appendTaskToJournal(text, now, initial = {}) {
       const id = nextId++;
       write(() => {

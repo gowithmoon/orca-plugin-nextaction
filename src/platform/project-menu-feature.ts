@@ -1,7 +1,14 @@
 import type { TaskRepository } from "../application/ports/task-repository";
 import { createChangeProjectStatus } from "../application/usecases/change-project-status";
+import {
+  createDropProject,
+  createReadDropProjectPlan,
+} from "../application/usecases/drop-project";
 import { createReadProject } from "../application/usecases/read-project";
-import { registerBuiltinProjectMenuItems } from "../ui/project-menu/builtin-items";
+import {
+  registerBuiltinProjectMenuItems,
+  registerDropProjectItem,
+} from "../ui/project-menu/builtin-items";
 import {
   createProjectMenuItems,
   type ProjectMenuItems,
@@ -25,6 +32,11 @@ export function createProjectMenuFeature(deps: {
     const items = createProjectMenuItems();
     registerBuiltinProjectMenuItems(items, {
       changeProjectStatus: createChangeProjectStatus({ repository }),
+      pluginName,
+    });
+    registerDropProjectItem(items, {
+      readDropProjectPlan: createReadDropProjectPlan({ repository }),
+      dropProject: createDropProject({ repository }),
       pluginName,
     });
     // Each load replaces the previous load's registration; released last,
