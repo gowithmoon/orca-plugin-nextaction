@@ -581,6 +581,29 @@ describe("read next actions with projects", () => {
   });
 });
 
+describe("read next actions: the project on a card", () => {
+  it("gives every task the project it belongs to, under its block, set to it or by its parent task, or none", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { project: [1] });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" });
+
+    const read = await readNextActions();
+
+    expect(
+      read.items
+        .map((item) => [item.task.id, item.project?.text ?? null] as const)
+        .sort((a, b) => a[0] - b[0]),
+    ).toEqual([
+      [2, "Move house"],
+      [4, "Move house"],
+      [5, null],
+    ]);
+  });
+});
+
 describe("read next actions with a set project of a task", () => {
   it("lets a task with a set project in only while that project is active", async () => {
     const { repository, readNextActions } = setup();

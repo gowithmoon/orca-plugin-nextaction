@@ -162,6 +162,7 @@ const zhCN: Record<string, string> = {
   "Any urgency": "全部紧急度",
   "Any status": "全部状态",
   "Parent task:": "父任务：",
+  "Project (${status}):": "所属项目（${status}）：",
   "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
     "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
   "New tasks you capture appear here.": "新捕获的任务会出现在这里。",

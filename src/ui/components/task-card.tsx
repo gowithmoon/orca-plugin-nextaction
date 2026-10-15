@@ -6,13 +6,16 @@
 // task menu; a click elsewhere on the card calls `onOpen` (the task panel).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
+import type { Project } from "../../domain/project/project";
 import type { CalendarDate, Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import type { TaskActions } from "../hooks/use-task-actions";
+import { projectStatusIcons } from "../project-menu/project-status-icons";
 import type { TaskMenuItems, TaskMenuPlace } from "../task-menu/menu-items";
 import { TaskMenu } from "../task-menu/task-menu";
 import { shownText } from "./format";
 import { ContextMenu } from "./popup-controls";
+import { projectStatusLabel } from "./project-status-label";
 import { PropertyRow } from "./property-row";
 import { StatusIcon } from "./status-icon";
 import { markedStatus, StatusMenu } from "./status-menu";
@@ -46,6 +49,12 @@ export interface TaskCardProps {
    * cut short when too long and not clickable on its own; no line without it.
    */
   parentText?: string | null;
+  /**
+   * The project the task belongs to (GLOSSARY: 所属项目, #149), on the
+   * parent task's line before its text, when where the card sits does not
+   * say it; no project shown without it.
+   */
+  project?: Project | null;
   /**
    * Marked blocked (#65): held back by a dependency, a sequential parent or
    * a dependency cycle. The task panel says why.
@@ -127,21 +136,68 @@ function OpenInNotesButton(props: { task: Task; actions: TaskActions }) {
   );
 }
 
-/** The parent task's text: plain text, so a click on it is a click on the card. */
-function ParentLine(props: { text: string }) {
-  const blank = props.text.trim() === "";
-  const text = blank ? t("(No text)") : props.text;
+/** Blank text reads as "(No text)". */
+function lineText(text: string): { text: string; blank: boolean } {
+  const blank = text.trim() === "";
+  return { text: blank ? t("(No text)") : text, blank };
+}
+
+/**
+ * The line above the task's text (#55, #149): the project it belongs to
+ * (its project status icon and name), then the parent task's text, either
+ * one alone, each cut short. Plain text, so a click on it is a click on the
+ * card.
+ */
+function ParentLine(props: {
+  project: Project | null;
+  parentText: string | null;
+}) {
+  const { project, parentText } = props;
+  const name = project && lineText(project.text);
+  const parent = parentText === null ? null : lineText(parentText);
+  const icon = project && projectStatusIcons[project.status];
+  const title = [name?.text, parent?.text].filter(Boolean).join(" › ");
   return (
-    <div
-      className="nextaction-task-card-parent"
-      data-empty={blank || undefined}
-      title={text}
-    >
-      <i className="ti ti-corner-left-up" aria-hidden="true" />
-      <span className="nextaction-task-card-parent-text">
-        <span className="nextaction-visually-hidden">{t("Parent task:")} </span>
-        {text}
-      </span>
+    <div className="nextaction-task-card-parent" title={title}>
+      {project && icon && name && (
+        <span
+          className="nextaction-task-card-project"
+          data-empty={name.blank || undefined}
+        >
+          <i
+            className={icon.className}
+            style={{ color: icon.color }}
+            aria-hidden="true"
+          />
+          <span className="nextaction-task-card-parent-text">
+            <span className="nextaction-visually-hidden">
+              {t("Project (${status}):", {
+                status: projectStatusLabel(project.status),
+              })}{" "}
+            </span>
+            {name.text}
+          </span>
+        </span>
+      )}
+      {name && parent && (
+        <span className="nextaction-task-card-parent-sep" aria-hidden="true">
+          ›
+        </span>
+      )}
+      {parent && (
+        <span
+          className="nextaction-task-card-parent-task"
+          data-empty={parent.blank || undefined}
+        >
+          <i className="ti ti-corner-left-up" aria-hidden="true" />
+          <span className="nextaction-task-card-parent-text">
+            <span className="nextaction-visually-hidden">
+              {t("Parent task:")}{" "}
+            </span>
+            {parent.text}
+          </span>
+        </span>
+      )}
     </div>
   );
 }
@@ -158,6 +214,7 @@ export function TaskCard(props: TaskCardProps) {
     kept,
     keptStatusShown = true,
     parentText,
+    project,
     blocked,
     buttons,
     doneToday,
@@ -210,7 +267,12 @@ export function TaskCard(props: TaskCardProps) {
         )}
       </div>
       <div className="nextaction-task-card-main">
-        {parentText != null && <ParentLine text={parentText} />}
+        {(parentText != null || project) && (
+          <ParentLine
+            project={project ?? null}
+            parentText={parentText ?? null}
+          />
+        )}
         <div
           className="nextaction-task-card-text"
           data-empty={text.empty || undefined}

@@ -83,6 +83,7 @@ export function StatsSelectionList(props: {
               menuPlace={menuPlace}
               onOpen={(open) => selectTask(open.id)}
               selected={entry.task.id === selectedTaskId}
+              project={entry.project}
             />
           </StatsEntryItem>
         ))}

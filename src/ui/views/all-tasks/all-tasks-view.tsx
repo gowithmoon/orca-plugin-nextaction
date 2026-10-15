@@ -337,6 +337,7 @@ function TaskTreeItem(props: TreeItemProps & { node: TaskNode }) {
             // kept one leaves for more reasons than its status.
             keptStatusShown={false}
             blocked={node.blocked}
+            project={node.shownProject}
           />
         </TaskDropTarget>
       </div>
@@ -395,6 +396,7 @@ function DoneSectionPart(props: {
                       menuPlace={cards.menuPlace}
                       onOpen={(open) => cards.selectTask(open.id)}
                       selected={item.task.id === cards.selectedTaskId}
+                      project={item.shownProject}
                     />
                   </DoneItem>
                 ) : (

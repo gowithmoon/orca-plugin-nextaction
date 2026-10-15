@@ -1,6 +1,7 @@
 // Use case: read the next actions (GLOSSARY: 下一步行动), for the next action
 // view, highest score first (#53).
 import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
+import type { Project } from "../../domain/project/project";
 import { rankByScore } from "../../domain/scoring/score";
 import type { Task, TaskId } from "../../domain/task/task";
 import { filterLets, type TaskFilter } from "../../domain/task/task-filter";
@@ -38,6 +39,11 @@ export interface NextActionItem {
    * `null` when it has none.
    */
   readonly parentText: string | null;
+  /**
+   * The project it belongs to (GLOSSARY: 所属项目), shown on its card
+   * whenever it has one: the list does not say it; `null` for none.
+   */
+  readonly project: Project | null;
 }
 
 export interface NextActionsRead {
@@ -84,6 +90,7 @@ export function createReadNextActions(deps: {
           entry.parentId === null
             ? null
             : (graph.entry(entry.parentId)?.task.text ?? null),
+        project: entry.project,
       })),
       total: graph.nextActions.length,
     };

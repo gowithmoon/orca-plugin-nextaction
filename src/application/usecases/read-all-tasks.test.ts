@@ -1402,3 +1402,113 @@ describe("read all tasks: projects and the done section", () => {
     expect(doneIds(read)).toEqual([]);
   });
 });
+
+/**
+ * Every task node in the tree, depth first, with the ID of the project its
+ * card shows (`null`: none).
+ */
+function shownProjects(
+  nodes: readonly AllTasksNode[],
+): [NodeKey, number | null][] {
+  return nodes.flatMap((node) => [
+    ...(node.kind === "task"
+      ? [[key(node), node.shownProject?.id ?? null] as [NodeKey, number | null]]
+      : []),
+    ...shownProjects(node.children),
+  ]);
+}
+
+describe("read all tasks: the project on a card", () => {
+  it("shows the project of a task set to it outside its block, not again on its descendant tasks", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { project: [1] });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+
+    const read = await readAllTasks();
+
+    expect(shownProjects(read.tree)).toEqual([
+      [2, 1],
+      [3, null],
+      [4, null],
+    ]);
+  });
+
+  it("shows no project on a task under its own project's row, nor on its descendant tasks", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addBlock(2, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" });
+
+    const read = await readAllTasks();
+
+    expect(shownProjects(read.tree)).toEqual([
+      [3, null],
+      [4, null],
+      [5, null],
+    ]);
+  });
+
+  it("shows the project of a task under another project's row, set to it", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "active" });
+    repository.addTask(
+      { id: 3, status: "todo" },
+      { parentId: 2, project: [1] },
+    );
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 2 });
+
+    const read = await readAllTasks();
+
+    expect(shownProjects(read.tree)).toEqual([
+      [3, 1],
+      [4, null],
+      [5, null],
+    ]);
+  });
+
+  it("shows the project once on an ancestor task kept only for where a found task sits", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, text: "Pack", status: "todo" },
+      { project: [1] },
+    );
+    repository.addTask(
+      { id: 3, text: "Books", status: "todo" },
+      { parentId: 2 },
+    );
+
+    const read = await readAllTasks({ search: "Books" });
+
+    expect(shownProjects(read.tree)).toEqual([
+      [2, 1],
+      [3, null],
+    ]);
+  });
+
+  it("shows the project on a done subtree's top-level task in the done section", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "done" }, { project: [1] });
+    repository.addTask({ id: 3, status: "done" });
+
+    const read = await readAllTasks({ showEarlierDone: true });
+
+    expect(
+      read.done.items.map((item) =>
+        item.kind === "task"
+          ? [item.task.id, item.shownProject?.id ?? null]
+          : key(item),
+      ),
+    ).toEqual([
+      [2, 1],
+      [3, null],
+    ]);
+  });
+});

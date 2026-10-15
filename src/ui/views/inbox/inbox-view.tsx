@@ -5,7 +5,10 @@
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
-import type { ReadInbox } from "../../../application/usecases/read-inbox";
+import type {
+  InboxItem as InboxItemRead,
+  ReadInbox,
+} from "../../../application/usecases/read-inbox";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
@@ -51,12 +54,17 @@ export interface InboxViewDeps {
  * selected task if it has left the inbox, in its place. A task kept for an
  * earlier selection is no longer shown once the selection moves on.
  */
-function shownTasks(read: readonly Task[], selected: TaskId | undefined) {
-  return read.filter((task) => task.status === "inbox" || task.id === selected);
+function shownTasks(
+  read: readonly InboxItemRead[],
+  selected: TaskId | undefined,
+) {
+  return read.filter(
+    ({ task }) => task.status === "inbox" || task.id === selected,
+  );
 }
 
 function InboxContent(props: {
-  query: ViewQuery<Task[]>;
+  query: ViewQuery<InboxItemRead[]>;
   today: CalendarDate;
   deps: InboxViewDeps;
 }) {
@@ -97,7 +105,7 @@ function InboxContent(props: {
   return (
     <CardDragArea onNoteDrop={linkTaskInNote}>
       <ul className="nextaction-task-list">
-        {tasks.map((task) => (
+        {tasks.map(({ task, project }) => (
           <InboxItem key={task.id} task={task}>
             <TaskCard
               task={task}
@@ -108,6 +116,7 @@ function InboxContent(props: {
               onOpen={(open) => selectTask(open.id)}
               selected={task.id === selectedTaskId}
               kept={task.status !== "inbox"}
+              project={project}
             />
           </InboxItem>
         ))}
