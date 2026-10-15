@@ -1,10 +1,10 @@
-// Alias lookups and renames for the task tag. Thin Orca side; verified by
+// Alias lookups and renames for a plugin tag. Thin Orca side; verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
 import { describeError } from "../../../shared/describe-error";
 import { findAliasOwner, invokeEditorCommand } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { planRename, type RenamePlan } from "./rename-plan";
-import { type TaskTagCache, writeTaskTagCache } from "./task-tag-cache";
+import { type TagCache, writeTagCache } from "./tag-cache";
 
 /**
  * Renames the tag's alias with `renameAlias` (ADR 0002): the block, its
@@ -40,7 +40,9 @@ export async function renameTagAlias(
  */
 export async function applyRename(
   pluginName: string,
-  current: TaskTagCache,
+  /** The `setData` key of the tag's cache. */
+  cacheKey: string,
+  current: TagCache,
   requested: unknown,
 ): Promise<RenamePlan> {
   try {
@@ -52,7 +54,7 @@ export async function applyRename(
     const plan = planRename({ current, requested, newNameOwner });
     if (plan.kind === "rename") {
       await renameTagAlias(current.tagBlockId, plan.from, plan.to);
-      await writeTaskTagCache(pluginName, current, {
+      await writeTagCache(pluginName, cacheKey, current, {
         tagBlockId: current.tagBlockId,
         tagName: plan.to,
       });

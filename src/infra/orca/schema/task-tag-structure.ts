@@ -1,21 +1,18 @@
 // The structure the plugin expects on the task tag (spec #16, ADR 0008).
-import type { BlockProperty } from "../../../orca.d.ts";
 import {
+  defaultTagNames,
   dependencyModeKeys,
   dependencyModeName,
+  findPropertyKey,
   type NoteLanguage,
   type PropertyKey,
+  propertyKeys,
   propertyName,
   statusKeys,
   statusName,
 } from "../codec/names";
 import { PropType } from "../prop-type";
-
-/** A property definition as written to the tag block with `setProperties`. */
-export type PropertyDefinition = Required<
-  Pick<BlockProperty, "name" | "type" | "pos">
-> &
-  Pick<BlockProperty, "typeArgs">;
+import type { PropertyDefinition, TagSchema } from "./tag-schema";
 
 /** Fixed colors of the status options, shown in Orca's own interface. */
 const statusColors = {
@@ -143,3 +140,12 @@ export function taskTagDefinitions(
     ...(typeArgs ? { typeArgs: typeArgs(language, tagName) } : {}),
   }));
 }
+
+/** The task tag as the shared tag mechanism sees it. */
+export const taskTagSchema: TagSchema<PropertyKey> = {
+  keys: propertyKeys,
+  defaultNames: defaultTagNames,
+  propertyName,
+  findPropertyKey,
+  definitions: taskTagDefinitions,
+};

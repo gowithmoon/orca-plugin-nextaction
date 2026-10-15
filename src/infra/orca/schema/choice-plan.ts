@@ -5,7 +5,7 @@
 import type { BlockProperty } from "../../../orca.d.ts";
 import { findPropertyKey, propertyKeys } from "../codec/names";
 import { choiceName } from "./startup-plan";
-import type { PropertyDefinition } from "./task-tag-structure";
+import type { PropertyDefinition } from "./tag-schema";
 
 export type ChoicePlan =
   | { kind: "unchanged" }

@@ -1,7 +1,7 @@
 import type { TaskTagNames } from "../../../application/ports/task-tag-names";
 import { taskStatuses } from "../../../domain/task/task";
 import { propertyName, statusName } from "../codec/names";
-import type { TaskTagState } from "./task-tag-state";
+import type { TaskTagState } from "./tag-state";
 
 /**
  * The names the tag carries in the notes for a given tag state: none while
