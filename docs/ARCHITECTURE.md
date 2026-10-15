@@ -51,7 +51,7 @@ src/
   infra/
     system-clock.ts        Clock 端口的真实实现（与 Orca 无关）
   infra/orca/
-    schema/                任务标签的结构定义、启动对齐、改名
+    schema/                插件标签的启动对齐、改名、缓存、状态（一份机制，按 TagSchema 推广到各标签）；任务标签的结构定义
     codec/                 Block ⇄ Task 编解码、中英文名称表
     repository/            TaskRepository 的实现
     query/                 QueryDescription2 的构建

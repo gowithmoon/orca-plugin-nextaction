@@ -12,8 +12,9 @@ import {
 import { OrcaError } from "../orca-error";
 import { planStartup, type StartupPlan } from "./startup-plan";
 import { renameTagAlias } from "./tag-alias";
-import { type TaskTagCache, writeTaskTagCache } from "./task-tag-cache";
-import type { TaskTagState } from "./task-tag-state";
+import { type TagCache, writeTagCache } from "./tag-cache";
+import type { TagSchema } from "./tag-schema";
+import type { TagState } from "./tag-state";
 
 /** The block with ID `id`, or `undefined` when there is none. */
 async function readBlock(id: number): Promise<Block | undefined> {
@@ -36,7 +37,10 @@ async function findTagBlock(name: string): Promise<Block | undefined> {
  * again, so no empty block without an alias is left behind. Whether
  * `invokeGroup` rolls back on its own is not measured.
  */
-async function createTag(plan: StartupPlan, tagName: string): Promise<DbId> {
+async function createTag(
+  plan: StartupPlan<string>,
+  tagName: string,
+): Promise<DbId> {
   let tagBlockId: DbId | undefined;
   await invokeGroup(async () => {
     const id = await invokeEditorCommand(
@@ -75,18 +79,18 @@ async function createTag(plan: StartupPlan, tagName: string): Promise<DbId> {
     tagBlockId = id;
   });
   if (tagBlockId === undefined) {
-    throw new OrcaError("the task tag block was not created");
+    throw new OrcaError(`the tag block "${tagName}" was not created`);
   }
   return tagBlockId;
 }
 
 /** What startup settled on. */
-export interface StartupOutcome {
+export interface StartupOutcome<K extends string> {
   /**
    * Where the tag stands: `ready` (possibly with invalidated properties) or
    * `paused` because the takeover was refused.
    */
-  state: TaskTagState;
+  state: TagState<K>;
   /**
    * Set when the name in the settings was changed while the plugin was off
    * to a name another block has: the cached tag was kept under its name, and
@@ -96,17 +100,19 @@ export interface StartupOutcome {
 }
 
 /**
- * Finds or creates the task tag named `tagName` (renaming the cached tag when
- * the name was changed while the plugin was off, or keeping it when that name
- * is taken) and brings it to the planned structure. Throws an `OrcaError` on
- * failure.
+ * Finds or creates the tag of `schema` named `tagName` (renaming the cached
+ * tag when the name was changed while the plugin was off, or keeping it when
+ * that name is taken) and brings it to the planned structure. The cache is
+ * kept under `cacheKey`. Throws an `OrcaError` on failure.
  */
-export async function runStartupPlan(
+export async function runStartupPlan<K extends string>(
+  schema: TagSchema<K>,
   pluginName: string,
+  cacheKey: string,
   tagName: string,
   uiLanguage: NoteLanguage,
-  cache: TaskTagCache | undefined,
-): Promise<StartupOutcome> {
+  cache: TagCache | undefined,
+): Promise<StartupOutcome<K>> {
   try {
     const tagBlock = await findTagBlock(tagName);
     // Only needed when the name from the settings is not the cached tag's:
@@ -115,7 +121,7 @@ export async function runStartupPlan(
       cache !== undefined && tagBlock?.id !== cache.tagBlockId
         ? await readBlock(cache.tagBlockId)
         : undefined;
-    const plan = planStartup({
+    const plan = planStartup(schema, {
       tagName,
       tagBlock,
       cache,
@@ -137,7 +143,10 @@ export async function runStartupPlan(
         };
       case "create": {
         const tagBlockId = await createTag(plan, action.tagName);
-        await writeTaskTagCache(pluginName, cache, { tagBlockId, tagName });
+        await writeTagCache(pluginName, cacheKey, cache, {
+          tagBlockId,
+          tagName,
+        });
         return {
           state: {
             kind: "ready",
@@ -168,7 +177,7 @@ export async function runStartupPlan(
         const nameInUse = action.kind === "revert" ? action.tagName : tagName;
         // Recorded after alignment, so a takeover that failed half-way is
         // checked as a first takeover again next time.
-        await writeTaskTagCache(pluginName, cache, {
+        await writeTagCache(pluginName, cacheKey, cache, {
           tagBlockId: action.tagBlockId,
           tagName: nameInUse,
         });

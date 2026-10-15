@@ -97,8 +97,8 @@ import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
 import { RefType } from "../ref-type";
 import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
-import type { TaskTagState } from "../schema/task-tag-state";
-import type { PropertyDefinition } from "../schema/task-tag-structure";
+import type { PropertyDefinition } from "../schema/tag-schema";
+import type { TaskTagState } from "../schema/tag-state";
 import {
   type HierarchyBlock,
   missingParents,
