@@ -580,3 +580,164 @@ describe("read next actions with projects", () => {
     expect(read.items.map((item) => item.task.id)).toEqual([3, 1]);
   });
 });
+
+describe("read next actions with a set project of a task", () => {
+  it("lets a task with a set project in only while that project is active", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "paused" });
+    repository.addBlock(3);
+    repository.addTask(
+      { id: 4, status: "todo" },
+      { parentId: 3, project: [1] },
+    );
+    repository.addTask(
+      { id: 5, status: "todo" },
+      { parentId: 3, project: [2] },
+    );
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([4]);
+  });
+
+  it("puts the subtasks of a task with a set project in that project, a subtask's own setting not counting", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "paused" });
+    repository.addProject({ id: 2, status: "active" });
+    repository.addTask({ id: 3, status: "todo" }, { project: [1] });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask(
+      { id: 5, status: "todo" },
+      { parentId: 3, project: [2] },
+    );
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 5 });
+
+    const read = await readNextActions();
+
+    // Parent task first (ADR 0025): 3 belongs to paused project 1, and so do
+    // 4, 5 and 6; 5's setting of active project 2 does not count.
+    expect(read.items).toEqual([]);
+  });
+
+  it("goes by a task's own setting before the project block it sits in", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "paused" });
+    repository.addProject({ id: 2, status: "active" });
+    repository.addTask(
+      { id: 3, status: "todo" },
+      { parentId: 1, project: [2] },
+    );
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 1 });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([4]);
+  });
+
+  it("puts only the subtask with a set project and its descendants in it when the parent task belongs to none", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "paused" });
+    repository.addTask({ id: 2, status: "todo" });
+    repository.addTask(
+      { id: 3, status: "todo" },
+      { parentId: 2, project: [1] },
+    );
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 2 });
+
+    const read = await readNextActions();
+
+    // 2 waits for its subtasks; 3 and 4 belong to paused project 1.
+    expect(read.items.map((item) => item.task.id)).toEqual([5]);
+  });
+
+  it("reads a stale setting as none: the task falls back to its project block, or to no project", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "paused" });
+    repository.addBlock(2);
+    // 2 is no project; null is a value with no reference behind it.
+    repository.addTask(
+      { id: 3, status: "todo" },
+      { parentId: 1, project: [2] },
+    );
+    repository.addTask(
+      { id: 4, status: "todo" },
+      { parentId: 1, project: [null] },
+    );
+    repository.addTask({ id: 5, status: "todo" }, { project: [2] });
+    repository.addTask({ id: 6, status: "todo" }, { project: [null] });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([5, 6]);
+  });
+
+  it("lets a stale setting on a parent task leave the decision to its subtasks", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "paused" });
+    repository.addBlock(2);
+    repository.addTask({ id: 3, status: "todo" }, { project: [2] });
+    repository.addTask(
+      { id: 4, status: "todo" },
+      { parentId: 3, project: [1] },
+    );
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 3 });
+
+    const read = await readNextActions();
+
+    // 3 waits for its subtasks; 4 belongs to paused project 1, 5 to none.
+    expect(read.items.map((item) => item.task.id)).toEqual([5]);
+  });
+
+  it("takes only the first of several values", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "paused" });
+    repository.addTask({ id: 3, status: "todo" }, { project: [1, 2] });
+    repository.addTask({ id: 4, status: "todo" }, { project: [2, 1] });
+    // A stale first value is no setting: the second is not tried.
+    repository.addTask(
+      { id: 5, status: "todo" },
+      { parentId: 2, project: [null, 1] },
+    );
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([3]);
+  });
+
+  it("does not take a block that is both a task and a project for its own task's project when set to itself", async () => {
+    const { repository, readNextActions } = setup();
+    repository.addProject({ id: 1, status: "paused" });
+    repository.addTask(
+      { id: 2, status: "todo" },
+      { parentId: 1, project: [2] },
+    );
+    repository.addProject({ id: 2, status: "active" });
+
+    const read = await readNextActions();
+
+    // Its setting is stale: it falls back to project 1 (paused).
+    expect(read.items).toEqual([]);
+  });
+
+  it("constrains a task with a set project by the project's start and ratings, as one in a project block", async () => {
+    const { repository, readNextActions } = setup();
+    // Today is the logical day 2026-10-09.
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: { year: 2026, month: 10, day: 12 },
+    });
+    repository.addProject({ id: 2, status: "active", importance: 7 });
+    repository.addTask({ id: 3, status: "todo" });
+    repository.addTask({ id: 4, status: "todo" }, { project: [1] });
+    repository.addTask({ id: 5, status: "todo" }, { project: [2] });
+
+    const read = await readNextActions();
+
+    expect(read.items.map((item) => item.task.id)).toEqual([5, 3]);
+  });
+});

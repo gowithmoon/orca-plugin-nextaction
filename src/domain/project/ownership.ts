@@ -1,15 +1,50 @@
 // 所属项目 (GLOSSARY, ADR 0025): which project a task belongs to, at most
 // one. Parent task first: going down from the top task, the first task with
-// an ownership decides for itself and every descendant task. Pure.
+// an ownership decides for itself and every descendant task. A task's own
+// ownership is its set project, or else its nearest project block. Pure.
 import type { ProjectId } from "./project";
+
+/**
+ * A task's own 所属项目 setting: the first value of the property, as read
+ * (a second value is ignored, ADR 0025).
+ */
+export interface ProjectSetting {
+  /** The reference ID the value holds, for writing it again or clearing it. */
+  readonly refId: number;
+  /**
+   * The block the reference points at; `null` when the block has no such
+   * reference. Either way it counts only while it is a project (stale
+   * otherwise).
+   */
+  readonly target: number | null;
+}
 
 /** What one task in a chain says about its own ownership. */
 export interface OwnershipLink {
+  readonly task: { readonly id: number };
+  /** Its own 所属项目 setting; absent when it has none. */
+  readonly projectSetting?: ProjectSetting;
   /**
    * Its nearest project block in the block hierarchy, itself not counting
    * (a block that is both is not its own task's project); absent for none.
    */
   readonly projectBlock?: ProjectId;
+}
+
+/**
+ * The project a task's own ownership names, or `null` for none: its set
+ * project, unless that is stale, else its nearest project block. A block
+ * that is both a task and a project is not its own task's project, set or
+ * not.
+ */
+function ownProject(
+  link: OwnershipLink,
+  isProject: (id: ProjectId) => boolean,
+): ProjectId | null {
+  const set = link.projectSetting?.target ?? null;
+  if (set !== null && set !== link.task.id && isProject(set)) return set;
+  const block = link.projectBlock;
+  return block !== undefined && isProject(block) ? block : null;
 }
 
 /**
@@ -23,8 +58,9 @@ export function owningProject(
 ): ProjectId | null {
   // The top task first: the first ownership found decides the branch.
   for (let i = selfAndAncestors.length - 1; i >= 0; i--) {
-    const block = selfAndAncestors[i]?.projectBlock;
-    if (block !== undefined && isProject(block)) return block;
+    const link = selfAndAncestors[i];
+    const project = link ? ownProject(link, isProject) : null;
+    if (project !== null) return project;
   }
   return null;
 }
