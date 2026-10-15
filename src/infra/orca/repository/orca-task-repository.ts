@@ -61,6 +61,10 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
+import {
+  encodeProjectSetting,
+  projectSettingWithout,
+} from "../codec/project-clear";
 import { decodeProject, encodeProjectStatus } from "../codec/project-codec";
 import {
   planRecurrenceDiscard,
@@ -375,6 +379,71 @@ function myDayOf(block: Block): MyDayRead | undefined {
     return { kind: "unreadable", reason: read.reason };
   }
   return read.entries.length > 0 ? read : undefined;
+}
+
+/**
+ * The block reference values to write when a project is dropped (#150): for
+ * each task among `holders`, its dependencies without those on dropped tasks
+ * and its 所属项目 without the project, in one `setRefData` per task. Only
+ * the reference IDs each value really holds go (a `type: 3` reference is not
+ * always one, next-action-hierarchy-boolean-deps); an invalidated property
+ * is left as it is, and so is an unreadable value, with a warning. A block
+ * that is not a task is left as it is.
+ */
+function planDropProjectClears(
+  state: ReadyTag,
+  holders: ReadonlyMap<number, Block>,
+  refs: {
+    dependencyRefs: ReadonlyMap<number, ReadonlySet<number>>;
+    settingRefs: ReadonlyMap<number, ReadonlySet<number>>;
+  },
+): { ref: Block["refs"][number]; items: RefDataItem[] }[] {
+  const context = {
+    tagBlockId: state.tagBlockId,
+    invalidated: state.invalidated,
+  };
+  const tag = { language: state.language };
+  const clears: { ref: Block["refs"][number]; items: RefDataItem[] }[] = [];
+  for (const [holderId, holder] of holders) {
+    if (decodeTask(holder, context).kind !== "task") continue;
+    const dependencyRefIds = refs.dependencyRefs.get(holderId);
+    const settingRefIds = refs.settingRefs.get(holderId);
+    const removals = [
+      dependencyRefIds &&
+        !state.invalidated.includes("dependencies") && {
+          removal: dependenciesWithout(
+            holder,
+            state.tagBlockId,
+            dependencyRefIds,
+          ),
+          encode: encodeDependencies,
+        },
+      settingRefIds &&
+        !state.invalidated.includes("project") && {
+          removal: projectSettingWithout(
+            holder,
+            state.tagBlockId,
+            settingRefIds,
+          ),
+          encode: encodeProjectSetting,
+        },
+    ];
+    const items: RefDataItem[] = [];
+    for (const entry of removals) {
+      if (!entry) continue;
+      if (entry.removal.kind === "unreadable") {
+        console.warn(
+          `[nextaction] block ${holderId}: a block reference value is kept as it is`,
+          entry.removal.raw,
+        );
+      } else if (entry.removal.kind === "write") {
+        items.push(entry.encode(entry.removal.refIds, tag));
+      }
+    }
+    const ref = findTaskTagRef(holder.refs, state.tagBlockId);
+    if (ref && items.length > 0) clears.push({ ref, items });
+  }
+  return clears;
 }
 
 /**
@@ -1443,6 +1512,91 @@ export function createOrcaTaskRepository(
       await writeTo(read.block, async () => {
         await invokeEditorCommand("core.editor.setRefData", ref, [item]);
       });
+    },
+
+    async dropProject(id: ProjectId, taskIds: readonly TaskId[]) {
+      const state = readyTag();
+      const projectState = projectTagState();
+      if (projectState.kind !== "ready") {
+        throw new OrcaError(`projects are paused (${projectState.reason})`);
+      }
+      const read = await projectBlock(id);
+      if (!read) throw new OrcaError(`block ${id} is not a project`);
+      const context: TaskTagContext = {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      };
+      // The IDs come from the task graph: source blocks carrying the task tag.
+      const taskBlocks = await getBlocks(taskIds);
+      const dropped: Block[] = [];
+      for (const taskId of taskIds) {
+        const block = taskBlocks.get(taskId);
+        if (!block || decodeTask(block, context).kind !== "task") {
+          throw new OrcaError(`block ${taskId} is not a task`);
+        }
+        dropped.push(block);
+      }
+      const droppedIds = new Set(taskIds);
+      // Found as dependents of a dropped task are (ADR 0016, project-tag):
+      // `type: 3` references among the backRefs, each confirmed below
+      // against the value it should be in.
+      const dependencyRefs = new Map<number, Set<number>>();
+      for (const block of dropped) {
+        for (const [from, refIds] of dependentsOf(block)) {
+          // A dropped task's own task tag goes, its dependencies with it.
+          if (droppedIds.has(from)) continue;
+          const merged = dependencyRefs.get(from) ?? new Set<number>();
+          for (const refId of refIds) merged.add(refId);
+          dependencyRefs.set(from, merged);
+        }
+      }
+      // Every setting pointing at it, those of tasks dropped with it and of
+      // done tasks too (GLOSSARY: 放弃项目), cleared before tags go, as the
+      // spike did (project-tag round 2).
+      const settingRefs = dependentsOf(read.block);
+      const holders = await getBlocks([
+        ...new Set([...dependencyRefs.keys(), ...settingRefs.keys()]),
+      ]);
+      const clears = planDropProjectClears(state, holders, {
+        dependencyRefs,
+        settingRefs,
+      });
+      const written = new Set<number>([read.block.id, ...droppedIds]);
+      for (const { ref } of clears) written.add(ref.from);
+      try {
+        // One group, one undo for all of it (project-tag round 2).
+        await invokeGroup(async () => {
+          for (const { ref, items } of clears) {
+            await invokeEditorCommand("core.editor.setRefData", ref, items);
+          }
+          // As dropTask: removeTag leaves plugin block properties behind
+          // (block-properties-json J4).
+          for (const block of dropped) {
+            await invokeEditorCommand(
+              "core.editor.removeTag",
+              block.id,
+              state.tagName,
+            );
+            const pluginProperties = block.properties
+              .map((p) => p.name)
+              .filter((name) => name.startsWith(pluginPropertyPrefix));
+            if (pluginProperties.length > 0) {
+              await invokeEditorCommand(
+                "core.editor.deleteProperties",
+                [block.id],
+                pluginProperties,
+              );
+            }
+          }
+          await invokeEditorCommand(
+            "core.editor.removeTag",
+            read.block.id,
+            projectState.tagName,
+          );
+        });
+      } finally {
+        for (const writtenId of written) onWritten(writtenId);
+      }
     },
 
     queryTasks,

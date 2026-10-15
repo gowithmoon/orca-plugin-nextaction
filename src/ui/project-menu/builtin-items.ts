@@ -3,6 +3,10 @@
 
 import type { ChangeProjectStatus } from "../../application/usecases/change-project-status";
 import { NotAProjectError } from "../../application/usecases/change-project-status";
+import type {
+  DropProject,
+  ReadDropProjectPlan,
+} from "../../application/usecases/drop-project";
 import { projectStatuses } from "../../domain/project/project";
 import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
@@ -33,6 +37,56 @@ export function notifyProjectActionFailure(
     return;
   }
   notify("error", failed(describeError(error)));
+}
+
+/**
+ * "Drop project" (GLOSSARY: 放弃项目, #150): asks with Orca's `ConfirmBox`
+ * when open tasks go with it, naming how many; drops it at once when none
+ * do. One undo brings everything back.
+ */
+export function registerDropProjectItem(
+  items: ProjectMenuItems,
+  deps: {
+    readDropProjectPlan: ReadDropProjectPlan;
+    dropProject: DropProject;
+    pluginName: string;
+  },
+): void {
+  const notify = createNotify(deps.pluginName);
+  items.register({
+    id: "dropProject",
+    group: projectMenuGroups.drop,
+    order: 0,
+    label: () => t("Drop project"),
+    icon: "ti ti-trash",
+    dangerous: true,
+    async confirmation(project) {
+      try {
+        const plan = await deps.readDropProjectPlan(project.id);
+        if (plan.openTasks === 0) return null;
+        return t(
+          'Drop project "${name}"? Its ${count} open tasks will be dropped too; done tasks are kept. You can undo it.',
+          { name: plan.project.text, count: String(plan.openTasks) },
+        );
+      } catch (error) {
+        notifyProjectActionFailure(notify, error, (reason) =>
+          t("Could not drop the project: ${reason}", { reason }),
+        );
+        throw error;
+      }
+    },
+    async run(project) {
+      try {
+        // The tasks are worked out again: the plan may be stale by now.
+        await deps.dropProject(project.id);
+        notify("info", t("Project dropped"));
+      } catch (error) {
+        notifyProjectActionFailure(notify, error, (reason) =>
+          t("Could not drop the project: ${reason}", { reason }),
+        );
+      }
+    },
+  });
 }
 
 export function registerBuiltinProjectMenuItems(
