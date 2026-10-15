@@ -437,3 +437,115 @@ describe("read not-next-action reasons", () => {
     expect(read.tasks.get(3)?.recurring).toBe(false);
   });
 });
+
+describe("read not-next-action reasons with projects", () => {
+  it("says the project it belongs to is not active, with the project status", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "paused" });
+    repository.addTask(
+      { id: 2, text: "Pack", status: "todo" },
+      { parentId: 1 },
+    );
+
+    const read = await readNotNextActionReasons(2);
+
+    expect(read.reasons).toEqual([
+      {
+        kind: "projectNotActive",
+        source: 1,
+        waitingFor: [],
+        status: "paused",
+      },
+    ]);
+    expect(read.projects.get(1)).toEqual({ id: 1, text: "Move house" });
+  });
+
+  it("says the project it belongs to has not reached its start, with the day", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    // Today is the logical day 2026-10-09.
+    repository.addProject({
+      id: 1,
+      text: "Year-end trip",
+      status: "active",
+      start: { year: 2026, month: 10, day: 20 },
+    });
+    repository.addTask(
+      {
+        id: 2,
+        text: "Book the hotel",
+        status: "todo",
+        start: { year: 2026, month: 10, day: 12 },
+      },
+      { parentId: 1 },
+    );
+
+    const read = await readNotNextActionReasons(2);
+
+    expect(read.reasons).toEqual([
+      {
+        kind: "projectNotStarted",
+        source: 1,
+        waitingFor: [],
+        startsOn: { year: 2026, month: 10, day: 20 },
+      },
+    ]);
+    expect(read.projects.get(1)).toEqual({ id: 1, text: "Year-end trip" });
+  });
+
+  it("lists the project reasons after the others, and a later start of its own instead of the project's", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addProject({
+      id: 1,
+      text: "Move house",
+      status: "someday",
+      start: { year: 2026, month: 10, day: 12 },
+    });
+    repository.addTask(
+      { id: 2, text: "Pack", status: "done" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 3,
+        text: "Pack the books",
+        status: "todo",
+        start: { year: 2026, month: 10, day: 15 },
+      },
+      { parentId: 2 },
+    );
+
+    const read = await readNotNextActionReasons(3);
+
+    expect(read.reasons).toEqual([
+      { kind: "doneAncestor", source: 2, waitingFor: [] },
+      {
+        kind: "notStarted",
+        source: 3,
+        waitingFor: [],
+        startsOn: { year: 2026, month: 10, day: 15 },
+      },
+      {
+        kind: "projectNotActive",
+        source: 1,
+        waitingFor: [],
+        status: "someday",
+      },
+    ]);
+    expect([...read.tasks.keys()].sort()).toEqual([2, 3]);
+    expect([...read.projects.keys()]).toEqual([1]);
+  });
+
+  it("gives no project reason for a task that belongs to no project", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "paused" });
+    repository.addTask({ id: 2, text: "Pack", status: "todo" });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+
+    const read = await readNotNextActionReasons(2);
+
+    expect(read.reasons).toEqual([
+      { kind: "subtasks", source: 2, waitingFor: [3] },
+    ]);
+    expect(read.projects.size).toBe(0);
+  });
+});

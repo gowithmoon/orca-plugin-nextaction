@@ -8,16 +8,19 @@
 // task back under a sequential parent is marked, with a hint that it keeps
 // doing so until it no longer recurs (#94, ADR 0021). Verified by hand in
 // Orca (docs/ARCHITECTURE.md §5).
-import type {
-  NotNextActionReason,
-  ReadNotNextActionReasons,
-  RelatedTask,
+import {
+  isProjectReason,
+  type NotNextActionReason,
+  type ReadNotNextActionReasons,
+  type RelatedTask,
 } from "../../application/usecases/read-not-next-action-reasons";
+import type { ProjectId } from "../../domain/project/project";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { daysBetween } from "../../domain/time/calendar-days";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate, shownText } from "../components/format";
+import { projectStatusLabel } from "../components/project-status-label";
 import { useNotNextActionReasons } from "../hooks/use-not-next-action-reasons";
 import type { Notify } from "../notify";
 import { Field } from "./task-panel-fields";
@@ -33,7 +36,11 @@ function predicate(reason: NotNextActionReason): string {
     case "parked":
       return t("Parked");
     case "notStarted":
+    case "projectNotStarted":
       return t("Not started yet");
+    case "projectNotActive":
+      // e.g. "Project Move house — Paused" (#143).
+      return projectStatusLabel(reason.status);
     case "subtasks":
       return t("Subtasks not done");
     case "sequential":
@@ -54,6 +61,7 @@ function predicate(reason: NotNextActionReason): string {
 function hasDetails(reason: NotNextActionReason): boolean {
   return (
     reason.kind === "notStarted" ||
+    reason.kind === "projectNotStarted" ||
     reason.kind === "dependencyDelay" ||
     reason.waitingFor.length > 0
   );
@@ -103,8 +111,10 @@ export function NotNextActionReasonsField(props: {
   today: CalendarDate;
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
+  /** Opens project `projectId` in the notes (#143): a project is no task. */
+  onOpenProject: (projectId: ProjectId) => void;
 }) {
-  const { reasons, tasks } = useNotNextActionReasons(
+  const { reasons, tasks, projects } = useNotNextActionReasons(
     props.readNotNextActionReasons,
     props.taskId,
     props.changes,
@@ -127,6 +137,22 @@ export function NotNextActionReasonsField(props: {
       </button>
     );
   };
+  /** A project named in a reason, as a button that opens it in the notes. */
+  const projectButton = (id: ProjectId) => {
+    const related = projects.get(id);
+    if (!related) return null;
+    const text = shownText(related);
+    return (
+      <button
+        type="button"
+        className="nextaction-not-next-action-reason-task"
+        data-empty={text.empty || undefined}
+        onClick={() => props.onOpenProject(id)}
+      >
+        {text.text}
+      </button>
+    );
+  };
   return (
     <Field label={t("Why not a next action")} labelId={props.labelId}>
       <ul
@@ -139,7 +165,20 @@ export function NotNextActionReasonsField(props: {
             key={`${reason.kind}-${reason.source}`}
             className="nextaction-not-next-action-reason"
           >
-            {reason.source !== props.taskId && (
+            {isProjectReason(reason) && (
+              // The project the task belongs to (#143), named first as an
+              // ancestor task is, e.g. "Project Move house — Paused".
+              <>
+                <span className="nextaction-not-next-action-reason-kind">
+                  {t("Project ")}
+                </span>
+                {projectButton(reason.source)}
+                <span className="nextaction-not-next-action-reason-kind">
+                  {t(" — ")}
+                </span>
+              </>
+            )}
+            {!isProjectReason(reason) && reason.source !== props.taskId && (
               // Passed down from an ancestor task (ADR 0015, #78), named
               // first, e.g. "Ancestor task Move house — Done",
               // "Ancestor task Draft — Earlier tasks first: Outline".
@@ -158,7 +197,8 @@ export function NotNextActionReasonsField(props: {
                 ? t("${kind}: ", { kind: predicate(reason) })
                 : predicate(reason)}
             </span>
-            {reason.kind === "notStarted" &&
+            {(reason.kind === "notStarted" ||
+              reason.kind === "projectNotStarted") &&
               formatDate(reason.startsOn, props.today)}
             {reason.kind === "dependencyDelay" && (
               // e.g. "In dependency delay: counting from when Paint the wall

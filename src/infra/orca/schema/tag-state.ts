@@ -1,4 +1,5 @@
 import type { NoteLanguage, PropertyKey } from "../codec/names";
+import type { ProjectPropertyKey } from "../codec/project-names";
 
 /**
  * Where a plugin tag stands after startup; what the code using the tag reads
@@ -32,3 +33,9 @@ export type TagState<K extends string> =
 
 /** The task tag's state; what the task repository reads. */
 export type TaskTagState = TagState<PropertyKey>;
+
+/**
+ * The project tag's state (#143). While it is paused every task reads as
+ * belonging to no project; task features go on.
+ */
+export type ProjectTagState = TagState<ProjectPropertyKey>;

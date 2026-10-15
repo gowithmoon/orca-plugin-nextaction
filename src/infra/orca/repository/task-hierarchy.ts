@@ -17,6 +17,11 @@ export interface TaskPlace {
   readonly parentId: TaskId | null;
   /** Lower comes first (document preorder). */
   readonly position: number;
+  /**
+   * The nearest ancestor block among the project blocks (GLOSSARY: 所属项
+   * 目), the block itself not counting; absent when there is none.
+   */
+  readonly projectBlock?: number;
 }
 
 /**
@@ -53,17 +58,26 @@ function comparePaths(a: readonly number[], b: readonly number[]): number {
  * "index in the parent's `children`" from the root, the root's ID first. A
  * chain stops at a parent that could not be read, which then counts as the
  * root.
+ *
+ * The project blocks `projectIds` (#143) are placed among the tasks in the
+ * same order, and every block placed gets its nearest project block on the
+ * way up, itself not counting. A block in both lists is placed once.
  */
 export function placeTasks(
   taskIds: readonly TaskId[],
   blocks: ReadonlyMap<number, HierarchyBlock>,
-): Map<TaskId, TaskPlace> {
+  projectIds: readonly number[] = [],
+): Map<number, TaskPlace> {
   const tasks = new Set(taskIds);
-  const paths = new Map<TaskId, number[]>();
-  const parents = new Map<TaskId, TaskId | null>();
-  for (const id of taskIds) {
+  const projects = new Set(projectIds);
+  const placed = [...new Set([...taskIds, ...projectIds])];
+  const paths = new Map<number, number[]>();
+  const parents = new Map<number, TaskId | null>();
+  const projectBlocks = new Map<number, number>();
+  for (const id of placed) {
     const path: number[] = [];
     let parentTask: TaskId | null = null;
+    let projectBlock: number | undefined;
     const seen = new Set<number>([id]);
     let current = id;
     for (;;) {
@@ -77,18 +91,27 @@ export function placeTasks(
       // A block missing from its parent's children (not expected) goes last.
       path.unshift(index === -1 ? Number.MAX_SAFE_INTEGER : index);
       if (parentTask === null && tasks.has(parentId)) parentTask = parentId;
+      if (projectBlock === undefined && projects.has(parentId)) {
+        projectBlock = parentId;
+      }
       seen.add(parentId);
       current = parentId;
     }
     paths.set(id, path);
     parents.set(id, parentTask);
+    if (projectBlock !== undefined) projectBlocks.set(id, projectBlock);
   }
-  const ordered = [...taskIds].sort(
+  const ordered = placed.sort(
     (a, b) => comparePaths(paths.get(a) ?? [], paths.get(b) ?? []) || a - b,
   );
-  const places = new Map<TaskId, TaskPlace>();
+  const places = new Map<number, TaskPlace>();
   ordered.forEach((id, position) => {
-    places.set(id, { parentId: parents.get(id) ?? null, position });
+    const projectBlock = projectBlocks.get(id);
+    places.set(id, {
+      parentId: parents.get(id) ?? null,
+      position,
+      ...(projectBlock !== undefined && { projectBlock }),
+    });
   });
   return places;
 }

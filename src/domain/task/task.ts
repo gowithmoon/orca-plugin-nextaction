@@ -180,7 +180,8 @@ function delayDays(value: number | null): number {
   return value !== null && Number.isInteger(value) && value > 0 ? value : 0;
 }
 
-function isRating(value: number | null): value is Rating {
+/** An integer from 1 to 7: importance, urgency or effort. */
+export function isRating(value: number | null): value is Rating {
   return value !== null && Number.isInteger(value) && value >= 1 && value <= 7;
 }
 

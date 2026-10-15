@@ -5,6 +5,7 @@ import { createQuickCapture } from "../application/usecases/quick-capture";
 import type { CalendarDate } from "../domain/task/task";
 import { noteLanguageFor } from "../infra/orca/codec/names";
 import { createOrcaTaskRepository } from "../infra/orca/repository/orca-task-repository";
+import { projectTagSchema } from "../infra/orca/schema/project-tag-structure";
 import { taskTagNamesFor } from "../infra/orca/schema/task-tag-names";
 import { taskTagSchema } from "../infra/orca/schema/task-tag-structure";
 import { systemClock } from "../infra/system-clock";
@@ -42,6 +43,43 @@ const taskTagMessages: TagMessages = {
   invalidated: (name, properties) =>
     t(
       'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.',
+      { name, properties },
+    ),
+};
+
+/** What the user is told about the project tag (#143). */
+const projectTagMessages: TagMessages = {
+  listenerFailed: (reason) =>
+    t("A feature could not follow the change of the project tag: ${reason}", {
+      reason,
+    }),
+  setupFailed: (name, reason) =>
+    t('Could not set up the project tag "${name}": ${reason}', {
+      name,
+      reason,
+    }),
+  renameFailed: (name, reason) =>
+    t('Could not rename the project tag "${name}": ${reason}', {
+      name,
+      reason,
+    }),
+  empty: (name) =>
+    t('The project tag name cannot be empty. It was set back to "${name}".', {
+      name,
+    }),
+  taken: (requested, name) =>
+    t(
+      '"${requested}" is already used by another page or block, so the project tag was not renamed. The name was set back to "${name}".',
+      { requested, name },
+    ),
+  refused: (name, properties) =>
+    t(
+      'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Projects are paused: every task reads as belonging to no project. Choose another project tag name in the plugin settings.',
+      { name, properties },
+    ),
+  invalidated: (name, properties) =>
+    t(
+      'The properties ${properties} of the project tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.',
       { name, properties },
     ),
 };
@@ -85,8 +123,20 @@ export function createTaskTagFeature(
     current: () => taskTagNamesFor(tag.state()),
     subscribe: tag.subscribe,
   };
+  // Independent of the task tag (#140): one paused leaves the other working.
+  const projectTag = createTagLifecycle({
+    schema: projectTagSchema,
+    settingKey: "projectTagName",
+    cacheKey: "projectTag",
+    messages: projectTagMessages,
+    logName: "project tag",
+  });
 
-  const repository = createOrcaTaskRepository(tag.state, onWritten);
+  const repository = createOrcaTaskRepository(
+    tag.state,
+    onWritten,
+    projectTag.state,
+  );
   // The quick capture popup's opener exists only while loaded.
   let openCapture: () => void = () => {};
 
@@ -120,7 +170,15 @@ export function createTaskTagFeature(
     context.registry.add(`${context.pluginName}.quickCaptureOpen`, () => {
       openCapture = () => {};
     });
-    await tag.load(context, noteLanguageFor(orca.state.locale));
+    const uiLanguage = noteLanguageFor(orca.state.locale);
+    await tag.load(context, uiLanguage);
+    // Views read again once projects are known, or after a rename (ADR
+    // 0007): the task graph holds none while the tag is starting.
+    context.registry.add(
+      `${context.pluginName}.projectTagChanges`,
+      projectTag.subscribe(onWritten),
+    );
+    await projectTag.load(context, uiLanguage);
   };
 
   const taskTagBlockId = () => {
