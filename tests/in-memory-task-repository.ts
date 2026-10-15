@@ -785,6 +785,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     async getProject(id) {
+      if (projectTagPaused) return null;
       return blocks.get(id)?.project ?? null;
     },
 
