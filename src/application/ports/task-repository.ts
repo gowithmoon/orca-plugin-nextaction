@@ -1,6 +1,11 @@
 import type { NoteDropPlan } from "../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
+import type {
+  Project,
+  ProjectId,
+  ProjectStatus,
+} from "../../domain/project/project";
 import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
 import type { Reminders } from "../../domain/reminder/reminder";
 import type { ReviewPlan } from "../../domain/review/review";
@@ -358,4 +363,20 @@ export interface TaskRepository {
     value: CustomPropertyValue,
     now: Date,
   ): Promise<void>;
+
+  /**
+   * The project with the given block ID (#144), or `null` when that block is
+   * not a project (no project tag, an orphan, no such block) or the project
+   * tag is paused. A mirror block reads as the project of its source block.
+   */
+  getProject(id: ProjectId): Promise<Project | null>;
+
+  /**
+   * Writes the project's project status (#144), and nothing else: the tasks
+   * belonging to it are left as they are. The user undoes it with one undo.
+   * Fails, writing nothing, when the block is not a project, the project
+   * tag is paused, the project status property is invalidated, or the write
+   * fails. A mirror block's ID writes to its source block.
+   */
+  updateProjectStatus(id: ProjectId, status: ProjectStatus): Promise<void>;
 }

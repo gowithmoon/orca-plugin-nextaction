@@ -61,6 +61,7 @@ src/
     views/                 各个视图，每个视图一个子目录
     task-panel/            任务属性面板
     task-menu/             状态图标（只显示）与任务操作菜单（菜单项通过登记的方式添加，渲染进 Orca 的标签菜单和块右键菜单）
+    project-menu/          项目状态图标（只显示）与项目操作菜单（菜单项通过登记的方式添加，渲染进项目标签的标签菜单，项目行复用）
     capture/               快速捕获弹窗
     components/            可复用组件
     hooks/                 React hooks（只调用 application）
@@ -162,7 +163,7 @@ tests/
 界面注入（`status-icon-task-menu`、`official-task-menus`）：
 - 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 Orca 的 DOM 读取块 ID。插件自己渲染的 `data-` 属性可以读取。
 - 只有状态图标依赖 Orca 内部 DOM：它是一份只负责显示的注入样式，Orca 改版时最坏的结果是图标不显示，不影响任何操作。依赖内部 DOM 的选择器全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
-- 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件中使用；其他 `ui` 代码仍然只用英文键。
+- 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件和两份图标样式中使用；项目标签的名称同样只通过 `ProjectTagNamesSource` 提供（#144）。其他 `ui` 代码仍然只用英文键。
 - 例外：把任务卡片拖到笔记（ADR 0024，`drag-to-note`）。Orca 没有开放拖放钩子，落点只能从松开的坐标在 DOM 里找：笔记面板（`.orca-panel` 的 `data-panel-id`）、落点块（`.orca-block` 的 `data-id`）和它自己那一行的矩形。这些选择器集中在 `ui/drag` 的一个文件中，每次 Orca 升级后与状态图标的选择器一起手动检查。坐标到 Orca 光标的换算（`getCursorDataFromRange`）不在 `ui` 中调用，经端口由 `infra` 提供。
 
 弹出层（`orca-popup-container`）：

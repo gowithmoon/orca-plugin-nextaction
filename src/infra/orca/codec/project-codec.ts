@@ -5,13 +5,17 @@
 import {
   defaultProjectStatus,
   type Project,
+  type ProjectStatus,
 } from "../../../domain/project/project";
 import { defaultRating, isRating } from "../../../domain/task/task";
 import { textValue } from "./custom-property-codec";
+import type { NoteLanguage } from "./names";
 import {
   findProjectPropertyKey,
   findProjectStatusKey,
   type ProjectPropertyKey,
+  projectPropertyName,
+  projectStatusName,
 } from "./project-names";
 import {
   createdValue,
@@ -23,6 +27,7 @@ import {
   type RawBlock,
   taskText,
 } from "./task-codec";
+import type { RefDataItem } from "./task-encode";
 
 /** What the codec needs to know about the project tag. */
 export interface ProjectTagContext {
@@ -36,6 +41,28 @@ export type ProjectDecodeResult =
   | { kind: "not-project"; reason: "untagged" | "orphan" }
   /** A mirror carries no data of its own; read `sourceId` instead. */
   | { kind: "mirror"; sourceId: number };
+
+/**
+ * The project status item to write to the block's reference to the project
+ * tag (#144), as the task status is written (`setRefData`, no `type`).
+ * Throws, encoding nothing, when the project status property is invalidated
+ * (ADR 0008).
+ */
+export function encodeProjectStatus(
+  status: ProjectStatus,
+  tag: {
+    language: NoteLanguage;
+    invalidated: readonly ProjectPropertyKey[];
+  },
+): RefDataItem {
+  if (tag.invalidated.includes("status")) {
+    throw new Error("cannot write invalidated properties: status");
+  }
+  return {
+    name: projectPropertyName("status", tag.language),
+    value: projectStatusName(status, tag.language),
+  };
+}
 
 /** 1–7, or 4 for anything else (GLOSSARY: 重要性, 紧急度). */
 function ratingValue(value: unknown) {

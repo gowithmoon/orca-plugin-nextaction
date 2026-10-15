@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { decodeProject, type ProjectTagContext } from "./project-codec";
+import {
+  decodeProject,
+  encodeProjectStatus,
+  type ProjectTagContext,
+} from "./project-codec";
 
 // Shapes as docs/spikes/project-tag.md recorded them: the project's values
 // sit in the `type: 2` reference to the project tag block, apart from the
@@ -200,5 +204,22 @@ describe("decodeProject", () => {
     expect(decoded(raw).created).toEqual(new Date(0));
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
+  });
+});
+
+describe("encodeProjectStatus", () => {
+  it("writes the option name in the language of the names on the tag", () => {
+    expect(
+      encodeProjectStatus("someday", { language: "zh", invalidated: [] }),
+    ).toEqual({ name: "项目状态", value: "将来/也许" });
+    expect(
+      encodeProjectStatus("active", { language: "en", invalidated: [] }),
+    ).toEqual({ name: "Project status", value: "Active" });
+  });
+
+  it("refuses to write an invalidated project status", () => {
+    expect(() =>
+      encodeProjectStatus("done", { language: "zh", invalidated: ["status"] }),
+    ).toThrow("invalidated");
   });
 });
