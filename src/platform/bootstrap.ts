@@ -4,6 +4,7 @@ import zhCN from "../shared/l10n/zh-cn";
 import { createLoadDayBoundary } from "./day-boundary";
 import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
+import { createProjectMenuFeature } from "./project-menu-feature";
 import { createRegistry, type Registry } from "./registry";
 import { createLoadReminderDefaultTime } from "./reminder-default-time";
 import { createReminderFeature } from "./reminder-feature";
@@ -156,6 +157,10 @@ export function createNextActionPlugin(): Plugin {
       taskPanel.open(taskId);
     },
   });
+  const projectMenu = createProjectMenuFeature({
+    repository,
+    projectTagBlockId: taskTag.projectTagBlockId,
+  });
   const panel = createPanelFeature({
     repository,
     changes: taskChanges.changes,
@@ -186,7 +191,7 @@ export function createNextActionPlugin(): Plugin {
       reminderTime.feature,
       taskActions.feature,
       // Before the task tag feature, so it hears the outcome of startup.
-      createStatusIconFeature(taskTag.names),
+      createStatusIconFeature(taskTag.names, taskTag.projectNames),
       // Before quick capture (in the task tag feature) and the task panel,
       // which both wear these styles.
       createPopupStyleFeature(),
@@ -195,6 +200,7 @@ export function createNextActionPlugin(): Plugin {
       // released after them.
       taskPanel.feature,
       taskMenu.feature,
+      projectMenu.feature,
       panel.feature,
       // Last: it checks once loaded, so missed reminders are caught up with
       // every feature in place; its timer is released first.

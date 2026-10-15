@@ -7,16 +7,11 @@ const iconRule = (selector: string, status: TaskStatus) =>
   `${selector} {\n  content: "${statusIcons[status].codePoint}";\n  color: ${statusIcons[status].color};\n}`;
 
 /**
- * The style sheet for the status icons. A base rule draws the inbox icon on
- * every block with the task tag; one rule per status overrides it, so an
- * empty or unknown status shows as inbox, as the plugin reads it. Without
- * status names (the property is invalidated) every task shows as inbox.
+ * What every icon drawn with CSS `content` before a block wears: the
+ * tabler-icons font, its size and place. Shared with the project status
+ * icons (#144).
  */
-export function statusIconCss(names: TaskTagNames): string {
-  const base = iconSelector(names.tagName);
-  const rules = [
-    `${base} {
-  font-family: "tabler-icons";
+export const iconFontDeclarations = `  font-family: "tabler-icons";
   font-style: normal;
   font-weight: normal;
   font-variant: normal;
@@ -26,8 +21,18 @@ export function statusIconCss(names: TaskTagNames): string {
   line-height: 1;
   margin-right: var(--orca-spacing-md);
   font-size: calc(.25rem + var(--orca-block-line-height) / var(--orca-lineheight-md));
-  translate: 0 .125rem;
-}`,
+  translate: 0 .125rem;`;
+
+/**
+ * The style sheet for the status icons. A base rule draws the inbox icon on
+ * every block with the task tag; one rule per status overrides it, so an
+ * empty or unknown status shows as inbox, as the plugin reads it. Without
+ * status names (the property is invalidated) every task shows as inbox.
+ */
+export function statusIconCss(names: TaskTagNames): string {
+  const base = iconSelector(names.tagName);
+  const rules = [
+    `${base} {\n${iconFontDeclarations}\n}`,
     iconRule(base, "inbox"),
   ];
   const status = names.status;

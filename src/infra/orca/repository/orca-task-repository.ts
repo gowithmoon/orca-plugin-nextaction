@@ -19,7 +19,11 @@ import type {
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { ProjectSetting } from "../../../domain/project/ownership";
-import type { Project } from "../../../domain/project/project";
+import type {
+  Project,
+  ProjectId,
+  ProjectStatus,
+} from "../../../domain/project/project";
 import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
@@ -57,7 +61,7 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
-import { decodeProject } from "../codec/project-codec";
+import { decodeProject, encodeProjectStatus } from "../codec/project-codec";
 import {
   planRecurrenceDiscard,
   planRecurrenceWrite,
@@ -611,6 +615,27 @@ export function createOrcaTaskRepository(
       blocks.set(id, block);
     }
     return { projects, blocks };
+  };
+
+  /**
+   * The (source) block of a project with the project decoded (#144), or
+   * `undefined` when the ID is not a project or the project tag is paused.
+   */
+  const projectBlock = async (
+    id: ProjectId,
+  ): Promise<{ block: Block; project: Project } | undefined> => {
+    const state = projectTagState();
+    if (state.kind !== "ready") return undefined;
+    const block = await sourceBlock(id);
+    if (!block) return undefined;
+    const decoded = decodeProject(block, {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    });
+    // sourceBlock never returns a mirror.
+    return decoded.kind === "project"
+      ? { block, project: decoded.project }
+      : undefined;
   };
 
   /**
@@ -1390,6 +1415,32 @@ export function createOrcaTaskRepository(
             [choiceWrite],
           );
         }
+        await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+      });
+    },
+
+    async getProject(id: ProjectId): Promise<Project | null> {
+      return (await projectBlock(id))?.project ?? null;
+    },
+
+    async updateProjectStatus(
+      id: ProjectId,
+      status: ProjectStatus,
+    ): Promise<void> {
+      const state = projectTagState();
+      if (state.kind !== "ready") {
+        throw new OrcaError(`projects are paused (${state.reason})`);
+      }
+      // Encoded first: an invalidated project status fails before any read.
+      const item = encodeProjectStatus(status, state);
+      const read = await projectBlock(id);
+      if (!read) throw new OrcaError(`block ${id} is not a project`);
+      const ref = findTaskTagRef(read.block.refs, state.tagBlockId);
+      if (!ref) throw new OrcaError(`block ${id} lost its project tag`);
+      // As a task status: setRefData on the reference to the project tag
+      // changes only the item passed, in one group, one undo; the task tag's
+      // reference on a block with both is left as it is (project-tag).
+      await writeTo(read.block, async () => {
         await invokeEditorCommand("core.editor.setRefData", ref, [item]);
       });
     },

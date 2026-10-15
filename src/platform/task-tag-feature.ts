@@ -1,3 +1,4 @@
+import type { ProjectTagNamesSource } from "../application/ports/project-tag-names";
 import type { TaskRepository } from "../application/ports/task-repository";
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createConvertToTask } from "../application/usecases/convert-to-task";
@@ -5,6 +6,7 @@ import { createQuickCapture } from "../application/usecases/quick-capture";
 import type { CalendarDate } from "../domain/task/task";
 import { noteLanguageFor } from "../infra/orca/codec/names";
 import { createOrcaTaskRepository } from "../infra/orca/repository/orca-task-repository";
+import { projectTagNamesFor } from "../infra/orca/schema/project-tag-names";
 import { projectTagSchema } from "../infra/orca/schema/project-tag-structure";
 import { taskTagNamesFor } from "../infra/orca/schema/task-tag-names";
 import { taskTagSchemaFor } from "../infra/orca/schema/task-tag-structure";
@@ -104,6 +106,10 @@ export function createTaskTagFeature(
   repository: TaskRepository;
   /** The task tag block's ID; `undefined` while task features are paused. */
   taskTagBlockId: () => number | undefined;
+  /** The project tag's note-facing names, following its tag state (#144). */
+  projectNames: ProjectTagNamesSource;
+  /** The project tag block's ID; `undefined` while the project tag is paused. */
+  projectTagBlockId: () => number | undefined;
   /**
    * Opens the quick capture popup, as its command does (the review's steps,
    * #99); does nothing outside a load.
@@ -135,6 +141,10 @@ export function createTaskTagFeature(
   const names: TaskTagNamesSource = {
     current: () => taskTagNamesFor(tag.state()),
     subscribe: tag.subscribe,
+  };
+  const projectNames: ProjectTagNamesSource = {
+    current: () => projectTagNamesFor(projectTag.state()),
+    subscribe: projectTag.subscribe,
   };
 
   const repository = createOrcaTaskRepository(
@@ -195,11 +205,18 @@ export function createTaskTagFeature(
     return state.kind === "ready" ? state.tagBlockId : undefined;
   };
 
+  const projectTagBlockId = () => {
+    const state = projectTag.state();
+    return state.kind === "ready" ? state.tagBlockId : undefined;
+  };
+
   return {
     feature,
     names,
     repository,
     taskTagBlockId,
+    projectNames,
+    projectTagBlockId,
     openQuickCapture: () => openCapture(),
   };
 }
