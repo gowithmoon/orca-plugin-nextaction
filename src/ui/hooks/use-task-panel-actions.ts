@@ -10,7 +10,9 @@ import type { RepairNotAdvanced } from "../../application/usecases/repair-not-ad
 import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
+import type { SetProjectOfTask } from "../../application/usecases/set-project-of-task";
 import type { SetSequential } from "../../application/usecases/set-sequential";
+import type { ProjectId } from "../../domain/project/project";
 import type { CustomPropertyValue } from "../../domain/task/custom-property";
 import type {
   DependencyMode,
@@ -34,6 +36,8 @@ export interface TaskPanelWrites {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /** Sets, changes or clears the task's own 所属项目 (#146). */
+  setProjectOfTask: SetProjectOfTask;
   /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
   repairNotAdvanced: RepairNotAdvanced;
   /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
@@ -61,6 +65,7 @@ export function useTaskPanelActions(
   setSequential(sequential: boolean): Promise<boolean>;
   setDependencies(dependencies: readonly TaskId[]): Promise<boolean>;
   setDependencyMode(mode: DependencyMode): Promise<boolean>;
+  setProjectOfTask(project: ProjectId | null): Promise<boolean>;
   repairNotAdvanced(): Promise<boolean>;
   markReviewed(): Promise<boolean>;
   setCustomProperty(name: string, value: CustomPropertyValue): Promise<boolean>;
@@ -112,6 +117,11 @@ export function useTaskPanelActions(
       setDependencyMode: (mode) =>
         run(
           () => writes.setDependencyMode(id, mode),
+          (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
+      setProjectOfTask: (project) =>
+        run(
+          () => writes.setProjectOfTask(id, project),
           (reason) => t("Could not save the change: ${reason}", { reason }),
         ),
       setCustomProperty: (name, value) =>

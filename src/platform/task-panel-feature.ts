@@ -14,6 +14,8 @@ import { createReadBlockRefCandidates } from "../application/usecases/read-block
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
 import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
+import { createReadProjectCandidates } from "../application/usecases/read-project-candidates";
+import { createReadProjectOfTask } from "../application/usecases/read-project-of-task";
 import {
   createReadTask,
   createReadTaskForPanel,
@@ -22,6 +24,7 @@ import { createRepairNotAdvanced } from "../application/usecases/repair-not-adva
 import { createSetCustomProperty } from "../application/usecases/set-custom-property";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
+import { createSetProjectOfTask } from "../application/usecases/set-project-of-task";
 import { createSetRecurrence } from "../application/usecases/set-recurrence";
 import { createSetReminders } from "../application/usecases/set-reminders";
 import { createSetReviewPlan } from "../application/usecases/set-review-plan";
@@ -137,6 +140,9 @@ export function createTaskPanelFeature(deps: {
     readBlockRefCandidates: createReadBlockRefCandidates({ repository }),
     setDependencies: createSetDependencies({ repository }),
     setDependencyMode: createSetDependencyMode({ repository }),
+    readProjectOfTask: createReadProjectOfTask({ repository }),
+    readProjectCandidates: createReadProjectCandidates({ repository }),
+    setProjectOfTask: createSetProjectOfTask({ repository }),
     openRecurrencePopup: createRecurrencePopup({
       deps: {
         setRecurrence: createSetRecurrence({

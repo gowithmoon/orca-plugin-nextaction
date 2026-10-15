@@ -54,6 +54,7 @@ import {
   dependenciesWithout,
   dependentsOf,
   planDependencyWrite,
+  planProjectWrite,
 } from "../codec/dependency-write";
 import { planMyDayWrite, readMyDay } from "../codec/my-day-codec";
 import { type PropertyKey, propertyName } from "../codec/names";
@@ -84,6 +85,7 @@ import {
 import { planConversion } from "../codec/task-conversion";
 import {
   encodeDependencies,
+  encodeProject,
   encodeTaskChanges,
   type RefDataItem,
 } from "../codec/task-encode";
@@ -862,10 +864,24 @@ export function createOrcaTaskRepository(
                   await getBlocks(changes.dependencies),
                 ),
           );
+    // 所属项目 (#146) likewise: one target at most, a mirror resolved to its
+    // source; whatever was held, a stale value too, is replaced (ADR 0016).
+    const projectTarget =
+      changes.project === undefined || changes.project === null
+        ? changes.project
+        : resolveDependencyTargets(
+            [changes.project],
+            await getBlocks([changes.project]),
+          )[0];
+    const projectPlan =
+      projectTarget === undefined
+        ? undefined
+        : planProjectWrite(block, state.tagBlockId, projectTarget);
     if (
       items.length === 0 &&
       properties.length === 0 &&
-      dependencyPlan === undefined
+      dependencyPlan === undefined &&
+      projectPlan === undefined
     ) {
       return undefined;
     }
@@ -897,6 +913,12 @@ export function createOrcaTaskRepository(
       if (dependencyPlan !== undefined) {
         await runRefDataWrite(block, state.tagBlockId, dependencyPlan, (ids) =>
           encodeDependencies(ids, { language: state.language }),
+        );
+      }
+      // 所属项目 (#146): written as dependencies are (project-tag).
+      if (projectPlan !== undefined) {
+        await runRefDataWrite(block, state.tagBlockId, projectPlan, (ids) =>
+          encodeProject(ids, { language: state.language }),
         );
       }
       // setProperties replaces a property of the same name and keeps the

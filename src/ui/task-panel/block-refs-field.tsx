@@ -12,12 +12,18 @@ import { Select } from "../components/popup-controls";
 /** One target block as the field lists it. */
 export interface BlockRefsFieldItem {
   readonly id: number;
+  /** The list key, when two items may share an ID (default: the ID). */
+  readonly key?: string;
   /** Its text; `null` when there is no block to open, `missingText` shown instead. */
   readonly text: string | null;
   /** Shown struck through (e.g. a stale dependency). */
   readonly struck?: boolean;
+  /** Before the text (e.g. a project status icon). */
+  readonly before?: React.ReactNode;
   /** After the text, before the remove button (e.g. a hint icon, "Stale"). */
   readonly after?: React.ReactNode;
+  /** `false`: shown without a remove button (read only). */
+  readonly removable?: boolean;
 }
 
 export function BlockRefsField(props: {
@@ -32,6 +38,8 @@ export function BlockRefsField(props: {
   onRemove: (id: number) => void;
   /** Below the list, above the search (e.g. a hint). */
   below?: React.ReactNode;
+  /** The search is shown; `false` leaves it out (read only). Default true. */
+  searchable?: boolean;
   /** The search: options' values are block IDs. */
   options: SelectOption[];
   filterFunction: NonNullable<
@@ -52,10 +60,11 @@ export function BlockRefsField(props: {
               item.text === null ? undefined : shownText({ text: item.text });
             return (
               <li
-                key={item.id}
+                key={item.key ?? item.id}
                 className="nextaction-block-ref"
                 data-struck={item.struck || undefined}
               >
+                {item.before}
                 {text ? (
                   <button
                     type="button"
@@ -71,36 +80,40 @@ export function BlockRefsField(props: {
                   </span>
                 )}
                 {item.after}
-                <Tooltip text={props.removeLabel}>
-                  <Button
-                    variant="plain"
-                    className="nextaction-block-ref-remove"
-                    aria-label={props.removeLabel}
-                    onClick={() => props.onRemove(item.id)}
-                  >
-                    <i className="ti ti-x" aria-hidden="true" />
-                  </Button>
-                </Tooltip>
+                {item.removable !== false && (
+                  <Tooltip text={props.removeLabel}>
+                    <Button
+                      variant="plain"
+                      className="nextaction-block-ref-remove"
+                      aria-label={props.removeLabel}
+                      onClick={() => props.onRemove(item.id)}
+                    >
+                      <i className="ti ti-x" aria-hidden="true" />
+                    </Button>
+                  </Tooltip>
+                )}
               </li>
             );
           })}
         </ul>
       )}
       {props.below}
-      <Select
-        selected={[]}
-        options={props.options}
-        filter={true}
-        filterFunction={props.filterFunction}
-        filterPlaceholder={props.filterPlaceholder}
-        placeholder={props.placeholder}
-        width="100%"
-        alignment="left"
-        onChange={(selected) => {
-          const picked = Number(selected[0]);
-          if (Number.isInteger(picked)) props.onPick(picked);
-        }}
-      />
+      {props.searchable !== false && (
+        <Select
+          selected={[]}
+          options={props.options}
+          filter={true}
+          filterFunction={props.filterFunction}
+          filterPlaceholder={props.filterPlaceholder}
+          placeholder={props.placeholder}
+          width="100%"
+          alignment="left"
+          onChange={(selected) => {
+            const picked = Number(selected[0]);
+            if (Number.isInteger(picked)) props.onPick(picked);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   encodeDependencies,
+  encodeProject,
   encodeTaskChanges,
   InvalidatedPropertyError,
   type TaskWriteContext,
@@ -263,5 +264,29 @@ describe("encodeTaskChanges on an English task tag", () => {
     expect(encodeTaskChanges({ status: "waiting" }, en)).toEqual([
       { name: "Status", value: "Waiting" },
     ]);
+  });
+});
+
+describe("encodeProject", () => {
+  it("writes reference IDs as a block reference value (project-tag)", () => {
+    expect(encodeProject([55], zh)).toEqual({
+      name: "所属项目",
+      type: 2,
+      value: [55],
+    });
+    expect(encodeProject([], { language: "en" })).toEqual({
+      name: "Project",
+      type: 2,
+      value: [],
+    });
+  });
+
+  it("refuses a project write when the property is invalidated", () => {
+    const tag: TaskWriteContext = { language: "zh", invalidated: ["project"] };
+    expect(() => encodeTaskChanges({ project: 10 }, tag)).toThrow(
+      InvalidatedPropertyError,
+    );
+    // Its value is written apart, never among the task changes.
+    expect(encodeTaskChanges({ project: 10 }, zh)).toEqual([]);
   });
 });
