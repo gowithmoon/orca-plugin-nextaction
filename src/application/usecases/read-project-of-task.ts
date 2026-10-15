@@ -26,8 +26,8 @@ export interface ProjectShown {
  * - `own`: its own setting.
  * - `location`: its nearest project block; setting one of its own changes it.
  * - `parentTask`: an ancestor task's ownership decides the branch (by its
- *   setting, or a project block the task is not in); `task` is that
- *   ancestor. Read only: the task's own setting would not count.
+ *   setting, or its nearest project block, the task's too or not); `task`
+ *   is that ancestor. Read only: the task's own setting would not count.
  */
 export type ProjectOfTaskSource =
   | { readonly kind: "own" | "location" }
@@ -89,19 +89,18 @@ export function createReadProjectOfTask(deps: {
     let source: ProjectOfTaskSource | null = null;
     if (decision !== null) {
       const decider = chain[decision.link];
+      // An ancestor task decides even when it is by a project block the task
+      // sits in too: the task's own setting would not count (US18, US90).
       source =
         decision.link === 0
           ? { kind: decision.by === "setting" ? "own" : "location" }
-          : // The branch's project block is the task's own too.
-            decision.by === "block" && self.projectBlock === decision.project
-            ? { kind: "location" }
-            : {
-                kind: "parentTask",
-                task: {
-                  id: decider?.task.id ?? id,
-                  text: decider?.task.text ?? "",
-                },
-              };
+          : {
+              kind: "parentTask",
+              task: {
+                id: decider?.task.id ?? id,
+                text: decider?.task.text ?? "",
+              },
+            };
     }
     let ownSetting: OwnSettingShown | null = null;
     const target = self.projectSetting?.target ?? null;
