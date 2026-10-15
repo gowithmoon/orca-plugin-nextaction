@@ -545,6 +545,14 @@ const zhCN: Record<string, string> = {
   // The selection list (#137).
   "Pick a bar or an item above to see its tasks":
     "点一下上面的柱子或分布中的一项，这里会列出相应的任务",
+  // The project menu (#144).
+  "Project status: ${status}": "项目状态：${status}",
+  "Could not change the project status: ${reason}":
+    "无法修改项目状态：${reason}",
+  "Could not open the project menu: ${reason}":
+    "无法打开项目操作菜单：${reason}",
+  "Nothing changed: the block is no longer a project.":
+    "没有修改：这个块已经不是项目了。",
 };
 
 export default zhCN;

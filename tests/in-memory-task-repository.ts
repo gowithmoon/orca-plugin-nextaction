@@ -736,6 +736,19 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async getProject(id) {
+      return blocks.get(id)?.project ?? null;
+    },
+
+    async updateProjectStatus(id, status) {
+      const block = blocks.get(id);
+      if (!block?.project) throw new Error(`block ${id} is not a project`);
+      const project = block.project;
+      write(() => {
+        block.project = { ...project, status };
+      });
+    },
+
     async appendTaskToJournal(text, now, initial = {}) {
       const id = nextId++;
       write(() => {
