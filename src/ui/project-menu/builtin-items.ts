@@ -15,7 +15,7 @@ import { createNotify, type Notify } from "../notify";
 import type { ProjectMenuItems } from "./menu-items";
 import { projectStatusIcons } from "./project-status-icons";
 
-/** Menu groups, lowest first. Gaps leave room for later steps. */
+/** Menu groups, lowest first. */
 export const projectMenuGroups = {
   status: 10,
   /** "Drop project" (#150). */
