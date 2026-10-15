@@ -19,11 +19,12 @@ import type { Project, ProjectId } from "../../domain/project/project";
 import { recurs } from "../../domain/recurrence/recurrence";
 import { score } from "../../domain/scoring/score";
 import type { CompletionEntry } from "../../domain/task/completion-history";
-import type {
-  CalendarDate,
-  Task,
-  TaskId,
-  TaskStatus,
+import {
+  type CalendarDate,
+  defaultRating,
+  type Task,
+  type TaskId,
+  type TaskStatus,
 } from "../../domain/task/task";
 import {
   filterChoosesAny,
@@ -140,7 +141,9 @@ export interface AllTasksRead {
 /**
  * How the top-level nodes are ordered; subtasks always keep note order. Each
  * runs in the direction below unless reversed (`SortDirection`), and ties
- * keep note order.
+ * keep note order. A project row sorts with the top-level tasks by its own
+ * values (for the score: effort 4, no ancestor factor), the tasks below it
+ * in note order (#148).
  * - `note`: note order.
  * - `due`: the task's own due day, earliest first, none last.
  * - `start`: the task's own start, earliest first, none last.
@@ -237,47 +240,46 @@ function byDay(
 }
 
 type NodeOrder = (a: AllTasksNode, b: AllTasksNode) => number;
-type TaskNodeOrder = (a: TaskNode, b: TaskNode) => number;
+
+/**
+ * What a top-level node is sorted by: a task's own values, or a project's
+ * (GLOSSARY: 项目行), each the project's own.
+ */
+type Sorted = Pick<
+  Task,
+  "due" | "start" | "importance" | "urgency" | "created"
+> & { readonly score: number };
 
 /**
  * How top-level nodes compare for `sort` run `direction`; `null` for note
- * order. Only the comparison flips, so ties still compare equal. Project
- * nodes do not take part yet: they follow the tasks, in note order.
+ * order. Only the comparison flips, so ties still compare equal. A project
+ * row takes part with its own values (`sortedOf`).
  */
 function comparator(
   sort: AllTasksSort,
   direction: SortDirection,
-  scoreOf: (task: Task) => number,
+  sortedOf: (node: AllTasksNode) => Sorted,
 ): NodeOrder | null {
-  const order = taskComparator(sort, direction, scoreOf);
-  if (!order) return null;
-  const rank = (node: AllTasksNode) => (node.kind === "project" ? 1 : 0);
-  return (a, b) =>
-    a.kind === "task" && b.kind === "task" ? order(a, b) : rank(a) - rank(b);
-}
-
-function taskComparator(
-  sort: AllTasksSort,
-  direction: SortDirection,
-  scoreOf: (task: Task) => number,
-): TaskNodeOrder | null {
   const sign = direction === "descending" ? -1 : 1;
+  const by =
+    (compare: (a: Sorted, b: Sorted) => number): NodeOrder =>
+    (a, b) =>
+      compare(sortedOf(a), sortedOf(b));
   switch (sort) {
     case "note":
       return null;
     case "due":
-      return (a, b) => byDay(a.task.due, b.task.due, sign);
+      return by((a, b) => byDay(a.due, b.due, sign));
     case "start":
-      return (a, b) => byDay(a.task.start, b.task.start, sign);
+      return by((a, b) => byDay(a.start, b.start, sign));
     case "importance":
-      return (a, b) => sign * (b.task.importance - a.task.importance);
+      return by((a, b) => sign * (b.importance - a.importance));
     case "urgency":
-      return (a, b) => sign * (b.task.urgency - a.task.urgency);
+      return by((a, b) => sign * (b.urgency - a.urgency));
     case "score":
-      return (a, b) => sign * (scoreOf(b.task) - scoreOf(a.task));
+      return by((a, b) => sign * (b.score - a.score));
     case "captured":
-      return (a, b) =>
-        sign * (b.task.created.getTime() - a.task.created.getTime());
+      return by((a, b) => sign * (b.created.getTime() - a.created.getTime()));
   }
 }
 
@@ -497,9 +499,26 @@ function searches(narrow: Narrowing): boolean {
   return narrow.search.trim() !== "";
 }
 
+/** The filter or the search lets fewer through than every task. */
+function narrows(narrow: Narrowing): boolean {
+  return (
+    searches(narrow) ||
+    filterChoosesAny(narrow.filter) ||
+    (narrow.filter.statuses?.length ?? 0) > 0
+  );
+}
+
 /** The task is found by what is searched for (#112). */
 function found(narrow: Narrowing, task: Task): boolean {
   return matchesSearch(narrow.search, task);
+}
+
+/** Something is searched for, and the project's name holds it. */
+function projectFound(narrow: Narrowing, project: Project): boolean {
+  return (
+    searches(narrow) &&
+    matchesSearch(narrow.search, { text: project.text, searchText: "" })
+  );
 }
 
 /** The task is let through in the tree. */
@@ -565,12 +584,19 @@ function narrowedTree(
     if (entry.kind === "project") {
       const project = entry.item.project;
       if (!projectFinished(context, entry)) {
+        // Found by its name, every task under the row is found; the filter
+        // still applies to them.
+        const below = projectFound(narrow, project)
+          ? { ...narrow, search: "" }
+          : narrow;
         // Under an open project row a done subtree stays faded in its
         // place, as a done subtask does under a task.
         const children = entry.below.flatMap(
-          (item) => shownNode(context, narrow, item, counted) ?? [],
+          (item) => shownNode(context, below, item, counted) ?? [],
         );
-        tree.push(projectNode(context, project, children));
+        // Narrowed, a row with no task let through below it is hidden.
+        if (children.length > 0 || !narrows(narrow))
+          tree.push(projectNode(context, project, children));
         continue;
       }
       // A finished project holding the kept task stays in the tree for it.
@@ -579,12 +605,18 @@ function narrowedTree(
         tree.push(projectNode(context, project, kept));
         continue;
       }
-      // Its tasks let through as the top-level tasks of done subtrees are;
-      // one without any, only while nothing narrows.
+      // Its tasks let through as the top-level tasks of done subtrees are,
+      // every one found when its name is; one without any, only while
+      // nothing but its name narrows.
+      const named = projectFound(narrow, project);
       if (
         entry.below.length === 0
-          ? !searches(narrow) && !filterChoosesAny(narrow.filter)
-          : entry.below.some((item) => doneLets(item.task))
+          ? (named || !searches(narrow)) && !filterChoosesAny(narrow.filter)
+          : entry.below.some(
+              (item) =>
+                filterLets(narrow.filter, item.task) &&
+                (named || found(narrow, item.task)),
+            )
       ) {
         done.push({
           item: projectNode(context, project, []),
@@ -663,21 +695,39 @@ export function createReadAllTasks(deps: {
     };
     const narrow = narrowing(options);
     const { tree, matchCount, done } = narrowedTree(context, narrow);
-    const scoreOf = (task: Task) => {
-      const entry = graph.entry(task.id);
-      return score(
-        {
-          task,
-          effectiveStart: entry?.effectiveStart ?? null,
-          ancestorRatings: entry?.ancestorRatings ?? [],
-        },
-        today,
-      );
+    const sortedOf = (node: AllTasksNode): Sorted => {
+      if (node.kind === "task") {
+        const entry = graph.entry(node.task.id);
+        return {
+          ...node.task,
+          score: score(
+            {
+              task: node.task,
+              effectiveStart: entry?.effectiveStart ?? null,
+              ancestorRatings: entry?.ancestorRatings ?? [],
+            },
+            today,
+          ),
+        };
+      }
+      // The same formula, at the default effort and with no ancestor factor.
+      const project = node.project;
+      return {
+        ...project,
+        score: score(
+          {
+            task: { ...project, effort: defaultRating },
+            effectiveStart: project.start,
+            ancestorRatings: [],
+          },
+          today,
+        ),
+      };
     };
     const compare = comparator(
       options.sort ?? "note",
       options.direction ?? "ascending",
-      scoreOf,
+      sortedOf,
     );
     // Stable: ties keep note order.
     if (compare) tree.sort(compare);

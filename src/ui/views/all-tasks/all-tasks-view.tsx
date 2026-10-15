@@ -158,13 +158,22 @@ function shownNodes(
   return shown;
 }
 
-/** The nodes of the tree that have children: what "collapse all" collapses. */
-function parentKeys(nodes: readonly AllTasksNode[]): CollapseKey[] {
-  return nodes.flatMap((node) =>
-    node.children.length > 0
-      ? [collapseKey(node), ...parentKeys(node.children)]
-      : [],
-  );
+/**
+ * The nodes of the tree that have children: what "collapse all" collapses.
+ * `projectsExpanded`: project rows, then temporarily expanded, are left out,
+ * so their saved state stays as it is (#148); the tasks below still count.
+ */
+function parentKeys(
+  nodes: readonly AllTasksNode[],
+  projectsExpanded: boolean,
+): CollapseKey[] {
+  return nodes.flatMap((node) => {
+    if (node.children.length === 0) return [];
+    const below = parentKeys(node.children, projectsExpanded);
+    return node.kind === "project" && projectsExpanded
+      ? below
+      : [collapseKey(node), ...below];
+  });
 }
 
 /** What every card in the tree shares. */
@@ -185,6 +194,11 @@ interface TreeCards {
    * among them means something (#63).
    */
   topLevelGaps: boolean;
+  /**
+   * A filter or search is set: project rows show expanded, without a toggle,
+   * and the saved collapse state is left as it is, back once cleared (#148).
+   */
+  projectsExpanded: boolean;
 }
 
 /** A node's collapse button. */
@@ -271,7 +285,9 @@ function TreeItem(props: TreeItemProps & { node: AllTasksNode }) {
 function ProjectTreeItem(props: { node: ProjectNode; cards: TreeCards }) {
   const { node, cards } = props;
   const key = collapseKey(node);
-  const parent = node.children.length > 0;
+  const expanded = cards.projectsExpanded;
+  // Temporarily expanded, it has nothing to toggle.
+  const parent = node.children.length > 0 && !expanded;
   const collapsed = parent && isCollapsed(cards.collapsed, key);
   return (
     <li>
@@ -292,7 +308,7 @@ function ProjectTreeItem(props: { node: ProjectNode; cards: TreeCards }) {
           onOpenInNotes={() => cards.actions.openBlockInNotes(node.project.id)}
         />
       </div>
-      {parent && !collapsed && (
+      {node.children.length > 0 && (expanded || !collapsed) && (
         <TreeNodes nodes={node.children} cards={cards} />
       )}
     </li>
@@ -490,6 +506,7 @@ function AllTasksContent(props: {
     collapsed,
     toggleCollapsed: deps.collapse.toggle,
     topLevelGaps: sort === "note",
+    projectsExpanded: filtered,
   };
   if (filtered && nodes.length === 0 && done.count === 0) {
     const { Button } = orca.components;
@@ -538,6 +555,8 @@ function CollapseAllButton(props: {
   query: ViewQuery<AllTasksRead>;
   selectedTaskId: TaskId | undefined;
   collapse: AllTasksCollapseStore;
+  /** A filter or search is set: project rows are temporarily expanded. */
+  filtered: boolean;
 }) {
   const { Button, Tooltip } = orca.components;
   const state = useViewQuery(props.query);
@@ -546,7 +565,10 @@ function CollapseAllButton(props: {
     props.collapse.current,
   );
   if (state.kind !== "loaded") return null;
-  const keys = parentKeys(shownNodes(state.data.tree, props.selectedTaskId));
+  const keys = parentKeys(
+    shownNodes(state.data.tree, props.selectedTaskId),
+    props.filtered,
+  );
   if (keys.length === 0) return null;
   // Records of nodes no longer in the tree count for nothing.
   const anyExpanded = keys.some((key) => !isCollapsed(collapsed, key));
@@ -669,6 +691,7 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
               query={query}
               selectedTaskId={selectedTaskId}
               collapse={deps.collapse}
+              filtered={filtering}
             />
             <AllTasksFilterButton
               state={filter}
