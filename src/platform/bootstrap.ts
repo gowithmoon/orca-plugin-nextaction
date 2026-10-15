@@ -170,6 +170,7 @@ export function createNextActionPlugin(): Plugin {
     startPreviewDays: preview.startPreviewDays,
     taskActions: taskActions.taskActions,
     menuItems: taskMenu.items,
+    projectMenuItems: projectMenu.items,
     taskPanel: { openPopup: taskPanel.open, formDeps: taskPanel.formDeps },
     openReviewPopup: taskPanel.openReviewPopup,
     openQuickCapture: taskTag.openQuickCapture,

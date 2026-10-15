@@ -553,6 +553,14 @@ const zhCN: Record<string, string> = {
     "无法打开项目操作菜单：${reason}",
   "Nothing changed: the block is no longer a project.":
     "没有修改：这个块已经不是项目了。",
+  // The project row (#147).
+  "Project ${name}": "项目 ${name}",
+  Progress: "进度",
+  "No tasks": "没有任务",
+  "No next action": "缺少下一步行动",
+  "${count} tasks not done yet": "还有 ${count} 个任务未完成",
+  "${count} tasks": "${count} 个任务",
+  "Starts ${date}": "${date} 开始",
 };
 
 export default zhCN;

@@ -9,6 +9,8 @@ import {
   type AllTasksNode,
   type AllTasksRead,
   createReadAllTasks,
+  type DoneItem,
+  type ProjectNode,
 } from "./read-all-tasks";
 
 /** 2026-10-09 10:00 in UTC+8: the logical day 2026-10-09. */
@@ -25,14 +27,19 @@ function setup() {
   return { repository, readAllTasks };
 }
 
-/** A tree written as ids: a leaf as its id, a node with children as [id, children]. */
-type Shape = TaskId | [TaskId, Shape[]];
+/** A node's key: a task's as its ID, a project's as `P` and its ID. */
+type NodeKey = TaskId | `P${number}`;
+
+function key(node: AllTasksNode | DoneItem): NodeKey {
+  return node.kind === "task" ? node.task.id : `P${node.project.id}`;
+}
+
+/** A tree written as keys: a leaf as its key, a node with children as [key, children]. */
+type Shape = NodeKey | [NodeKey, Shape[]];
 
 function shape(nodes: readonly AllTasksNode[]): Shape[] {
   return nodes.map((node) =>
-    node.children.length === 0
-      ? node.task.id
-      : [node.task.id, shape(node.children)],
+    node.children.length === 0 ? key(node) : [key(node), shape(node.children)],
   );
 }
 
@@ -906,7 +913,7 @@ describe("read all tasks, filtered and searched", () => {
 
     const read = await readAllTasks({ search: "zhang" });
 
-    expect(read.done.items.map((task) => task.id)).toEqual([1]);
+    expect(doneIds(read)).toEqual([1]);
   });
 
   it("counts the matching tasks, not the ancestor tasks shown only for where they sit", async () => {
@@ -1040,31 +1047,316 @@ describe("read all tasks filtered, keeping the task being viewed", () => {
   });
 });
 
-/** The tasks the done section lists, by ID. */
-function doneIds(read: AllTasksRead): TaskId[] {
-  return read.done.items.map((task) => task.id);
+/** The items the done section lists, by key. */
+function doneIds(read: AllTasksRead): NodeKey[] {
+  return read.done.items.map(key);
 }
 
 /** Every node in the tree, depth first, with whether it is marked blocked. */
-function marks(nodes: readonly AllTasksNode[]): [TaskId, boolean][] {
+function marks(nodes: readonly AllTasksNode[]): [NodeKey, boolean][] {
   return nodes.flatMap((node) => [
-    [node.task.id, node.blocked] as [TaskId, boolean],
+    [key(node), node.kind === "task" && node.blocked] as [NodeKey, boolean],
     ...marks(node.children),
   ]);
 }
 
 /** Every node in the tree, depth first, with its kind. */
-function kinds(nodes: readonly AllTasksNode[]): [TaskId, string][] {
+function kinds(nodes: readonly AllTasksNode[]): [NodeKey, string][] {
   return nodes.flatMap((node) => [
-    [node.task.id, node.kind] as [TaskId, string],
+    [key(node), node.kind] as [NodeKey, string],
     ...kinds(node.children),
   ]);
 }
 
 /** Every node in the tree, depth first, with why it is faded (`null`: not). */
-function fades(nodes: readonly AllTasksNode[]): [TaskId, string | null][] {
+function fades(nodes: readonly AllTasksNode[]): [NodeKey, string | null][] {
   return nodes.flatMap((node) => [
-    [node.task.id, node.faded] as [TaskId, string | null],
+    [key(node), node.faded] as [NodeKey, string | null],
     ...fades(node.children),
   ]);
 }
+
+/** The project node of project `id` in the tree; fails the test without one. */
+function projectNode(read: AllTasksRead, id: number): ProjectNode {
+  for (const node of read.tree) {
+    if (node.kind === "project" && node.project.id === id) return node;
+  }
+  throw new Error(`no project node ${id} in the tree`);
+}
+
+describe("read all tasks with projects", () => {
+  it("shows a project as a top-level node, the tasks under its block below it", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addProject({ id: 2, text: "Move house", status: "active" });
+    repository.addBlock(3, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 4 });
+    repository.addTask({ id: 6, status: "inbox" }, { parentId: 2 });
+    repository.addTask({ id: 7, status: "todo" });
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([1, ["P2", [[4, [5]], 6]], 7]);
+    expect(kinds(read.tree)).toContainEqual(["P2", "project"]);
+    expect(projectNode(read, 2).project.text).toBe("Move house");
+    expect(projectNode(read, 2).faded).toBeNull();
+  });
+
+  it("shows a block with both tags as a task and as a project, its subtasks under the task", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", effort: 2 });
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "done", effort: 6 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" });
+
+    const read = await readAllTasks();
+
+    // The task is not its own project's: the subtask belongs to it.
+    expect(shape(read.tree)).toEqual([[1, [2]], "P1", 3]);
+    expect(projectNode(read, 1).progress).toEqual({
+      kind: "measured",
+      done: 6,
+      total: 6,
+    });
+  });
+});
+
+describe("read all tasks: project progress", () => {
+  const weekly = {
+    kind: "rule",
+    rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+  } as const;
+
+  it("weighs the tasks by effort, parent and subtask each with its own", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo", effort: 6 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done", effort: 2 }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "done", effort: 1 }, { parentId: 1 });
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).progress).toEqual({
+      kind: "measured",
+      done: 3,
+      total: 9,
+    });
+  });
+
+  it("leaves out someday and recurring tasks, and counts a task below a done ancestor task as done", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "someday", effort: 5 },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", effort: 5, recurrence: weekly },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 4, status: "done", effort: 2 }, { parentId: 1 });
+    repository.addTask({ id: 5, status: "todo", effort: 3 }, { parentId: 4 });
+    repository.addTask({ id: 6, status: "todo", effort: 4 }, { parentId: 1 });
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).progress).toEqual({
+      kind: "measured",
+      done: 5,
+      total: 9,
+    });
+  });
+
+  it("tells a project without tasks from one whose tasks none count", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "active" });
+    repository.addTask({ id: 3, status: "someday" }, { parentId: 2 });
+    repository.addTask(
+      { id: 4, status: "todo", recurrence: weekly },
+      { parentId: 2 },
+    );
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).progress).toEqual({ kind: "noTasks" });
+    expect(projectNode(read, 2).progress).toEqual({ kind: "uncounted" });
+  });
+
+  it("counts a task by the project it belongs to: below a task, a project block does not take it", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo", effort: 4 }, { parentId: 1 });
+    repository.addProject({ id: 3, status: "active" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "done", effort: 4 }, { parentId: 3 });
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).progress).toEqual({
+      kind: "measured",
+      done: 4,
+      total: 8,
+    });
+    expect(projectNode(read, 3).progress).toEqual({ kind: "noTasks" });
+    // In the tree, the subtask stays under its parent task.
+    expect(shape(read.tree)).toEqual([["P1", [[2, [4]]]], "P3"]);
+  });
+});
+
+describe("read all tasks: no next action", () => {
+  it("marks an active project none of whose tasks is a next action", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 1 });
+    // An empty active project lacks one too.
+    repository.addProject({ id: 4, status: "active" });
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 5 });
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).noNextAction).toBe(true);
+    expect(projectNode(read, 4).noNextAction).toBe(true);
+    expect(projectNode(read, 5).noNextAction).toBe(false);
+  });
+
+  it("does not mark a project with a waiting task", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "waiting" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).noNextAction).toBe(false);
+  });
+
+  it.each(["planning", "paused", "someday", "done"] as const)(
+    "does not mark a %s project",
+    async (status) => {
+      const { repository, readAllTasks } = setup();
+      repository.addProject({ id: 1, status });
+      repository.addTask({ id: 2, status: "inbox" }, { parentId: 1 });
+
+      const read = await readAllTasks();
+
+      expect(projectNode(read, 1).noNextAction).toBe(false);
+    },
+  );
+
+  it("does not mark a project before its start, the start preview days counted", async () => {
+    const repository = createInMemoryTaskRepository();
+    const readAllTasks = createReadAllTasks({
+      repository,
+      clock: createFixedClock(morning),
+      dayBoundary: createFixedDayBoundary(),
+      startPreviewDays: createFixedStartPreviewDays(2),
+    });
+    // Today is 2026-10-09; with 2 preview days, 10-11 is reached.
+    const day = (date: number) => ({ year: 2026, month: 10, day: date });
+    repository.addProject({ id: 1, status: "active", start: day(12) });
+    repository.addProject({ id: 2, status: "active", start: day(11) });
+
+    const read = await readAllTasks();
+
+    expect(projectNode(read, 1).noNextAction).toBe(false);
+    expect(projectNode(read, 1).notStarted).toBe(true);
+    expect(projectNode(read, 2).noNextAction).toBe(true);
+    expect(projectNode(read, 2).notStarted).toBe(false);
+  });
+});
+
+describe("read all tasks: projects and the done section", () => {
+  it("puts a done project with all its tasks done in the done section as one item, by its latest completion", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "done" }, completedOn("2026-10-06"));
+    repository.addProject({ id: 2, status: "done" });
+    repository.addTask(
+      { id: 3, status: "done" },
+      { parentId: 2, ...completedOn("2026-10-08") },
+    );
+    repository.addTask(
+      { id: 4, status: "done" },
+      { parentId: 3, ...completedOn("2026-10-02") },
+    );
+    repository.addTask(
+      { id: 5, status: "done" },
+      { parentId: 2, ...completedOn("2026-10-04") },
+    );
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([]);
+    expect(doneIds(read)).toEqual(["P2", 1]);
+  });
+
+  it("keeps a done project in the tree while a task below a done task is not done, as a done subtree is kept", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([["P1", [[2, [3]]]]]);
+    expect(projectNode(read, 1).unfinished).toBe(1);
+    // For progress, the task below the done task counts as done.
+    expect(projectNode(read, 1).progress).toEqual({
+      kind: "measured",
+      done: 8,
+      total: 8,
+    });
+  });
+
+  it("keeps a done project with a task not done in the tree, not faded, saying how many", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "waiting" }, { parentId: 1 });
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([["P1", [2, 3, 4]]]);
+    expect(fades(read.tree)).toEqual([
+      ["P1", null],
+      [2, "done"],
+      [3, null],
+      [4, null],
+    ]);
+    expect(projectNode(read, 1).unfinished).toBe(2);
+    expect(doneIds(read)).toEqual([]);
+  });
+
+  it("keeps the done tasks of a project not done faded in their place", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-08") },
+    );
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([["P1", [2]]]);
+    expect(fades(read.tree)).toEqual([
+      ["P1", null],
+      [2, "done"],
+    ]);
+    expect(doneIds(read)).toEqual([]);
+  });
+
+  it("keeps a finished project in the tree while it holds the kept task", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 1 });
+
+    const read = await readAllTasks({ keep: 3 });
+
+    expect(shape(read.tree)).toEqual([["P1", [3]]]);
+    expect(doneIds(read)).toEqual([]);
+  });
+});

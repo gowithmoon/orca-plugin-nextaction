@@ -1,6 +1,6 @@
 // The project menu's item registrations (GLOSSARY: 项目操作菜单; #144). The
 // menu renders whatever is registered, in Orca's tag menu of the project tag
-// and, later, on the project row of the all tasks view (#147); later issues
+// and on the project row of the all tasks view (#147); later issues
 // only append registrations (Drop project, #150).
 import type { Project } from "../../domain/project/project";
 
