@@ -134,7 +134,7 @@ function NextActionContent(props: {
   return (
     <CardDragArea onNoteDrop={linkTaskInNote}>
       <ul className="nextaction-task-list">
-        {items.map(({ task, kept, parentText }) => (
+        {items.map(({ task, kept, parentText, project }) => (
           <NextActionItemRow key={task.id} task={task}>
             <TaskCard
               task={task}
@@ -150,6 +150,7 @@ function NextActionContent(props: {
               // often mislead (#53, confirmed 2026-10-10).
               keptStatusShown={false}
               parentText={parentText}
+              project={project}
             />
           </NextActionItemRow>
         ))}

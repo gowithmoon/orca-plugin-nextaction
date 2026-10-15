@@ -75,6 +75,12 @@ export interface TaskNode extends TreeNode {
    * subtasks show right under it.
    */
   readonly blocked: boolean;
+  /**
+   * The project it belongs to (GLOSSARY: 所属项目), for its card, when where
+   * it sits does not say so: not under that project's row, nor below a card
+   * showing it already. `null`: none to show.
+   */
+  readonly shownProject: Project | null;
 }
 
 /**
@@ -109,7 +115,12 @@ export interface ProjectNode extends TreeNode {
  * project with all its tasks done, standing for them (GLOSSARY: 已完成区).
  */
 export type DoneItem =
-  | { readonly kind: "task"; readonly task: Task }
+  | {
+      readonly kind: "task";
+      readonly task: Task;
+      /** The project it belongs to, for its card; `null`: none. */
+      readonly shownProject: Project | null;
+    }
   | ProjectNode;
 
 /** The done section (GLOSSARY: 已完成区), below the tree. */
@@ -453,15 +464,44 @@ function projectFinished(
   );
 }
 
-function node(context: NodeContext, item: SnapshotTask): TaskNode {
+/**
+ * The project the card of `item` shows: the one it belongs to, unless the
+ * project row or a card above it says so already (`shown`); `null`: none.
+ */
+function shownProjectOf(
+  context: NodeContext,
+  item: SnapshotTask,
+  shown: ProjectId | null,
+): Project | null {
+  const project = context.graph.entry(item.task.id)?.project ?? null;
+  return project !== null && project.id !== shown ? project : null;
+}
+
+/** What the subtasks of a card showing `project` take as said already. */
+function shownBelow(project: Project | null, shown: ProjectId | null) {
+  return project?.id ?? shown;
+}
+
+/**
+ * The node of `item` and its whole subtree; `shown`: the project the
+ * project row or a card above it says already.
+ */
+function node(
+  context: NodeContext,
+  item: SnapshotTask,
+  shown: ProjectId | null,
+): TaskNode {
+  const shownProject = shownProjectOf(context, item, shown);
+  const below = shownBelow(shownProject, shown);
   return {
     kind: "task",
     task: item.task,
     faded: item.task.status === "done" ? "done" : null,
     blocked: marksBlocked(context.graph.entry(item.task.id)),
+    shownProject,
     children: context.tree
       .childrenOf(item.task.id)
-      .map((child) => node(context, child)),
+      .map((child) => node(context, child, below)),
   };
 }
 
@@ -472,13 +512,16 @@ function node(context: NodeContext, item: SnapshotTask): TaskNode {
 function keptPath(
   context: NodeContext,
   item: SnapshotTask,
+  shown: ProjectId | null,
 ): TaskNode | undefined {
   if (item.task.id === context.keep) {
-    return { ...node(context, item), faded: "kept", children: [] };
+    return { ...node(context, item, shown), faded: "kept", children: [] };
   }
+  const own = node(context, item, shown);
+  const next = shownBelow(own.shownProject, shown);
   for (const child of context.tree.childrenOf(item.task.id)) {
-    const below = keptPath(context, child);
-    if (below) return { ...node(context, item), children: [below] };
+    const below = keptPath(context, child, next);
+    if (below) return { ...own, children: [below] };
   }
   return undefined;
 }
@@ -542,19 +585,24 @@ function shownNode(
   narrow: Narrowing,
   item: SnapshotTask,
   counted: { matches: number },
+  shown: ProjectId | null,
 ): TaskNode | undefined {
+  // An ancestor task shown only for where a task sits still shows the
+  // project, so the tasks below it do not repeat it.
+  const own = node(context, item, shown);
+  const next = shownBelow(own.shownProject, shown);
   const below = context.tree
     .childrenOf(item.task.id)
-    .flatMap((child) => shownNode(context, narrow, child, counted) ?? []);
+    .flatMap((child) => shownNode(context, narrow, child, counted, next) ?? []);
   if (matches(narrow, item.task)) {
     counted.matches += 1;
-    return { ...node(context, item), children: below };
+    return { ...own, children: below };
   }
   // The kept task no longer let through stays in its place, not counted.
   if (item.task.id === context.keep)
-    return { ...node(context, item), faded: "kept", children: below };
+    return { ...own, faded: "kept", children: below };
   if (below.length === 0) return undefined;
-  return { ...node(context, item), faded: "ancestor", children: below };
+  return { ...own, faded: "ancestor", children: below };
 }
 
 /** A done section item before its range, with the completion it is ordered by. */
@@ -592,7 +640,7 @@ function narrowedTree(
         // Under an open project row a done subtree stays faded in its
         // place, as a done subtask does under a task.
         const children = entry.below.flatMap(
-          (item) => shownNode(context, below, item, counted) ?? [],
+          (item) => shownNode(context, below, item, counted, project.id) ?? [],
         );
         // Narrowed, a row with no task let through below it is hidden.
         if (children.length > 0 || !narrows(narrow))
@@ -600,7 +648,9 @@ function narrowedTree(
         continue;
       }
       // A finished project holding the kept task stays in the tree for it.
-      const kept = entry.below.flatMap((item) => keptPath(context, item) ?? []);
+      const kept = entry.below.flatMap(
+        (item) => keptPath(context, item, project.id) ?? [],
+      );
       if (kept.length > 0) {
         tree.push(projectNode(context, project, kept));
         continue;
@@ -627,18 +677,22 @@ function narrowedTree(
     }
     const item = entry.item;
     if (holdsOpen(context.tree, item)) {
-      const shown = shownNode(context, narrow, item, counted);
+      const shown = shownNode(context, narrow, item, counted, null);
       if (shown) tree.push(shown);
       continue;
     }
     // A done subtree holding the kept task stays in the tree for it, so it
     // is not in the done section too; the other dimensions and the search
     // look at the item's own top-level task.
-    const kept = keptPath(context, item);
+    const kept = keptPath(context, item, null);
     if (kept) tree.push(kept);
     else if (doneLets(item.task))
       done.push({
-        item: { kind: "task", task: item.task },
+        item: {
+          kind: "task",
+          task: item.task,
+          shownProject: shownProjectOf(context, item, null),
+        },
         lastCompletion: item.lastCompletion,
       });
   }

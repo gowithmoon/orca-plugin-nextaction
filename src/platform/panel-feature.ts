@@ -189,7 +189,12 @@ export function createPanelFeature(deps: {
   );
   views.register(
     createInboxView({
-      readInbox: createReadInbox({ repository }),
+      readInbox: createReadInbox({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
       linkTaskInNote,
       today: deps.today,
       changes,

@@ -528,3 +528,33 @@ describe("read review", () => {
     });
   });
 });
+
+describe("read review: the project on a card", () => {
+  it("gives every listed task the project it belongs to, or none, in each kind of step", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "active" });
+    repository.addTask({ id: 2, status: "inbox" }, { project: [1] });
+    repository.addTask({ id: 3, status: "waiting" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "waiting" });
+    repository.addTask(
+      { id: 5, status: "todo", due: october(10) },
+      { parentId: 1 },
+    );
+
+    const { steps } = await readReview();
+
+    const projects = (items: readonly ReviewItemLike[]) =>
+      items.map((item) => [item.task.id, item.project?.text ?? null]);
+    expect(projects(steps.inbox.items)).toEqual([[2, "Move house"]]);
+    expect(projects(steps.waiting.items).sort()).toEqual([
+      [3, "Move house"],
+      [4, null],
+    ]);
+    expect(projects(steps.overdue.items)).toEqual([[5, "Move house"]]);
+  });
+});
+
+interface ReviewItemLike {
+  readonly task: { readonly id: number };
+  readonly project: { readonly text: string } | null;
+}

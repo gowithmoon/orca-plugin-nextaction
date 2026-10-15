@@ -7,6 +7,7 @@ import {
   analyzeTaskGraph,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
+import type { Project } from "../../domain/project/project";
 import { isDueSoon } from "../../domain/review/due-steps";
 import {
   type LookBackEntry,
@@ -84,6 +85,11 @@ export interface ReviewItem {
   readonly task: Task;
   /** Listed only because it is kept: it has left this step. */
   readonly kept: boolean;
+  /**
+   * The project it belongs to (GLOSSARY: 所属项目), shown on its card
+   * whenever it has one; `null` for none.
+   */
+  readonly project: Project | null;
 }
 
 /** One step's list. */
@@ -213,6 +219,9 @@ export function createReadReview(deps: {
       previewDays: deps.startPreviewDays.current(),
     });
     const keep = options.keep;
+    /** The project `task` belongs to, for its card. */
+    const projectOf = (task: Task): Project | null =>
+      graph.entry(task.id)?.project ?? null;
     /** The tasks kept in `step`; none for any other step. */
     const keptIn = (step: ReviewStepKey): ReadonlySet<TaskId> =>
       keep?.step === step && !isDatedKeep(keep) ? keep.tasks : new Set();
@@ -241,6 +250,7 @@ export function createReadReview(deps: {
         items: rankByScore(entries, today).map((entry) => ({
           task: entry.task,
           kept: !belongs(entry),
+          project: entry.project,
         })),
         total: entries.filter(belongs).length,
       };
@@ -262,11 +272,17 @@ export function createReadReview(deps: {
         const dueOn = dayOf(task);
         if (dueOn) {
           count++;
-          listed.push({ task, kept: false, dueOn });
+          listed.push({ task, kept: false, dueOn, project: projectOf(task) });
           continue;
         }
         const keptOn = keptOnDay(step, task.id);
-        if (keptOn) listed.push({ task, kept: true, dueOn: keptOn });
+        if (keptOn)
+          listed.push({
+            task,
+            kept: true,
+            dueOn: keptOn,
+            project: projectOf(task),
+          });
       }
       // Stable: the same day keeps the notes' order.
       listed.sort((a, b) => compareDays(a.dueOn, b.dueOn));
@@ -299,13 +315,18 @@ export function createReadReview(deps: {
     const plannedNotDone = tasks
       .map((item) => item.task)
       .filter((task) => notDone.has(task.id) || keptInLookBack.has(task.id))
-      .map((task) => ({ task, kept: !notDone.has(task.id) }));
+      .map((task) => ({
+        task,
+        kept: !notDone.has(task.id),
+        project: projectOf(task),
+      }));
     return {
       steps: {
         inbox: {
           items: inbox.map((task) => ({
             task,
             kept: task.status !== "inbox",
+            project: projectOf(task),
           })),
           total: inboxTotal,
         },

@@ -4,6 +4,7 @@ import {
   analyzeTaskGraph,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
+import type { Project } from "../../domain/project/project";
 import { rankByScore } from "../../domain/scoring/score";
 import {
   type MyDaySchedule,
@@ -39,6 +40,11 @@ export interface MyDayItem {
   readonly skipped: boolean;
   /** Still not done after its due day (GLOSSARY: 截止日期). */
   readonly overdue: boolean;
+  /**
+   * The project it belongs to (GLOSSARY: 所属项目), shown on its card
+   * whenever it has one; `null` for none.
+   */
+  readonly project: Project | null;
   /**
    * Its place in the unscheduled area's order among all of today's tasks,
    * scheduled ones too, from 0: where it would go once unscheduled, so a
@@ -128,6 +134,7 @@ export function createReadMyDay(deps: {
       done: done.has(entry.task.id),
       skipped: skipped.has(entry.task.id),
       overdue: isOverdue(entry.task, today),
+      project: entry.project,
       unscheduledOrder,
     }));
     const scheduled: ScheduledMyDayItem[] = [];

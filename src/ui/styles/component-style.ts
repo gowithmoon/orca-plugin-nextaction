@@ -193,8 +193,26 @@ export const componentCss = `
   line-height: var(--orca-lineheight-sm);
 }
 
-.nextaction-task-card-parent > .ti {
+/*
+ * Its parts (#149): the project (status icon and name), then the parent
+ * task, each cut short on its own when the line is too narrow for both.
+ */
+.nextaction-task-card-project,
+.nextaction-task-card-parent-task {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.nextaction-task-card-parent .ti {
   flex: 0 0 auto;
+}
+
+.nextaction-task-card-parent-sep {
+  flex: 0 0 auto;
+  opacity: 0.6;
 }
 
 .nextaction-task-card-parent-text {
@@ -204,7 +222,7 @@ export const componentCss = `
   white-space: nowrap;
 }
 
-.nextaction-task-card-parent[data-empty] .nextaction-task-card-parent-text {
+.nextaction-task-card-parent [data-empty] .nextaction-task-card-parent-text {
   font-style: italic;
 }
 
