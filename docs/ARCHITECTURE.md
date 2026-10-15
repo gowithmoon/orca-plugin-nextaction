@@ -125,7 +125,7 @@ tests/
 读写任务数据（`tag-operations`、`block-properties-json`）：
 - 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；`get-blocks` 返回的日期是 `Date`（`plugin-panel-writes`；早先记成 ISO 字符串是 JSON 打印造成的）。页面任务的 `content` 为空，文字取它的别名。
 - 修改标签块上的属性定义时，传入完整的 `typeArgs`（Orca 是整体替换），并显式写入 `pos`。
-- 块引用属性（依赖）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。
+- 块引用属性（依赖、所属项目）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。`insertTag` 带块引用值时会把块 ID 原样存下、不建引用，所以打标签时不带块引用值，之后再按上面的方式写（`project-tag`）。
 - 依赖方从被依赖块 `backRefs` 中 `type: 3` 的引用找到，并以依赖方"依赖"值中含有该引用 ID 为准；行内引用是 `type: 1`，不算依赖（`next-action-hierarchy-boolean-deps`）。
 - 布尔属性的值项一律带 `type: 4`。`insertTag` 传不带 `type` 的 `true` / `false` 时，标签整个打不上，也不报错（`next-action-hierarchy-boolean-deps`）。
 - 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
