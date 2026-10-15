@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { blocks, tagBlocks } from "../../../../tests/task-block-fixtures";
 import {
   decodeTask,
+  projectSettingOf,
   resolveDependencyTargets,
   type TaskTagContext,
 } from "./task-codec";
@@ -715,5 +716,77 @@ describe("decodeTask with values of the wrong kind", () => {
   it("reads a note of digits only, stored as a number, as text (custom-properties)", () => {
     const task = decodedTask(withData([{ name: "备注", type: 1, value: 222 }]));
     expect(task.note).toBe("222");
+  });
+});
+
+describe("projectSettingOf", () => {
+  /**
+   * A task on the Chinese task tag whose 所属项目 holds `value`, as T1 of the
+   * project-tag spike: reference 55 points at the project block 89.
+   */
+  const task = (value: unknown, name = "所属项目") => ({
+    refs: [
+      {
+        id: 50,
+        type: 2,
+        to: tagBlocks.zh.id,
+        data: [
+          { name, value },
+          { name: "状态", value: "收集箱" },
+        ],
+      },
+      { id: 55, type: 3, to: 89 },
+      { id: 56, type: 3, to: 120 },
+    ],
+  });
+
+  it("reads the reference ID and the block it points at", () => {
+    expect(projectSettingOf(task([55]), zhTag)).toEqual({
+      refId: 55,
+      target: 89,
+    });
+  });
+
+  it("reads the property by its English name on an English task tag", () => {
+    const block = task([55], "Project");
+    block.refs[0] = { ...block.refs[0], to: tagBlocks.en.id } as never;
+    expect(projectSettingOf(block, enTag)).toEqual({ refId: 55, target: 89 });
+  });
+
+  it("takes only the first of several values", () => {
+    expect(projectSettingOf(task([56, 55]), zhTag)).toEqual({
+      refId: 56,
+      target: 120,
+    });
+  });
+
+  it("reads a reference ID with no block reference behind it as a stale setting, not the next value", () => {
+    // insertTag stores a block ID as it is, with no `type: 3` reference
+    // (project-tag); 50 is the tag reference, not a block reference.
+    expect(projectSettingOf(task([89, 55]), zhTag)).toEqual({
+      refId: 89,
+      target: null,
+    });
+    expect(projectSettingOf(task([50]), zhTag)).toEqual({
+      refId: 50,
+      target: null,
+    });
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["empty", []],
+    ["a single number", 55],
+    ["a list of strings", ["55"]],
+    ["null", null],
+  ])("reads a value that is %s as no setting", (_, value) => {
+    expect(projectSettingOf(task(value), zhTag)).toBeUndefined();
+  });
+
+  it("reads an invalidated property, or a block without the task tag, as no setting", () => {
+    expect(
+      projectSettingOf(task([55]), { ...zhTag, invalidated: ["project"] }),
+    ).toBeUndefined();
+    expect(projectSettingOf(task([55]), enTag)).toBeUndefined();
   });
 });

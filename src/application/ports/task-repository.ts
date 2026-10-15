@@ -379,4 +379,17 @@ export interface TaskRepository {
    * fails. A mirror block's ID writes to its source block.
    */
   updateProjectStatus(id: ProjectId, status: ProjectStatus): Promise<void>;
+
+  /**
+   * Drops the project (GLOSSARY: 放弃项目, #150), in one undo: clears every
+   * task's 所属项目 setting that points at it (done tasks' too; found as
+   * dependencies on a dropped task are, ADR 0016), drops each of `tasks` as
+   * `dropTask` drops one, dependencies on them cleared, and removes the
+   * project tag. Which tasks belong to the project is the caller's to work
+   * out (ADR 0025); the block itself is never deleted. A mirror block's ID
+   * drops its source block. Fails, writing nothing, when the block is not a
+   * project, the project tag is paused, one of `tasks` is not a task, or the
+   * write fails.
+   */
+  dropProject(id: ProjectId, tasks: readonly TaskId[]): Promise<void>;
 }

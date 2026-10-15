@@ -1,7 +1,7 @@
 // The task graph (GLOSSARY: 下一步行动, 阻塞, 搁置子树, 开始日期): which tasks
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
-import { owningProject } from "../project/ownership";
+import { owningProject, type ProjectSetting } from "../project/ownership";
 import {
   type Project,
   type ProjectId,
@@ -67,6 +67,11 @@ export interface SnapshotTask {
    * is not its own task's project. Absent when no ancestor block is one.
    */
   readonly projectBlock?: ProjectId;
+  /**
+   * Its own 所属项目 setting (GLOSSARY: 所属项目), the first value only;
+   * absent when it has none. A stale one is kept, as read.
+   */
+  readonly projectSetting?: ProjectSetting;
 }
 
 /** A project with where it sits in the notes (GLOSSARY: 项目). */

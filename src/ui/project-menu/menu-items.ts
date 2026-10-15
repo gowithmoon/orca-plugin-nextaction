@@ -26,6 +26,13 @@ export interface ProjectMenuItem {
    * item's to report.
    */
   readonly run: (project: Project) => Promise<void>;
+  /**
+   * Asks before `run` (#150): read when the menu shows the item, it gives
+   * the question for Orca's `ConfirmBox`, or `null` to run without asking.
+   * While it is read, and when reading it fails, the item is disabled; a
+   * failure is the item's to report. Absent: never asks.
+   */
+  readonly confirmation?: (project: Project) => Promise<string | null>;
 }
 
 /** Shows a group as one entry that opens its items. */

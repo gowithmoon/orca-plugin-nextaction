@@ -1202,6 +1202,35 @@ describe("read all tasks: project progress", () => {
     // In the tree, the subtask stays under its parent task.
     expect(shape(read.tree)).toEqual([["P1", [[2, [4]]]], "P3"]);
   });
+
+  it("counts a task set to the project, which stays where it sits in the tree", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo", effort: 2 }, { parentId: 1 });
+    // A journal task set to project 1; its subtask belongs to it too.
+    repository.addTask({ id: 3, status: "done", effort: 3 }, { project: [1] });
+    repository.addTask({ id: 4, status: "todo", effort: 1 }, { parentId: 3 });
+    // Set to project 1 from under project 5: its own setting wins.
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask(
+      { id: 6, status: "done", effort: 4 },
+      { parentId: 5, project: [1] },
+    );
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([
+      ["P1", [2]],
+      [3, [4]],
+      ["P5", [6]],
+    ]);
+    expect(projectNode(read, 1).progress).toEqual({
+      kind: "measured",
+      done: 8,
+      total: 10,
+    });
+    expect(projectNode(read, 5).progress).toEqual({ kind: "noTasks" });
+  });
 });
 
 describe("read all tasks: no next action", () => {
@@ -1345,6 +1374,19 @@ describe("read all tasks: projects and the done section", () => {
       ["P1", null],
       [2, "done"],
     ]);
+    expect(doneIds(read)).toEqual([]);
+  });
+
+  it("keeps a done project in the tree while a task set to it elsewhere is not done", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { project: [1] });
+
+    const read = await readAllTasks();
+
+    expect(shape(read.tree)).toEqual([["P1", [2]], 3]);
+    expect(projectNode(read, 1).unfinished).toBe(1);
     expect(doneIds(read)).toEqual([]);
   });
 

@@ -17,6 +17,7 @@ import type {
 } from "../src/application/ports/task-repository";
 import type { NoteDropPlan } from "../src/domain/blocking/note-drop";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import type { ProjectSetting } from "../src/domain/project/ownership";
 import type { Project, ProjectId } from "../src/domain/project/project";
 import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
@@ -58,6 +59,11 @@ interface StoredBlock {
   tags: readonly string[];
   /** Present while the block carries the project tag (ADR 0025). */
   project: Project | undefined;
+  /**
+   * The task's 所属项目 values in order, as reference IDs with the blocks
+   * they point at (`null`: no such reference); absent for none.
+   */
+  projectValues?: readonly ProjectSetting[];
 }
 
 export interface BlockSetup {
@@ -77,11 +83,18 @@ export interface BlockSetup {
   page?: boolean;
   /** Tags the block carries, by name, for block searches with a scope. */
   tags?: readonly string[];
+  /**
+   * A task's 所属项目 values in order (GLOSSARY: 所属项目): the blocks they
+   * point at, `null` for a value with no reference behind it. Only the first
+   * is read, as the codec does; a block that is not a project makes it
+   * stale.
+   */
+  project?: readonly (number | null)[];
 }
 
 export interface InMemoryTaskRepository extends TaskRepository {
   /** Adds a block that is not a task. */
-  addBlock(id: number, setup?: BlockSetup): void;
+  addBlock(id: number, setup?: Omit<BlockSetup, "project">): void;
   /**
    * Adds a project (GLOSSARY: 项目); unspecified values are those of a
    * freshly tagged project. On a block that is already there (a task), the
@@ -199,6 +212,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const journalDays = new Map<number, CalendarDate>();
   /** IDs of new blocks, far from the ones tests pick. */
   let nextId = 100_000;
+  /** Reference IDs of 所属项目 values, far from block IDs too. */
+  let nextRefId = 900_000;
   /** Places in the notes for blocks added without one, in adding order. */
   let nextPosition = 0;
   const positionOf = (position: number | undefined) => {
@@ -407,6 +422,12 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         page: setup.page ?? false,
         tags: setup.tags ?? [],
         project: undefined,
+        ...(setup.project && {
+          projectValues: setup.project.map((target) => ({
+            refId: nextRefId++,
+            target,
+          })),
+        }),
       });
     },
 
@@ -656,6 +677,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),
           ...(projectBlock !== undefined && { projectBlock }),
+          ...(block.projectValues?.[0] && {
+            projectSetting: block.projectValues[0],
+          }),
         });
       }
       return { tasks, projects };
@@ -746,6 +770,37 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const project = block.project;
       write(() => {
         block.project = { ...project, status };
+      });
+    },
+
+    async dropProject(id, tasks) {
+      const block = blocks.get(id);
+      if (!block?.project) throw new Error(`block ${id} is not a project`);
+      const dropped: StoredBlock[] = tasks.map((taskId) => taskToWrite(taskId));
+      const droppedIds = new Set(tasks);
+      write(() => {
+        block.project = undefined;
+        for (const task of dropped) {
+          task.completionHistory = undefined;
+          task.myDay = undefined;
+          task.task = undefined;
+        }
+        for (const other of blocks.values()) {
+          // No 所属项目 setting is left pointing at it, done tasks' included.
+          if (other.projectValues?.some((value) => value.target === id)) {
+            other.projectValues = other.projectValues.filter(
+              (value) => value.target !== id,
+            );
+          }
+          // As dropTask: no dependency is left on a dropped task (ADR 0016).
+          const dependencies = other.task?.dependencies ?? [];
+          if (other.task && dependencies.some((d) => droppedIds.has(d))) {
+            other.task = {
+              ...other.task,
+              dependencies: dependencies.filter((d) => !droppedIds.has(d)),
+            };
+          }
+        }
       });
     },
 

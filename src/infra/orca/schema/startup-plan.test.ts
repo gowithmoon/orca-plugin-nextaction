@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { projectTagSchema } from "./project-tag-structure";
 import { planStartup } from "./startup-plan";
 import type { TagSchema } from "./tag-schema";
-import { taskTagSchema } from "./task-tag-structure";
+import { taskTagSchema, taskTagSchemaFor } from "./task-tag-structure";
 
 // Expected definitions written out by hand from spec #16 ("写进笔记的名称").
 const zhDefinitions = [
@@ -90,6 +90,9 @@ const zhDefinitions = [
   // A number with no default (#77): empty reads as 0 days. Written bare,
   // as numbers were in the tag-operations spike.
   { name: "依赖延迟", type: 3, pos: 12 },
+  // A block reference (#145). `taskTagSchema` knows no project tag, so no
+  // scope; see "search scope of the project" for the one with it.
+  { name: "所属项目", type: 2, pos: 13 },
 ];
 
 const enDefinitions = [
@@ -166,6 +169,7 @@ const enDefinitions = [
     typeArgs: { defaultEnabled: true, default: 4 },
   },
   { name: "Dependency delay", type: 3, pos: 12 },
+  { name: "Project", type: 2, pos: 13 },
 ];
 
 /**
@@ -465,6 +469,90 @@ describe("startup plan", () => {
         uiLanguage: "zh",
       }).writes.find((definition) => definition.name === "依赖");
       expect(dependencies?.typeArgs).toEqual({ scope: "GTD" });
+    });
+  });
+
+  describe("search scope of the project", () => {
+    const scoped = taskTagSchemaFor(() => "项目");
+    const withProject = (typeArgs: unknown) =>
+      tagBlock(
+        readBack(zhDefinitions).map((definition) =>
+          definition.name === "所属项目"
+            ? { ...definition, typeArgs }
+            : definition,
+        ),
+      );
+
+    it("scopes a newly created tag's project to the project tag", () => {
+      const project = planStartup(scoped, {
+        tagName: "任务",
+        tagBlock: undefined,
+        cache: undefined,
+        uiLanguage: "zh",
+      }).writes.find((definition) => definition.name === "所属项目");
+      expect(project).toEqual({
+        name: "所属项目",
+        type: 2,
+        pos: 13,
+        typeArgs: { scope: "项目" },
+      });
+    });
+
+    it("adds the project to a tag from before #145, scoped to the project tag", () => {
+      expect(
+        planStartup(scoped, {
+          tagName: "任务",
+          tagBlock: tagBlock(readBack(without(["所属项目"]))),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([
+        { name: "所属项目", type: 2, pos: 13, typeArgs: { scope: "项目" } },
+      ]);
+    });
+
+    it("sets the scope when the project has none, and leaves one the user chose alone", () => {
+      const plan = (typeArgs: unknown) =>
+        planStartup(scoped, {
+          tagName: "任务",
+          tagBlock: withProject(typeArgs),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes;
+      expect(plan({})).toEqual([
+        { name: "所属项目", type: 2, pos: 13, typeArgs: { scope: "项目" } },
+      ]);
+      expect(plan({ scope: "书" })).toEqual([]);
+    });
+
+    it("writes no scope while the project tag is not ready", () => {
+      expect(
+        planStartup(taskTagSchema, {
+          tagName: "任务",
+          tagBlock: withProject({}),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([]);
+    });
+
+    it("invalidates a project the user already has with another type, on a tag already taken over", () => {
+      const result = planStartup(scoped, {
+        tagName: "任务",
+        tagBlock: tagBlock([
+          ...readBack(without(["所属项目"])),
+          { name: "所属项目", type: 1, pos: 13, value: null },
+        ]),
+        cache: takenOver,
+        uiLanguage: "zh",
+      });
+      expect(result.action).toEqual({
+        kind: "use",
+        tagBlockId: 211,
+        invalidated: ["project"],
+        language: "zh",
+      });
+      expect(result.writes).toEqual([]);
     });
   });
 
