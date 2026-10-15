@@ -14,6 +14,8 @@ import type { ReadBlockRefCandidates } from "../../application/usecases/read-blo
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
 import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
+import type { ReadProjectCandidates } from "../../application/usecases/read-project-candidates";
+import type { ReadProjectOfTask } from "../../application/usecases/read-project-of-task";
 import type {
   ReadTaskForPanel,
   TaskCustomProperty,
@@ -22,6 +24,7 @@ import type { RepairNotAdvanced } from "../../application/usecases/repair-not-ad
 import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
 import type { SetDependencyMode } from "../../application/usecases/set-dependency-mode";
+import type { SetProjectOfTask } from "../../application/usecases/set-project-of-task";
 import type { SetSequential } from "../../application/usecases/set-sequential";
 import { isNotAdvanced } from "../../domain/recurrence/recurrence";
 import { isOverdue } from "../../domain/task/overdue";
@@ -54,6 +57,7 @@ import {
 } from "./custom-properties-field";
 import { DependenciesField } from "./dependencies-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
+import { ProjectOfTaskField } from "./project-of-task-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
 import { ReminderField } from "./reminder-field";
 import type { OpenReminderPopup } from "./reminder-popup";
@@ -93,6 +97,12 @@ export interface TaskPanelFormDeps {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /** The task's 所属项目 and where it comes from (#146). */
+  readProjectOfTask: ReadProjectOfTask;
+  /** Projects offered as the task's 所属项目 (#146). */
+  readProjectCandidates: ReadProjectCandidates;
+  /** Sets, changes or clears the task's own 所属项目 (#146). */
+  setProjectOfTask: SetProjectOfTask;
   /** Opens the recurrence rule popup for the task (#95). */
   openRecurrencePopup: OpenRecurrencePopup;
   /** Advances a recurring task not advanced (GLOSSARY: 未自动重复, #93). */
@@ -189,6 +199,8 @@ function Fields(props: {
   notNextActionReasons: React.ReactNode;
   /** The dependencies list and search to add (#57). */
   dependencies: React.ReactNode;
+  /** The 所属项目 field (#146). */
+  projectOfTask: React.ReactNode;
   /** For block reference custom properties (#115). */
   blockRefs: BlockRefsDeps;
   /** Opens the recurrence rule popup (#95). */
@@ -347,6 +359,9 @@ function Fields(props: {
           />
         </Field>
       )}
+      <Field label={t("Project")} labelId={id("project")}>
+        {props.projectOfTask}
+      </Field>
       <CustomPropertiesField
         idPrefix={idPrefix}
         properties={props.customProperties}
@@ -454,6 +469,23 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
             onChange={(dependencies) =>
               void actions.setDependencies(dependencies)
             }
+            onSelectTask={props.onSelectTask}
+          />
+        }
+        projectOfTask={
+          <ProjectOfTaskField
+            labelId={`${idPrefix}-project`}
+            taskId={state.task.id}
+            readProjectOfTask={deps.readProjectOfTask}
+            readProjectCandidates={deps.readProjectCandidates}
+            changes={deps.changes}
+            notify={notify}
+            onChange={(project) => void actions.setProjectOfTask(project)}
+            onOpenProject={(projectId) => {
+              // Failures are told by the shared action (#39).
+              taskActions.openBlockInNotes(projectId);
+              props.onOpenedInNotes?.();
+            }}
             onSelectTask={props.onSelectTask}
           />
         }

@@ -48,7 +48,7 @@ export function encodeTaskChanges(
   tag: TaskWriteContext,
 ): RefDataItem[] {
   const refused = tag.invalidated.filter(
-    (key) => key !== "project" && changes[changeFieldOf[key]] !== undefined,
+    (key) => changes[changeFieldOf[key]] !== undefined,
   );
   if (refused.length > 0) throw new InvalidatedPropertyError(refused);
   const items: RefDataItem[] = [];
@@ -142,6 +142,22 @@ export function encodeDependencies(
   };
 }
 
+/**
+ * The 所属项目 value (#146): one reference ID at most, never a block ID
+ * (project-tag), written as dependencies are; `[]` removes it with its
+ * reference (project-tag, round 2).
+ */
+export function encodeProject(
+  refIds: readonly number[],
+  tag: Pick<TaskWriteContext, "language">,
+): RefDataItem {
+  return {
+    name: propertyName("project", tag.language),
+    type: PropType.BlockRefs,
+    value: [...refIds],
+  };
+}
+
 /** A date, or `null` to clear it as tag-operations step 06 did. */
 function dateItem(name: string, date: CalendarDate | null): RefDataItem {
   return date === null
@@ -150,14 +166,8 @@ function dateItem(name: string, date: CalendarDate | null): RefDataItem {
       { name, type: PropType.DateTime, value: localMidnight(date) };
 }
 
-/**
- * The `TaskChanges` field each property is written from. 所属项目 is not
- * among them: it is not written as a task change (#145 only reads it).
- */
-const changeFieldOf: Record<
-  Exclude<PropertyKey, "project">,
-  keyof TaskChanges
-> = {
+/** The `TaskChanges` field each property is written from. */
+const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   status: "status",
   importance: "importance",
   effort: "effort",
@@ -173,6 +183,8 @@ const changeFieldOf: Record<
   dependencyMode: "dependencyMode",
   urgency: "urgency",
   dependencyDelay: "dependencyDelay",
+  // Written apart as dependencies are (encodeProject, project-tag).
+  project: "project",
 };
 
 /**

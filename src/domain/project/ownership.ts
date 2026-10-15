@@ -40,11 +40,52 @@ export interface OwnershipLink {
 function ownProject(
   link: OwnershipLink,
   isProject: (id: ProjectId) => boolean,
-): ProjectId | null {
+): { project: ProjectId; by: "setting" | "block" } | null {
   const set = link.projectSetting?.target ?? null;
-  if (set !== null && set !== link.task.id && isProject(set)) return set;
+  if (set !== null && settingCounts(link, isProject)) {
+    return { project: set, by: "setting" };
+  }
   const block = link.projectBlock;
-  return block !== undefined && isProject(block) ? block : null;
+  return block !== undefined && isProject(block)
+    ? { project: block, by: "block" }
+    : null;
+}
+
+/**
+ * The link's own 所属项目 setting names a project: not stale (GLOSSARY: 所属
+ * 项目), and not the task's own block.
+ */
+export function settingCounts(
+  link: OwnershipLink,
+  isProject: (id: ProjectId) => boolean,
+): boolean {
+  const set = link.projectSetting?.target ?? null;
+  return set !== null && set !== link.task.id && isProject(set);
+}
+
+/** Which link decided a task's project, and how (#146). */
+export interface OwnershipDecision {
+  readonly project: ProjectId;
+  /** Its index in the chain given: 0 is the task itself. */
+  readonly link: number;
+  /** The link's own setting, or its nearest project block. */
+  readonly by: "setting" | "block";
+}
+
+/**
+ * As `owningProject`, saying which link decided and how; `null` for none.
+ */
+export function ownershipDecision(
+  selfAndAncestors: readonly OwnershipLink[],
+  isProject: (id: ProjectId) => boolean,
+): OwnershipDecision | null {
+  // The top task first: the first ownership found decides the branch.
+  for (let i = selfAndAncestors.length - 1; i >= 0; i--) {
+    const link = selfAndAncestors[i];
+    const own = link ? ownProject(link, isProject) : null;
+    if (own !== null) return { ...own, link: i };
+  }
+  return null;
 }
 
 /**
@@ -56,11 +97,5 @@ export function owningProject(
   selfAndAncestors: readonly OwnershipLink[],
   isProject: (id: ProjectId) => boolean,
 ): ProjectId | null {
-  // The top task first: the first ownership found decides the branch.
-  for (let i = selfAndAncestors.length - 1; i >= 0; i--) {
-    const link = selfAndAncestors[i];
-    const project = link ? ownProject(link, isProject) : null;
-    if (project !== null) return project;
-  }
-  return null;
+  return ownershipDecision(selfAndAncestors, isProject)?.project ?? null;
 }

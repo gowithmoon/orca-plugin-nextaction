@@ -303,8 +303,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         }
       }
     }
-    const { dependencyDelay, ...rest } = changes;
+    const { dependencyDelay, project, ...rest } = changes;
     block.task = { ...block.task, ...rest };
+    // 所属项目 (#146): one value replacing every one held, stale ones too,
+    // with a new reference unless it names the block already referenced.
+    if (project !== undefined) {
+      const kept = block.projectValues?.find((v) => v.target === project);
+      block.projectValues =
+        project === null
+          ? []
+          : [kept ?? { refId: nextRefId++, target: project }];
+    }
     // A cleared dependency delay reads back as 0, as decoding does.
     if (dependencyDelay !== undefined) {
       block.task = { ...block.task, dependencyDelay: dependencyDelay ?? 0 };

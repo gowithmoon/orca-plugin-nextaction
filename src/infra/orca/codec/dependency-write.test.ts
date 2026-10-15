@@ -4,6 +4,7 @@ import {
   dependenciesWithout,
   dependentsOf,
   planDependencyWrite,
+  planProjectWrite,
 } from "./dependency-write";
 
 const zhTagId = tagBlocks.zh.id;
@@ -56,6 +57,45 @@ describe("planDependencyWrite", () => {
     expect(
       planDependencyWrite(blocks.zhDefaultsOnly, zhTagId, [201, 201]),
     ).toEqual([{ kind: "new", target: 201 }]);
+  });
+});
+
+describe("planProjectWrite", () => {
+  /**
+   * A task whose 所属项目 holds `value`, as T1 of the project-tag spike:
+   * reference 55 points at the project block 89; 56 is a dependency's.
+   */
+  const task = (value: unknown) => ({
+    refs: [
+      {
+        id: 50,
+        type: 2,
+        to: zhTagId,
+        data: [
+          { name: "所属项目", value },
+          { name: "依赖", value: [56] },
+        ],
+      },
+      { id: 55, type: 3, to: 89 },
+      { id: 56, type: 3, to: 120 },
+    ],
+  });
+
+  it("keeps the reference of the project already set", () => {
+    expect(planProjectWrite(task([55]), zhTagId, 89)).toEqual([
+      { kind: "existing", refId: 55 },
+    ]);
+  });
+
+  it("creates a reference for another project, the old value left out", () => {
+    // 120 is referenced as a dependency, not as the project.
+    expect(planProjectWrite(task([55]), zhTagId, 120)).toEqual([
+      { kind: "new", target: 120 },
+    ]);
+  });
+
+  it("writes nothing for no project, a stale value going with it", () => {
+    expect(planProjectWrite(task([77]), zhTagId, null)).toEqual([]);
   });
 });
 

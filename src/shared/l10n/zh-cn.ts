@@ -568,6 +568,18 @@ const zhCN: Record<string, string> = {
   "${count} tasks not done yet": "还有 ${count} 个任务未完成",
   "${count} tasks": "${count} 个任务",
   "Starts ${date}": "${date} 开始",
+  // The task panel's 所属项目 (#146).
+  Project: "所属项目",
+  "· From its location": "· 来自所在位置",
+  "· From parent task": "· 来自父任务",
+  "Not in effect": "不生效",
+  "(No longer a project)": "（已不是项目）",
+  "Remove project": "移除所属项目",
+  "Search projects": "搜索项目",
+  "Set a project": "设定所属项目",
+  "Change project": "改设所属项目",
+  "Could not read the project of the task: ${reason}":
+    "无法读取任务的所属项目：${reason}",
 };
 
 export default zhCN;
