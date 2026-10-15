@@ -2,6 +2,7 @@
 // one. Parent task first: going down from the top task, the first task with
 // an ownership decides for itself and every descendant task. A task's own
 // ownership is its set project, or else its nearest project block. Pure.
+import type { TaskId } from "../task/task";
 import type { ProjectId } from "./project";
 
 /**
@@ -16,12 +17,12 @@ export interface ProjectSetting {
    * reference. Either way it counts only while it is a project (stale
    * otherwise).
    */
-  readonly target: number | null;
+  readonly target: ProjectId | null;
 }
 
 /** What one task in a chain says about its own ownership. */
 export interface OwnershipLink {
-  readonly task: { readonly id: number };
+  readonly task: { readonly id: TaskId };
   /** Its own 所属项目 setting; absent when it has none. */
   readonly projectSetting?: ProjectSetting;
   /**
