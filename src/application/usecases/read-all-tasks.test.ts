@@ -1512,3 +1512,177 @@ describe("read all tasks: the project on a card", () => {
     ]);
   });
 });
+
+describe("read all tasks: project rows sorted", () => {
+  const day = (month: number, d: number) => ({ year: 2026, month, day: d });
+
+  it("by due day orders a project row by its own due day among the top-level tasks, its tasks kept in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo", due: day(10, 20) });
+    repository.addProject({ id: 2, status: "active", due: day(10, 15) });
+    repository.addTask(
+      { id: 3, status: "todo", due: day(10, 30) },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", due: day(10, 1) },
+      { parentId: 2 },
+    );
+    repository.addTask({ id: 5, status: "todo", due: day(10, 12) });
+    repository.addProject({ id: 6, status: "active" });
+    repository.addTask({ id: 7, status: "todo" });
+
+    const read = await readAllTasks({ sort: "due" });
+
+    expect(shape(read.tree)).toEqual([5, ["P2", [3, 4]], 1, "P6", 7]);
+  });
+
+  it("by score scores a project row by the same formula, at the default effort, from its own start", async () => {
+    const { repository, readAllTasks } = setup();
+    // Scores on 2026-10-09: 1 is 54.75; 2 (importance 7) 64.75; 3 (due
+    // today, effort 7) 67.39; project 4 (due today) 77.5; project 5
+    // (starts in 20 days) 36.75.
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "todo", importance: 7 });
+    repository.addTask({ id: 3, status: "todo", due: day(10, 9), effort: 7 });
+    repository.addProject({ id: 4, status: "paused", due: day(10, 9) });
+    repository.addProject({ id: 5, status: "active", start: day(10, 29) });
+
+    const read = await readAllTasks({ sort: "score" });
+
+    expect(shape(read.tree)).toEqual(["P4", 3, 2, 1, "P5"]);
+  });
+
+  it("by capture time orders a project row by when its block was created", async () => {
+    const { repository, readAllTasks } = setup();
+    const at = (iso: string) => new Date(iso);
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      created: at("2026-10-01T09:00:00Z"),
+    });
+    repository.addProject({
+      id: 2,
+      status: "active",
+      created: at("2026-10-05T09:00:00Z"),
+    });
+    repository.addTask(
+      { id: 3, status: "todo", created: at("2026-10-08T09:00:00Z") },
+      { parentId: 2 },
+    );
+    repository.addTask({
+      id: 4,
+      status: "todo",
+      created: at("2026-10-03T09:00:00Z"),
+    });
+
+    const read = await readAllTasks({ sort: "captured" });
+
+    expect(shape(read.tree)).toEqual([["P2", [3]], 4, 1]);
+  });
+});
+
+describe("read all tasks: project rows filtered and searched", () => {
+  it("lists under a project row only the tasks let through, and hides a row with none", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask({ id: 6, status: "inbox" }, { parentId: 5 });
+    repository.addProject({ id: 7, status: "active" });
+    repository.addTask({ id: 8, status: "todo" });
+
+    const read = await readAllTasks({ filter: { statuses: ["todo"] } });
+
+    expect(shape(read.tree)).toEqual([["P1", [2, [3, [4]]]], 8]);
+    expect(fades(read.tree)).toEqual([
+      ["P1", null],
+      [2, null],
+      [3, "ancestor"],
+      [4, null],
+      [8, null],
+    ]);
+    expect(read.matchCount).toBe(3);
+  });
+
+  it("by search text matching the project name lists every task under its row, the other dimensions still applying", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, text: "Move House", status: "active" });
+    repository.addTask(
+      { id: 2, text: "Pack books", status: "todo" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, text: "Book van", status: "inbox" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, text: "Label boxes", status: "todo" },
+      { parentId: 3 },
+    );
+    repository.addProject({ id: 5, text: "Garden", status: "active" });
+    repository.addTask(
+      { id: 6, text: "Move plants", status: "todo" },
+      { parentId: 5 },
+    );
+    repository.addTask(
+      { id: 7, text: "Rake leaves", status: "todo" },
+      { parentId: 5 },
+    );
+    repository.addTask({ id: 8, text: "Call mum", status: "todo" });
+
+    const searched = await readAllTasks({ search: "move house" });
+    const narrowed = await readAllTasks({
+      search: "move",
+      filter: { statuses: ["todo"] },
+    });
+
+    expect(shape(searched.tree)).toEqual([["P1", [2, [3, [4]]]]]);
+    expect(searched.matchCount).toBe(3);
+    // Project 1 by its name, with only its tasks to do; project 5 by a task.
+    expect(shape(narrowed.tree)).toEqual([
+      ["P1", [2, [3, [4]]]],
+      ["P5", [6]],
+    ]);
+    expect(fades(narrowed.tree)).toContainEqual([3, "ancestor"]);
+    expect(narrowed.matchCount).toBe(3);
+  });
+
+  it("by status looks only at the tasks' statuses, never the project's", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "someday" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addProject({ id: 3, status: "active" });
+    repository.addTask({ id: 4, status: "someday" }, { parentId: 3 });
+
+    const read = await readAllTasks({ filter: { statuses: ["todo"] } });
+
+    expect(shape(read.tree)).toEqual([["P1", [2]]]);
+    expect(fades(read.tree)).toEqual([
+      ["P1", null],
+      [2, null],
+    ]);
+    expect(read.matchCount).toBe(1);
+  });
+
+  it("by search text finds a finished project in the done section by its name", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "done" });
+    repository.addTask(
+      { id: 2, text: "Pack books", status: "done" },
+      { parentId: 1, ...completedOn("2026-10-08") },
+    );
+    repository.addProject({ id: 3, text: "Garden", status: "done" });
+    repository.addTask(
+      { id: 4, text: "Rake leaves", status: "done" },
+      { parentId: 3, ...completedOn("2026-10-08") },
+    );
+
+    const read = await readAllTasks({ search: "house" });
+
+    expect(doneIds(read)).toEqual(["P1"]);
+    expect(read.matchCount).toBe(0);
+  });
+});
