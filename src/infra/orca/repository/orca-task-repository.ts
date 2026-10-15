@@ -18,6 +18,7 @@ import type {
 } from "../../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
+import type { ProjectSetting } from "../../../domain/project/ownership";
 import type { Project } from "../../../domain/project/project";
 import {
   lastCompletion as lastCompletionIn,
@@ -71,6 +72,7 @@ import {
   findTaskTagRef,
   isOrphan,
   mirrorSourceId,
+  projectSettingOf,
   resolveDependencyTargets,
   type TaskTagContext,
   taskText,
@@ -650,12 +652,17 @@ export function createOrcaTaskRepository(
       readingTag(state, definitions),
     ]);
     const tasks: Task[] = [];
+    /** Each task's own 所属项目 setting, from the block already read (#145). */
+    const projectSettings = new Map<number, ProjectSetting>();
     for (const id of ids) {
       const block = blocks.get(id);
       if (!block) continue;
       const decoded = decodeTask(block, context);
       // As in queryTasks: a mirror or an orphan is not expected here.
-      if (decoded.kind === "task") tasks.push(decoded.task);
+      if (decoded.kind !== "task") continue;
+      tasks.push(decoded.task);
+      const setting = projectSettingOf(block, context);
+      if (setting) projectSettings.set(id, setting);
     }
     // Mirrors among the dependency targets read as their sources, so the
     // task graph sees a dependency on a mirror as one on its task (#57).
@@ -724,6 +731,10 @@ export function createOrcaTaskRepository(
           ...(block && block.parent == null && { root: true }),
           ...(place?.projectBlock !== undefined && {
             projectBlock: place.projectBlock,
+          }),
+          // Stale or not, as read; the task graph decides whether it counts.
+          ...(projectSettings.has(task.id) && {
+            projectSetting: projectSettings.get(task.id),
           }),
         };
       }),

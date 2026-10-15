@@ -24,11 +24,16 @@ const statusColors = {
   done: "#4caf50",
 } as const;
 
-/** The type arguments, given the tag's language and its name in use. */
+/**
+ * The type arguments, given the tag's language, its name in use and the
+ * project tag's name in use (`undefined` while the project tag is not
+ * ready); `undefined` for none.
+ */
 type TypeArgsFor = (
   language: NoteLanguage,
   tagName: string,
-) => Record<string, unknown>;
+  projectTagName: string | undefined,
+) => Record<string, unknown> | undefined;
 
 /** In display order; the index is the property's `pos`. */
 const structure: readonly {
@@ -124,6 +129,17 @@ const structure: readonly {
   // Whole days, no default (#77): empty reads as 0. Written bare, as numbers
   // were in the tag-operations spike.
   { key: "dependencyDelay", type: PropType.Number },
+  // A block reference to the project, single valued by the plugin's own
+  // rule (#145, project-tag). Its scope holds the project tag's name, so
+  // Orca offers only projects, and Orca follows `renameAlias` (project-tag,
+  // round 2). With no project tag ready there is no name to scope to: the
+  // scope is left out, and alignment adds it on a later start.
+  {
+    key: "project",
+    type: PropType.BlockRefs,
+    typeArgs: (_language, _tagName, projectTagName) =>
+      projectTagName === undefined ? undefined : { scope: projectTagName },
+  },
 ];
 
 /**
@@ -132,20 +148,37 @@ const structure: readonly {
 export function taskTagDefinitions(
   language: NoteLanguage,
   tagName: string,
+  projectTagName?: string,
 ): PropertyDefinition[] {
-  return structure.map(({ key, type, typeArgs }, pos) => ({
-    name: propertyName(key, language),
-    type,
-    pos,
-    ...(typeArgs ? { typeArgs: typeArgs(language, tagName) } : {}),
-  }));
+  return structure.map(({ key, type, typeArgs }, pos) => {
+    const args = typeArgs?.(language, tagName, projectTagName);
+    return {
+      name: propertyName(key, language),
+      type,
+      pos,
+      ...(args ? { typeArgs: args } : {}),
+    };
+  });
 }
 
-/** The task tag as the shared tag mechanism sees it. */
-export const taskTagSchema: TagSchema<PropertyKey> = {
-  keys: propertyKeys,
-  defaultNames: defaultTagNames,
-  propertyName,
-  findPropertyKey,
-  definitions: taskTagDefinitions,
-};
+/**
+ * The task tag as the shared tag mechanism sees it, given where to read the
+ * project tag's name in use (`undefined` while it is not ready).
+ */
+export function taskTagSchemaFor(
+  projectTagName: () => string | undefined,
+): TagSchema<PropertyKey> {
+  return {
+    keys: propertyKeys,
+    defaultNames: defaultTagNames,
+    propertyName,
+    findPropertyKey,
+    definitions: (language, tagName) =>
+      taskTagDefinitions(language, tagName, projectTagName()),
+  };
+}
+
+/** The task tag with no project tag ready: 所属项目 has no scope. */
+export const taskTagSchema: TagSchema<PropertyKey> = taskTagSchemaFor(
+  () => undefined,
+);

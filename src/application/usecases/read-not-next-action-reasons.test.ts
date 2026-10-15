@@ -548,4 +548,29 @@ describe("read not-next-action reasons with projects", () => {
     ]);
     expect(read.projects.size).toBe(0);
   });
+
+  it("names the set project of a task, or of its parent task, as the one not active", async () => {
+    const { repository, readNotNextActionReasons } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "paused" });
+    repository.addTask(
+      { id: 2, text: "Pack", status: "todo" },
+      { project: [1] },
+    );
+    repository.addTask(
+      { id: 3, text: "Boxes", status: "todo" },
+      { parentId: 2 },
+    );
+
+    const read = await readNotNextActionReasons(3);
+
+    expect(read.reasons).toEqual([
+      {
+        kind: "projectNotActive",
+        source: 1,
+        waitingFor: [],
+        status: "paused",
+      },
+    ]);
+    expect(read.projects.get(1)).toEqual({ id: 1, text: "Move house" });
+  });
 });

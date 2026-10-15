@@ -7,7 +7,7 @@ import { noteLanguageFor } from "../infra/orca/codec/names";
 import { createOrcaTaskRepository } from "../infra/orca/repository/orca-task-repository";
 import { projectTagSchema } from "../infra/orca/schema/project-tag-structure";
 import { taskTagNamesFor } from "../infra/orca/schema/task-tag-names";
-import { taskTagSchema } from "../infra/orca/schema/task-tag-structure";
+import { taskTagSchemaFor } from "../infra/orca/schema/task-tag-structure";
 import { systemClock } from "../infra/system-clock";
 import { t } from "../shared/l10n/l10n";
 import { createQuickCaptureCommand } from "../ui/capture/quick-capture-popup";
@@ -110,8 +110,21 @@ export function createTaskTagFeature(
    */
   openQuickCapture: () => void;
 } {
+  // Independent of the task tag (#140): one paused leaves the other working.
+  const projectTag = createTagLifecycle({
+    schema: projectTagSchema,
+    settingKey: "projectTagName",
+    cacheKey: "projectTag",
+    messages: projectTagMessages,
+    logName: "project tag",
+  });
   const tag = createTagLifecycle({
-    schema: taskTagSchema,
+    // 所属项目 is scoped to the project tag's name in use, none while it is
+    // not ready (#145).
+    schema: taskTagSchemaFor(() => {
+      const state = projectTag.state();
+      return state.kind === "ready" ? state.tagName : undefined;
+    }),
     // Both keys are what they were before #141, so existing repos keep their
     // setting and cache.
     settingKey: "taskTagName",
@@ -123,14 +136,6 @@ export function createTaskTagFeature(
     current: () => taskTagNamesFor(tag.state()),
     subscribe: tag.subscribe,
   };
-  // Independent of the task tag (#140): one paused leaves the other working.
-  const projectTag = createTagLifecycle({
-    schema: projectTagSchema,
-    settingKey: "projectTagName",
-    cacheKey: "projectTag",
-    messages: projectTagMessages,
-    logName: "project tag",
-  });
 
   const repository = createOrcaTaskRepository(
     tag.state,
@@ -171,14 +176,18 @@ export function createTaskTagFeature(
       openCapture = () => {};
     });
     const uiLanguage = noteLanguageFor(orca.state.locale);
+    // The project tag first: the task tag's 所属项目 is scoped to its name
+    // (#145), so a new or aligned task tag gets the scope on this start. Its
+    // startup does not touch the task tag; views read once the task tag is
+    // ready, when projects are known.
+    await projectTag.load(context, uiLanguage);
     await tag.load(context, uiLanguage);
-    // Views read again once projects are known, or after a rename (ADR
-    // 0007): the task graph holds none while the tag is starting.
+    // Views read again after a change of the project tag (ADR 0007), such as
+    // a rename.
     context.registry.add(
       `${context.pluginName}.projectTagChanges`,
       projectTag.subscribe(onWritten),
     );
-    await projectTag.load(context, uiLanguage);
   };
 
   const taskTagBlockId = () => {

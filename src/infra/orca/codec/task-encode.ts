@@ -48,7 +48,7 @@ export function encodeTaskChanges(
   tag: TaskWriteContext,
 ): RefDataItem[] {
   const refused = tag.invalidated.filter(
-    (key) => changes[changeFieldOf[key]] !== undefined,
+    (key) => key !== "project" && changes[changeFieldOf[key]] !== undefined,
   );
   if (refused.length > 0) throw new InvalidatedPropertyError(refused);
   const items: RefDataItem[] = [];
@@ -150,8 +150,14 @@ function dateItem(name: string, date: CalendarDate | null): RefDataItem {
       { name, type: PropType.DateTime, value: localMidnight(date) };
 }
 
-/** The `TaskChanges` field each property is written from. */
-const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
+/**
+ * The `TaskChanges` field each property is written from. 所属项目 is not
+ * among them: it is not written as a task change (#145 only reads it).
+ */
+const changeFieldOf: Record<
+  Exclude<PropertyKey, "project">,
+  keyof TaskChanges
+> = {
   status: "status",
   importance: "importance",
   effort: "effort",
