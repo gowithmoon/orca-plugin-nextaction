@@ -18,6 +18,7 @@ import type {
   AllTasksRead,
   DoneSection,
   ReadAllTasks,
+  TaskNode,
 } from "../../../application/usecases/read-all-tasks";
 import type { ReadCandidates } from "../../../application/usecases/read-candidates";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
@@ -93,7 +94,26 @@ export interface AllTasksViewDeps {
 
 /** The node or a node below it is a task not done. */
 function holdsOpenTask(node: AllTasksNode): boolean {
-  return node.task.status !== "done" || node.children.some(holdsOpenTask);
+  switch (node.kind) {
+    case "task":
+      return node.task.status !== "done" || node.children.some(holdsOpenTask);
+  }
+}
+
+/** The block a node stands for: what collapsing it records. */
+function nodeId(node: AllTasksNode): TaskId {
+  switch (node.kind) {
+    case "task":
+      return node.task.id;
+  }
+}
+
+/** The node was kept for a selection other than `selected`. */
+function keptBefore(node: AllTasksNode, selected: TaskId | undefined): boolean {
+  switch (node.kind) {
+    case "task":
+      return node.faded === "kept" && node.task.id !== selected;
+  }
 }
 
 /**
@@ -109,8 +129,7 @@ function shownNodes(
   const shown: AllTasksNode[] = [];
   for (const node of nodes) {
     const children = shownNodes(node.children, selected);
-    const keptBefore = node.faded === "kept" && node.task.id !== selected;
-    if (keptBefore) {
+    if (keptBefore(node, selected)) {
       if (children.length > 0)
         shown.push({ ...node, faded: "ancestor", children });
       continue;
@@ -125,10 +144,10 @@ function shownNodes(
   return shown;
 }
 
-/** The tasks of the tree that have children: what "collapse all" collapses. */
+/** The nodes of the tree that have children: what "collapse all" collapses. */
 function parentIds(nodes: readonly AllTasksNode[]): TaskId[] {
   return nodes.flatMap((node) =>
-    node.children.length > 0 ? [node.task.id, ...parentIds(node.children)] : [],
+    node.children.length > 0 ? [nodeId(node), ...parentIds(node.children)] : [],
   );
 }
 
@@ -190,59 +209,86 @@ function TreeNodes(props: {
           : "nextaction-task-tree-children"
       }
     >
-      {props.nodes.map((node) => {
-        const parent = node.children.length > 0;
-        const collapsed = parent && cards.collapsed.has(node.task.id);
-        return (
-          <li key={node.task.id}>
-            {/* Before the card below it; a task the filter hides stays
-                where it is (#71). */}
-            {gaps && <TaskDropGap target={node.task.id} placement="before" />}
-            <div className="nextaction-task-tree-row">
-              {parent ? (
-                <CollapseButton
-                  collapsed={collapsed}
-                  onToggle={() => cards.toggleCollapsed(node.task.id)}
-                />
-              ) : (
-                // Keeps the cards of a level in line, toggle or not.
-                <span
-                  className="nextaction-task-tree-toggle"
-                  aria-hidden="true"
-                />
-              )}
-              {/* Only tree cards are dragged and dropped on, never the done
-                  section's (#70). */}
-              <TaskDropTarget task={node.task}>
-                <TaskCard
-                  task={node.task}
-                  today={cards.today}
-                  actions={cards.actions}
-                  menuItems={cards.menuItems}
-                  menuPlace={cards.menuPlace}
-                  onOpen={(open) => cards.selectTask(open.id)}
-                  selected={node.task.id === cards.selectedTaskId}
-                  // Done or kept: the card's faded "kept" look (#65).
-                  kept={node.faded !== null}
-                  // Only faded: a done task's status icon already says why, and a
-                  // kept one leaves for more reasons than its status.
-                  keptStatusShown={false}
-                  blocked={node.blocked}
-                />
-              </TaskDropTarget>
-            </div>
-            {/* Collapsed, the toggle alone says there is more below. */}
-            {parent && !collapsed && (
-              <TreeNodes nodes={node.children} cards={cards} />
-            )}
-            {/* The bottom gap: after the last top-level task. */}
-            {props.top && gaps && node === last && (
-              <TaskDropGap target={node.task.id} placement="after" />
-            )}
-          </li>
-        );
-      })}
+      {props.nodes.map((node) => (
+        <TreeItem
+          key={nodeId(node)}
+          node={node}
+          cards={cards}
+          gaps={gaps}
+          // The bottom gap: after the last top-level node.
+          bottomGap={props.top === true && gaps && node === last}
+        />
+      ))}
     </ul>
+  );
+}
+
+/** What a node's list item is given besides its node. */
+interface TreeItemProps {
+  cards: TreeCards;
+  /** Has a gap to drop in above it. */
+  gaps: boolean;
+  /** Has a gap to drop in below it: the last top-level node. */
+  bottomGap: boolean;
+}
+
+/** A node's list item, as its kind shows it. */
+function TreeItem(props: TreeItemProps & { node: AllTasksNode }) {
+  const { node, ...rest } = props;
+  switch (node.kind) {
+    case "task":
+      return <TaskTreeItem node={node} {...rest} />;
+  }
+}
+
+/** A task node's list item: its card, and its subtree below it. */
+function TaskTreeItem(props: TreeItemProps & { node: TaskNode }) {
+  const { node, cards } = props;
+  const parent = node.children.length > 0;
+  const collapsed = parent && cards.collapsed.has(node.task.id);
+  return (
+    <li>
+      {/* Before the card below it; a task the filter hides stays
+          where it is (#71). */}
+      {props.gaps && <TaskDropGap target={node.task.id} placement="before" />}
+      <div className="nextaction-task-tree-row">
+        {parent ? (
+          <CollapseButton
+            collapsed={collapsed}
+            onToggle={() => cards.toggleCollapsed(node.task.id)}
+          />
+        ) : (
+          // Keeps the cards of a level in line, toggle or not.
+          <span className="nextaction-task-tree-toggle" aria-hidden="true" />
+        )}
+        {/* Only tree cards are dragged and dropped on, never the done
+            section's (#70). */}
+        <TaskDropTarget task={node.task}>
+          <TaskCard
+            task={node.task}
+            today={cards.today}
+            actions={cards.actions}
+            menuItems={cards.menuItems}
+            menuPlace={cards.menuPlace}
+            onOpen={(open) => cards.selectTask(open.id)}
+            selected={node.task.id === cards.selectedTaskId}
+            // Done or kept: the card's faded "kept" look (#65).
+            kept={node.faded !== null}
+            // Only faded: a done task's status icon already says why, and a
+            // kept one leaves for more reasons than its status.
+            keptStatusShown={false}
+            blocked={node.blocked}
+          />
+        </TaskDropTarget>
+      </div>
+      {/* Collapsed, the toggle alone says there is more below. */}
+      {parent && !collapsed && (
+        <TreeNodes nodes={node.children} cards={cards} />
+      )}
+      {props.bottomGap && (
+        <TaskDropGap target={node.task.id} placement="after" />
+      )}
+    </li>
   );
 }
 

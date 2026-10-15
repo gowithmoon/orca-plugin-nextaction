@@ -34,11 +34,24 @@ import type { TaskRepository } from "../ports/task-repository";
  */
 export type FadeReason = "done" | "kept" | "ancestor";
 
-/** A task in the tree. */
-export interface AllTasksNode {
-  readonly task: Task;
+/**
+ * A node in the tree, told apart by `kind`. Every consumer branches on it, so
+ * another kind of node (the project row, #140) is one more branch.
+ */
+export type AllTasksNode = TaskNode;
+
+/** What every kind of node has. */
+interface TreeNode {
   /** Why it is faded; `null` when it is not. */
   readonly faded: FadeReason | null;
+  /** The nodes below it in the tree, in note order. */
+  readonly children: readonly AllTasksNode[];
+}
+
+/** A task in the tree (GLOSSARY: 任务卡片). */
+export interface TaskNode extends TreeNode {
+  readonly kind: "task";
+  readonly task: Task;
   /**
    * Marked blocked (GLOSSARY: 阻塞): to do or in progress, and held back by a
    * dependency, a sequential parent or a dependency cycle, its own or passed
@@ -46,8 +59,6 @@ export interface AllTasksNode {
    * subtasks show right under it.
    */
   readonly blocked: boolean;
-  /** Its subtasks in the tree, in note order. */
-  readonly children: readonly AllTasksNode[];
 }
 
 /** The done section (GLOSSARY: 已完成区), below the tree. */
@@ -174,7 +185,7 @@ function byDay(
   return sign * compareDays(a, b);
 }
 
-type NodeOrder = (a: AllTasksNode, b: AllTasksNode) => number;
+type NodeOrder = (a: TaskNode, b: TaskNode) => number;
 
 /**
  * How top-level nodes compare for `sort` run `direction`; `null` for note
@@ -245,8 +256,9 @@ interface NodeContext {
   readonly keep: TaskId | undefined;
 }
 
-function node(context: NodeContext, item: SnapshotTask): AllTasksNode {
+function node(context: NodeContext, item: SnapshotTask): TaskNode {
   return {
+    kind: "task",
     task: item.task,
     faded: item.task.status === "done" ? "done" : null,
     blocked: marksBlocked(context.graph.entry(item.task.id)),
@@ -263,7 +275,7 @@ function node(context: NodeContext, item: SnapshotTask): AllTasksNode {
 function keptPath(
   context: NodeContext,
   item: SnapshotTask,
-): AllTasksNode | undefined {
+): TaskNode | undefined {
   if (item.task.id === context.keep) {
     return { ...node(context, item), faded: "kept", children: [] };
   }
@@ -316,7 +328,7 @@ function shownNode(
   narrow: Narrowing,
   item: SnapshotTask,
   counted: { matches: number },
-): AllTasksNode | undefined {
+): TaskNode | undefined {
   const below = context.tree
     .childrenOf(item.task.id)
     .flatMap((child) => shownNode(context, narrow, child, counted) ?? []);
@@ -338,12 +350,12 @@ function shownNode(
 function narrowedTree(
   context: NodeContext,
   narrow: Narrowing,
-): { tree: AllTasksNode[]; matchCount: number; done: SnapshotTask[] } {
+): { tree: TaskNode[]; matchCount: number; done: SnapshotTask[] } {
   // A top-level task done with all its descendant tasks belongs to the done
   // section (GLOSSARY: 已完成区); every other task stays in its place. Only a
   // task still in the snapshot is kept: a block no longer a task is not.
   const counted = { matches: 0 };
-  const tree: AllTasksNode[] = [];
+  const tree: TaskNode[] = [];
   const done: SnapshotTask[] = [];
   for (const item of context.tree.topLevel) {
     if (holdsOpen(context.tree, item)) {

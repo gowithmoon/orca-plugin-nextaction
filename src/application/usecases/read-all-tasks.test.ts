@@ -50,6 +50,21 @@ describe("read all tasks", () => {
     expect(shape(read.tree)).toEqual([2, 4, 1, 5, 3]);
   });
 
+  it("marks every node in the tree, subtasks too, as a task node", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 2 });
+
+    const read = await readAllTasks();
+
+    expect(kinds(read.tree)).toEqual([
+      [1, "task"],
+      [2, "task"],
+      [3, "task"],
+    ]);
+  });
+
   it("puts each subtask under its parent task, plain blocks in between not counting", async () => {
     const { repository, readAllTasks } = setup();
     // A page task (no parent block) holding a plain block holding a task.
@@ -1035,6 +1050,14 @@ function marks(nodes: readonly AllTasksNode[]): [TaskId, boolean][] {
   return nodes.flatMap((node) => [
     [node.task.id, node.blocked] as [TaskId, boolean],
     ...marks(node.children),
+  ]);
+}
+
+/** Every node in the tree, depth first, with its kind. */
+function kinds(nodes: readonly AllTasksNode[]): [TaskId, string][] {
+  return nodes.flatMap((node) => [
+    [node.task.id, node.kind] as [TaskId, string],
+    ...kinds(node.children),
   ]);
 }
 
