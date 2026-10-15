@@ -528,7 +528,7 @@ export const componentCss = `
 
 /*
  * The project row (GLOSSARY: 项目行, #147): a heading over its tasks, no card
- * border. The status icon, the name in bold and the percent on one line, a
+ * border. The status icon, the name in bold and the progress on one line, a
  * thin progress bar under them, then what needs noticing, all indented to
  * the name.
  */
@@ -582,7 +582,7 @@ export const componentCss = `
   user-select: text;
 }
 
-.nextaction-project-row-percent {
+.nextaction-project-row-progress-value {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-xs);

@@ -661,9 +661,12 @@ export function createOrcaTaskRepository(
   const readProjects = async (): Promise<{
     projects: Project[];
     blocks: Map<number, Block>;
+    paused?: true;
   }> => {
     const state = projectTagState();
-    if (state.kind !== "ready") return { projects: [], blocks: new Map() };
+    if (state.kind !== "ready") {
+      return { projects: [], blocks: new Map(), paused: true };
+    }
     const ids = blockIdsFromQueryResult(
       await invokeBackend("query", buildProjectQuery(state.tagName)),
     );
@@ -741,6 +744,7 @@ export function createOrcaTaskRepository(
             page: true,
           }),
         })),
+        ...(projectsRead.paused && { projectsPaused: true }),
       };
     }
     const [blocks, context] = await Promise.all([
@@ -757,7 +761,11 @@ export function createOrcaTaskRepository(
       // As in queryTasks: a mirror or an orphan is not expected here.
       if (decoded.kind !== "task") continue;
       tasks.push(decoded.task);
-      const setting = projectSettingOf(block, context);
+      // None while the project tag is paused: no setting then reads as stale
+      // (US103).
+      const setting = projectsRead.paused
+        ? undefined
+        : projectSettingOf(block, context);
       if (setting) projectSettings.set(id, setting);
     }
     // Mirrors among the dependency targets read as their sources, so the
@@ -781,6 +789,7 @@ export function createOrcaTaskRepository(
       projectsRead.projects.map((project) => project.id),
     );
     return {
+      ...(projectsRead.paused && { projectsPaused: true }),
       projects: projectsRead.projects.map((project) => {
         const block = projectsRead.blocks.get(project.id);
         return {

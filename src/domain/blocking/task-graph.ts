@@ -91,6 +91,12 @@ export interface TaskGraphSnapshot {
    * the project tag is paused: then no task belongs to a project.
    */
   readonly projects?: readonly SnapshotProject[];
+  /**
+   * The project tag is paused (#143): no project, and no task holds a
+   * project block or a 所属项目 setting, so none reads as stale. Absent when
+   * it is not.
+   */
+  readonly projectsPaused?: boolean;
 }
 
 export interface TaskGraphOptions {

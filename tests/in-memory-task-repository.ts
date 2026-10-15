@@ -112,6 +112,11 @@ export interface InMemoryTaskRepository extends TaskRepository {
   ): void;
   /** The task tag's choices for contexts or labels (none unless set). */
   setChoices(property: ChoiceProperty, choices: readonly string[]): void;
+  /**
+   * Pauses the project tag (#143), `false` resuming it: the task graph then
+   * holds no project, no project block and no 所属项目 setting.
+   */
+  pauseProjectTag(paused: boolean): void;
   /** Every write from now on fails with `error`; `undefined` stops it. */
   failWrites(error: Error | undefined): void;
   /** How many writes succeeded. */
@@ -199,6 +204,7 @@ function freshProject(id: ProjectId, created: Date): Project {
 export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const blocks = new Map<number, StoredBlock>();
   let failure: Error | undefined;
+  let projectTagPaused = false;
   /** The task tag's choices per property. */
   const choices: Record<ChoiceProperty, string[]> = {
     contexts: [],
@@ -444,6 +450,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       choices[property] = [...values];
     },
 
+    pauseProjectTag(paused) {
+      projectTagPaused = paused;
+    },
+
     failWrites(error) {
       failure = error;
     },
@@ -654,7 +664,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       };
       const projects = [];
       for (const block of blocks.values()) {
-        if (!block.project) continue;
+        if (!block.project || projectTagPaused) continue;
         projects.push({
           project: block.project,
           position: block.position,
@@ -664,7 +674,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       const tasks = [];
       for (const [id, block] of blocks) {
         if (!block.task) continue;
-        const projectBlock = projectBlockOf(id);
+        const projectBlock = projectTagPaused ? undefined : projectBlockOf(id);
         const stored = block.completionHistory;
         const lastCompletion =
           stored?.kind === "readable"
@@ -686,12 +696,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),
           ...(projectBlock !== undefined && { projectBlock }),
-          ...(block.projectValues?.[0] && {
-            projectSetting: block.projectValues[0],
-          }),
+          ...(!projectTagPaused &&
+            block.projectValues?.[0] && {
+              projectSetting: block.projectValues[0],
+            }),
         });
       }
-      return { tasks, projects };
+      return {
+        tasks,
+        projects,
+        ...(projectTagPaused && { projectsPaused: true }),
+      };
     },
 
     async readCandidates() {
@@ -770,6 +785,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     async getProject(id) {
+      if (projectTagPaused) return null;
       return blocks.get(id)?.project ?? null;
     },
 

@@ -1,6 +1,12 @@
 // The task menu's item registrations (GLOSSARY: 任务操作菜单). The menu
 // renders whatever is registered; later steps only append registrations.
 import type { Task, TaskId } from "../../domain/task/task";
+import {
+  createMenuItems,
+  type MenuGroup,
+  type MenuItemBase,
+  type MenuItems,
+} from "../components/menu-items";
 
 /**
  * The plugin panel a task menu was opened in (a right-click on a card).
@@ -12,13 +18,7 @@ export interface TaskMenuPlace {
 }
 
 /** What every entry of the task menu has. */
-interface TaskMenuItemBase {
-  /** Stable identifier, unique within the menu. */
-  readonly id: string;
-  /** Items of one group sit together, lowest group first. */
-  readonly group: number;
-  /** Position within the group, lowest first. */
-  readonly order: number;
+interface TaskMenuItemBase extends MenuItemBase {
   /** Whether the item shows for this task; shown when absent. */
   readonly isShownFor?: (task: Task) => boolean;
 }
@@ -75,52 +75,10 @@ export interface TaskMenuSubmenu {
 }
 
 /** A non-empty group of the menu, in menu order. */
-export interface TaskMenuGroup {
-  readonly group: number;
-  /** Present when the group shows as a submenu. */
-  readonly submenu?: TaskMenuSubmenu;
-  readonly items: readonly TaskMenuItem[];
-}
+export type TaskMenuGroup = MenuGroup<TaskMenuItem, TaskMenuSubmenu>;
 
-export interface TaskMenuItems {
-  /** Adds an item. Throws when its identifier is already registered. */
-  register(item: TaskMenuItem): void;
-  /** Shows `group` as a submenu. Throws when the group already has one. */
-  registerSubmenu(group: number, submenu: TaskMenuSubmenu): void;
-  /** The items shown for `task`, as non-empty groups in menu order. */
-  arrange(task: Task): TaskMenuGroup[];
-}
+export type TaskMenuItems = MenuItems<Task, TaskMenuItem, TaskMenuSubmenu>;
 
 export function createTaskMenuItems(): TaskMenuItems {
-  const items: TaskMenuItem[] = [];
-  const submenus = new Map<number, TaskMenuSubmenu>();
-  return {
-    register(item) {
-      if (items.some((existing) => existing.id === item.id)) {
-        throw new Error(`Task menu item "${item.id}" is already registered`);
-      }
-      items.push(item);
-    },
-    registerSubmenu(group, submenu) {
-      if (submenus.has(group)) {
-        throw new Error(`Task menu group ${group} already has a submenu`);
-      }
-      submenus.set(group, submenu);
-    },
-    arrange(task) {
-      const shown = items
-        .filter((item) => item.isShownFor?.(task) ?? true)
-        .sort((a, b) => a.group - b.group || a.order - b.order);
-      const groups: { group: number; items: TaskMenuItem[] }[] = [];
-      for (const item of shown) {
-        const last = groups.at(-1);
-        if (last?.group === item.group) last.items.push(item);
-        else groups.push({ group: item.group, items: [item] });
-      }
-      return groups.map((entry) => {
-        const submenu = submenus.get(entry.group);
-        return submenu ? { ...entry, submenu } : entry;
-      });
-    },
-  };
+  return createMenuItems("Task menu");
 }

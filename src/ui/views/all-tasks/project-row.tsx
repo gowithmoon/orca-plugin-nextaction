@@ -19,8 +19,11 @@ import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import { ProjectMenu } from "../../project-menu/project-menu";
 import { projectStatusIcons } from "../../project-menu/project-status-icons";
 
-/** The progress as a whole percent, rounded down: 100 only when all is done. */
-function percent(progress: ProjectProgress): number | null {
+/**
+ * The progress shown, out of 100 and rounded down: 100 only when all is
+ * done; `null` for no progress.
+ */
+function progressValue(progress: ProjectProgress): number | null {
   if (progress.kind !== "measured") return null;
   return Math.floor((100 * progress.done) / progress.total);
 }
@@ -122,7 +125,7 @@ export function ProjectRow(props: ProjectRowProps) {
   const { Tooltip } = orca.components;
   const icon = projectStatusIcons[project.status];
   const status = projectStatusLabel(project.status);
-  const pct = inDone ? null : percent(node.progress);
+  const shownProgress = inDone ? null : progressValue(node.progress);
   const name = project.text.trim() === "" ? t("(No text)") : project.text;
 
   const row = (open?: (event: React.MouseEvent) => void, shown?: boolean) => (
@@ -183,8 +186,8 @@ export function ProjectRow(props: ProjectRowProps) {
         <span className="nextaction-project-row-name" title={name}>
           {name}
         </span>
-        {pct !== null && (
-          <span className="nextaction-project-row-percent">{`${pct}%`}</span>
+        {shownProgress !== null && (
+          <span className="nextaction-project-row-progress-value">{`${shownProgress}%`}</span>
         )}
         <Tooltip text={t("Open in notes")}>
           <button
@@ -200,16 +203,16 @@ export function ProjectRow(props: ProjectRowProps) {
           </button>
         </Tooltip>
       </div>
-      {pct !== null && (
+      {shownProgress !== null && (
         <div
           className="nextaction-project-row-bar"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={pct}
+          aria-valuenow={shownProgress}
           aria-label={t("Progress")}
         >
-          <i style={{ width: `${pct}%` }} />
+          <i style={{ width: `${shownProgress}%` }} />
         </div>
       )}
       <ProjectMeta node={node} today={today} inDone={inDone} />

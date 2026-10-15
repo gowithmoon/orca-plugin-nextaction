@@ -26,8 +26,8 @@ export interface ProjectShown {
  * - `own`: its own setting.
  * - `location`: its nearest project block; setting one of its own changes it.
  * - `parentTask`: an ancestor task's ownership decides the branch (by its
- *   setting, or a project block the task is not in); `task` is that
- *   ancestor. Read only: the task's own setting would not count.
+ *   setting, or its nearest project block, the task's too or not); `task`
+ *   is that ancestor. Read only: the task's own setting would not count.
  */
 export type ProjectOfTaskSource =
   | { readonly kind: "own" | "location" }
@@ -53,6 +53,11 @@ export interface ProjectOfTaskRead {
   readonly source: ProjectOfTaskSource | null;
   /** `null` when the task has no setting of its own, or it decides. */
   readonly ownSetting: OwnSettingShown | null;
+  /**
+   * The project tag is paused (US103): the task belongs to no project and
+   * nothing can be set or cleared. Absent when it is not.
+   */
+  readonly projectsPaused?: true;
 }
 
 /** Reads the 所属项目 of task `id`, from one read. Errors are thrown as they are. */
@@ -63,6 +68,14 @@ export function createReadProjectOfTask(deps: {
 }): ReadProjectOfTask {
   return async (id) => {
     const snapshot = await deps.repository.readTaskGraph();
+    if (snapshot.projectsPaused) {
+      return {
+        project: null,
+        source: null,
+        ownSetting: null,
+        projectsPaused: true,
+      };
+    }
     const tasks = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
     const projects = new Map(
       (snapshot.projects ?? []).map(({ project }) => [
@@ -89,19 +102,18 @@ export function createReadProjectOfTask(deps: {
     let source: ProjectOfTaskSource | null = null;
     if (decision !== null) {
       const decider = chain[decision.link];
+      // An ancestor task decides even when it is by a project block the task
+      // sits in too: the task's own setting would not count (US18, US90).
       source =
         decision.link === 0
           ? { kind: decision.by === "setting" ? "own" : "location" }
-          : // The branch's project block is the task's own too.
-            decision.by === "block" && self.projectBlock === decision.project
-            ? { kind: "location" }
-            : {
-                kind: "parentTask",
-                task: {
-                  id: decider?.task.id ?? id,
-                  text: decider?.task.text ?? "",
-                },
-              };
+          : {
+              kind: "parentTask",
+              task: {
+                id: decider?.task.id ?? id,
+                text: decider?.task.text ?? "",
+              },
+            };
     }
     let ownSetting: OwnSettingShown | null = null;
     const target = self.projectSetting?.target ?? null;

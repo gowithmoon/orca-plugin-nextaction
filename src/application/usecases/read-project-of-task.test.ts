@@ -38,12 +38,31 @@ describe("read the project of a task", () => {
     const { repository, readProjectOfTask } = setup();
     repository.addProject(moveHouse);
     repository.addTask({ id: 1 }, { parentId: 10 });
-    // Its subtask sits in the same project block: still its location.
-    repository.addTask({ id: 2 }, { parentId: 1 });
 
-    expect((await readProjectOfTask(1)).source).toEqual({ kind: "location" });
-    expect((await readProjectOfTask(2)).source).toEqual({ kind: "location" });
-    expect((await readProjectOfTask(2)).project).toEqual(moveHouse);
+    expect(await readProjectOfTask(1)).toEqual({
+      project: moveHouse,
+      source: { kind: "location" },
+      ownSetting: null,
+    });
+  });
+
+  it("a subtask in its parent task's project block reads as decided by the parent task", async () => {
+    const { repository, readProjectOfTask } = setup();
+    repository.addProject(moveHouse);
+    repository.addProject({ id: 11, text: "Year-end trip", status: "paused" });
+    repository.addTask({ id: 1, text: "Renovation plan" }, { parentId: 10 });
+    // Same project block as its parent task, but the parent task decides:
+    // its own setting would not count, so it is read only and not in effect.
+    repository.addTask({ id: 2 }, { parentId: 1, project: [11] });
+
+    expect(await readProjectOfTask(2)).toEqual({
+      project: moveHouse,
+      source: { kind: "parentTask", task: { id: 1, text: "Renovation plan" } },
+      ownSetting: {
+        kind: "overridden",
+        project: { id: 11, text: "Year-end trip", status: "paused" },
+      },
+    });
   });
 
   it("a parent task's setting decides: the task's own setting does not count", async () => {
@@ -73,7 +92,10 @@ describe("read the project of a task", () => {
     repository.addProject({ id: 11, text: "Kitchen" }, { parentId: 1 });
     repository.addTask({ id: 3 }, { parentId: 11 });
 
-    expect((await readProjectOfTask(2)).source).toEqual({ kind: "location" });
+    expect((await readProjectOfTask(2)).source).toEqual({
+      kind: "parentTask",
+      task: { id: 1, text: "Renovation plan" },
+    });
     expect(await readProjectOfTask(3)).toMatchObject({
       project: moveHouse,
       source: { kind: "parentTask", task: { id: 1, text: "Renovation plan" } },
@@ -97,6 +119,20 @@ describe("read the project of a task", () => {
       project: null,
       source: null,
       ownSetting: { kind: "stale" },
+    });
+  });
+
+  it("while the project tag is paused, a task reads as belonging to no project, nothing to set", async () => {
+    const { repository, readProjectOfTask } = setup();
+    repository.addProject(moveHouse);
+    repository.addTask({ id: 1 }, { parentId: 10, project: [10] });
+    repository.pauseProjectTag(true);
+
+    expect(await readProjectOfTask(1)).toEqual({
+      project: null,
+      source: null,
+      ownSetting: null,
+      projectsPaused: true,
     });
   });
 
