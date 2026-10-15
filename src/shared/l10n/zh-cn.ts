@@ -580,6 +580,9 @@ const zhCN: Record<string, string> = {
   "Change project": "改设所属项目",
   "Could not read the project of the task: ${reason}":
     "无法读取任务的所属项目：${reason}",
+  // Quick capture's 所属项目 (#151).
+  "No project": "无所属项目",
+  "Could not read the projects: ${reason}": "无法读取项目：${reason}",
 };
 
 export default zhCN;

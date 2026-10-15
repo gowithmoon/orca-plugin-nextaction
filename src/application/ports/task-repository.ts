@@ -108,15 +108,15 @@ export type ConvertToTaskResult =
 
 /**
  * Properties a quick capture sets on the new task (GLOSSARY: 快速捕获). Those
- * not given take their defaults: importance, urgency and effort 4, no dates.
- * Taken from `TaskChanges`, so the two cannot drift; a new task has no date to
- * clear, so the dates are never `null`.
+ * not given take their defaults: importance, urgency and effort 4, no dates,
+ * no 所属项目 (#151). Taken from `TaskChanges`, so the two cannot drift; a new
+ * task has nothing to clear, so none is ever `null`.
  */
 export type InitialProperties = Pick<
   TaskChanges,
   "importance" | "urgency" | "effort"
 > & {
-  readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
+  readonly [K in "start" | "due" | "project"]?: NonNullable<TaskChanges[K]>;
 };
 
 /**
@@ -274,8 +274,9 @@ export interface TaskRepository {
    * Creates an inbox task with `text`, as plain text, at the end of the
    * journal of the calendar day `now` falls on in local time (not the logical
    * day, ADR 0005), creating that journal if it does not exist yet, with the
-   * `initial` properties given. The user undoes it, properties included, with
-   * one undo. Returns the new task's ID.
+   * `initial` properties given, a 所属项目 among them (#151). The user undoes
+   * it, properties included, with one undo; a failed write leaves no task.
+   * Returns the new task's ID.
    */
   appendTaskToJournal(
     text: string,
