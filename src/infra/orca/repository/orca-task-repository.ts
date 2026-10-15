@@ -1375,6 +1375,16 @@ export function createOrcaTaskRepository(
         language: state.language,
         invalidated: state.invalidated,
       });
+      // 所属项目 (#151): not in `items`, as insertTag cannot write a block
+      // reference value (project-tag); a mirror resolved to its source first,
+      // as every block ID is (block-properties-json M3).
+      const projectTarget =
+        initial.project === undefined
+          ? undefined
+          : resolveDependencyTargets(
+              [initial.project],
+              await getBlocks([initial.project]),
+            )[0];
       // A local-time Date picks the journal by local date, and a missing
       // journal is created (journal-capture J2, J3). This runs outside the
       // group below, so a journal it creates is not removed by the one undo;
@@ -1412,6 +1422,19 @@ export function createOrcaTaskRepository(
             state.tagName,
             ...(items.length > 0 ? [items] : []),
           );
+          // Then 所属项目 in the same group, written as the task panel writes
+          // it: insertBlock, insertTag, createRef and setRefData are one
+          // undo (project-tag, round 2).
+          if (projectTarget !== undefined) {
+            const created = (await getBlocks([id])).get(id);
+            if (!created) throw new OrcaError(`block ${id} was not created`);
+            await runRefDataWrite(
+              created,
+              state.tagBlockId,
+              planProjectWrite(created, state.tagBlockId, projectTarget),
+              (ids) => encodeProject(ids, { language: state.language }),
+            );
+          }
         });
       } finally {
         if (typeof id === "number") onWritten(id);

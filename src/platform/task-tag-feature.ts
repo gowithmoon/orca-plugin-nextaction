@@ -3,6 +3,7 @@ import type { TaskRepository } from "../application/ports/task-repository";
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createConvertToTask } from "../application/usecases/convert-to-task";
 import { createQuickCapture } from "../application/usecases/quick-capture";
+import { createReadProjectCandidates } from "../application/usecases/read-project-candidates";
 import type { CalendarDate } from "../domain/task/task";
 import { noteLanguageFor } from "../infra/orca/codec/names";
 import { createOrcaTaskRepository } from "../infra/orca/repository/orca-task-repository";
@@ -174,6 +175,7 @@ export function createTaskTagFeature(
     const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
     const quickCapture = createQuickCaptureCommand(
       createQuickCapture({ repository, clock: systemClock }),
+      createReadProjectCandidates({ repository }),
       context.pluginName,
       today,
       captureRoot.render,
