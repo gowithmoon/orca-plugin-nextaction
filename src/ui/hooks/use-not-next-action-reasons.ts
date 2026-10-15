@@ -17,6 +17,7 @@ import { createLatestRead } from "./latest-read";
 const none: NotNextActionReasonsRead = {
   reasons: [],
   tasks: new Map(),
+  projects: new Map(),
   dependencies: [],
 };
 

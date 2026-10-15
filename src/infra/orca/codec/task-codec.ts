@@ -186,7 +186,7 @@ export function taskText(block: Pick<RawBlock, "content" | "aliases">): string {
 // Dates (plugin-panel-writes; ISO strings are accepted too). Anything else reads
 // as empty.
 
-function numberValue(value: unknown): number | null {
+export function numberValue(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
@@ -260,7 +260,7 @@ function choicesValue(value: unknown): string[] {
  * the epoch. Anything else, or an invalid date, reads as the epoch with a
  * warning, so ordering by it never fails.
  */
-function createdValue(blockId: number, value: unknown): Date {
+export function createdValue(blockId: number, value: unknown): Date {
   const at =
     value instanceof Date
       ? value
@@ -276,7 +276,7 @@ function createdValue(blockId: number, value: unknown): Date {
 }
 
 /** The local calendar day of a stored instant (ADR 0012, date-subtype). */
-function dateValue(value: unknown): CalendarDate | null {
+export function dateValue(value: unknown): CalendarDate | null {
   const at =
     value instanceof Date
       ? value

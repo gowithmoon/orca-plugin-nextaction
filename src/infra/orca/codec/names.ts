@@ -30,7 +30,10 @@ export type PropertyKey = (typeof propertyKeys)[number];
 /** The statuses, in option order; the domain's list (no second copy). */
 export const statusKeys = taskStatuses;
 
-type NameTable<K extends string> = Record<K, Record<NoteLanguage, string>>;
+export type NameTable<K extends string> = Record<
+  K,
+  Record<NoteLanguage, string>
+>;
 
 const propertyNames: NameTable<PropertyKey> = {
   status: { zh: "状态", en: "Status" },
@@ -87,7 +90,8 @@ export interface NameMatch<K extends string> {
   language: NoteLanguage;
 }
 
-function findKey<K extends string>(
+/** Which key of `table` a name in the notes stands for, and in which language. */
+export function findKey<K extends string>(
   table: NameTable<K>,
   keys: readonly K[],
   name: string,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { projectTagSchema } from "./project-tag-structure";
 import { planStartup } from "./startup-plan";
 import type { TagSchema } from "./tag-schema";
 import { taskTagSchema } from "./task-tag-structure";
@@ -953,6 +954,158 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         }).action,
       ).toEqual({ kind: "create", tagName: "GTD" });
+    });
+  });
+});
+
+describe("startup plan for the project tag", () => {
+  // Written out by hand from #140 "项目标签的结构": the colors are the task
+  // status colors of the like status (planning as todo, active as doing,
+  // paused as waiting).
+  const zhProjectDefinitions = [
+    {
+      name: "项目状态",
+      type: 6,
+      pos: 0,
+      typeArgs: {
+        subType: "single",
+        defaultEnabled: true,
+        default: "规划中",
+        choices: [
+          { n: "规划中", c: "#2196f3" },
+          { n: "进行中", c: "#ff9800" },
+          { n: "暂停中", c: "#9c27b0" },
+          { n: "将来/也许", c: "#795548" },
+          { n: "已完成", c: "#4caf50" },
+        ],
+      },
+    },
+    { name: "目标", type: 1, pos: 1 },
+    { name: "开始日期", type: 5, pos: 2, typeArgs: { subType: "date" } },
+    { name: "截止日期", type: 5, pos: 3, typeArgs: { subType: "date" } },
+    {
+      name: "重要性",
+      type: 3,
+      pos: 4,
+      typeArgs: { defaultEnabled: true, default: 4 },
+    },
+    {
+      name: "紧急度",
+      type: 3,
+      pos: 5,
+      typeArgs: { defaultEnabled: true, default: 4 },
+    },
+  ];
+
+  it("creates a Chinese project tag with its own definitions", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: undefined,
+        cache: undefined,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: { kind: "create", tagName: "项目" },
+      writes: zhProjectDefinitions,
+    });
+  });
+
+  it("creates an English project tag with English names", () => {
+    const plan = planStartup(projectTagSchema, {
+      tagName: "Project",
+      tagBlock: undefined,
+      cache: undefined,
+      uiLanguage: "en",
+    });
+    expect(plan.writes.map((definition) => definition.name)).toEqual([
+      "Project status",
+      "Goal",
+      "Start",
+      "Due",
+      "Importance",
+      "Urgency",
+    ]);
+    expect(plan.writes[0]?.typeArgs).toEqual({
+      subType: "single",
+      defaultEnabled: true,
+      default: "Planning",
+      choices: [
+        { n: "Planning", c: "#2196f3" },
+        { n: "Active", c: "#ff9800" },
+        { n: "Paused", c: "#9c27b0" },
+        { n: "Someday", c: "#795548" },
+        { n: "Done", c: "#4caf50" },
+      ],
+    });
+  });
+
+  it("takes over a tag of that name with no conflicting property, adding what is missing", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: tagBlock(readBack(zhProjectDefinitions.slice(0, 4))),
+        cache: undefined,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: zhProjectDefinitions.slice(4),
+    });
+  });
+
+  it("refuses a first takeover when a property conflicts", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: tagBlock([{ name: "目标", type: 3, pos: 1, value: null }]),
+        cache: undefined,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: { kind: "refuse", conflicts: ["goal"], language: "zh" },
+      writes: [],
+    });
+  });
+
+  it("invalidates a property changed to another type on a tag already taken over", () => {
+    const changed = readBack(zhProjectDefinitions).map((definition) =>
+      definition.name === "重要性" ? { ...definition, type: 1 } : definition,
+    );
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: tagBlock(changed),
+        cache: { tagBlockId: 211, tagName: "项目" },
+        uiLanguage: "zh",
+      }).action,
+    ).toEqual({
+      kind: "use",
+      tagBlockId: 211,
+      invalidated: ["importance"],
+      language: "zh",
+    });
+  });
+
+  it("renames the cached project tag when the name was changed while the plugin was off", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "PRJ",
+        tagBlock: undefined,
+        cache: { tagBlockId: 211, tagName: "项目" },
+        cachedBlock: tagBlock(readBack(zhProjectDefinitions), 211, ["项目"]),
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: {
+        kind: "rename",
+        from: "项目",
+        to: "PRJ",
+        tagBlockId: 211,
+        invalidated: [],
+        language: "zh",
+      },
+      writes: [],
     });
   });
 });

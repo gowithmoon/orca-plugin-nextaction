@@ -18,6 +18,7 @@ import type {
 } from "../../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
+import type { Project } from "../../../domain/project/project";
 import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
@@ -55,6 +56,7 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
+import { decodeProject } from "../codec/project-codec";
 import {
   planRecurrenceDiscard,
   planRecurrenceWrite,
@@ -92,13 +94,14 @@ import {
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { buildBlockSearchQuery } from "../query/block-search-query";
+import { buildProjectQuery } from "../query/project-query";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
 import { RefType } from "../ref-type";
 import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
 import type { PropertyDefinition } from "../schema/tag-schema";
-import type { TaskTagState } from "../schema/tag-state";
+import type { ProjectTagState, TaskTagState } from "../schema/tag-state";
 import {
   type HierarchyBlock,
   missingParents,
@@ -374,10 +377,16 @@ function myDayOf(block: Block): MyDayRead | undefined {
  *   properties read as empty and cannot be written.
  * @param onWritten Called after every write to a task, also a failed one
  *   (what Orca applied is then unknown), so views read again (ADR 0007).
+ * @param projectTagState Where the project tag stands (#143). While it is
+ *   paused, the task graph holds no project.
  */
 export function createOrcaTaskRepository(
   tagState: () => TaskTagState,
   onWritten: (id: TaskId) => void,
+  projectTagState: () => ProjectTagState = () => ({
+    kind: "paused",
+    reason: "starting",
+  }),
 ): TaskRepository {
   const readyTag = () => {
     const state = tagState();
@@ -568,6 +577,41 @@ export function createOrcaTaskRepository(
   };
 
   /**
+   * Every project with its block (#143): the query for the project tag, then
+   * get-blocks. None while the project tag is paused: then no task belongs
+   * to a project, and task features go on (ADR 0025).
+   */
+  const readProjects = async (): Promise<{
+    projects: Project[];
+    blocks: Map<number, Block>;
+  }> => {
+    const state = projectTagState();
+    if (state.kind !== "ready") return { projects: [], blocks: new Map() };
+    const ids = blockIdsFromQueryResult(
+      await invokeBackend("query", buildProjectQuery(state.tagName)),
+    );
+    if (ids.length === 0) return { projects: [], blocks: new Map() };
+    const read = await getBlocks(ids);
+    const context = {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    };
+    const projects: Project[] = [];
+    const blocks = new Map<number, Block>();
+    for (const id of ids) {
+      const block = read.get(id);
+      if (!block) continue;
+      const decoded = decodeProject(block, context);
+      // The query asks for blocks carrying the project tag, so a mirror is
+      // not among them (project-tag, round 2).
+      if (decoded.kind !== "project") continue;
+      projects.push(decoded.project);
+      blocks.set(id, block);
+    }
+    return { projects, blocks };
+  };
+
+  /**
    * Every task with its parent task and place in the notes
    * (next-action-hierarchy-boolean-deps): the query for every task, the task
    * blocks with get-blocks, then the ancestors not among them, layer by
@@ -585,8 +629,22 @@ export function createOrcaTaskRepository(
       },
     );
     const definitions = definitionsForReading(state);
+    // Read alongside the tasks; none while the project tag is paused (#143).
+    const projectRead = readProjects();
     const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
-    if (ids.length === 0) return { tasks: [] };
+    const projectsRead = await projectRead;
+    if (ids.length === 0) {
+      return {
+        tasks: [],
+        projects: projectsRead.projects.map((project) => ({
+          project,
+          position: 0,
+          ...(projectsRead.blocks.get(project.id)?.aliases.length && {
+            page: true,
+          }),
+        })),
+      };
+    }
     const [blocks, context] = await Promise.all([
       getBlocks(ids),
       readingTag(state, definitions),
@@ -604,7 +662,8 @@ export function createOrcaTaskRepository(
     const resolved = await withResolvedDependencies(tasks, new Set(ids));
     tasks.splice(0, tasks.length, ...resolved);
     const hierarchy = new Map<number, HierarchyBlock>(blocks);
-    const asked = new Set<number>(ids);
+    for (const [id, block] of projectsRead.blocks) hierarchy.set(id, block);
+    const asked = new Set<number>([...ids, ...projectsRead.blocks.keys()]);
     for (;;) {
       const layer = missingParents(hierarchy, asked);
       if (layer.length === 0) break;
@@ -616,8 +675,17 @@ export function createOrcaTaskRepository(
     const places = placeTasks(
       tasks.map((task) => task.id),
       hierarchy,
+      projectsRead.projects.map((project) => project.id),
     );
     return {
+      projects: projectsRead.projects.map((project) => {
+        const block = projectsRead.blocks.get(project.id);
+        return {
+          project,
+          position: places.get(project.id)?.position ?? Number.MAX_SAFE_INTEGER,
+          ...(block && block.aliases.length > 0 && { page: true }),
+        };
+      }),
       tasks: tasks.map((task) => {
         const place = places.get(task.id);
         // The last completion (skips passed over, #91), from the block already
@@ -654,6 +722,9 @@ export function createOrcaTaskRepository(
           // the notes, where only pages are tasks (ADR 0013, move-blocks P2).
           ...(block && block.aliases.length > 0 && { page: true }),
           ...(block && block.parent == null && { root: true }),
+          ...(place?.projectBlock !== undefined && {
+            projectBlock: place.projectBlock,
+          }),
         };
       }),
     };

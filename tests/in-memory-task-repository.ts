@@ -17,6 +17,7 @@ import type {
 } from "../src/application/ports/task-repository";
 import type { NoteDropPlan } from "../src/domain/blocking/note-drop";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import type { Project, ProjectId } from "../src/domain/project/project";
 import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
   lastCompletion as lastCompletionIn,
@@ -55,6 +56,8 @@ interface StoredBlock {
   myDay: MyDayRead | undefined;
   /** Tags the block carries, by name, for block searches with a scope. */
   tags: readonly string[];
+  /** Present while the block carries the project tag (ADR 0025). */
+  project: Project | undefined;
 }
 
 export interface BlockSetup {
@@ -79,6 +82,16 @@ export interface BlockSetup {
 export interface InMemoryTaskRepository extends TaskRepository {
   /** Adds a block that is not a task. */
   addBlock(id: number, setup?: BlockSetup): void;
+  /**
+   * Adds a project (GLOSSARY: 项目); unspecified values are those of a
+   * freshly tagged project. On a block that is already there (a task), the
+   * project tag is added to it: the block is both (ADR 0025), and `setup`
+   * is ignored.
+   */
+  addProject(
+    project: Partial<Project> & { id: ProjectId },
+    setup?: Pick<BlockSetup, "parentId" | "position" | "page">,
+  ): void;
   /** Adds a task; unspecified values are those of a freshly tagged task. */
   addTask(
     task: Partial<Task> & { id: TaskId },
@@ -153,6 +166,21 @@ function matchesValues(
     (filter.includes ?? []).every((v) => values.includes(v)) &&
     (filter.excludes ?? []).every((v) => !values.includes(v))
   );
+}
+
+/** What a block given the project tag without values reads as (project-tag). */
+function freshProject(id: ProjectId, created: Date): Project {
+  return {
+    id,
+    text: "",
+    status: "planning",
+    goal: null,
+    start: null,
+    due: null,
+    importance: 4,
+    urgency: 4,
+    created,
+  };
 }
 
 export function createInMemoryTaskRepository(): InMemoryTaskRepository {
@@ -335,6 +363,33 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         myDay: setup.myDay,
         page: setup.page ?? false,
         tags: setup.tags ?? [],
+        project: undefined,
+      });
+    },
+
+    addProject(project, setup = {}) {
+      const existing = blocks.get(project.id);
+      const full = {
+        ...freshProject(project.id, existing?.created ?? defaultCreated),
+        ...(existing && { text: existing.task?.text ?? existing.text }),
+        ...project,
+      };
+      if (existing) {
+        existing.project = full;
+        return;
+      }
+      store(project.id, {
+        text: full.text,
+        created: full.created,
+        parentId: setup.parentId,
+        position: positionOf(setup.position),
+        notConvertible: undefined,
+        task: undefined,
+        completionHistory: undefined,
+        myDay: undefined,
+        page: setup.page ?? false,
+        tags: [],
+        project: full,
       });
     },
 
@@ -351,6 +406,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         myDay: setup.myDay,
         page: setup.page ?? false,
         tags: setup.tags ?? [],
+        project: undefined,
       });
     },
 
@@ -553,9 +609,32 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         }
         return null;
       };
+      /** The nearest ancestor block carrying the project tag (ADR 0025). */
+      const projectBlockOf = (id: number): ProjectId | undefined => {
+        const seen = new Set<number>([id]);
+        let parentId = blocks.get(id)?.parentId;
+        while (parentId !== undefined && !seen.has(parentId)) {
+          const parent = blocks.get(parentId);
+          if (!parent) return undefined;
+          if (parent.project) return parentId;
+          seen.add(parentId);
+          parentId = parent.parentId;
+        }
+        return undefined;
+      };
+      const projects = [];
+      for (const block of blocks.values()) {
+        if (!block.project) continue;
+        projects.push({
+          project: block.project,
+          position: block.position,
+          ...(block.page && { page: true }),
+        });
+      }
       const tasks = [];
       for (const [id, block] of blocks) {
         if (!block.task) continue;
+        const projectBlock = projectBlockOf(id);
         const stored = block.completionHistory;
         const lastCompletion =
           stored?.kind === "readable"
@@ -576,9 +655,10 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           ...(block.myDay && { myDay: block.myDay }),
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),
+          ...(projectBlock !== undefined && { projectBlock }),
         });
       }
-      return { tasks };
+      return { tasks, projects };
     },
 
     async readCandidates() {
@@ -678,6 +758,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           myDay: undefined,
           page: false,
           tags: [],
+          project: undefined,
         });
       });
       return id;

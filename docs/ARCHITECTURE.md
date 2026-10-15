@@ -41,6 +41,7 @@ src/
   domain/
     task/                  Task、TaskStatus、各属性值对象
     blocking/              阻塞判断、搁置子树、下一步行动筛选
+    project/               项目、项目状态、所属项目的判定（ADR 0025）
     scoring/               评分公式及其参数
     time/                  日界线、逻辑日
     recurrence/            重复规则、顺延计算
@@ -51,7 +52,7 @@ src/
   infra/
     system-clock.ts        Clock 端口的真实实现（与 Orca 无关）
   infra/orca/
-    schema/                插件标签的启动对齐、改名、缓存、状态（一份机制，按 TagSchema 推广到各标签）；任务标签的结构定义
+    schema/                插件标签的启动对齐、改名、缓存、状态（一份机制，按 TagSchema 推广到各标签）；任务标签、项目标签的结构定义
     codec/                 Block ⇄ Task 编解码、中英文名称表
     repository/            TaskRepository 的实现
     query/                 QueryDescription2 的构建

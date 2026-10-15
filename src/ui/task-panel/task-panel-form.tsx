@@ -435,6 +435,11 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
             labelId={`${idPrefix}-not-next-action`}
             today={deps.today()}
             onSelectTask={props.onSelectTask}
+            onOpenProject={(projectId) => {
+              // Failures are told by the shared action (#39).
+              taskActions.openBlockInNotes(projectId);
+              props.onOpenedInNotes?.();
+            }}
           />
         }
         dependencies={

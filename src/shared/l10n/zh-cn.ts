@@ -29,6 +29,27 @@ const zhCN: Record<string, string> = {
     "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。任务功能已暂停，请在插件设置中换一个任务标签名。",
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
+  "Project tag name": "项目标签名",
+  "The Orca tag that marks a page or block as a project. Changing it renames the tag; existing projects keep it.":
+    "用来把页面或块标记为项目的 Orca 标签。修改后会重命名这个标签，已有项目不受影响。",
+  'The project tag name cannot be empty. It was set back to "${name}".':
+    "项目标签名不能为空，已改回“${name}”。",
+  '"${requested}" is already used by another page or block, so the project tag was not renamed. The name was set back to "${name}".':
+    "“${requested}”已被其他页面或块使用，项目标签没有改名，名称已改回“${name}”。",
+  'Could not rename the project tag "${name}": ${reason}':
+    "无法重命名项目标签“${name}”：${reason}",
+  'Could not set up the project tag "${name}": ${reason}':
+    "无法设置项目标签“${name}”：${reason}",
+  "A feature could not follow the change of the project tag: ${reason}":
+    "有功能未能跟上项目标签的变化：${reason}",
+  'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Projects are paused: every task reads as belonging to no project. Choose another project tag name in the plugin settings.':
+    "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。项目功能已暂停，所有任务都视为不属于项目。请在插件设置中换一个项目标签名。",
+  'The properties ${properties} of the project tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
+    "项目标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
+  "Project ": "所属项目 ",
+  Planning: "规划中",
+  Active: "进行中",
+  Paused: "暂停中",
   "Convert to task": "转为任务",
   "This block is already a task.": "这个块已经是任务。",
   "The task tag itself cannot be converted to a task.":

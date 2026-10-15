@@ -8,6 +8,11 @@ import {
   statusAllowsNextAction,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
+import {
+  type ProjectId,
+  type ProjectStatus,
+  projectAllowsNextAction,
+} from "../../domain/project/project";
 import { recurs } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
@@ -31,11 +36,29 @@ import type { TaskRepository } from "../ports/task-repository";
  */
 export type NotNextActionReason = BlockingReason | NotBlockingReason;
 
-/** A reason that is not blocking (#78). */
+/**
+ * A reason that is not blocking (#78). The project reasons (#143) come from
+ * the project the task belongs to: their `source` is the project's ID, not a
+ * task's.
+ *
+ * - `projectNotActive` (项目状态): the project is not active; `status` is
+ *   its project status.
+ * - `projectNotStarted` (开始日期): the project's start is the effective
+ *   start and lies beyond today plus the start preview days; `startsOn` is
+ *   that start.
+ */
 export type NotBlockingReason =
   | (OtherReasonBase & { readonly kind: "doneAncestor" | "parked" })
   | (OtherReasonBase & {
       readonly kind: "notStarted";
+      readonly startsOn: CalendarDate;
+    })
+  | (OtherReasonBase & {
+      readonly kind: "projectNotActive";
+      readonly status: ProjectStatus;
+    })
+  | (OtherReasonBase & {
+      readonly kind: "projectNotStarted";
       readonly startsOn: CalendarDate;
     });
 
@@ -60,7 +83,21 @@ const reasonKinds: {
   sequential: { order: 5 },
   cycle: { order: 6 },
   notStarted: { order: 7 },
+  projectNotActive: { order: 8 },
+  projectNotStarted: { order: 9 },
 };
+
+/** A reason whose `source` is a project, not a task (#143). */
+export function isProjectReason(
+  reason: NotNextActionReason,
+): reason is Extract<
+  NotNextActionReason,
+  { kind: "projectNotActive" | "projectNotStarted" }
+> {
+  return (
+    reason.kind === "projectNotActive" || reason.kind === "projectNotStarted"
+  );
+}
 
 /** Why `entry` is not a next action; empty when it is one. */
 function reasonsOf(entry: TaskGraphEntry): NotNextActionReason[] {
@@ -83,6 +120,18 @@ function reasonsOf(entry: TaskGraphEntry): NotNextActionReason[] {
   if (
     !entry.started &&
     entry.effectiveStart !== null &&
+    entry.startFromProject &&
+    entry.project
+  ) {
+    reasons.push({
+      kind: "projectNotStarted",
+      source: entry.project.id,
+      waitingFor: [],
+      startsOn: entry.effectiveStart,
+    });
+  } else if (
+    !entry.started &&
+    entry.effectiveStart !== null &&
     entry.effectiveStartFrom !== null
   ) {
     reasons.push({
@@ -90,6 +139,14 @@ function reasonsOf(entry: TaskGraphEntry): NotNextActionReason[] {
       source: entry.effectiveStartFrom,
       waitingFor: [],
       startsOn: entry.effectiveStart,
+    });
+  }
+  if (entry.project && !projectAllowsNextAction(entry.project.status)) {
+    reasons.push({
+      kind: "projectNotActive",
+      source: entry.project.id,
+      waitingFor: [],
+      status: entry.project.status,
     });
   }
   // A stable sort: reasons of one kind keep the graph's order, nearest first.
@@ -113,6 +170,13 @@ export interface RelatedTask {
   readonly recurring: boolean;
 }
 
+/** A project a reason names (#143), opened in the notes from the panel. */
+export interface RelatedProject {
+  readonly id: ProjectId;
+  /** As the notes hold it; may be empty. */
+  readonly text: string;
+}
+
 export interface NotNextActionReasonsRead {
   /**
    * In the order of `reasonKinds`. Empty when the task is a next action, is
@@ -124,6 +188,8 @@ export interface NotNextActionReasonsRead {
    * dependency delay counts from), by ID.
    */
   readonly tasks: ReadonlyMap<TaskId, RelatedTask>;
+  /** Every project the project reasons name, by ID (#143). */
+  readonly projects: ReadonlyMap<ProjectId, RelatedProject>;
   /**
    * The task's own dependencies (GLOSSARY: 依赖), in the order the notes
    * hold them; empty when it has none or is not a task.
@@ -171,7 +237,16 @@ export function createReadNotNextActionReasons(deps: {
     const entry = graph.entry(id);
     const reasons = entry ? reasonsOf(entry) : [];
     const tasks = new Map<TaskId, RelatedTask>();
+    const projects = new Map<ProjectId, RelatedProject>();
     for (const reason of reasons) {
+      if (isProjectReason(reason)) {
+        // The reason names the task's own project.
+        const project = entry?.project;
+        if (project) {
+          projects.set(project.id, { id: project.id, text: project.text });
+        }
+        continue;
+      }
       const named = [reason.source, ...reason.waitingFor];
       // A dependency delay names the dependency it counts from (#77).
       if (reason.kind === "dependencyDelay") named.push(reason.countedFrom);
@@ -201,6 +276,6 @@ export function createReadNotNextActionReasons(deps: {
           : { id: target, text: null, stale: true, recurring: false };
       },
     );
-    return { reasons, tasks, dependencies };
+    return { reasons, tasks, projects, dependencies };
   };
 }
