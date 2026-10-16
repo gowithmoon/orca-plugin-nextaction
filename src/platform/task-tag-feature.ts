@@ -13,7 +13,10 @@ import { taskTagNamesFor } from "../infra/orca/schema/task-tag-names";
 import { taskTagSchemaFor } from "../infra/orca/schema/task-tag-structure";
 import { systemClock } from "../infra/system-clock";
 import { t } from "../shared/l10n/l10n";
-import { createQuickCaptureCommand } from "../ui/capture/quick-capture-popup";
+import {
+  createQuickCaptureCommand,
+  type OpenQuickCapture,
+} from "../ui/capture/quick-capture-popup";
 import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
 import { quickCaptureCss } from "../ui/styles/quick-capture-style";
 import type { FeatureModule } from "./bootstrap";
@@ -113,9 +116,10 @@ export function createTaskTagFeature(
   projectTagBlockId: () => number | undefined;
   /**
    * Opens the quick capture popup, as its command does (the review's steps,
-   * #99); does nothing outside a load.
+   * #99), its 所属项目 filled in when given (the projects step's rows, #162);
+   * does nothing outside a load.
    */
-  openQuickCapture: () => void;
+  openQuickCapture: OpenQuickCapture;
 } {
   // Independent of the task tag (#140): one paused leaves the other working.
   const projectTag = createTagLifecycle({
@@ -154,7 +158,7 @@ export function createTaskTagFeature(
     projectTag.state,
   );
   // The quick capture popup's opener exists only while loaded.
-  let openCapture: () => void = () => {};
+  let openCapture: OpenQuickCapture = () => {};
 
   const feature: FeatureModule = async (context) => {
     // No shortcut is assigned: the user binds one in Orca's settings.
@@ -173,17 +177,22 @@ export function createTaskTagFeature(
     // opens it; unload unmounts it.
     context.registry.css("quickCaptureStyle", quickCaptureCss);
     const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
-    const quickCapture = createQuickCaptureCommand(
+    const openQuickCapture = createQuickCaptureCommand(
       createQuickCapture({ repository, clock: systemClock }),
       createReadProjectCandidates({ repository }),
       context.pluginName,
       today,
       captureRoot.render,
     );
-    context.registry.command("quickCapture", quickCapture, t("Create task"));
+    // The command never fills in a project, whatever it is called with.
+    context.registry.command(
+      "quickCapture",
+      () => openQuickCapture(),
+      t("Create task"),
+    );
     // Recorded after the root, so it is released first: nothing opens the
     // popup into a root that is going away.
-    openCapture = () => void quickCapture();
+    openCapture = openQuickCapture;
     context.registry.add(`${context.pluginName}.quickCaptureOpen`, () => {
       openCapture = () => {};
     });
@@ -219,6 +228,6 @@ export function createTaskTagFeature(
     taskTagBlockId,
     projectNames,
     projectTagBlockId,
-    openQuickCapture: () => openCapture(),
+    openQuickCapture: (project) => openCapture(project),
   };
 }

@@ -28,6 +28,7 @@ import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-s
 import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
+import type { OpenQuickCapture } from "../ui/capture/quick-capture-popup";
 import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
@@ -106,8 +107,11 @@ export function createPanelFeature(deps: {
   taskPanel: { openPopup: OpenTaskPanelPopup; formDeps: TaskPanelFormDeps };
   /** The review popup (#103), for the review view's "Change review interval". */
   openReviewPopup: OpenReviewPopup;
-  /** The quick capture popup, for the review's "Create task" (#99). */
-  openQuickCapture: () => void;
+  /**
+   * The quick capture popup, for the review's "Create task" (#99), its
+   * 所属项目 filled in from the projects step's rows (#162).
+   */
+  openQuickCapture: OpenQuickCapture;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
 }): { feature: FeatureModule; views: PanelViews } {
