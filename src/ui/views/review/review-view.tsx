@@ -24,6 +24,7 @@ import {
   type ReviewKeep,
   type ReviewStepKey,
 } from "../../../application/usecases/read-review";
+import type { ProjectId } from "../../../domain/project/project";
 import { quickDueDate } from "../../../domain/review/due-steps";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -54,12 +55,22 @@ import {
 } from "../../hooks/use-view-query";
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
+import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import type { OpenReviewPopup } from "../../task-panel/review-popup";
 import {
   toCalendarDate,
   toLocalDate,
 } from "../../task-panel/task-panel-fields";
+import type { OpenProjectStore } from "../projects/open-project-store";
+import {
+  isGroupCollapsed,
+  type ProjectGroupsStore,
+} from "../projects/project-groups-store";
+import {
+  ProjectGroupPart,
+  ProjectsPausedNotice,
+} from "../projects/projects-view";
 import type { ReviewPage, ReviewPageStore } from "./review-page-store";
 import {
   adjacentStep,
@@ -104,7 +115,22 @@ export interface ReviewViewDeps {
   menuItems: () => TaskMenuItems | undefined;
   /** The page shown and a full review's progress, in memory. */
   page: ReviewPageStore;
+  /** The project menu's registrations, for the projects step's rows (#161). */
+  projectMenuItems: () => ProjectMenuItems | undefined;
+  /**
+   * The projects step's collapsed groups, in the plugin instance's memory
+   * apart from the project list's; every group expanded by default.
+   */
+  projectGroups: ProjectGroupsStore;
+  /**
+   * The project the projects view has open: a click on a row sets it, then
+   * shows the projects view.
+   */
+  openProject: Pick<OpenProjectStore, "set">;
 }
+
+/** A step whose listed tasks or projects stay in place while it shows. */
+type KeptStep = ReviewStepKey | "projects";
 
 /** One of a card's own buttons, shown like "open in notes". */
 function CardButton(props: {
@@ -379,6 +405,69 @@ function StepList(props: {
         ))}
       </ul>
     </CardDragArea>
+  );
+}
+
+/**
+ * The projects step's page (#161): the projects grouped by project status,
+ * each as its project row, no filter or search. A click on the rest of a row
+ * opens its project details in the projects view; the review stays on this
+ * step, in memory.
+ */
+function ProjectsStepPage(props: {
+  query: ViewQuery<ReadReviewResult>;
+  deps: ReviewViewDeps;
+}) {
+  const { query, deps } = props;
+  const state = useViewQuery(query);
+  const actions = useTaskActions(deps.taskActions);
+  const { showView } = usePanel();
+  const turned = React.useSyncExternalStore(
+    deps.projectGroups.subscribe,
+    deps.projectGroups.current,
+  );
+
+  if (state.kind === "loading") return <TaskListPlaceholder />;
+  if (state.kind === "paused") return <PausedNotice />;
+  if (state.kind === "failed") {
+    return (
+      <FailedNotice
+        error={state.error}
+        message={(reason) =>
+          t("Could not read the review: ${reason}", { reason })
+        }
+        onRetry={() => query.reset()}
+      />
+    );
+  }
+  const read = state.data.projects;
+  if (read.kind === "paused") return <ProjectsPausedNotice />;
+  if (read.groups.length === 0) {
+    return <ViewNotice icon="ti ti-folder" title={t("No projects")} />;
+  }
+  const today = deps.today();
+  const menuItems = deps.projectMenuItems();
+  const open = (id: ProjectId) => {
+    deps.openProject.set(id);
+    showView("projects");
+  };
+  return (
+    <div className="nextaction-project-groups">
+      {read.groups.map((group) => (
+        <ProjectGroupPart
+          key={group.status}
+          group={group}
+          // Every group expanded by default: the done one holds only the
+          // projects with tasks not done.
+          collapsed={isGroupCollapsed(turned, group.status, [])}
+          onToggle={() => deps.projectGroups.toggle(group.status)}
+          today={today}
+          actions={actions}
+          menuItems={menuItems}
+          onOpen={open}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -728,9 +817,13 @@ function FullReviewPage(props: {
   const previous = adjacentStep(page.step, -1);
   const next = adjacentStep(page.step, 1);
   const total =
-    state.kind === "loaded" && step.list
-      ? state.data.steps[step.list.key].total
-      : undefined;
+    state.kind !== "loaded"
+      ? undefined
+      : step.list
+        ? state.data.steps[step.list.key].total
+        : page.step === "projects" && state.data.projects.kind === "projects"
+          ? state.data.projects.total
+          : undefined;
   return (
     <>
       <BackButton onClick={props.onLeave} />
@@ -748,6 +841,9 @@ function FullReviewPage(props: {
         </h3>
       )}
       {step.list && <StepList query={query} deps={deps} list={step.list} />}
+      {page.step === "projects" && (
+        <ProjectsStepPage query={query} deps={deps} />
+      )}
       {page.step === "summary" && (
         <SummaryPage
           query={query}
@@ -791,11 +887,16 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
    * #99). One value serves the whole view: there is at most one plugin
    * panel.
    */
-  let keeping: ReviewStepKey | undefined;
+  let keeping: KeptStep | undefined;
   const keep = new Map<TaskId, CalendarDate | null>();
-  /** What the read keeps: the step shown's tasks. */
+  /** The projects listed in the projects step while it shows (#161). */
+  const keepProjects = new Set<ProjectId>();
+  /** What the read keeps: the step shown's tasks or projects. */
   const keepOption = (): ReviewKeep | undefined => {
     if (keeping === undefined) return undefined;
+    if (keeping === "projects") {
+      return { step: keeping, projects: new Set(keepProjects) };
+    }
     if (isDatedReviewStep(keeping)) {
       const tasks = new Map<TaskId, CalendarDate>();
       for (const [id, on] of keep) if (on) tasks.set(id, on);
@@ -806,6 +907,15 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
   /** Remembers where each task still in the step is listed, while keeping. */
   const remember = (read: ReadReviewResult) => {
     if (keeping === undefined) return;
+    if (keeping === "projects") {
+      if (read.projects.kind !== "projects") return;
+      for (const group of read.projects.groups) {
+        for (const node of group.projects) {
+          if (node.faded !== "kept") keepProjects.add(node.project.id);
+        }
+      }
+      return;
+    }
     if (isDatedReviewStep(keeping)) {
       for (const item of read.steps[keeping].items) {
         if (!item.kept) keep.set(item.task.id, item.dueOn);
@@ -834,7 +944,7 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
    * Keeps what `step` lists while it shows; leaving it (another step, the
    * page, the view) forgets it and reads again.
    */
-  function useKeepWhileShown(step: ReviewStepKey | undefined) {
+  function useKeepWhileShown(step: KeptStep | undefined) {
     React.useEffect(() => {
       if (step === undefined) return;
       keeping = step;
@@ -844,6 +954,7 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
       return () => {
         keeping = undefined;
         keep.clear();
+        keepProjects.clear();
         query.reload();
       };
     }, [step]);
@@ -866,7 +977,11 @@ export function createReviewView(deps: ReviewViewDeps): PanelView {
     page: Extract<ReviewPage, { kind: "full" }>;
   }) {
     const { page } = props;
-    useKeepWhileShown(fullReviewStep(page.step).list?.key);
+    useKeepWhileShown(
+      page.step === "projects"
+        ? "projects"
+        : fullReviewStep(page.step).list?.key,
+    );
     const open = (step: FullReviewStepId) => {
       if (step === page.step) return;
       deps.page.set({
