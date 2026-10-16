@@ -113,9 +113,7 @@ export function leavesTasksInPlace(
   const arrangement = (tasks: readonly SnapshotTask[]) =>
     [...tasks]
       .sort((a, b) => a.position - b.position)
-      .map(
-        (item) => `${item.task.id}:${item.parentId}:${item.projectBlock}`,
-      )
+      .map((item) => `${item.task.id}:${item.parentId}:${item.projectBlock}`)
       .join(",");
   return arrangement(after.tasks) === arrangement(snapshot.tasks);
 }

@@ -55,7 +55,11 @@ describe("跨越项目块的移动 (#157)", () => {
     );
 
     expect(
-      projectBlockCrossing(graph, { id: 3, target: 1, placement: "before" }, 10),
+      projectBlockCrossing(
+        graph,
+        { id: 3, target: 1, placement: "before" },
+        10,
+      ),
     ).toEqual({ kind: "moveIn" });
   });
 
@@ -155,7 +159,11 @@ describe("跨越项目块的移动 (#157)", () => {
 
     // Both under the block, as a sibling or as a subtask.
     expect(
-      projectBlockCrossing(graph, { id: 2, target: 1, placement: "before" }, 10),
+      projectBlockCrossing(
+        graph,
+        { id: 2, target: 1, placement: "before" },
+        10,
+      ),
     ).toBeNull();
     expect(
       projectBlockCrossing(

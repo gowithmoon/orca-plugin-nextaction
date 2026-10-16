@@ -279,6 +279,15 @@ const zhCN: Record<string, string> = {
   "Not moved: only pages can go between pages.":
     "未移动：只有页面能放在页面之间。",
   "Could not move the task: ${reason}": "无法移动任务：${reason}",
+  // A project details move across the project block (#157).
+  '"${task}" will go under the block of project "${project}". You can undo it.':
+    "「${task}」会挪到项目「${project}」的块下。可以撤销。",
+  '"${task}" will leave the block of project "${project}" and still belong to it. You can undo it.':
+    "「${task}」会移出项目「${project}」的块，仍属于这个项目。可以撤销。",
+  '"${task}" will leave the block of project "${project}", belong to no project and go from here. You can undo it.':
+    "「${task}」会移出项目「${project}」的块，之后不再属于任何项目，会从这里消失。可以撤销。",
+  '"${task}" will belong to project "${other}" once moved and go from here. You can undo it.':
+    "「${task}」移动后会属于项目「${other}」，会从这里消失。可以撤销。",
   "Could not write the task into the note: ${reason}":
     "无法把任务写进笔记：${reason}",
   "${start}–${end}": "${start}–${end}",
