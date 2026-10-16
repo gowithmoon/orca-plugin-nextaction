@@ -4,8 +4,8 @@
 // the progress; a thin progress bar below; then, as needed, "no next action"
 // (yellow), a start still ahead, the due date (red when overdue) and, for a
 // done project, how many tasks are not done yet. The status icon and a
-// right-click open the project menu; a click elsewhere collapses or expands
-// it. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// right-click open the project menu; a click elsewhere activates it (the all
+// tasks view collapses or expands it, the project list opens it). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { ProjectProgress } from "../../../domain/project/progress";
@@ -39,8 +39,11 @@ export interface ProjectRowProps {
   today: CalendarDate;
   /** The project menu's registrations; the row has no menu without them. */
   menuItems: ProjectMenuItems | undefined;
-  /** Collapses or expands it; absent when it has nothing below it. */
-  onToggle?: () => void;
+  /**
+   * A click on the rest of the row: the all tasks view collapses or expands
+   * it, the project list opens its project details. Absent: does nothing.
+   */
+  onActivate?: () => void;
   /** Opens the project's block in a note panel. */
   onOpenInNotes: () => void;
   /**
@@ -119,7 +122,7 @@ function ProjectMeta(props: {
 }
 
 export function ProjectRow(props: ProjectRowProps) {
-  const { node, today, menuItems, onToggle, onOpenInNotes } = props;
+  const { node, today, menuItems, onActivate, onOpenInNotes } = props;
   const inDone = props.inDone ?? false;
   const { project } = node;
   const { Tooltip } = orca.components;
@@ -138,13 +141,13 @@ export function ProjectRow(props: ProjectRowProps) {
       data-faded={inDone || undefined}
       aria-label={t("Project ${name}", { name })}
       onClick={
-        onToggle &&
+        onActivate &&
         ((event) => {
           // React bubbles clicks out of portals: a menu item chosen in the
           // menu opened from this row is not a click on the row.
           if (!(event.target instanceof Node)) return;
           if (!event.currentTarget.contains(event.target)) return;
-          if (!selectsText()) onToggle();
+          if (!selectsText()) onActivate();
         })
       }
       onContextMenu={

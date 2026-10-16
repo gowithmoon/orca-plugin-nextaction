@@ -241,7 +241,7 @@ function ProjectTreeItem(props: { node: ProjectNode; cards: TaskTreeCards }) {
           node={node}
           today={cards.today}
           menuItems={cards.projectMenuItems}
-          onToggle={parent ? () => cards.toggleCollapsed(key) : undefined}
+          onActivate={parent ? () => cards.toggleCollapsed(key) : undefined}
           onOpenInNotes={() => cards.actions.openBlockInNotes(node.project.id)}
         />
       </div>

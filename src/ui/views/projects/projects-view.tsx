@@ -143,7 +143,7 @@ function GroupPart(props: {
                 node={node}
                 today={props.today}
                 menuItems={props.menuItems}
-                onToggle={() => props.onOpen(node.project.id)}
+                onActivate={() => props.onOpen(node.project.id)}
                 onOpenInNotes={() =>
                   props.actions.openBlockInNotes(node.project.id)
                 }
