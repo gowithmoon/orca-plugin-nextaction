@@ -594,7 +594,7 @@ describe("read project board, by project root task (#171)", () => {
     ]);
   });
 
-  it('shows no parent task text on a column\'s cards, the column head their parent task; in "Other" a project root task\'s parent task not the project\'s still shows', async () => {
+  it("shows no parent task text on a column's cards, the column head their parent task; in \"Other\" a project root task's parent task not the project's still shows", async () => {
     const { repository, readProjectBoard } = setup();
     repository.addProject({ id: 1, status: "active" });
     repository.addTask(

@@ -382,7 +382,7 @@ type TopLevel =
     };
 
 /** The tasks as a tree, in note order. */
-interface TaskTree {
+export interface TaskTree {
   /** Top-level tasks not under a project block, and the projects. */
   readonly topLevel: readonly TopLevel[];
   /** The task's subtasks; none for a task without. */
@@ -431,7 +431,8 @@ export function projectRootTasks(
     );
 }
 
-function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
+/** Shared with the project board (#165). */
+export function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
   const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
   const ids = new Set(ordered.map((item) => item.task.id));
   const projects = new Map(
