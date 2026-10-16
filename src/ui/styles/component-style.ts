@@ -193,8 +193,26 @@ export const componentCss = `
   line-height: var(--orca-lineheight-sm);
 }
 
-.nextaction-task-card-parent > .ti {
+/*
+ * Its parts (#149): the project (status icon and name), then the parent
+ * task, each cut short on its own when the line is too narrow for both.
+ */
+.nextaction-task-card-project,
+.nextaction-task-card-parent-task {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.nextaction-task-card-parent .ti {
   flex: 0 0 auto;
+}
+
+.nextaction-task-card-parent-sep {
+  flex: 0 0 auto;
+  opacity: 0.6;
 }
 
 .nextaction-task-card-parent-text {
@@ -204,7 +222,7 @@ export const componentCss = `
   white-space: nowrap;
 }
 
-.nextaction-task-card-parent[data-empty] .nextaction-task-card-parent-text {
+.nextaction-task-card-parent [data-empty] .nextaction-task-card-parent-text {
   font-style: italic;
 }
 
@@ -506,6 +524,109 @@ export const componentCss = `
   width: 1.25em;
   height: 1.25em;
   margin-top: var(--orca-spacing-md);
+}
+
+/*
+ * The project row (GLOSSARY: 项目行, #147): a heading over its tasks, no card
+ * border. The status icon, the name in bold and the progress on one line, a
+ * thin progress bar under them, then what needs noticing, all indented to
+ * the name.
+ */
+.nextaction-project-tree-row > .nextaction-task-tree-toggle {
+  margin-top: var(--orca-spacing-xs);
+}
+
+.nextaction-project-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm) var(--orca-spacing-sm) 2px;
+  border-radius: var(--orca-radius-sm);
+  cursor: pointer;
+}
+
+.nextaction-project-row:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-project-row[data-faded] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.nextaction-project-row-line {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+}
+
+.nextaction-project-row-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  font-size: var(--orca-fontsize-lg);
+}
+
+.nextaction-project-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--orca-fontweight-lg);
+  user-select: text;
+}
+
+.nextaction-project-row-progress-value {
+  flex: 0 0 auto;
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-project-row-bar {
+  height: 3px;
+  margin-left: calc(22px + var(--orca-spacing-sm));
+  border-radius: 2px;
+  background-color: var(--orca-color-bg-3);
+  overflow: hidden;
+}
+
+.nextaction-project-row-bar > i {
+  display: block;
+  height: 100%;
+  background-color: var(--orca-color-primary-5);
+}
+
+.nextaction-project-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-xs) var(--orca-spacing-lg);
+  min-width: 0;
+  padding-left: calc(22px + var(--orca-spacing-sm));
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+}
+
+/* "No next action", "N tasks not done yet": a yellow mark. */
+.nextaction-project-warn {
+  padding: 0 var(--orca-spacing-xs);
+  border-radius: var(--orca-radius-sm);
+  background-color: color-mix(in srgb, var(--orca-color-text-yellow) 14%, transparent);
+  color: var(--orca-color-text-yellow);
+  font-weight: var(--orca-fontweight-lg);
+}
+
+@media (hover: hover) {
+  .nextaction-project-row:not(:hover, :focus-within) .nextaction-task-card-open {
+    opacity: 0;
+  }
 }
 
 /*

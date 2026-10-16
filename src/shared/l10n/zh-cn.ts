@@ -29,6 +29,27 @@ const zhCN: Record<string, string> = {
     "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。任务功能已暂停，请在插件设置中换一个任务标签名。",
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
+  "Project tag name": "项目标签名",
+  "The Orca tag that marks a page or block as a project. Changing it renames the tag; existing projects keep it.":
+    "用来把页面或块标记为项目的 Orca 标签。修改后会重命名这个标签，已有项目不受影响。",
+  'The project tag name cannot be empty. It was set back to "${name}".':
+    "项目标签名不能为空，已改回“${name}”。",
+  '"${requested}" is already used by another page or block, so the project tag was not renamed. The name was set back to "${name}".':
+    "“${requested}”已被其他页面或块使用，项目标签没有改名，名称已改回“${name}”。",
+  'Could not rename the project tag "${name}": ${reason}':
+    "无法重命名项目标签“${name}”：${reason}",
+  'Could not set up the project tag "${name}": ${reason}':
+    "无法设置项目标签“${name}”：${reason}",
+  "A feature could not follow the change of the project tag: ${reason}":
+    "有功能未能跟上项目标签的变化：${reason}",
+  'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Projects are paused: every task reads as belonging to no project. Choose another project tag name in the plugin settings.':
+    "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。项目功能已暂停，所有任务都视为不属于项目。请在插件设置中换一个项目标签名。",
+  'The properties ${properties} of the project tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
+    "项目标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
+  "Project ": "所属项目 ",
+  Planning: "规划中",
+  Active: "进行中",
+  Paused: "暂停中",
   "Convert to task": "转为任务",
   "This block is already a task.": "这个块已经是任务。",
   "The task tag itself cannot be converted to a task.":
@@ -141,6 +162,7 @@ const zhCN: Record<string, string> = {
   "Any urgency": "全部紧急度",
   "Any status": "全部状态",
   "Parent task:": "父任务：",
+  "Project (${status}):": "所属项目（${status}）：",
   "Tasks to do or in progress show here once nothing blocks them and their start day has come.":
     "待开始和进行中的任务，在没有阻塞、到了开始日期之后会出现在这里。",
   "New tasks you capture appear here.": "新捕获的任务会出现在这里。",
@@ -524,6 +546,43 @@ const zhCN: Record<string, string> = {
   // The selection list (#137).
   "Pick a bar or an item above to see its tasks":
     "点一下上面的柱子或分布中的一项，这里会列出相应的任务",
+  // The project menu (#144).
+  "Project status: ${status}": "项目状态：${status}",
+  "Could not change the project status: ${reason}":
+    "无法修改项目状态：${reason}",
+  "Could not open the project menu: ${reason}":
+    "无法打开项目操作菜单：${reason}",
+  "Nothing changed: the block is no longer a project.":
+    "没有修改：这个块已经不是项目了。",
+  // Drop project (#150).
+  "Drop project": "放弃项目",
+  'Drop project "${name}"? Its ${count} open tasks will be dropped too; done tasks are kept. You can undo it.':
+    "放弃项目“${name}”？其中 ${count} 个未完成的任务也会被放弃，已完成的任务保留。可以撤销。",
+  "Project dropped": "已放弃项目",
+  "Could not drop the project: ${reason}": "无法放弃项目：${reason}",
+  // The project row (#147).
+  "Project ${name}": "项目 ${name}",
+  Progress: "进度",
+  "No tasks": "没有任务",
+  "No next action": "缺少下一步行动",
+  "${count} tasks not done yet": "还有 ${count} 个任务未完成",
+  "${count} tasks": "${count} 个任务",
+  "Starts ${date}": "${date} 开始",
+  // The task panel's 所属项目 (#146).
+  Project: "所属项目",
+  "· From its location": "· 来自所在位置",
+  "· From parent task": "· 来自父任务",
+  "Not in effect": "不生效",
+  "(No longer a project)": "（已不是项目）",
+  "Remove project": "移除所属项目",
+  "Search projects": "搜索项目",
+  "Set a project": "设定所属项目",
+  "Change project": "改设所属项目",
+  "Could not read the project of the task: ${reason}":
+    "无法读取任务的所属项目：${reason}",
+  // Quick capture's 所属项目 (#151).
+  "No project": "无所属项目",
+  "Could not read the projects: ${reason}": "无法读取项目：${reason}",
 };
 
 export default zhCN;

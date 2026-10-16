@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { projectTagSchema } from "./project-tag-structure";
 import { planStartup } from "./startup-plan";
+import type { TagSchema } from "./tag-schema";
+import { taskTagSchema, taskTagSchemaFor } from "./task-tag-structure";
 
 // Expected definitions written out by hand from spec #16 ("写进笔记的名称").
 const zhDefinitions = [
@@ -87,6 +90,9 @@ const zhDefinitions = [
   // A number with no default (#77): empty reads as 0 days. Written bare,
   // as numbers were in the tag-operations spike.
   { name: "依赖延迟", type: 3, pos: 12 },
+  // A block reference (#145). `taskTagSchema` knows no project tag, so no
+  // scope; see "search scope of the project" for the one with it.
+  { name: "所属项目", type: 2, pos: 13 },
 ];
 
 const enDefinitions = [
@@ -163,6 +169,7 @@ const enDefinitions = [
     typeArgs: { defaultEnabled: true, default: 4 },
   },
   { name: "Dependency delay", type: 3, pos: 12 },
+  { name: "Project", type: 2, pos: 13 },
 ];
 
 /**
@@ -205,7 +212,7 @@ const takenOver = { tagBlockId: 211, tagName: "任务" };
 describe("startup plan", () => {
   it("creates a Chinese task tag in an empty repo with a Chinese interface", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: undefined,
         cache: undefined,
@@ -219,7 +226,7 @@ describe("startup plan", () => {
 
   it("creates an English task tag in an empty repo with an English interface", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "Task",
         tagBlock: undefined,
         cache: undefined,
@@ -233,7 +240,7 @@ describe("startup plan", () => {
 
   it("writes nothing when the task tag already has the complete structure", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(zhDefinitions)),
         cache: takenOver,
@@ -247,7 +254,7 @@ describe("startup plan", () => {
 
   it("adds a missing property with its full definition and pos", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["标记"]))),
         cache: takenOver,
@@ -269,7 +276,7 @@ describe("startup plan", () => {
   it("appends the sequential property to a task tag that predates it", () => {
     // A tag created before step 5 (#59): the eight earlier properties only.
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["顺序执行"]))),
         cache: takenOver,
@@ -311,7 +318,7 @@ describe("startup plan", () => {
     };
 
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([status, ...readBack(without(["状态"]))]),
         cache: takenOver,
@@ -350,7 +357,7 @@ describe("startup plan", () => {
     };
 
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([importance, ...readBack(without(["重要性"]))]),
         cache: takenOver,
@@ -368,7 +375,7 @@ describe("startup plan", () => {
 
   it("adds the dependencies property to a tag from before step 5, leaving the others as they are", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["依赖"]))),
         cache: takenOver,
@@ -388,7 +395,7 @@ describe("startup plan", () => {
     it("sets the scope to the task tag when the dependencies have none", () => {
       // Orca reads a block-reference property without arguments back as {}.
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "任务",
           tagBlock: withDependencies({}),
           cache: takenOver,
@@ -401,7 +408,7 @@ describe("startup plan", () => {
 
     it("leaves a scope the user chose alone", () => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "任务",
           tagBlock: withDependencies({ scope: "项目" }),
           cache: takenOver,
@@ -412,7 +419,7 @@ describe("startup plan", () => {
 
     it("uses the new name when the tag is renamed while the plugin was off", () => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "GTD",
           tagBlock: undefined,
           cache: takenOver,
@@ -434,7 +441,7 @@ describe("startup plan", () => {
 
     it("uses the name kept when the new name is taken", () => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "已占用",
           tagBlock: tagBlock([], 300, ["已占用"]),
           cache: takenOver,
@@ -455,7 +462,7 @@ describe("startup plan", () => {
     });
 
     it("scopes a newly created tag to its own name", () => {
-      const dependencies = planStartup({
+      const dependencies = planStartup(taskTagSchema, {
         tagName: "GTD",
         tagBlock: undefined,
         cache: undefined,
@@ -465,9 +472,93 @@ describe("startup plan", () => {
     });
   });
 
+  describe("search scope of the project", () => {
+    const scoped = taskTagSchemaFor(() => "项目");
+    const withProject = (typeArgs: unknown) =>
+      tagBlock(
+        readBack(zhDefinitions).map((definition) =>
+          definition.name === "所属项目"
+            ? { ...definition, typeArgs }
+            : definition,
+        ),
+      );
+
+    it("scopes a newly created tag's project to the project tag", () => {
+      const project = planStartup(scoped, {
+        tagName: "任务",
+        tagBlock: undefined,
+        cache: undefined,
+        uiLanguage: "zh",
+      }).writes.find((definition) => definition.name === "所属项目");
+      expect(project).toEqual({
+        name: "所属项目",
+        type: 2,
+        pos: 13,
+        typeArgs: { scope: "项目" },
+      });
+    });
+
+    it("adds the project to a tag from before #145, scoped to the project tag", () => {
+      expect(
+        planStartup(scoped, {
+          tagName: "任务",
+          tagBlock: tagBlock(readBack(without(["所属项目"]))),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([
+        { name: "所属项目", type: 2, pos: 13, typeArgs: { scope: "项目" } },
+      ]);
+    });
+
+    it("sets the scope when the project has none, and leaves one the user chose alone", () => {
+      const plan = (typeArgs: unknown) =>
+        planStartup(scoped, {
+          tagName: "任务",
+          tagBlock: withProject(typeArgs),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes;
+      expect(plan({})).toEqual([
+        { name: "所属项目", type: 2, pos: 13, typeArgs: { scope: "项目" } },
+      ]);
+      expect(plan({ scope: "书" })).toEqual([]);
+    });
+
+    it("writes no scope while the project tag is not ready", () => {
+      expect(
+        planStartup(taskTagSchema, {
+          tagName: "任务",
+          tagBlock: withProject({}),
+          cache: takenOver,
+          uiLanguage: "zh",
+        }).writes,
+      ).toEqual([]);
+    });
+
+    it("invalidates a project the user already has with another type, on a tag already taken over", () => {
+      const result = planStartup(scoped, {
+        tagName: "任务",
+        tagBlock: tagBlock([
+          ...readBack(without(["所属项目"])),
+          { name: "所属项目", type: 1, pos: 13, value: null },
+        ]),
+        cache: takenOver,
+        uiLanguage: "zh",
+      });
+      expect(result.action).toEqual({
+        kind: "use",
+        tagBlockId: 211,
+        invalidated: ["project"],
+        language: "zh",
+      });
+      expect(result.writes).toEqual([]);
+    });
+  });
+
   it("appends the dependency mode with its choices and default to a tag from before #58", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["依赖模式"]))),
         cache: takenOver,
@@ -494,7 +585,7 @@ describe("startup plan", () => {
   it("appends the urgency after the existing properties to a tag from before #79", () => {
     // The interface is English, but the tag's names are Chinese (ADR 0009).
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["紧急度"]))),
         cache: takenOver,
@@ -515,7 +606,7 @@ describe("startup plan", () => {
 
   it("appends the dependency delay, a number with no default, to a tag from before #77", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["依赖延迟"]))),
         cache: takenOver,
@@ -533,7 +624,7 @@ describe("startup plan", () => {
       typeArgs: { defaultEnabled: true, default: 2 },
     };
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([...readBack(without(["依赖延迟"])), delay]),
         cache: takenOver,
@@ -557,7 +648,7 @@ describe("startup plan", () => {
     };
 
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([...readBack(without(["依赖模式"])), mode]),
         cache: takenOver,
@@ -583,7 +674,7 @@ describe("startup plan", () => {
 
   it("names a missing property in the tag's language, not the interface's", () => {
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock(readBack(without(["备注"]))),
         cache: takenOver,
@@ -602,7 +693,7 @@ describe("startup plan", () => {
     };
 
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([movedEffort, ...readBack(without(["工作量"]))]),
         cache: takenOver,
@@ -641,7 +732,7 @@ describe("startup plan", () => {
     };
 
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([
           withContexts,
@@ -663,7 +754,7 @@ describe("startup plan", () => {
     const ownLabel = { name: "Label", type: 1, pos: 9, value: null };
 
     expect(
-      planStartup({
+      planStartup(taskTagSchema, {
         tagName: "任务",
         tagBlock: tagBlock([ownLabel, ...readBack(without(["备注"]))]),
         cache: takenOver,
@@ -706,7 +797,7 @@ describe("startup plan", () => {
       uiLanguage: "zh" as const,
     });
 
-    const first = planStartup(input(worn));
+    const first = planStartup(taskTagSchema, input(worn));
     expect(first.writes).not.toEqual([]);
 
     // Orca's setProperties: merges by name, replaces typeArgs as a whole
@@ -721,7 +812,7 @@ describe("startup plan", () => {
       }
     }
 
-    expect(planStartup(input(applied)).writes).toEqual([]);
+    expect(planStartup(taskTagSchema, input(applied)).writes).toEqual([]);
   });
 
   describe("conflicting definitions", () => {
@@ -737,7 +828,7 @@ describe("startup plan", () => {
       ],
     ])("refuses a first takeover and writes nothing when %s", (_, cache) => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "任务",
           tagBlock: foreignTag,
           cache,
@@ -760,7 +851,7 @@ describe("startup plan", () => {
       };
 
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "任务",
           tagBlock: tagBlock([
             singleChoiceImportance,
@@ -797,7 +888,7 @@ describe("startup plan", () => {
       };
 
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "任务",
           tagBlock: tagBlock([dateTimeDue, ...readBack(without(["截止日期"]))]),
           cache: takenOver,
@@ -821,7 +912,7 @@ describe("startup plan", () => {
 
     it("renames the cached tag instead of creating one", () => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "GTD",
           tagBlock: undefined,
           cache: renamedInSettings,
@@ -850,7 +941,7 @@ describe("startup plan", () => {
       ["the block no longer exists", undefined],
     ])("creates a tag under the new name when %s", (_, cachedBlock) => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "GTD",
           tagBlock: undefined,
           cache: renamedInSettings,
@@ -876,7 +967,7 @@ describe("startup plan", () => {
         ],
       ])("keeps the cached tag rather than taking over %s", (_, page) => {
         expect(
-          planStartup({
+          planStartup(taskTagSchema, {
             tagName: "NA已占用",
             tagBlock: page,
             cache: renamedInSettings,
@@ -897,7 +988,7 @@ describe("startup plan", () => {
       });
 
       it("still aligns the cached tag it keeps", () => {
-        const plan = planStartup({
+        const plan = planStartup(taskTagSchema, {
           tagName: "NA已占用",
           tagBlock: tagBlock([], 305, ["NA已占用"]),
           cache: renamedInSettings,
@@ -910,7 +1001,7 @@ describe("startup plan", () => {
 
       it("goes by the name when the cached block is no longer the tag", () => {
         expect(
-          planStartup({
+          planStartup(taskTagSchema, {
             tagName: "NA已占用",
             tagBlock: tagBlock(readBack(zhDefinitions), 305, ["NA已占用"]),
             cache: renamedInSettings,
@@ -928,7 +1019,7 @@ describe("startup plan", () => {
 
     it("goes by the name alone when the cache is lost", () => {
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "GTD",
           tagBlock: tagBlock(readBack(zhDefinitions), 305),
           cache: undefined,
@@ -944,13 +1035,258 @@ describe("startup plan", () => {
         writes: [],
       });
       expect(
-        planStartup({
+        planStartup(taskTagSchema, {
           tagName: "GTD",
           tagBlock: undefined,
           cache: undefined,
           uiLanguage: "zh",
         }).action,
       ).toEqual({ kind: "create", tagName: "GTD" });
+    });
+  });
+});
+
+describe("startup plan for the project tag", () => {
+  // Written out by hand from #140 "项目标签的结构": the colors are the task
+  // status colors of the like status (planning as todo, active as doing,
+  // paused as waiting).
+  const zhProjectDefinitions = [
+    {
+      name: "项目状态",
+      type: 6,
+      pos: 0,
+      typeArgs: {
+        subType: "single",
+        defaultEnabled: true,
+        default: "规划中",
+        choices: [
+          { n: "规划中", c: "#2196f3" },
+          { n: "进行中", c: "#ff9800" },
+          { n: "暂停中", c: "#9c27b0" },
+          { n: "将来/也许", c: "#795548" },
+          { n: "已完成", c: "#4caf50" },
+        ],
+      },
+    },
+    { name: "目标", type: 1, pos: 1 },
+    { name: "开始日期", type: 5, pos: 2, typeArgs: { subType: "date" } },
+    { name: "截止日期", type: 5, pos: 3, typeArgs: { subType: "date" } },
+    {
+      name: "重要性",
+      type: 3,
+      pos: 4,
+      typeArgs: { defaultEnabled: true, default: 4 },
+    },
+    {
+      name: "紧急度",
+      type: 3,
+      pos: 5,
+      typeArgs: { defaultEnabled: true, default: 4 },
+    },
+  ];
+
+  it("creates a Chinese project tag with its own definitions", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: undefined,
+        cache: undefined,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: { kind: "create", tagName: "项目" },
+      writes: zhProjectDefinitions,
+    });
+  });
+
+  it("creates an English project tag with English names", () => {
+    const plan = planStartup(projectTagSchema, {
+      tagName: "Project",
+      tagBlock: undefined,
+      cache: undefined,
+      uiLanguage: "en",
+    });
+    expect(plan.writes.map((definition) => definition.name)).toEqual([
+      "Project status",
+      "Goal",
+      "Start",
+      "Due",
+      "Importance",
+      "Urgency",
+    ]);
+    expect(plan.writes[0]?.typeArgs).toEqual({
+      subType: "single",
+      defaultEnabled: true,
+      default: "Planning",
+      choices: [
+        { n: "Planning", c: "#2196f3" },
+        { n: "Active", c: "#ff9800" },
+        { n: "Paused", c: "#9c27b0" },
+        { n: "Someday", c: "#795548" },
+        { n: "Done", c: "#4caf50" },
+      ],
+    });
+  });
+
+  it("takes over a tag of that name with no conflicting property, adding what is missing", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: tagBlock(readBack(zhProjectDefinitions.slice(0, 4))),
+        cache: undefined,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: zhProjectDefinitions.slice(4),
+    });
+  });
+
+  it("refuses a first takeover when a property conflicts", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: tagBlock([{ name: "目标", type: 3, pos: 1, value: null }]),
+        cache: undefined,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: { kind: "refuse", conflicts: ["goal"], language: "zh" },
+      writes: [],
+    });
+  });
+
+  it("invalidates a property changed to another type on a tag already taken over", () => {
+    const changed = readBack(zhProjectDefinitions).map((definition) =>
+      definition.name === "重要性" ? { ...definition, type: 1 } : definition,
+    );
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "项目",
+        tagBlock: tagBlock(changed),
+        cache: { tagBlockId: 211, tagName: "项目" },
+        uiLanguage: "zh",
+      }).action,
+    ).toEqual({
+      kind: "use",
+      tagBlockId: 211,
+      invalidated: ["importance"],
+      language: "zh",
+    });
+  });
+
+  it("renames the cached project tag when the name was changed while the plugin was off", () => {
+    expect(
+      planStartup(projectTagSchema, {
+        tagName: "PRJ",
+        tagBlock: undefined,
+        cache: { tagBlockId: 211, tagName: "项目" },
+        cachedBlock: tagBlock(readBack(zhProjectDefinitions), 211, ["项目"]),
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: {
+        kind: "rename",
+        from: "项目",
+        to: "PRJ",
+        tagBlockId: 211,
+        invalidated: [],
+        language: "zh",
+      },
+      writes: [],
+    });
+  });
+});
+
+describe("startup plan for a tag other than the task tag", () => {
+  // A made-up tag with two properties, standing in for the project tag (#140).
+  type BookKey = "shelf" | "pages";
+  const bookNames: Record<BookKey, Record<"zh" | "en", string>> = {
+    shelf: { zh: "书架", en: "Shelf" },
+    pages: { zh: "页数", en: "Pages" },
+  };
+  const bookSchema: TagSchema<BookKey> = {
+    keys: ["shelf", "pages"],
+    defaultNames: { zh: "书", en: "Book" },
+    propertyName: (key, language) => bookNames[key][language],
+    findPropertyKey(name) {
+      for (const key of ["shelf", "pages"] as const) {
+        for (const language of ["zh", "en"] as const) {
+          if (bookNames[key][language] === name) return { key, language };
+        }
+      }
+      return undefined;
+    },
+    definitions: (language, tagName) => [
+      {
+        name: bookNames.shelf[language],
+        type: 2,
+        pos: 0,
+        typeArgs: { scope: tagName },
+      },
+      { name: bookNames.pages[language], type: 3, pos: 1 },
+    ],
+  };
+  const zhBook = [
+    { name: "书架", type: 2, pos: 0, typeArgs: { scope: "书" } },
+    { name: "页数", type: 3, pos: 1 },
+  ];
+
+  it("creates the tag with that tag's own definitions", () => {
+    expect(
+      planStartup(bookSchema, {
+        tagName: "书",
+        tagBlock: undefined,
+        cache: undefined,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({ action: { kind: "create", tagName: "书" }, writes: zhBook });
+  });
+
+  it("goes by that tag's property names for the tag's language", () => {
+    expect(
+      planStartup(bookSchema, {
+        tagName: "Book",
+        tagBlock: tagBlock([{ name: "页数", type: 3, pos: 1, value: null }]),
+        cache: undefined,
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [{ name: "书架", type: 2, pos: 0, typeArgs: { scope: "Book" } }],
+    });
+  });
+
+  it("refuses a first takeover with that tag's conflicting keys", () => {
+    expect(
+      planStartup(bookSchema, {
+        tagName: "书",
+        tagBlock: tagBlock([{ name: "页数", type: 1, pos: 1, value: null }]),
+        cache: undefined,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: { kind: "refuse", conflicts: ["pages"], language: "zh" },
+      writes: [],
+    });
+  });
+
+  it("treats a task tag property name on it as the user's own", () => {
+    // "Status" names a task tag property, not one of this tag's: it neither
+    // conflicts nor decides the language.
+    expect(
+      planStartup(bookSchema, {
+        tagName: "书",
+        tagBlock: tagBlock([
+          { name: "Status", type: 3, pos: 0, value: null },
+          ...readBack(zhBook),
+        ]),
+        cache: { tagBlockId: 211, tagName: "书" },
+        uiLanguage: "en",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [],
     });
   });
 });

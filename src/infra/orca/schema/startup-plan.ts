@@ -1,26 +1,19 @@
 // The startup plan: given what was found in the notes, decide what to do with
-// the task tag and which property definitions to write. Pure; executing the
-// plan against Orca lives in ./run-startup-plan.ts.
+// one plugin tag and which property definitions to write. The tag's structure
+// comes from its `TagSchema` (#141). Pure; executing the plan against Orca
+// lives in ./run-startup-plan.ts.
 import type { Block, BlockProperty } from "../../../orca.d.ts";
-import {
-  findPropertyKey,
-  type NoteLanguage,
-  type PropertyKey,
-  propertyKeys,
-} from "../codec/names";
-import type { TaskTagCache } from "./task-tag-cache";
-import {
-  type PropertyDefinition,
-  taskTagDefinitions,
-} from "./task-tag-structure";
+import type { NoteLanguage } from "../codec/names";
+import type { TagCache } from "./tag-cache";
+import type { PropertyDefinition, TagSchema } from "./tag-schema";
 
 export interface StartupInput {
-  /** The task tag name from the settings, already resolved (never empty). */
+  /** The tag name from the settings, already resolved (never empty). */
   tagName: string;
   /** The block whose alias is `tagName`, if any. */
   tagBlock: Pick<Block, "id" | "properties"> | undefined;
   /** This repo's cache; `undefined` when there is none (or it is unreadable). */
-  cache: TaskTagCache | undefined;
+  cache: TagCache | undefined;
   /**
    * The block the cache points at, read only when `tagBlock` is not that
    * block; `undefined` when it was not read or no longer exists. Block IDs
@@ -31,18 +24,19 @@ export interface StartupInput {
   uiLanguage: NoteLanguage;
 }
 
-export type StartupAction =
+export type StartupAction<K extends string> =
   | { kind: "create"; tagName: string }
   /**
    * A tag of that name exists but was never taken over here, and some of its
-   * properties conflict: leave it alone; task features are paused (ADR 0008).
+   * properties conflict: leave it alone; the tag's features are paused
+   * (ADR 0008).
    */
-  | { kind: "refuse"; conflicts: PropertyKey[]; language: NoteLanguage }
+  | { kind: "refuse"; conflicts: K[]; language: NoteLanguage }
   | {
       kind: "use";
       tagBlockId: number;
       /** Plugin properties whose definition conflicts with the plugin's. */
-      invalidated: PropertyKey[];
+      invalidated: K[];
       /** Language of the names on the tag (ADR 0009). */
       language: NoteLanguage;
     }
@@ -56,7 +50,7 @@ export type StartupAction =
       from: string;
       to: string;
       tagBlockId: number;
-      invalidated: PropertyKey[];
+      invalidated: K[];
       language: NoteLanguage;
     }
   /**
@@ -70,12 +64,12 @@ export type StartupAction =
       tagBlockId: number;
       tagName: string;
       requested: string;
-      invalidated: PropertyKey[];
+      invalidated: K[];
       language: NoteLanguage;
     };
 
-export interface StartupPlan {
-  action: StartupAction;
+export interface StartupPlan<K extends string> {
+  action: StartupAction<K>;
   /** Property definitions to write to the tag block, each complete with `pos`. */
   writes: PropertyDefinition[];
 }
@@ -135,13 +129,14 @@ function alignProperty(
  * carry a plugin name of the other language does not decide it. The interface
  * language when the tag has none of them yet, or on a tie.
  */
-function tagLanguage(
+function tagLanguage<K extends string>(
+  schema: TagSchema<K>,
   properties: readonly BlockProperty[],
   uiLanguage: NoteLanguage,
 ): NoteLanguage {
   const counts: Record<NoteLanguage, number> = { zh: 0, en: 0 };
   for (const property of properties) {
-    const match = findPropertyKey(property.name);
+    const match = schema.findPropertyKey(property.name);
     if (match) counts[match.language] += 1;
   }
   if (counts.zh === counts.en) return uiLanguage;
@@ -166,19 +161,20 @@ function conflicts(
  * Plan for a tag block that exists, to be used under `tagName`: align it, or
  * refuse a first takeover.
  */
-function planExisting(
+function planExisting<K extends string>(
+  schema: TagSchema<K>,
   tagBlock: Pick<Block, "id" | "properties">,
   tagName: string,
-  cache: TaskTagCache | undefined,
+  cache: TagCache | undefined,
   uiLanguage: NoteLanguage,
-): StartupPlan {
+): StartupPlan<K> {
   const byName = new Map(tagBlock.properties.map((p) => [p.name, p]));
-  const language = tagLanguage(tagBlock.properties, uiLanguage);
-  // Definitions are in `propertyKeys` order (their index is `pos`).
-  const expectedDefinitions = taskTagDefinitions(language, tagName);
-  const conflicting: PropertyKey[] = [];
+  const language = tagLanguage(schema, tagBlock.properties, uiLanguage);
+  // Definitions are in `keys` order (their index is `pos`).
+  const expectedDefinitions = schema.definitions(language, tagName);
+  const conflicting: K[] = [];
   const writes: PropertyDefinition[] = [];
-  propertyKeys.forEach((key, pos) => {
+  schema.keys.forEach((key, pos) => {
     const expected = expectedDefinitions[pos];
     if (!expected) return;
     const existing = byName.get(expected.name);
@@ -209,7 +205,10 @@ function planExisting(
   };
 }
 
-export function planStartup(input: StartupInput): StartupPlan {
+export function planStartup<K extends string>(
+  schema: TagSchema<K>,
+  input: StartupInput,
+): StartupPlan<K> {
   const { tagBlock, cache, cachedBlock } = input;
   // The cached block is still the tag under the cached name.
   const cachedTag =
@@ -222,6 +221,7 @@ export function planStartup(input: StartupInput): StartupPlan {
     if (cache && cachedTag && tagBlock.id !== cachedTag.id) {
       // The cached tag keeps its name.
       const plan = planExisting(
+        schema,
         cachedTag,
         cache.tagName,
         cache,
@@ -239,12 +239,19 @@ export function planStartup(input: StartupInput): StartupPlan {
         };
       }
     }
-    return planExisting(tagBlock, input.tagName, cache, input.uiLanguage);
+    return planExisting(
+      schema,
+      tagBlock,
+      input.tagName,
+      cache,
+      input.uiLanguage,
+    );
   }
   // Recovery: rename the cached tag to the name from the settings.
   if (cache && cachedTag) {
     // Renamed before the writes, in the same group (run-startup-plan).
     const plan = planExisting(
+      schema,
       cachedTag,
       input.tagName,
       cache,
@@ -264,6 +271,6 @@ export function planStartup(input: StartupInput): StartupPlan {
   }
   return {
     action: { kind: "create", tagName: input.tagName },
-    writes: taskTagDefinitions(input.uiLanguage, input.tagName),
+    writes: schema.definitions(input.uiLanguage, input.tagName),
   };
 }

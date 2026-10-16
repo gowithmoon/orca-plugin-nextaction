@@ -35,4 +35,9 @@ export interface TaskChanges {
    * (GLOSSARY: 依赖延迟); `null` clears it, which reads as 0.
    */
   readonly dependencyDelay?: number | null;
+  /**
+   * The task's own 所属项目 setting (GLOSSARY: 所属项目): the project block it
+   * names, replacing every value the notes hold; `null` clears it.
+   */
+  readonly project?: number | null;
 }

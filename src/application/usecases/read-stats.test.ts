@@ -994,3 +994,33 @@ describe("read stats", () => {
     });
   });
 });
+
+describe("read stats: the project on a card", () => {
+  it("gives every selected completion's task the project it belongs to, or none", async () => {
+    const { repository, readStats } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "done" });
+    repository.addTask(
+      { id: 2, status: "done" },
+      { parentId: 1, ...history(recorded("2026-10-13T10:00:00", 13)) },
+    );
+    repository.addTask(
+      { id: 3, status: "done" },
+      history(recorded("2026-10-13T12:00:00", 13)),
+    );
+
+    const read = await readStats({
+      scale: "week",
+      selection: { kind: "cell", first: october(13), last: october(13) },
+    });
+
+    expect(
+      read.selected.map((entry) => [
+        entry.task.id,
+        entry.project?.text ?? null,
+      ]),
+    ).toEqual([
+      [3, null],
+      [2, "Move house"],
+    ]);
+  });
+});

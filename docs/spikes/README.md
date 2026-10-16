@@ -27,6 +27,7 @@
 | [multi-block-undo.md](./multi-block-undo.md) | #90 | 一个 `invokeGroup` 写多个块的撤销与写入顺序 | 第八步安排下一次时重置后代任务 |
 | [orca-fontsize.md](./orca-fontsize.md) | — | `--orca-fontsize-*` 的声明位置与取值，Orca 组件如何取字号 | 插件的字号缩放 |
 | [custom-properties.md](./custom-properties.md) | — | 用户在 Orca 中给任务标签加的属性：各类型的定义与值、默认值、删除定义后值的去向（第十二步开工前） | 第十二步的自定义属性；"备注"的读法 |
+| [project-tag.md](./project-tag.md) | — | 一个块上两个标签的值、查询、标签菜单与移除；所属项目块引用的值与搜索范围；`insertTag` 不能直接写块引用值；第二轮：镜像块、页面标题的图标、改名后的 `scope`、快速捕获与放弃项目的撤销（第十一步开工前） | 第十一步的项目标签、所属项目、快速捕获 |
 | [drag-to-note.md](./drag-to-note.md) | — | 从插件面板拖到笔记：落点换算、写入行内引用 / 只有引用的新块 / 镜像块、焦点与撤销的时序、写完后的光标（第十三步开工前） | 第十三步的拖拽到笔记 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。

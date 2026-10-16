@@ -360,7 +360,7 @@ function StepList(props: {
   return (
     <CardDragArea onNoteDrop={linkTaskInNote}>
       <ul className="nextaction-task-list">
-        {items.map(({ task, kept }) => (
+        {items.map(({ task, kept, project }) => (
           <StepItem key={task.id} task={task}>
             <TaskCard
               task={task}
@@ -372,6 +372,7 @@ function StepList(props: {
               selected={task.id === selectedTaskId}
               kept={kept}
               keptStatusShown={list.keptStatusShown}
+              project={project}
               buttons={shown.map((action) => button(action, task))}
             />
           </StepItem>

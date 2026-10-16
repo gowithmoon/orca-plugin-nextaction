@@ -41,6 +41,7 @@ src/
   domain/
     task/                  Task、TaskStatus、各属性值对象
     blocking/              阻塞判断、搁置子树、下一步行动筛选
+    project/               项目、项目状态、所属项目的判定（ADR 0025）
     scoring/               评分公式及其参数
     time/                  日界线、逻辑日
     recurrence/            重复规则、顺延计算
@@ -51,7 +52,7 @@ src/
   infra/
     system-clock.ts        Clock 端口的真实实现（与 Orca 无关）
   infra/orca/
-    schema/                任务标签的结构定义、启动对齐、改名
+    schema/                插件标签的启动对齐、改名、缓存、状态（一份机制，按 TagSchema 推广到各标签）；任务标签、项目标签的结构定义
     codec/                 Block ⇄ Task 编解码、中英文名称表
     repository/            TaskRepository 的实现
     query/                 QueryDescription2 的构建
@@ -60,6 +61,7 @@ src/
     views/                 各个视图，每个视图一个子目录
     task-panel/            任务属性面板
     task-menu/             状态图标（只显示）与任务操作菜单（菜单项通过登记的方式添加，渲染进 Orca 的标签菜单和块右键菜单）
+    project-menu/          项目状态图标（只显示）与项目操作菜单（菜单项通过登记的方式添加，渲染进项目标签的标签菜单，项目行复用）
     capture/               快速捕获弹窗
     components/            可复用组件
     hooks/                 React hooks（只调用 application）
@@ -125,7 +127,7 @@ tests/
 读写任务数据（`tag-operations`、`block-properties-json`）：
 - 任务属性值从任务块 `refs` 中 `to` 为任务标签块 ID 的那条引用的 `data` 读取。块上可能还有其他标签（例如 `Reminder`）。缺项和 `null` 都视为空；`get-blocks` 返回的日期是 `Date`（`plugin-panel-writes`；早先记成 ISO 字符串是 JSON 打印造成的）。页面任务的 `content` 为空，文字取它的别名。
 - 修改标签块上的属性定义时，传入完整的 `typeArgs`（Orca 是整体替换），并显式写入 `pos`。
-- 块引用属性（依赖）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。
+- 块引用属性（依赖、所属项目）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。`insertTag` 带块引用值时会把块 ID 原样存下、不建引用，所以打标签时不带块引用值，之后再按上面的方式写（`project-tag`）。
 - 依赖方从被依赖块 `backRefs` 中 `type: 3` 的引用找到，并以依赖方"依赖"值中含有该引用 ID 为准；行内引用是 `type: 1`，不算依赖（`next-action-hierarchy-boolean-deps`）。
 - 布尔属性的值项一律带 `type: 4`。`insertTag` 传不带 `type` 的 `true` / `false` 时，标签整个打不上，也不报错（`next-action-hierarchy-boolean-deps`）。
 - 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
@@ -161,7 +163,7 @@ tests/
 界面注入（`status-icon-task-menu`、`official-task-menus`）：
 - 优先使用 Orca 的官方扩展点（命令、`tagMenuCommands`、`blockMenuCommands` 等），不拦截 Orca 的鼠标和键盘事件，不从 Orca 的 DOM 读取块 ID。插件自己渲染的 `data-` 属性可以读取。
 - 只有状态图标依赖 Orca 内部 DOM：它是一份只负责显示的注入样式，Orca 改版时最坏的结果是图标不显示，不影响任何操作。依赖内部 DOM 的选择器全部集中在 `ui/task-menu` 的一个文件中，每次 Orca 升级后手动检查。`.orca-tag` 的 `data-name` 是小写的标签名，选择器要用 `i` 标志匹配；属性的 `data-` 名是属性名转小写、空格换成 `_`（`page-task`）。
-- 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件中使用；其他 `ui` 代码仍然只用英文键。
+- 例外：这个文件需要笔记中的任务标签名、状态属性名和选项名来生成选择器。这些名称只通过 `TaskTagNamesSource` 端口提供，只在这个文件和两份图标样式中使用；项目标签的名称同样只通过 `ProjectTagNamesSource` 提供（#144）。其他 `ui` 代码仍然只用英文键。
 - 例外：把任务卡片拖到笔记（ADR 0024，`drag-to-note`）。Orca 没有开放拖放钩子，落点只能从松开的坐标在 DOM 里找：笔记面板（`.orca-panel` 的 `data-panel-id`）、落点块（`.orca-block` 的 `data-id`）和它自己那一行的矩形。这些选择器集中在 `ui/drag` 的一个文件中，每次 Orca 升级后与状态图标的选择器一起手动检查。坐标到 Orca 光标的换算（`getCursorDataFromRange`）不在 `ui` 中调用，经端口由 `infra` 提供。
 
 弹出层（`orca-popup-container`）：

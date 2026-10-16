@@ -1,6 +1,11 @@
 import type { NoteDropPlan } from "../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
+import type {
+  Project,
+  ProjectId,
+  ProjectStatus,
+} from "../../domain/project/project";
 import type { RecurrenceRule } from "../../domain/recurrence/recurrence";
 import type { Reminders } from "../../domain/reminder/reminder";
 import type { ReviewPlan } from "../../domain/review/review";
@@ -103,15 +108,15 @@ export type ConvertToTaskResult =
 
 /**
  * Properties a quick capture sets on the new task (GLOSSARY: 快速捕获). Those
- * not given take their defaults: importance, urgency and effort 4, no dates.
- * Taken from `TaskChanges`, so the two cannot drift; a new task has no date to
- * clear, so the dates are never `null`.
+ * not given take their defaults: importance, urgency and effort 4, no dates,
+ * no 所属项目 (#151). Taken from `TaskChanges`, so the two cannot drift; a new
+ * task has nothing to clear, so none is ever `null`.
  */
 export type InitialProperties = Pick<
   TaskChanges,
   "importance" | "urgency" | "effort"
 > & {
-  readonly [K in "start" | "due"]?: NonNullable<TaskChanges[K]>;
+  readonly [K in "start" | "due" | "project"]?: NonNullable<TaskChanges[K]>;
 };
 
 /**
@@ -269,8 +274,9 @@ export interface TaskRepository {
    * Creates an inbox task with `text`, as plain text, at the end of the
    * journal of the calendar day `now` falls on in local time (not the logical
    * day, ADR 0005), creating that journal if it does not exist yet, with the
-   * `initial` properties given. The user undoes it, properties included, with
-   * one undo. Returns the new task's ID.
+   * `initial` properties given, a 所属项目 among them (#151). The user undoes
+   * it, properties included, with one undo; a failed write leaves no task.
+   * Returns the new task's ID.
    */
   appendTaskToJournal(
     text: string,
@@ -358,4 +364,33 @@ export interface TaskRepository {
     value: CustomPropertyValue,
     now: Date,
   ): Promise<void>;
+
+  /**
+   * The project with the given block ID (#144), or `null` when that block is
+   * not a project (no project tag, an orphan, no such block) or the project
+   * tag is paused. A mirror block reads as the project of its source block.
+   */
+  getProject(id: ProjectId): Promise<Project | null>;
+
+  /**
+   * Writes the project's project status (#144), and nothing else: the tasks
+   * belonging to it are left as they are. The user undoes it with one undo.
+   * Fails, writing nothing, when the block is not a project, the project
+   * tag is paused, the project status property is invalidated, or the write
+   * fails. A mirror block's ID writes to its source block.
+   */
+  updateProjectStatus(id: ProjectId, status: ProjectStatus): Promise<void>;
+
+  /**
+   * Drops the project (GLOSSARY: 放弃项目, #150), in one undo: clears every
+   * task's 所属项目 setting that points at it (done tasks' too; found as
+   * dependencies on a dropped task are, ADR 0016), drops each of `tasks` as
+   * `dropTask` drops one, dependencies on them cleared, and removes the
+   * project tag. Which tasks belong to the project is the caller's to work
+   * out (ADR 0025); the block itself is never deleted. A mirror block's ID
+   * drops its source block. Fails, writing nothing, when the block is not a
+   * project, the project tag is paused, one of `tasks` is not a task, or the
+   * write fails.
+   */
+  dropProject(id: ProjectId, tasks: readonly TaskId[]): Promise<void>;
 }

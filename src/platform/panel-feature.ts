@@ -32,6 +32,7 @@ import type { EditorHost } from "../ui/panel/hidden-editor";
 import { createNextActionPanel } from "../ui/panel/nextaction-panel";
 import { createPanelButton } from "../ui/panel/panel-button";
 import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
+import type { ProjectMenuItems } from "../ui/project-menu/menu-items";
 import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
@@ -94,6 +95,8 @@ export function createPanelFeature(deps: {
   taskActions: TaskActionsDeps;
   /** The current load's task menu registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
+  /** The current load's project menu registrations, for the project rows. */
+  projectMenuItems: () => ProjectMenuItems | undefined;
   /**
    * The task panel (#40, #42): the selected task shows in the side pane in
    * the wide tier and in the popup otherwise.
@@ -186,7 +189,12 @@ export function createPanelFeature(deps: {
   );
   views.register(
     createInboxView({
-      readInbox: createReadInbox({ repository }),
+      readInbox: createReadInbox({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
       linkTaskInNote,
       today: deps.today,
       changes,
@@ -206,6 +214,7 @@ export function createPanelFeature(deps: {
       changes,
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
+      projectMenuItems: deps.projectMenuItems,
       collapse: allTasksCollapse,
       sort: allTasksSort,
       doneSection,

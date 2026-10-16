@@ -1,24 +1,40 @@
 // The quick capture window (GLOSSARY: 快速捕获, #45 "快速捕获") and the command
 // that opens it: a line of text and, below it, importance, urgency, effort,
-// start and due with the task panel's controls. Nothing is written before the capture.
+// start and due with the task panel's controls, then 所属项目 (#151) from the
+// task panel's candidates. Nothing is written before the capture, and every
+// opening starts empty: nothing is kept from the last one.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
 import type { QuickCapture } from "../../application/usecases/quick-capture";
 import {
+  matchingProjectCandidates,
+  type ReadProjectCandidates,
+} from "../../application/usecases/read-project-candidates";
+import type { ProjectId } from "../../domain/project/project";
+import {
   type CalendarDate,
   defaultRating,
   type Rating,
 } from "../../domain/task/task";
-import type { CommandFn } from "../../orca.d.ts";
+import type { CommandFn, SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
-import { effortName, importanceName, urgencyName } from "../components/format";
+import {
+  effortName,
+  importanceName,
+  shownText,
+  urgencyName,
+} from "../components/format";
 import {
   PluginWindow,
   WindowFooter,
   WindowHeader,
 } from "../components/plugin-window";
+import { Select } from "../components/popup-controls";
+import { useProjectCandidates } from "../hooks/use-project-candidates";
 import { useQuickCapture } from "../hooks/use-quick-capture";
+import { createNotify } from "../notify";
+import { projectStatusIcons } from "../project-menu/project-status-icons";
 import { DateField, Field, RatingField } from "../task-panel/task-panel-fields";
 
 interface Draft {
@@ -27,6 +43,7 @@ interface Draft {
   effort: Rating;
   start: CalendarDate | null;
   due: CalendarDate | null;
+  project: ProjectId | null;
 }
 
 const emptyDraft: Draft = {
@@ -35,6 +52,7 @@ const emptyDraft: Draft = {
   effort: defaultRating,
   start: null,
   due: null,
+  project: null,
 };
 
 /**
@@ -48,6 +66,7 @@ function initialProperties(draft: Draft): InitialProperties {
     ...(draft.effort !== defaultRating && { effort: draft.effort }),
     ...(draft.start && { start: draft.start }),
     ...(draft.due && { due: draft.due }),
+    ...(draft.project !== null && { project: draft.project }),
   };
 }
 
@@ -58,8 +77,57 @@ const captureTextStyle: React.CSSProperties = {
   fontSize: "var(--orca-fontsize-md)",
 };
 
+/**
+ * The 所属项目 choice: one project from the candidates, searched as in the
+ * task panel, with a clear at the bottom; empty for none.
+ */
+function ProjectChoice(props: {
+  value: ProjectId | null;
+  readProjectCandidates: ReadProjectCandidates;
+  pluginName: string;
+  onChange: (project: ProjectId | null) => void;
+}) {
+  const notify = React.useMemo(
+    () => createNotify(props.pluginName),
+    [props.pluginName],
+  );
+  const candidates = useProjectCandidates(props.readProjectCandidates, notify);
+  const options: SelectOption[] = candidates.map((candidate) => ({
+    value: String(candidate.id),
+    label: shownText(candidate).text,
+    icon: projectStatusIcons[candidate.status].className,
+  }));
+  return (
+    <Select
+      selected={props.value === null ? [] : [String(props.value)]}
+      options={options}
+      filter={true}
+      filterFunction={(keyword, all) => {
+        const found = new Set(
+          matchingProjectCandidates(candidates, keyword).map((c) =>
+            String(c.id),
+          ),
+        );
+        return (all ?? options).filter(
+          (option) => option.value !== undefined && found.has(option.value),
+        );
+      }}
+      filterPlaceholder={t("Search projects")}
+      placeholder={t("No project")}
+      withClear={true}
+      width="100%"
+      alignment="left"
+      onChange={(selected) => {
+        const picked = Number(selected[0]);
+        props.onChange(Number.isInteger(picked) ? picked : null);
+      }}
+    />
+  );
+}
+
 function QuickCapturePopup(props: {
   quickCapture: QuickCapture;
+  readProjectCandidates: ReadProjectCandidates;
   pluginName: string;
   today: () => CalendarDate;
   /** Closes the popup by unmounting it. */
@@ -167,6 +235,14 @@ function QuickCapturePopup(props: {
                 onChange={set("due")}
               />
             </Field>
+            <Field label={t("Project")} labelId={id("project")}>
+              <ProjectChoice
+                value={draft.project}
+                readProjectCandidates={props.readProjectCandidates}
+                pluginName={props.pluginName}
+                onChange={set("project")}
+              />
+            </Field>
           </div>
         </div>
       </div>
@@ -192,6 +268,8 @@ function QuickCapturePopup(props: {
  */
 export function createQuickCaptureCommand(
   quickCapture: QuickCapture,
+  /** The projects offered as 所属项目, as in the task panel. */
+  readProjectCandidates: ReadProjectCandidates,
   pluginName: string,
   /** The current logical day, for the dates. */
   today: () => CalendarDate,
@@ -204,6 +282,7 @@ export function createQuickCaptureCommand(
     render(
       <QuickCapturePopup
         quickCapture={quickCapture}
+        readProjectCandidates={readProjectCandidates}
         pluginName={pluginName}
         today={today}
         onClose={() => {

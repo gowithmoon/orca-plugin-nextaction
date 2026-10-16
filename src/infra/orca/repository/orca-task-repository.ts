@@ -18,6 +18,12 @@ import type {
 } from "../../../domain/blocking/note-drop";
 import type { TaskGraphSnapshot } from "../../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../../domain/blocking/task-move";
+import type { ProjectSetting } from "../../../domain/project/ownership";
+import type {
+  Project,
+  ProjectId,
+  ProjectStatus,
+} from "../../../domain/project/project";
 import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
@@ -48,6 +54,7 @@ import {
   dependenciesWithout,
   dependentsOf,
   planDependencyWrite,
+  planProjectWrite,
 } from "../codec/dependency-write";
 import { planMyDayWrite, readMyDay } from "../codec/my-day-codec";
 import { type PropertyKey, propertyName } from "../codec/names";
@@ -55,6 +62,11 @@ import {
   type PluginPropertyWrite,
   pluginPropertyPrefix,
 } from "../codec/plugin-block-property-codec";
+import {
+  encodeProjectSetting,
+  projectSettingWithout,
+} from "../codec/project-clear";
+import { decodeProject, encodeProjectStatus } from "../codec/project-codec";
 import {
   planRecurrenceDiscard,
   planRecurrenceWrite,
@@ -69,6 +81,7 @@ import {
   findTaskTagRef,
   isOrphan,
   mirrorSourceId,
+  projectSettingOf,
   resolveDependencyTargets,
   type TaskTagContext,
   taskText,
@@ -76,6 +89,7 @@ import {
 import { planConversion } from "../codec/task-conversion";
 import {
   encodeDependencies,
+  encodeProject,
   encodeTaskChanges,
   type RefDataItem,
 } from "../codec/task-encode";
@@ -92,13 +106,14 @@ import {
 } from "../orca-calls";
 import { OrcaError } from "../orca-error";
 import { buildBlockSearchQuery } from "../query/block-search-query";
+import { buildProjectQuery } from "../query/project-query";
 import { blockIdsFromQueryResult } from "../query/query-result";
 import { buildTaskQuery, type TaskTagNames } from "../query/task-query";
 import { RefType } from "../ref-type";
 import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
-import type { TaskTagState } from "../schema/task-tag-state";
-import type { PropertyDefinition } from "../schema/task-tag-structure";
+import type { PropertyDefinition } from "../schema/tag-schema";
+import type { ProjectTagState, TaskTagState } from "../schema/tag-state";
 import {
   type HierarchyBlock,
   missingParents,
@@ -369,15 +384,86 @@ function myDayOf(block: Block): MyDayRead | undefined {
 }
 
 /**
+ * The block reference values to write when a project is dropped (#150): for
+ * each task among `holders`, its dependencies without those on dropped tasks
+ * and its 所属项目 without the project, in one `setRefData` per task. Only
+ * the reference IDs each value really holds go (a `type: 3` reference is not
+ * always one, next-action-hierarchy-boolean-deps); an invalidated property
+ * is left as it is, and so is an unreadable value, with a warning. A block
+ * that is not a task is left as it is.
+ */
+function planDropProjectClears(
+  state: ReadyTag,
+  holders: ReadonlyMap<number, Block>,
+  refs: {
+    dependencyRefs: ReadonlyMap<number, ReadonlySet<number>>;
+    settingRefs: ReadonlyMap<number, ReadonlySet<number>>;
+  },
+): { ref: Block["refs"][number]; items: RefDataItem[] }[] {
+  const context = {
+    tagBlockId: state.tagBlockId,
+    invalidated: state.invalidated,
+  };
+  const tag = { language: state.language };
+  const clears: { ref: Block["refs"][number]; items: RefDataItem[] }[] = [];
+  for (const [holderId, holder] of holders) {
+    if (decodeTask(holder, context).kind !== "task") continue;
+    const dependencyRefIds = refs.dependencyRefs.get(holderId);
+    const settingRefIds = refs.settingRefs.get(holderId);
+    const removals = [
+      dependencyRefIds &&
+        !state.invalidated.includes("dependencies") && {
+          removal: dependenciesWithout(
+            holder,
+            state.tagBlockId,
+            dependencyRefIds,
+          ),
+          encode: encodeDependencies,
+        },
+      settingRefIds &&
+        !state.invalidated.includes("project") && {
+          removal: projectSettingWithout(
+            holder,
+            state.tagBlockId,
+            settingRefIds,
+          ),
+          encode: encodeProjectSetting,
+        },
+    ];
+    const items: RefDataItem[] = [];
+    for (const entry of removals) {
+      if (!entry) continue;
+      if (entry.removal.kind === "unreadable") {
+        console.warn(
+          `[nextaction] block ${holderId}: a block reference value is kept as it is`,
+          entry.removal.raw,
+        );
+      } else if (entry.removal.kind === "write") {
+        items.push(entry.encode(entry.removal.refIds, tag));
+      }
+    }
+    const ref = findTaskTagRef(holder.refs, state.tagBlockId);
+    if (ref && items.length > 0) clears.push({ ref, items });
+  }
+  return clears;
+}
+
+/**
  * @param tagState Where the task tag stands (#19). While it is paused the
  *   repository neither reads nor writes; when ready, its invalidated
  *   properties read as empty and cannot be written.
  * @param onWritten Called after every write to a task, also a failed one
  *   (what Orca applied is then unknown), so views read again (ADR 0007).
+ * @param projectTagState Where the project tag stands (#143). While it is
+ *   paused, the task graph holds no project.
  */
 export function createOrcaTaskRepository(
   tagState: () => TaskTagState,
   onWritten: (id: TaskId) => void,
+  projectTagState: () => ProjectTagState = () => ({
+    kind: "paused",
+    reason: "starting",
+  }),
 ): TaskRepository {
   const readyTag = () => {
     const state = tagState();
@@ -568,6 +654,65 @@ export function createOrcaTaskRepository(
   };
 
   /**
+   * Every project with its block (#143): the query for the project tag, then
+   * get-blocks. None while the project tag is paused: then no task belongs
+   * to a project, and task features go on (ADR 0025).
+   */
+  const readProjects = async (): Promise<{
+    projects: Project[];
+    blocks: Map<number, Block>;
+    paused?: true;
+  }> => {
+    const state = projectTagState();
+    if (state.kind !== "ready") {
+      return { projects: [], blocks: new Map(), paused: true };
+    }
+    const ids = blockIdsFromQueryResult(
+      await invokeBackend("query", buildProjectQuery(state.tagName)),
+    );
+    if (ids.length === 0) return { projects: [], blocks: new Map() };
+    const read = await getBlocks(ids);
+    const context = {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    };
+    const projects: Project[] = [];
+    const blocks = new Map<number, Block>();
+    for (const id of ids) {
+      const block = read.get(id);
+      if (!block) continue;
+      const decoded = decodeProject(block, context);
+      // The query asks for blocks carrying the project tag, so a mirror is
+      // not among them (project-tag, round 2).
+      if (decoded.kind !== "project") continue;
+      projects.push(decoded.project);
+      blocks.set(id, block);
+    }
+    return { projects, blocks };
+  };
+
+  /**
+   * The (source) block of a project with the project decoded (#144), or
+   * `undefined` when the ID is not a project or the project tag is paused.
+   */
+  const projectBlock = async (
+    id: ProjectId,
+  ): Promise<{ block: Block; project: Project } | undefined> => {
+    const state = projectTagState();
+    if (state.kind !== "ready") return undefined;
+    const block = await sourceBlock(id);
+    if (!block) return undefined;
+    const decoded = decodeProject(block, {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+    });
+    // sourceBlock never returns a mirror.
+    return decoded.kind === "project"
+      ? { block, project: decoded.project }
+      : undefined;
+  };
+
+  /**
    * Every task with its parent task and place in the notes
    * (next-action-hierarchy-boolean-deps): the query for every task, the task
    * blocks with get-blocks, then the ancestors not among them, layer by
@@ -585,26 +730,51 @@ export function createOrcaTaskRepository(
       },
     );
     const definitions = definitionsForReading(state);
+    // Read alongside the tasks; none while the project tag is paused (#143).
+    const projectRead = readProjects();
     const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
-    if (ids.length === 0) return { tasks: [] };
+    const projectsRead = await projectRead;
+    if (ids.length === 0) {
+      return {
+        tasks: [],
+        projects: projectsRead.projects.map((project) => ({
+          project,
+          position: 0,
+          ...(projectsRead.blocks.get(project.id)?.aliases.length && {
+            page: true,
+          }),
+        })),
+        ...(projectsRead.paused && { projectsPaused: true }),
+      };
+    }
     const [blocks, context] = await Promise.all([
       getBlocks(ids),
       readingTag(state, definitions),
     ]);
     const tasks: Task[] = [];
+    /** Each task's own 所属项目 setting, from the block already read (#145). */
+    const projectSettings = new Map<number, ProjectSetting>();
     for (const id of ids) {
       const block = blocks.get(id);
       if (!block) continue;
       const decoded = decodeTask(block, context);
       // As in queryTasks: a mirror or an orphan is not expected here.
-      if (decoded.kind === "task") tasks.push(decoded.task);
+      if (decoded.kind !== "task") continue;
+      tasks.push(decoded.task);
+      // None while the project tag is paused: no setting then reads as stale
+      // (US103).
+      const setting = projectsRead.paused
+        ? undefined
+        : projectSettingOf(block, context);
+      if (setting) projectSettings.set(id, setting);
     }
     // Mirrors among the dependency targets read as their sources, so the
     // task graph sees a dependency on a mirror as one on its task (#57).
     const resolved = await withResolvedDependencies(tasks, new Set(ids));
     tasks.splice(0, tasks.length, ...resolved);
     const hierarchy = new Map<number, HierarchyBlock>(blocks);
-    const asked = new Set<number>(ids);
+    for (const [id, block] of projectsRead.blocks) hierarchy.set(id, block);
+    const asked = new Set<number>([...ids, ...projectsRead.blocks.keys()]);
     for (;;) {
       const layer = missingParents(hierarchy, asked);
       if (layer.length === 0) break;
@@ -616,8 +786,18 @@ export function createOrcaTaskRepository(
     const places = placeTasks(
       tasks.map((task) => task.id),
       hierarchy,
+      projectsRead.projects.map((project) => project.id),
     );
     return {
+      ...(projectsRead.paused && { projectsPaused: true }),
+      projects: projectsRead.projects.map((project) => {
+        const block = projectsRead.blocks.get(project.id);
+        return {
+          project,
+          position: places.get(project.id)?.position ?? Number.MAX_SAFE_INTEGER,
+          ...(block && block.aliases.length > 0 && { page: true }),
+        };
+      }),
       tasks: tasks.map((task) => {
         const place = places.get(task.id);
         // The last completion (skips passed over, #91), from the block already
@@ -654,6 +834,13 @@ export function createOrcaTaskRepository(
           // the notes, where only pages are tasks (ADR 0013, move-blocks P2).
           ...(block && block.aliases.length > 0 && { page: true }),
           ...(block && block.parent == null && { root: true }),
+          ...(place?.projectBlock !== undefined && {
+            projectBlock: place.projectBlock,
+          }),
+          // Stale or not, as read; the task graph decides whether it counts.
+          ...(projectSettings.has(task.id) && {
+            projectSetting: projectSettings.get(task.id),
+          }),
         };
       }),
     };
@@ -755,10 +942,24 @@ export function createOrcaTaskRepository(
                   await getBlocks(changes.dependencies),
                 ),
           );
+    // 所属项目 (#146) likewise: one target at most, a mirror resolved to its
+    // source; whatever was held, a stale value too, is replaced (ADR 0016).
+    const projectTarget =
+      changes.project === undefined || changes.project === null
+        ? changes.project
+        : resolveDependencyTargets(
+            [changes.project],
+            await getBlocks([changes.project]),
+          )[0];
+    const projectPlan =
+      projectTarget === undefined
+        ? undefined
+        : planProjectWrite(block, state.tagBlockId, projectTarget);
     if (
       items.length === 0 &&
       properties.length === 0 &&
-      dependencyPlan === undefined
+      dependencyPlan === undefined &&
+      projectPlan === undefined
     ) {
       return undefined;
     }
@@ -790,6 +991,12 @@ export function createOrcaTaskRepository(
       if (dependencyPlan !== undefined) {
         await runRefDataWrite(block, state.tagBlockId, dependencyPlan, (ids) =>
           encodeDependencies(ids, { language: state.language }),
+        );
+      }
+      // 所属项目 (#146): written as dependencies are (project-tag).
+      if (projectPlan !== undefined) {
+        await runRefDataWrite(block, state.tagBlockId, projectPlan, (ids) =>
+          encodeProject(ids, { language: state.language }),
         );
       }
       // setProperties replaces a property of the same name and keeps the
@@ -1177,6 +1384,16 @@ export function createOrcaTaskRepository(
         language: state.language,
         invalidated: state.invalidated,
       });
+      // 所属项目 (#151): not in `items`, as insertTag cannot write a block
+      // reference value (project-tag); a mirror resolved to its source first,
+      // as every block ID is (block-properties-json M3).
+      const projectTarget =
+        initial.project === undefined
+          ? undefined
+          : resolveDependencyTargets(
+              [initial.project],
+              await getBlocks([initial.project]),
+            )[0];
       // A local-time Date picks the journal by local date, and a missing
       // journal is created (journal-capture J2, J3). This runs outside the
       // group below, so a journal it creates is not removed by the one undo;
@@ -1214,6 +1431,19 @@ export function createOrcaTaskRepository(
             state.tagName,
             ...(items.length > 0 ? [items] : []),
           );
+          // Then 所属项目 in the same group, written as the task panel writes
+          // it: insertBlock, insertTag, createRef and setRefData are one
+          // undo (project-tag, round 2).
+          if (projectTarget !== undefined) {
+            const created = (await getBlocks([id])).get(id);
+            if (!created) throw new OrcaError(`block ${id} was not created`);
+            await runRefDataWrite(
+              created,
+              state.tagBlockId,
+              planProjectWrite(created, state.tagBlockId, projectTarget),
+              (ids) => encodeProject(ids, { language: state.language }),
+            );
+          }
         });
       } finally {
         if (typeof id === "number") onWritten(id);
@@ -1310,6 +1540,117 @@ export function createOrcaTaskRepository(
         }
         await invokeEditorCommand("core.editor.setRefData", ref, [item]);
       });
+    },
+
+    async getProject(id: ProjectId): Promise<Project | null> {
+      return (await projectBlock(id))?.project ?? null;
+    },
+
+    async updateProjectStatus(
+      id: ProjectId,
+      status: ProjectStatus,
+    ): Promise<void> {
+      const state = projectTagState();
+      if (state.kind !== "ready") {
+        throw new OrcaError(`projects are paused (${state.reason})`);
+      }
+      // Encoded first: an invalidated project status fails before any read.
+      const item = encodeProjectStatus(status, state);
+      const read = await projectBlock(id);
+      if (!read) throw new OrcaError(`block ${id} is not a project`);
+      const ref = findTaskTagRef(read.block.refs, state.tagBlockId);
+      if (!ref) throw new OrcaError(`block ${id} lost its project tag`);
+      // As a task status: setRefData on the reference to the project tag
+      // changes only the item passed, in one group, one undo; the task tag's
+      // reference on a block with both is left as it is (project-tag).
+      await writeTo(read.block, async () => {
+        await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+      });
+    },
+
+    async dropProject(id: ProjectId, taskIds: readonly TaskId[]) {
+      const state = readyTag();
+      const projectState = projectTagState();
+      if (projectState.kind !== "ready") {
+        throw new OrcaError(`projects are paused (${projectState.reason})`);
+      }
+      const read = await projectBlock(id);
+      if (!read) throw new OrcaError(`block ${id} is not a project`);
+      const context: TaskTagContext = {
+        tagBlockId: state.tagBlockId,
+        invalidated: state.invalidated,
+      };
+      // The IDs come from the task graph: source blocks carrying the task tag.
+      const taskBlocks = await getBlocks(taskIds);
+      const dropped: Block[] = [];
+      for (const taskId of taskIds) {
+        const block = taskBlocks.get(taskId);
+        if (!block || decodeTask(block, context).kind !== "task") {
+          throw new OrcaError(`block ${taskId} is not a task`);
+        }
+        dropped.push(block);
+      }
+      const droppedIds = new Set(taskIds);
+      // Found as dependents of a dropped task are (ADR 0016, project-tag):
+      // `type: 3` references among the backRefs, each confirmed below
+      // against the value it should be in.
+      const dependencyRefs = new Map<number, Set<number>>();
+      for (const block of dropped) {
+        for (const [from, refIds] of dependentsOf(block)) {
+          // A dropped task's own task tag goes, its dependencies with it.
+          if (droppedIds.has(from)) continue;
+          const merged = dependencyRefs.get(from) ?? new Set<number>();
+          for (const refId of refIds) merged.add(refId);
+          dependencyRefs.set(from, merged);
+        }
+      }
+      // Every setting pointing at it, those of tasks dropped with it and of
+      // done tasks too (GLOSSARY: 放弃项目), cleared before tags go, as the
+      // spike did (project-tag round 2).
+      const settingRefs = dependentsOf(read.block);
+      const holders = await getBlocks([
+        ...new Set([...dependencyRefs.keys(), ...settingRefs.keys()]),
+      ]);
+      const clears = planDropProjectClears(state, holders, {
+        dependencyRefs,
+        settingRefs,
+      });
+      const written = new Set<number>([read.block.id, ...droppedIds]);
+      for (const { ref } of clears) written.add(ref.from);
+      try {
+        // One group, one undo for all of it (project-tag round 2).
+        await invokeGroup(async () => {
+          for (const { ref, items } of clears) {
+            await invokeEditorCommand("core.editor.setRefData", ref, items);
+          }
+          // As dropTask: removeTag leaves plugin block properties behind
+          // (block-properties-json J4).
+          for (const block of dropped) {
+            await invokeEditorCommand(
+              "core.editor.removeTag",
+              block.id,
+              state.tagName,
+            );
+            const pluginProperties = block.properties
+              .map((p) => p.name)
+              .filter((name) => name.startsWith(pluginPropertyPrefix));
+            if (pluginProperties.length > 0) {
+              await invokeEditorCommand(
+                "core.editor.deleteProperties",
+                [block.id],
+                pluginProperties,
+              );
+            }
+          }
+          await invokeEditorCommand(
+            "core.editor.removeTag",
+            read.block.id,
+            projectState.tagName,
+          );
+        });
+      } finally {
+        for (const writtenId of written) onWritten(writtenId);
+      }
     },
 
     queryTasks,

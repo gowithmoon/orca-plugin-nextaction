@@ -17,6 +17,8 @@ import type {
 } from "../src/application/ports/task-repository";
 import type { NoteDropPlan } from "../src/domain/blocking/note-drop";
 import type { TaskMove } from "../src/domain/blocking/task-move";
+import type { ProjectSetting } from "../src/domain/project/ownership";
+import type { Project, ProjectId } from "../src/domain/project/project";
 import { normalizeReminders } from "../src/domain/reminder/reminder";
 import {
   lastCompletion as lastCompletionIn,
@@ -55,6 +57,13 @@ interface StoredBlock {
   myDay: MyDayRead | undefined;
   /** Tags the block carries, by name, for block searches with a scope. */
   tags: readonly string[];
+  /** Present while the block carries the project tag (ADR 0025). */
+  project: Project | undefined;
+  /**
+   * The task's 所属项目 values in order, as reference IDs with the blocks
+   * they point at (`null`: no such reference); absent for none.
+   */
+  projectValues?: readonly ProjectSetting[];
 }
 
 export interface BlockSetup {
@@ -74,11 +83,28 @@ export interface BlockSetup {
   page?: boolean;
   /** Tags the block carries, by name, for block searches with a scope. */
   tags?: readonly string[];
+  /**
+   * A task's 所属项目 values in order (GLOSSARY: 所属项目): the blocks they
+   * point at, `null` for a value with no reference behind it. Only the first
+   * is read, as the codec does; a block that is not a project makes it
+   * stale.
+   */
+  project?: readonly (number | null)[];
 }
 
 export interface InMemoryTaskRepository extends TaskRepository {
   /** Adds a block that is not a task. */
-  addBlock(id: number, setup?: BlockSetup): void;
+  addBlock(id: number, setup?: Omit<BlockSetup, "project">): void;
+  /**
+   * Adds a project (GLOSSARY: 项目); unspecified values are those of a
+   * freshly tagged project. On a block that is already there (a task), the
+   * project tag is added to it: the block is both (ADR 0025), and `setup`
+   * is ignored.
+   */
+  addProject(
+    project: Partial<Project> & { id: ProjectId },
+    setup?: Pick<BlockSetup, "parentId" | "position" | "page">,
+  ): void;
   /** Adds a task; unspecified values are those of a freshly tagged task. */
   addTask(
     task: Partial<Task> & { id: TaskId },
@@ -86,6 +112,11 @@ export interface InMemoryTaskRepository extends TaskRepository {
   ): void;
   /** The task tag's choices for contexts or labels (none unless set). */
   setChoices(property: ChoiceProperty, choices: readonly string[]): void;
+  /**
+   * Pauses the project tag (#143), `false` resuming it: the task graph then
+   * holds no project, no project block and no 所属项目 setting.
+   */
+  pauseProjectTag(paused: boolean): void;
   /** Every write from now on fails with `error`; `undefined` stops it. */
   failWrites(error: Error | undefined): void;
   /** How many writes succeeded. */
@@ -155,9 +186,25 @@ function matchesValues(
   );
 }
 
+/** What a block given the project tag without values reads as (project-tag). */
+function freshProject(id: ProjectId, created: Date): Project {
+  return {
+    id,
+    text: "",
+    status: "planning",
+    goal: null,
+    start: null,
+    due: null,
+    importance: 4,
+    urgency: 4,
+    created,
+  };
+}
+
 export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const blocks = new Map<number, StoredBlock>();
   let failure: Error | undefined;
+  let projectTagPaused = false;
   /** The task tag's choices per property. */
   const choices: Record<ChoiceProperty, string[]> = {
     contexts: [],
@@ -171,6 +218,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const journalDays = new Map<number, CalendarDate>();
   /** IDs of new blocks, far from the ones tests pick. */
   let nextId = 100_000;
+  /** Reference IDs of 所属项目 values, far from block IDs too. */
+  let nextRefId = 900_000;
   /** Places in the notes for blocks added without one, in adding order. */
   let nextPosition = 0;
   const positionOf = (position: number | undefined) => {
@@ -260,8 +309,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         }
       }
     }
-    const { dependencyDelay, ...rest } = changes;
+    const { dependencyDelay, project, ...rest } = changes;
     block.task = { ...block.task, ...rest };
+    // 所属项目 (#146): one value replacing every one held, stale ones too,
+    // with a new reference unless it names the block already referenced.
+    if (project !== undefined) {
+      const kept = block.projectValues?.find((v) => v.target === project);
+      block.projectValues =
+        project === null
+          ? []
+          : [kept ?? { refId: nextRefId++, target: project }];
+    }
     // A cleared dependency delay reads back as 0, as decoding does.
     if (dependencyDelay !== undefined) {
       block.task = { ...block.task, dependencyDelay: dependencyDelay ?? 0 };
@@ -335,6 +393,33 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         myDay: setup.myDay,
         page: setup.page ?? false,
         tags: setup.tags ?? [],
+        project: undefined,
+      });
+    },
+
+    addProject(project, setup = {}) {
+      const existing = blocks.get(project.id);
+      const full = {
+        ...freshProject(project.id, existing?.created ?? defaultCreated),
+        ...(existing && { text: existing.task?.text ?? existing.text }),
+        ...project,
+      };
+      if (existing) {
+        existing.project = full;
+        return;
+      }
+      store(project.id, {
+        text: full.text,
+        created: full.created,
+        parentId: setup.parentId,
+        position: positionOf(setup.position),
+        notConvertible: undefined,
+        task: undefined,
+        completionHistory: undefined,
+        myDay: undefined,
+        page: setup.page ?? false,
+        tags: [],
+        project: full,
       });
     },
 
@@ -351,11 +436,22 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         myDay: setup.myDay,
         page: setup.page ?? false,
         tags: setup.tags ?? [],
+        project: undefined,
+        ...(setup.project && {
+          projectValues: setup.project.map((target) => ({
+            refId: nextRefId++,
+            target,
+          })),
+        }),
       });
     },
 
     setChoices(property, values) {
       choices[property] = [...values];
+    },
+
+    pauseProjectTag(paused) {
+      projectTagPaused = paused;
     },
 
     failWrites(error) {
@@ -553,9 +649,32 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         }
         return null;
       };
+      /** The nearest ancestor block carrying the project tag (ADR 0025). */
+      const projectBlockOf = (id: number): ProjectId | undefined => {
+        const seen = new Set<number>([id]);
+        let parentId = blocks.get(id)?.parentId;
+        while (parentId !== undefined && !seen.has(parentId)) {
+          const parent = blocks.get(parentId);
+          if (!parent) return undefined;
+          if (parent.project) return parentId;
+          seen.add(parentId);
+          parentId = parent.parentId;
+        }
+        return undefined;
+      };
+      const projects = [];
+      for (const block of blocks.values()) {
+        if (!block.project || projectTagPaused) continue;
+        projects.push({
+          project: block.project,
+          position: block.position,
+          ...(block.page && { page: true }),
+        });
+      }
       const tasks = [];
       for (const [id, block] of blocks) {
         if (!block.task) continue;
+        const projectBlock = projectTagPaused ? undefined : projectBlockOf(id);
         const stored = block.completionHistory;
         const lastCompletion =
           stored?.kind === "readable"
@@ -576,9 +695,18 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           ...(block.myDay && { myDay: block.myDay }),
           ...(block.page && { page: true }),
           ...(block.parentId === undefined && { root: true }),
+          ...(projectBlock !== undefined && { projectBlock }),
+          ...(!projectTagPaused &&
+            block.projectValues?.[0] && {
+              projectSetting: block.projectValues[0],
+            }),
         });
       }
-      return { tasks };
+      return {
+        tasks,
+        projects,
+        ...(projectTagPaused && { projectsPaused: true }),
+      };
     },
 
     async readCandidates() {
@@ -656,7 +784,53 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async getProject(id) {
+      if (projectTagPaused) return null;
+      return blocks.get(id)?.project ?? null;
+    },
+
+    async updateProjectStatus(id, status) {
+      const block = blocks.get(id);
+      if (!block?.project) throw new Error(`block ${id} is not a project`);
+      const project = block.project;
+      write(() => {
+        block.project = { ...project, status };
+      });
+    },
+
+    async dropProject(id, tasks) {
+      const block = blocks.get(id);
+      if (!block?.project) throw new Error(`block ${id} is not a project`);
+      const dropped: StoredBlock[] = tasks.map((taskId) => taskToWrite(taskId));
+      const droppedIds = new Set(tasks);
+      write(() => {
+        block.project = undefined;
+        for (const task of dropped) {
+          task.completionHistory = undefined;
+          task.myDay = undefined;
+          task.task = undefined;
+        }
+        for (const other of blocks.values()) {
+          // No 所属项目 setting is left pointing at it, done tasks' included.
+          if (other.projectValues?.some((value) => value.target === id)) {
+            other.projectValues = other.projectValues.filter(
+              (value) => value.target !== id,
+            );
+          }
+          // As dropTask: no dependency is left on a dropped task (ADR 0016).
+          const dependencies = other.task?.dependencies ?? [];
+          if (other.task && dependencies.some((d) => droppedIds.has(d))) {
+            other.task = {
+              ...other.task,
+              dependencies: dependencies.filter((d) => !droppedIds.has(d)),
+            };
+          }
+        }
+      });
+    },
+
     async appendTaskToJournal(text, now, initial = {}) {
+      const { project, ...properties } = initial;
       const id = nextId++;
       write(() => {
         // get-journal-block picks the journal by local date (journal-capture J3).
@@ -673,11 +847,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           position: positionOf(undefined),
           notConvertible: undefined,
           // Properties not given keep the defaults, as Orca fills them.
-          task: { ...freshTask(id, text, now), ...initial },
+          task: { ...freshTask(id, text, now), ...properties },
           completionHistory: undefined,
           myDay: undefined,
           page: false,
           tags: [],
+          project: undefined,
+          // 所属项目 (#151): written in the same undo as the task tag.
+          ...(project !== undefined && {
+            projectValues: [{ refId: nextRefId++, target: project }],
+          }),
         });
       });
       return id;

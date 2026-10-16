@@ -73,7 +73,10 @@ export function movedSnapshot(
     ...subtree.map((item) => (item === moved ? { ...item, parentId } : item)),
     ...rest.slice(insertAt),
   ];
-  return { tasks: order.map((item, position) => ({ ...item, position })) };
+  return {
+    ...snapshot,
+    tasks: order.map((item, position) => ({ ...item, position })),
+  };
 }
 
 /**

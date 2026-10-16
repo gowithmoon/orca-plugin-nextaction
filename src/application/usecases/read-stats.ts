@@ -4,6 +4,8 @@
 // its paging (#132, #135); the period's distributions of completions
 // (#136); the selection's completions and skips (#137); and the header's
 // numbers on how things stand now (#134).
+import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
+import type { Project } from "../../domain/project/project";
 import { countedEntries } from "../../domain/stats/counted-completions";
 import {
   type Distributions,
@@ -72,7 +74,16 @@ export interface ReadStatsResult {
    * The selection's completions and skips, the latest first, a recurring
    * task once for each (#137); none without a selection.
    */
-  readonly selected: readonly SelectedEntry<Task>[];
+  readonly selected: readonly SelectedRead[];
+}
+
+/** A selected completion or skip, with what its task's card shows. */
+export interface SelectedRead extends SelectedEntry<Task> {
+  /**
+   * The project its task belongs to (GLOSSARY: 所属项目), shown on its card
+   * whenever it has one; `null` for none.
+   */
+  readonly project: Project | null;
 }
 
 /** Reads the stats. Errors are thrown as they are. */
@@ -88,6 +99,20 @@ export function createReadStats(deps: {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const snapshot = await deps.repository.readTaskGraph();
     const { tasks } = snapshot;
+    /** The entries with the project each one's task belongs to. */
+    const withProjects = (
+      selected: readonly SelectedEntry<Task>[],
+    ): SelectedRead[] => {
+      if (selected.length === 0) return [];
+      const graph = analyzeTaskGraph(snapshot, {
+        today,
+        previewDays: deps.startPreviewDays.current(),
+      });
+      return selected.map((entry) => ({
+        ...entry,
+        project: graph.entry(entry.task.id)?.project ?? null,
+      }));
+    };
     const { cells, ...period } = statsPeriod(
       options.scale,
       pagedAnchor(options.anchor, today),
@@ -126,13 +151,18 @@ export function createReadStats(deps: {
         })),
       ),
       selected: options.selection
-        ? selectedEntries(
-            tasks.map((item) => ({
-              task: item.task,
-              entries: countedEntries(item.task, item.completionHistory ?? []),
-            })),
-            options.selection,
-            period,
+        ? withProjects(
+            selectedEntries(
+              tasks.map((item) => ({
+                task: item.task,
+                entries: countedEntries(
+                  item.task,
+                  item.completionHistory ?? [],
+                ),
+              })),
+              options.selection,
+              period,
+            ),
           )
         : [],
     };

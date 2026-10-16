@@ -142,6 +142,22 @@ export function encodeDependencies(
   };
 }
 
+/**
+ * The 所属项目 value (#146): one reference ID at most, never a block ID
+ * (project-tag), written as dependencies are; `[]` removes it with its
+ * reference (project-tag, round 2).
+ */
+export function encodeProject(
+  refIds: readonly number[],
+  tag: Pick<TaskWriteContext, "language">,
+): RefDataItem {
+  return {
+    name: propertyName("project", tag.language),
+    type: PropType.BlockRefs,
+    value: [...refIds],
+  };
+}
+
 /** A date, or `null` to clear it as tag-operations step 06 did. */
 function dateItem(name: string, date: CalendarDate | null): RefDataItem {
   return date === null
@@ -167,6 +183,8 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   dependencyMode: "dependencyMode",
   urgency: "urgency",
   dependencyDelay: "dependencyDelay",
+  // Written apart as dependencies are (encodeProject, project-tag).
+  project: "project",
 };
 
 /**

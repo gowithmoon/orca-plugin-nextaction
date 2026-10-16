@@ -24,13 +24,17 @@ export const propertyKeys = [
   "dependencyMode",
   "urgency",
   "dependencyDelay",
+  "project",
 ] as const;
 export type PropertyKey = (typeof propertyKeys)[number];
 
 /** The statuses, in option order; the domain's list (no second copy). */
 export const statusKeys = taskStatuses;
 
-type NameTable<K extends string> = Record<K, Record<NoteLanguage, string>>;
+export type NameTable<K extends string> = Record<
+  K,
+  Record<NoteLanguage, string>
+>;
 
 const propertyNames: NameTable<PropertyKey> = {
   status: { zh: "状态", en: "Status" },
@@ -46,6 +50,7 @@ const propertyNames: NameTable<PropertyKey> = {
   dependencyMode: { zh: "依赖模式", en: "Dependency mode" },
   urgency: { zh: "紧急度", en: "Urgency" },
   dependencyDelay: { zh: "依赖延迟", en: "Dependency delay" },
+  project: { zh: "所属项目", en: "Project" },
 };
 
 const statusNames: NameTable<TaskStatus> = {
@@ -87,7 +92,8 @@ export interface NameMatch<K extends string> {
   language: NoteLanguage;
 }
 
-function findKey<K extends string>(
+/** Which key of `table` a name in the notes stands for, and in which language. */
+export function findKey<K extends string>(
   table: NameTable<K>,
   keys: readonly K[],
   name: string,

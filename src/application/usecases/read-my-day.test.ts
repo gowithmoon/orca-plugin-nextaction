@@ -302,3 +302,36 @@ describe("read today's My Day", () => {
     ]);
   });
 });
+
+describe("read today's My Day: the project on a card", () => {
+  it("gives every task, scheduled or not, the project it belongs to, or none", async () => {
+    const { repository, readMyDay } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "paused" });
+    repository.addTask(
+      { id: 2, status: "todo" },
+      { parentId: 1, ...myDay({ day: oct9 }) },
+    );
+    repository.addTask(
+      { id: 3, status: "todo" },
+      {
+        project: [1],
+        ...myDay({
+          day: oct9,
+          schedule: { start: at("09T14:00:00"), end: at("09T15:00:00") },
+        }),
+      },
+    );
+    repository.addTask({ id: 4, status: "todo" }, myDay({ day: oct9 }));
+
+    const read = await readMyDay();
+
+    const projects = [...read.scheduled, ...read.unscheduled]
+      .map((item) => [item.task.id, item.project?.text ?? null] as const)
+      .sort((a, b) => a[0] - b[0]);
+    expect(projects).toEqual([
+      [2, "Move house"],
+      [3, "Move house"],
+      [4, null],
+    ]);
+  });
+});

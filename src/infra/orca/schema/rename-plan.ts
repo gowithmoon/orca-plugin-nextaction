@@ -1,10 +1,10 @@
-// What to do when the task tag name changes in the settings (ADR 0002). Pure;
+// What to do when a plugin tag name changes in the settings (ADR 0002). Pure;
 // the settings subscription, debounce and `renameAlias` live in platform.
-import type { TaskTagCache } from "./task-tag-cache";
+import type { TagCache } from "./tag-cache";
 
 export interface RenameInput {
-  /** The task tag in use. */
-  current: TaskTagCache;
+  /** The tag in use. */
+  current: TagCache;
   /** The raw value now in the settings. */
   requested: unknown;
   /**

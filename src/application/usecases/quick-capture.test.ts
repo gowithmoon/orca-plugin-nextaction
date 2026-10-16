@@ -132,6 +132,49 @@ describe("quick capture", () => {
     });
   });
 
+  it("captures the task into the project chosen", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addProject({ id: 10, text: "Move house" });
+    const quickCapture = createQuickCapture({
+      repository,
+      clock: createFixedClock("2026-10-08T10:00:00+08:00"),
+    });
+
+    const result = await quickCapture("Pack the books", {
+      importance: 6,
+      project: 10,
+    });
+
+    if (result.kind !== "captured") throw new Error("not captured");
+    const graph = await repository.readTaskGraph();
+    expect(
+      graph.tasks.find((item) => item.task.id === result.id)?.projectSetting
+        ?.target,
+    ).toBe(10);
+    expect(await repository.getTask(result.id)).toMatchObject({
+      status: "inbox",
+      importance: 6,
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("captures the task in no project when none is chosen", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addProject({ id: 10, text: "Move house" });
+    const quickCapture = createQuickCapture({
+      repository,
+      clock: createFixedClock("2026-10-08T10:00:00+08:00"),
+    });
+
+    const result = await quickCapture("Call the bank", { importance: 6 });
+
+    if (result.kind !== "captured") throw new Error("not captured");
+    const graph = await repository.readTaskGraph();
+    expect(
+      graph.tasks.find((item) => item.task.id === result.id)?.projectSetting,
+    ).toBeUndefined();
+  });
+
   it("throws when the write fails, writing nothing", async () => {
     const repository = createInMemoryTaskRepository();
     const failure = new Error("Orca is gone");
@@ -148,5 +191,41 @@ describe("quick capture", () => {
       }),
     ).rejects.toBe(failure);
     expect(await repository.queryTasks({})).toEqual([]);
+  });
+
+  it("captures the task in no project when the block chosen is no longer a project", async () => {
+    const repository = createInMemoryTaskRepository();
+    // Picked while the window was open; done with the project tag since.
+    repository.addBlock(10);
+    const quickCapture = createQuickCapture({
+      repository,
+      clock: createFixedClock("2026-10-08T10:00:00+08:00"),
+    });
+
+    const result = await quickCapture("Pack the books", { project: 10 });
+
+    if (result.kind !== "captured") throw new Error("not captured");
+    const graph = await repository.readTaskGraph();
+    expect(
+      graph.tasks.find((item) => item.task.id === result.id)?.projectSetting,
+    ).toBeUndefined();
+  });
+
+  it("leaves no task, and nothing in the project, when the write fails", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addProject({ id: 10, text: "Move house" });
+    const failure = new Error("Orca is gone");
+    repository.failWrites(failure);
+    const quickCapture = createQuickCapture({
+      repository,
+      clock: createFixedClock("2026-10-08T10:00:00+08:00"),
+    });
+
+    await expect(quickCapture("Pack the books", { project: 10 })).rejects.toBe(
+      failure,
+    );
+    const graph = await repository.readTaskGraph();
+    expect(graph.tasks).toEqual([]);
+    expect(graph.projects?.map((item) => item.project.id)).toEqual([10]);
   });
 });

@@ -1,6 +1,7 @@
 // Everything that depends on Orca's internal DOM (class names, structure, the
 // `data-` attributes on `.orca-tag`) lives in this file only: the selectors of
-// the status icon style sheet, which only displays (official-task-menus).
+// the status icon and project status icon style sheets, which only display
+// (official-task-menus).
 // None of it is a public API: check it by hand in Orca after every Orca
 // upgrade (status-icon-task-menu, page-task spikes).
 
@@ -38,22 +39,36 @@ function tagSelector(tagName: string, match?: TagValueMatch): string {
 /**
  * The `::before` of every icon host whose block carries the tag (optionally
  * with a property value), as a selector list. Covers blocks in journals and
- * pages, page titles (same structure, page-task P3), mirrors, card titles and
- * tag page lists (status-icon-task-menu).
+ * pages, page titles (same structure, page-task P3; project-tag round 2 for
+ * the project tag), mirrors, card titles and tag page lists
+ * (status-icon-task-menu). `without` leaves out blocks that also carry that
+ * tag: a block with both the task tag and the project tag shows only the
+ * task's status icon (#144).
  */
-export function iconSelector(tagName: string, match?: TagValueMatch): string {
-  return iconHostSelectors(tagName, match)
+export function iconSelector(
+  tagName: string,
+  match?: TagValueMatch,
+  without?: string,
+): string {
+  return iconHostSelectors(tagName, match, without)
     .map((host) => `${host}::before`)
     .join(",\n");
 }
 
 /** The icon hosts of blocks carrying the tag, one selector per place a task shows. */
-function iconHostSelectors(tagName: string, match?: TagValueMatch): string[] {
+function iconHostSelectors(
+  tagName: string,
+  match?: TagValueMatch,
+  without?: string,
+): string[] {
   const tag = tagSelector(tagName, match);
   const host = `.${iconHostClass}`;
+  // `:not(:has(…))` beside each `:has(…)`, on the same element and path.
+  const not = (path: string) =>
+    without ? `:not(:has(${path}${tagSelector(without)}))` : "";
   return [
-    `${host}:has(>.orca-tags>${tag})`,
-    `.orca-repr:has(>.orca-repr-card-title>.orca-tags>${tag})>.orca-repr-main>${host}`,
-    `.orca-query-card-title:has(>.orca-tags>${tag}) ~ .orca-block>.orca-repr>.orca-repr-main>${host}`,
+    `${host}:has(>.orca-tags>${tag})${not(">.orca-tags>")}`,
+    `.orca-repr:has(>.orca-repr-card-title>.orca-tags>${tag})${not(">.orca-repr-card-title>.orca-tags>")}>.orca-repr-main>${host}`,
+    `.orca-query-card-title:has(>.orca-tags>${tag})${not(">.orca-tags>")} ~ .orca-block>.orca-repr>.orca-repr-main>${host}`,
   ];
 }

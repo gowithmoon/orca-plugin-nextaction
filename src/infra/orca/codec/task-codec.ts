@@ -2,6 +2,7 @@
 // task tag block (tag-operations): `refs[]` with `type === 2` and `to` equal
 // to the tag block ID, its `data` holding one item per property.
 
+import type { ProjectSetting } from "../../../domain/project/ownership";
 import type { CustomPropertyDefinition } from "../../../domain/task/custom-property";
 import {
   type CalendarDate,
@@ -186,7 +187,7 @@ export function taskText(block: Pick<RawBlock, "content" | "aliases">): string {
 // Dates (plugin-panel-writes; ISO strings are accepted too). Anything else reads
 // as empty.
 
-function numberValue(value: unknown): number | null {
+export function numberValue(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
@@ -231,6 +232,34 @@ export function refDataTargets(
 }
 
 /**
+ * The task's own 所属项目 setting (GLOSSARY: 所属项目), read as dependencies
+ * are (project-tag): the value holds reference IDs, each resolved through the
+ * block's own `type: 3` reference. Only the first value counts; one with no
+ * such reference is a stale setting (`target: null`), not a reason to try
+ * the next. `undefined` for none: no task tag reference, an invalidated
+ * property, or a value that is empty or not a list of numbers. Whether the
+ * target is a project is decided with the task graph.
+ */
+export function projectSettingOf(
+  block: { refs: RawBlock["refs"] },
+  tag: Pick<TaskTagContext, "tagBlockId" | "invalidated">,
+): ProjectSetting | undefined {
+  if (tag.invalidated.includes("project")) return undefined;
+  const ref = findTaskTagRef(block.refs, tag.tagBlockId);
+  const item = ref?.data?.find(
+    (entry) => findPropertyKey(entry.name)?.key === "project",
+  );
+  const value: unknown = item?.value;
+  if (!Array.isArray(value)) return undefined;
+  const refId: unknown = value[0];
+  if (typeof refId !== "number") return undefined;
+  const target = block.refs.find(
+    (r) => r.id === refId && r.type === RefType.RefData,
+  );
+  return { refId, target: target?.to ?? null };
+}
+
+/**
  * Dependency targets with every mirror replaced by its source block
  * (block-properties-json M1), each once, in order. `blocks` holds the target
  * blocks as read; a target not among them, or no mirror, stays as it is.
@@ -260,7 +289,7 @@ function choicesValue(value: unknown): string[] {
  * the epoch. Anything else, or an invalid date, reads as the epoch with a
  * warning, so ordering by it never fails.
  */
-function createdValue(blockId: number, value: unknown): Date {
+export function createdValue(blockId: number, value: unknown): Date {
   const at =
     value instanceof Date
       ? value
@@ -276,7 +305,7 @@ function createdValue(blockId: number, value: unknown): Date {
 }
 
 /** The local calendar day of a stored instant (ADR 0012, date-subtype). */
-function dateValue(value: unknown): CalendarDate | null {
+export function dateValue(value: unknown): CalendarDate | null {
   const at =
     value instanceof Date
       ? value

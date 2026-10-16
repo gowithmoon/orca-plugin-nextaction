@@ -59,6 +59,7 @@ function withDrops(
         done: item.done,
         skipped: item.skipped,
         overdue: item.overdue,
+        project: item.project,
         unscheduledOrder: item.unscheduledOrder,
       });
     } else {

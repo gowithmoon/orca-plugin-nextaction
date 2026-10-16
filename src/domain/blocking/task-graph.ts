@@ -1,6 +1,12 @@
 // The task graph (GLOSSARY: 下一步行动, 阻塞, 搁置子树, 开始日期): which tasks
 // are next actions, given every task with its parent task and its place in
 // the notes. Pure; `today` is the current logical day, computed by the caller.
+import { owningProject, type ProjectSetting } from "../project/ownership";
+import {
+  type Project,
+  type ProjectId,
+  projectAllowsNextAction,
+} from "../project/project";
 import type {
   CompletionEntry,
   CompletionHistory,
@@ -55,11 +61,42 @@ export interface SnapshotTask {
    * it has one.
    */
   readonly root?: boolean;
+  /**
+   * Its nearest project block in the block hierarchy (GLOSSARY: 所属项目),
+   * the block itself not counting: a block that is both a task and a project
+   * is not its own task's project. Absent when no ancestor block is one.
+   */
+  readonly projectBlock?: ProjectId;
+  /**
+   * Its own 所属项目 setting (GLOSSARY: 所属项目), the first value only;
+   * absent when it has none. A stale one is kept, as read.
+   */
+  readonly projectSetting?: ProjectSetting;
+}
+
+/** A project with where it sits in the notes (GLOSSARY: 项目). */
+export interface SnapshotProject {
+  readonly project: Project;
+  /** Its place in the notes (document preorder), as a task's. */
+  readonly position: number;
+  /** Its block is a page: it has an alias. Absent when it is not. */
+  readonly page?: boolean;
 }
 
 /** Every task, done ones included, as they stand in the notes. */
 export interface TaskGraphSnapshot {
   readonly tasks: readonly SnapshotTask[];
+  /**
+   * Every project (ADR 0025); absent or empty when there is none, or while
+   * the project tag is paused: then no task belongs to a project.
+   */
+  readonly projects?: readonly SnapshotProject[];
+  /**
+   * The project tag is paused (#143): no project, and no task holds a
+   * project block or a 所属项目 setting, so none reads as stale. Absent when
+   * it is not.
+   */
+  readonly projectsPaused?: boolean;
 }
 
 export interface TaskGraphOptions {
@@ -146,25 +183,36 @@ export interface TaskGraphEntry {
    */
   readonly doneAncestor: TaskId | null;
   /**
-   * The latest start among the task and all its ancestor tasks (GLOSSARY:
-   * 开始日期, ADR 0015); `null` when none has one.
+   * The project the task belongs to (GLOSSARY: 所属项目), `null` for none.
+   * Its constraints keep the task out of the next actions but are no
+   * blocking: they are not in `blockedBy`.
+   */
+  readonly project: Project | null;
+  /**
+   * The latest start among the task, all its ancestor tasks and its project
+   * (GLOSSARY: 开始日期, ADR 0015); `null` when none has one.
    */
   readonly effectiveStart: CalendarDate | null;
   /**
    * The task whose start the effective start is: the task itself or an
    * ancestor task, the nearest one when several share that day; `null` when
-   * none has a start.
+   * none has a start, or when it is the project's (`startFromProject`).
    */
   readonly effectiveStartFrom: TaskId | null;
+  /**
+   * The effective start is the project's start: later than every start of
+   * the task and its ancestor tasks.
+   */
+  readonly startFromProject: boolean;
   /**
    * The effective start lets the task in (GLOSSARY: 开始日期): there is none,
    * or it lies no later than today plus the start preview days.
    */
   readonly started: boolean;
   /**
-   * The importance and urgency of each ancestor task, nearest first, whatever
-   * its status: what the score inherits (GLOSSARY: 评分, ADR 0019). Empty for
-   * a task without one.
+   * The importance and urgency of each ancestor task, nearest first, then of
+   * its project, whatever their status: what the score inherits (GLOSSARY:
+   * 评分, ADR 0019). Empty for a task without either.
    */
   readonly ancestorRatings: readonly AncestorRatings[];
   readonly nextAction: boolean;
@@ -303,6 +351,9 @@ export function analyzeTaskGraph(
   };
 
   const cycles = findDependencyCycles(snapshot);
+  const projects = new Map(
+    (snapshot.projects ?? []).map((item) => [item.project.id, item.project]),
+  );
 
   const entries = new Map<TaskId, TaskGraphEntry>();
   for (const item of ordered) {
@@ -376,7 +427,16 @@ export function analyzeTaskGraph(
         startLink = link;
       }
     }
-    const effectiveStart = startLink?.task.start ?? null;
+    const projectId = owningProject(chain, (id) => projects.has(id));
+    const project =
+      projectId === null ? null : (projects.get(projectId) ?? null);
+    const taskStart = startLink?.task.start ?? null;
+    // Beyond the top ancestor task: only a strictly later start is its.
+    const projectStart = project?.start ?? null;
+    const startFromProject =
+      projectStart !== null &&
+      (taskStart === null || compareDays(projectStart, taskStart) > 0);
+    const effectiveStart = startFromProject ? projectStart : taskStart;
     const started =
       effectiveStart === null || compareDays(effectiveStart, startsBy) <= 0;
     entries.set(item.task.id, {
@@ -386,19 +446,24 @@ export function analyzeTaskGraph(
       parked,
       parkedBy,
       doneAncestor,
+      project,
       effectiveStart,
-      effectiveStartFrom: startLink?.task.id ?? null,
+      effectiveStartFrom: startFromProject
+        ? null
+        : (startLink?.task.id ?? null),
+      startFromProject,
       started,
-      ancestorRatings: chain.slice(1).map((link) => ({
-        importance: link.task.importance,
-        urgency: link.task.urgency,
-      })),
+      ancestorRatings: [
+        ...chain.slice(1).map((link) => link.task),
+        ...(project ? [project] : []),
+      ].map(({ importance, urgency }) => ({ importance, urgency })),
       nextAction:
         statusAllowsNextAction(item.task.status) &&
         blockedBy.length === 0 &&
         !parked &&
         doneAncestor === null &&
-        started,
+        started &&
+        (project === null || projectAllowsNextAction(project.status)),
     });
   }
 

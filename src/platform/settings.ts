@@ -40,6 +40,17 @@ export const settingsDefinition: SettingsDefinition = {
       type: "string",
     }),
   },
+  // As the task tag name (#143): no default here, resolved where the tag is
+  // looked up and written back.
+  projectTagName: {
+    schema: () => ({
+      label: t("Project tag name"),
+      description: t(
+        "The Orca tag that marks a page or block as a project. Changing it renames the tag; existing projects keep it.",
+      ),
+      type: "string",
+    }),
+  },
   // 5:00 shows in the settings page and fills an item without a value
   // (plugin-lifecycle-settings). A `time` item holds a whole `Date`; only its
   // local hours and minutes mean anything. Anything else still reads as 5:00

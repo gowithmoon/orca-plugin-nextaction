@@ -20,14 +20,13 @@ export type DependencyWriteItem =
  * dependencies: a date value also makes a `type: 3` reference (to a journal,
  * tag-operations round 1 step 06), which is not one.
  */
-function currentDependencyRefIds(
+function currentRefIds(
   block: Pick<RawBlock, "refs">,
   tagBlockId: number,
+  key: "dependencies" | "project",
 ): Set<unknown> {
   const data = findTaskTagRef(block.refs, tagBlockId)?.data ?? [];
-  const item = data.find(
-    (d) => findPropertyKey(d.name)?.key === "dependencies",
-  );
+  const item = data.find((d) => findPropertyKey(d.name)?.key === key);
   return new Set(Array.isArray(item?.value) ? item.value : []);
 }
 
@@ -43,9 +42,27 @@ export function planDependencyWrite(
 ): DependencyWriteItem[] {
   return planBlockRefWrite(
     block,
-    currentDependencyRefIds(block, tagBlockId),
+    currentRefIds(block, tagBlockId, "dependencies"),
     targets,
   );
+}
+
+/**
+ * What to write so the task's 所属项目 is exactly `target` (a source block's
+ * ID), `null` for none (#146): one value, written as dependencies are
+ * (project-tag). Every other value held, a stale one included, is left out,
+ * so it goes with its reference (ADR 0016).
+ */
+export function planProjectWrite(
+  block: Pick<RawBlock, "refs">,
+  tagBlockId: number,
+  target: number | null,
+): DependencyWriteItem[] {
+  return target === null
+    ? []
+    : planBlockRefWrite(block, currentRefIds(block, tagBlockId, "project"), [
+        target,
+      ]);
 }
 
 /**
