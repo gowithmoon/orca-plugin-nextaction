@@ -1,17 +1,17 @@
 // The project row of the all tasks view (GLOSSARY: 项目行, #147), as the
 // prototype chose (docs/ROADMAP.md 第十一步第一阶段 "界面"): a heading, not a
 // card. The first line holds the project status icon, the name in bold and
-// the progress; a thin progress bar below; then, as needed, "no next action"
-// (yellow), a start still ahead, the due date (red when overdue) and, for a
-// done project, how many tasks are not done yet. The status icon and a
+// the progress; a thin progress bar below; then, as needed, "no next action",
+// "N days without progress" and "overdue" (yellow, #160), a start still
+// ahead, the due date (red when overdue) and, for a done project, how many
+// tasks are not done yet. The status icon and a
 // right-click open the project menu; a click elsewhere activates it (the all
 // tasks view collapses or expands it, the project list opens it). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { ProjectProgress } from "../../../domain/project/progress";
-import type { Project, ProjectStatus } from "../../../domain/project/project";
+import type { ProjectStatus } from "../../../domain/project/project";
 import type { CalendarDate } from "../../../domain/task/task";
-import { compareDays } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
 import { formatDate } from "../../components/format";
 import { ContextMenu } from "../../components/popup-controls";
@@ -70,16 +70,35 @@ export function ProjectStatusIcon(props: {
   );
 }
 
-/** Overdue: not done, and its due day is before `today`. */
-export function projectOverdue(
-  project: Pick<Project, "status" | "due">,
-  today: CalendarDate,
-): boolean {
-  return (
-    project.due !== null &&
-    project.status !== "done" &&
-    compareDays(project.due, today) < 0
-  );
+/**
+ * "N days without progress" and "overdue" (GLOSSARY: 长期无进展, 逾期项目),
+ * as needed, in the yellow of "no next action"; the project row and the
+ * project details' attribute area share them.
+ */
+export function signalChips(node: ProjectNode): React.ReactNode[] {
+  const items: React.ReactNode[] = [];
+  if (node.noProgressDays !== null) {
+    items.push(
+      <span key="stale" className="nextaction-property nextaction-project-warn">
+        <i className="ti ti-clock" aria-hidden="true" />
+        {t("${days} days without progress", {
+          days: String(node.noProgressDays),
+        })}
+      </span>,
+    );
+  }
+  if (node.overdue) {
+    items.push(
+      <span
+        key="overdue"
+        className="nextaction-property nextaction-project-warn"
+      >
+        <i className="ti ti-alert-triangle" aria-hidden="true" />
+        {t("Overdue")}
+      </span>,
+    );
+  }
+  return items;
 }
 
 /** A click that selected text is not a click on the row. */
@@ -114,7 +133,6 @@ function ProjectMeta(props: {
 }) {
   const { node, today, inDone } = props;
   const { project } = node;
-  const overdue = projectOverdue(project, today);
   const items: React.ReactNode[] = [];
   if (inDone) {
     items.push(
@@ -137,6 +155,7 @@ function ProjectMeta(props: {
       </span>,
     );
   }
+  items.push(...signalChips(node));
   if (!inDone && project.status === "done" && node.unfinished > 0) {
     items.push(
       <span key="open" className="nextaction-property nextaction-project-warn">
@@ -158,13 +177,10 @@ function ProjectMeta(props: {
       <span
         key="due"
         className="nextaction-property"
-        data-overdue={overdue || undefined}
+        data-overdue={node.overdue || undefined}
       >
         <i className="ti ti-calendar" aria-hidden="true" />
         {t("Due ${date}", { date: formatDate(project.due, today) })}
-        {overdue && (
-          <span className="nextaction-property-overdue">{t("Overdue")}</span>
-        )}
       </span>,
     );
   }
