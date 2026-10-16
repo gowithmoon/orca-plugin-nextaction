@@ -75,7 +75,7 @@ import {
 import type { TaskTreeStores } from "../all-tasks/task-tree-stores";
 import { useMoveConfirmation } from "./move-confirmation";
 import type { OpenProjectStore } from "./open-project-store";
-import { ProjectBoardColumns } from "./project-board";
+import { BoardCollapseAllButton, ProjectBoardColumns } from "./project-board";
 import type { ProjectBoardStores } from "./project-board-stores";
 import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
@@ -360,8 +360,8 @@ function LayoutSwitch(props: { store: ProjectLayoutStore }) {
 /**
  * The board layout's toolbar and board (#166): the layout switch, the
  * board's own sort and "Create task" (quick capture, 所属项目 filled in with
- * this project), then the columns. The filter, search and "collapse all"
- * come with later steps (#167, #172).
+ * this project), "collapse all / expand all" over the cards' subtasks
+ * (#167), then the columns. The filter and search come with #172.
  */
 function DetailsBoard(props: {
   read: Extract<ProjectBoardRead, { kind: "project" }>;
@@ -389,6 +389,10 @@ function DetailsBoard(props: {
         <LayoutSwitch store={deps.layout} />
         <div className="nextaction-toolbar-view">
           <AllTasksSortSelect state={sort} onChange={stores.sort.set} />
+          <BoardCollapseAllButton
+            board={read.board}
+            expanded={stores.expanded}
+          />
           <Tooltip text={t("Create task")}>
             <Button
               variant="plain"
@@ -412,6 +416,7 @@ function DetailsBoard(props: {
             menuPlace,
             selectedTaskId,
             selectTask,
+            expanded: stores.expanded,
           }}
         />
       </CardDragArea>

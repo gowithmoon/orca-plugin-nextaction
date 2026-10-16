@@ -165,4 +165,128 @@ export const projectBoardCss = `
   white-space: nowrap;
   font-weight: 600;
 }
+
+/* A next action (#167): a small dot at the status icon's top right. */
+.nextaction-task-card-status-button,
+.nextaction-task-card-status-mark {
+  position: relative;
+}
+
+.nextaction-next-action-dot {
+  position: absolute;
+  top: 1px;
+  right: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--orca-color-primary-5);
+  box-shadow: 0 0 0 1.5px var(--orca-color-bg-1);
+  pointer-events: none;
+}
+
+/* A card's subtasks (#167): the count and its toggle, then the rows. */
+.nextaction-board-subtasks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--orca-spacing-md);
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+  line-height: var(--orca-lineheight-sm);
+}
+
+.nextaction-board-subtasks-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  margin-left: -4px;
+  padding: 0 5px 0 2px;
+  border: 0;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.nextaction-board-subtasks-toggle:hover {
+  background-color: var(--orca-color-bg-3);
+  color: var(--orca-color-text-1);
+}
+
+.nextaction-board-subtasks-toggle:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-board-subtasks-summary {
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-board-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 0 -4px;
+  padding: 0;
+  list-style: none;
+}
+
+.nextaction-board-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 1px 4px 1px calc(4px + var(--nextaction-row-depth, 0) * 14px);
+  border-radius: var(--orca-radius-sm);
+  font-size: var(--orca-fontsize-xs);
+  cursor: pointer;
+}
+
+.nextaction-board-row:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-board-row[data-selected] {
+  background-color: var(--orca-color-bg-3);
+}
+
+.nextaction-board-row:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: -1px;
+}
+
+.nextaction-board-row[data-done] > * {
+  opacity: 0.6;
+}
+
+.nextaction-board-row .nextaction-task-card-status-button {
+  height: 18px;
+}
+
+.nextaction-board-row .nextaction-status-icon {
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-board-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--orca-color-text-1);
+}
+
+.nextaction-board-row-text[data-empty] {
+  color: var(--orca-color-text-2);
+  font-style: italic;
+}
+
+.nextaction-board-row-lock {
+  flex: none;
+  display: inline-flex;
+  color: var(--orca-color-dangerous-5);
+}
 `;
