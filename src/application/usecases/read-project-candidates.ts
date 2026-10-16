@@ -18,20 +18,25 @@ export interface ProjectCandidate {
 /**
  * The project candidates, in note order, from one read: none done, and not
  * the block of task `id` (a block both task and project is not its own
- * task's project, ADR 0025). Errors are thrown as they are.
+ * task's project, ADR 0025). Project `include`, when it is a project, is
+ * offered too, done or not: quick capture filled in with it (#162) shows it
+ * by name. Errors are thrown as they are.
  */
 export type ReadProjectCandidates = (
   id?: TaskId,
+  include?: ProjectId,
 ) => Promise<ProjectCandidate[]>;
 
 export function createReadProjectCandidates(deps: {
   repository: TaskRepository;
 }): ReadProjectCandidates {
-  return async (id) => {
+  return async (id, include) => {
     const snapshot = await deps.repository.readTaskGraph();
     return [...(snapshot.projects ?? [])]
       .filter(
-        (item) => item.project.status !== "done" && item.project.id !== id,
+        (item) =>
+          (item.project.status !== "done" || item.project.id === include) &&
+          item.project.id !== id,
       )
       .sort((a, b) => a.position - b.position)
       .map(({ project }) => ({

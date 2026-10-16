@@ -10,6 +10,7 @@ describe("the full review's steps", () => {
       "dueSoon",
       "nextActions",
       "waiting",
+      "projects",
       "someday",
       "dueForReview",
       "summary",

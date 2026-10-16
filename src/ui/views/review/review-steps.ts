@@ -3,9 +3,10 @@
 // order is the domain's (domain/review/review-steps.ts): the one list the
 // step bar, "Previous / Next" and each step's page follow.
 // A step with neither `list` nor `ownPage` is not built yet: the step bar
-// shows it unavailable and "Previous / Next" pass over it. The summary has
-// its own page (#101); look back's list is the tasks planned but not done,
-// the view adding its completions and skips above it (#102).
+// shows it unavailable and "Previous / Next" pass over it. The summary and
+// the projects step (#161) have their own pages (#101); look back's list is
+// the tasks planned but not done, the view adding its completions and skips
+// above it (#102).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { ReviewStepKey } from "../../../application/usecases/read-review";
 import {
@@ -63,7 +64,10 @@ export interface FullReviewStep {
   readonly label: () => string;
   /** Absent while the step is not built, or when it has its own page. */
   readonly list?: ReviewStepList;
-  /** The step shows its own page rather than a list (the summary, #101). */
+  /**
+   * The step shows its own page rather than a list (the summary, #101; the
+   * projects step, #161).
+   */
   readonly ownPage?: true;
 }
 
@@ -143,6 +147,9 @@ const stepDisplays: Readonly<
       empty: () => t("No waiting tasks"),
     },
   },
+  // Its own page of project rows grouped by project status (#161), not a
+  // list of task cards.
+  projects: { label: () => t("Projects"), ownPage: true },
   someday: {
     label: () => t("Someday"),
     list: {

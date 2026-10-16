@@ -2,7 +2,8 @@
 // that opens it: a line of text and, below it, importance, urgency, effort,
 // start and due with the task panel's controls, then 所属项目 (#151) from the
 // task panel's candidates. Nothing is written before the capture, and every
-// opening starts empty: nothing is kept from the last one.
+// opening starts empty: nothing is kept from the last one. Only the review's
+// projects step opens it with its 所属项目 filled in (#162), for that opening.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
@@ -17,7 +18,7 @@ import {
   defaultRating,
   type Rating,
 } from "../../domain/task/task";
-import type { CommandFn, SelectOption } from "../../orca.d.ts";
+import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import {
   effortName,
@@ -83,6 +84,8 @@ const captureTextStyle: React.CSSProperties = {
  */
 function ProjectChoice(props: {
   value: ProjectId | null;
+  /** Filled in on opening: offered even when done (#162). */
+  filledIn: ProjectId | null;
   readProjectCandidates: ReadProjectCandidates;
   pluginName: string;
   onChange: (project: ProjectId | null) => void;
@@ -91,7 +94,11 @@ function ProjectChoice(props: {
     () => createNotify(props.pluginName),
     [props.pluginName],
   );
-  const candidates = useProjectCandidates(props.readProjectCandidates, notify);
+  const candidates = useProjectCandidates(
+    props.readProjectCandidates,
+    notify,
+    props.filledIn,
+  );
   const options: SelectOption[] = candidates.map((candidate) => ({
     value: String(candidate.id),
     label: shownText(candidate).text,
@@ -130,6 +137,8 @@ function QuickCapturePopup(props: {
   readProjectCandidates: ReadProjectCandidates;
   pluginName: string;
   today: () => CalendarDate;
+  /** The 所属项目 filled in on opening; it can be changed or cleared. */
+  project: ProjectId | null;
   /** Closes the popup by unmounting it. */
   onClose: () => void;
 }) {
@@ -137,7 +146,10 @@ function QuickCapturePopup(props: {
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const [text, setText] = React.useState("");
-  const [draft, setDraft] = React.useState(emptyDraft);
+  const [draft, setDraft] = React.useState<Draft>(() => ({
+    ...emptyDraft,
+    project: props.project,
+  }));
   // Into the text on opening, back where it was (e.g. the editor) on closing.
   const input = React.useRef<HTMLInputElement>(null);
   const capture = useQuickCapture(props.quickCapture, props.pluginName);
@@ -238,6 +250,7 @@ function QuickCapturePopup(props: {
             <Field label={t("Project")} labelId={id("project")}>
               <ProjectChoice
                 value={draft.project}
+                filledIn={props.project}
                 readProjectCandidates={props.readProjectCandidates}
                 pluginName={props.pluginName}
                 onChange={set("project")}
@@ -263,8 +276,17 @@ function QuickCapturePopup(props: {
 }
 
 /**
- * The quick capture command ("Create task"): opens the popup in `render`'s root. At most
- * one popup at a time; running the command while it is open does nothing.
+ * Opens the quick capture popup ("Create task") in `render`'s root, its
+ * 所属项目 filled in with `project` when given (#162). At most one popup at a
+ * time; opening it while it is open does nothing. A filled-in project that is
+ * no longer a project when the task is created is left out, as the use case
+ * does for any 所属项目.
+ */
+export type OpenQuickCapture = (project?: ProjectId) => void;
+
+/**
+ * The opener of the quick capture popup; the command ("Create task") calls
+ * it without a project.
  */
 export function createQuickCaptureCommand(
   quickCapture: QuickCapture,
@@ -274,9 +296,9 @@ export function createQuickCaptureCommand(
   /** The current logical day, for the dates. */
   today: () => CalendarDate,
   render: (node: React.ReactNode) => void,
-): CommandFn {
+): OpenQuickCapture {
   let open = false;
-  return () => {
+  return (project) => {
     if (open) return;
     open = true;
     render(
@@ -285,6 +307,7 @@ export function createQuickCaptureCommand(
         readProjectCandidates={readProjectCandidates}
         pluginName={pluginName}
         today={today}
+        project={project ?? null}
         onClose={() => {
           open = false;
           render(null);

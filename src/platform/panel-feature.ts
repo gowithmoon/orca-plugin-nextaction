@@ -28,6 +28,7 @@ import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-s
 import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
+import type { OpenQuickCapture } from "../ui/capture/quick-capture-popup";
 import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
@@ -106,8 +107,11 @@ export function createPanelFeature(deps: {
   taskPanel: { openPopup: OpenTaskPanelPopup; formDeps: TaskPanelFormDeps };
   /** The review popup (#103), for the review view's "Change review interval". */
   openReviewPopup: OpenReviewPopup;
-  /** The quick capture popup, for the review's "Create task" (#99). */
-  openQuickCapture: () => void;
+  /**
+   * The quick capture popup, for the review's "Create task" (#99), its
+   * 所属项目 filled in from the projects step's rows (#162).
+   */
+  openQuickCapture: OpenQuickCapture;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
 }): { feature: FeatureModule; views: PanelViews } {
@@ -129,6 +133,9 @@ export function createPanelFeature(deps: {
   const projectDetails = createTaskTreeStores();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
+  // The review's projects step's collapsed groups (#161): in memory only,
+  // apart from the project list's.
+  const reviewProjectGroups = createProjectGroupsStore();
   // The stats view's scale (#135): in memory only, likewise.
   const statsScale = createStatsScaleStore();
   // When the last full review was completed (#101), in `plugins.setData`
@@ -279,6 +286,9 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       page: reviewPage,
+      projectMenuItems: deps.projectMenuItems,
+      projectGroups: reviewProjectGroups,
+      openProject,
     }),
   );
   views.register(
@@ -326,6 +336,10 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.openProject`, openProject.clear);
     registry.add(`${pluginName}.projectDetailsStores`, projectDetails.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
+    registry.add(
+      `${pluginName}.reviewProjectGroups`,
+      reviewProjectGroups.clear,
+    );
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);

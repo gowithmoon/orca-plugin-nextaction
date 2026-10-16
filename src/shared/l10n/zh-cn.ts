@@ -509,6 +509,8 @@ const zhCN: Record<string, string> = {
   "Review completed": "回顾已完成",
   "Could not complete the review: ${reason}": "无法完成回顾：${reason}",
   "Completions in look back": "回看过去中完成的次数",
+  "Projects with no next action": "缺少下一步行动的项目",
+  "Projects without progress": "长期无进展的项目",
   "Since ${moment}": "从 ${moment} 起",
   "Completed and skipped": "完成与跳过",
   "Nothing completed or skipped": "这段时间没有完成或跳过的任务",
@@ -574,6 +576,7 @@ const zhCN: Record<string, string> = {
   Progress: "进度",
   "No tasks": "没有任务",
   "No next action": "缺少下一步行动",
+  "${days} days without progress": "${days} 天无进展",
   "${count} tasks not done yet": "还有 ${count} 个任务未完成",
   "${count} tasks": "${count} 个任务",
   "Starts ${date}": "${date} 开始",
@@ -598,6 +601,7 @@ const zhCN: Record<string, string> = {
   "The project tag could not be set up. Check the project tag name in the plugin settings.":
     "项目标签无法设置。请在插件设置中检查项目标签名。",
   "No projects yet": "还没有项目",
+  "No projects": "没有项目",
   "To start a project, add the project tag to a page or block in Orca.":
     "在 Orca 中给页面或块打上项目标签，就新建了一个项目。",
   // The project details (#156).

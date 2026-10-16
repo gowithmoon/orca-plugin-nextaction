@@ -5,7 +5,8 @@ import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-
 import { createInMemoryLastFullReview } from "../../../tests/in-memory-last-full-review";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import type { ReviewRead } from "../../domain/review/review";
-import { createReadReview } from "./read-review";
+import { createReadProjectList } from "./read-project-list";
+import { createReadReview, type ReadReviewResult } from "./read-review";
 
 const weekly = { every: 1, unit: "week" } as const;
 const october = (day: number) => ({ year: 2026, month: 10, day });
@@ -521,6 +522,59 @@ describe("read review", () => {
       expect((await readReview()).lastFullReview?.daysAgo).toBe(1);
     });
 
+    it("counts the projects with no next action and those without progress, a project with both in each", async () => {
+      const { repository, readReview } = setup();
+      const longAgo = new Date("2026-09-01T10:00:00+08:00");
+      const recently = new Date("2026-10-10T10:00:00+08:00");
+      // Both: active, no task, created long ago.
+      repository.addProject({ id: 1, status: "active", created: longAgo });
+      // Neither: a next action added recently.
+      repository.addProject({ id: 2, status: "active", created: longAgo });
+      repository.addTask(
+        { id: 3, status: "todo", created: recently },
+        { parentId: 2 },
+      );
+      // Without progress only: waiting since long ago.
+      repository.addProject({ id: 4, status: "active", created: longAgo });
+      repository.addTask(
+        { id: 5, status: "waiting", created: longAgo },
+        { parentId: 4 },
+      );
+      // No next action only: active, no task, created recently.
+      repository.addProject({ id: 6, status: "active", created: recently });
+      // Neither: planning.
+      repository.addProject({ id: 7, status: "planning", created: longAgo });
+
+      const { summary } = await readReview();
+
+      expect(summary.projectsWithNoNextAction).toBe(2);
+      expect(summary.projectsWithoutProgress).toBe(2);
+    });
+
+    it("counts no project when there is none", async () => {
+      const { readReview } = setup();
+
+      const { summary } = await readReview();
+
+      expect(summary.projectsWithNoNextAction).toBe(0);
+      expect(summary.projectsWithoutProgress).toBe(0);
+    });
+
+    it("counts no project while the project tag is paused", async () => {
+      const { repository, readReview } = setup();
+      repository.addProject({
+        id: 1,
+        status: "active",
+        created: new Date("2026-09-01T10:00:00+08:00"),
+      });
+      repository.pauseProjectTag(true);
+
+      const { summary } = await readReview();
+
+      expect(summary.projectsWithNoNextAction).toBe(0);
+      expect(summary.projectsWithoutProgress).toBe(0);
+    });
+
     it("gives no last full review when none was completed or its moment is lost", async () => {
       const { readReview } = setup(null);
 
@@ -558,3 +612,143 @@ interface ReviewItemLike {
   readonly task: { readonly id: number };
   readonly project: { readonly text: string } | null;
 }
+
+/**
+ * The projects step's groups as their project status and their projects'
+ * IDs, a kept one as "<id> kept".
+ */
+function projectGroups(read: ReadReviewResult) {
+  if (read.projects.kind !== "projects")
+    throw new Error(`the projects step reads ${read.projects.kind}`);
+  return read.projects.groups.map((group) => [
+    group.status,
+    group.projects.map((node) =>
+      node.faded === "kept" ? `${node.project.id} kept` : node.project.id,
+    ),
+  ]);
+}
+
+describe("read review: the projects step", () => {
+  it("lists the projects not done and the done ones with tasks not done, grouped by project status", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "done" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Done, every task done: not listed.
+    repository.addProject({ id: 3, status: "done" });
+    repository.addTask({ id: 4, status: "done" }, { parentId: 3 });
+    // Done without a task: not listed either.
+    repository.addProject({ id: 5, status: "done" });
+    repository.addProject({ id: 6, status: "someday" });
+    repository.addProject({ id: 7, status: "paused" });
+    repository.addProject({ id: 8, status: "planning" });
+    repository.addProject({ id: 9, status: "active" });
+
+    expect(projectGroups(await readReview())).toEqual([
+      ["active", [9]],
+      ["planning", [8]],
+      ["paused", [7]],
+      ["someday", [6]],
+      ["done", [1]],
+    ]);
+  });
+
+  it("orders each group as the project list does: the highest score first", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "active", importance: 1 });
+    repository.addProject({ id: 2, status: "active", importance: 5 });
+    repository.addProject({ id: 3, status: "active", importance: 3 });
+    const readProjectList = createReadProjectList({
+      repository,
+      clock: createFixedClock("2026-10-14T09:00:00+08:00"),
+      dayBoundary: createFixedDayBoundary(),
+      startPreviewDays: createFixedStartPreviewDays(),
+    });
+
+    const read = await readReview();
+    const list = await readProjectList();
+
+    expect(projectGroups(read)).toEqual([["active", [2, 3, 1]]]);
+    if (list.kind !== "projects") throw new Error(list.kind);
+    if (read.projects.kind !== "projects") throw new Error(read.projects.kind);
+    expect(read.projects.groups).toEqual(list.groups);
+  });
+
+  it("still lists a kept project after it left the step, faded, in the group of its project status now", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // Listed as active, then set to done with every task done: it left.
+    repository.addProject({ id: 2, status: "done" });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 2 });
+
+    const read = await readReview({
+      keep: { step: "projects", projects: new Set([1, 2]) },
+    });
+
+    expect(projectGroups(read)).toEqual([
+      ["active", [1]],
+      ["done", ["2 kept"]],
+    ]);
+  });
+
+  it("moves a kept project still in the step to the group of its new project status, not faded", async () => {
+    const { repository, readReview } = setup();
+    // Listed as active, then paused.
+    repository.addProject({ id: 1, status: "paused" });
+
+    const read = await readReview({
+      keep: { step: "projects", projects: new Set([1]) },
+    });
+
+    expect(projectGroups(read)).toEqual([["paused", [1]]]);
+  });
+
+  it("does not list a kept project once it is no longer a project", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "active" });
+    await repository.dropProject(2, []);
+
+    const read = await readReview({
+      keep: { step: "projects", projects: new Set([1, 2]) },
+    });
+
+    expect(projectGroups(read)).toEqual([["active", [1]]]);
+  });
+
+  it("counts only the projects in the step, not a kept one", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "someday" });
+    repository.addProject({ id: 3, status: "done" });
+
+    const read = await readReview({
+      keep: { step: "projects", projects: new Set([1, 2, 3]) },
+    });
+
+    if (read.projects.kind !== "projects") throw new Error(read.projects.kind);
+    expect(read.projects.total).toBe(2);
+  });
+
+  it("keeps no project for another step", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "done" });
+
+    const read = await readReview({
+      keep: { step: "inbox", tasks: new Set([1]) },
+    });
+
+    expect(projectGroups(read)).toEqual([]);
+  });
+
+  it("reads as paused while the project tag is paused, the other steps as usual", async () => {
+    const { repository, readReview } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "inbox" }, { parentId: 1 });
+    repository.pauseProjectTag(true);
+
+    const read = await readReview();
+
+    expect(read.projects.kind).toBe("paused");
+    expect(ids(read.steps.inbox.items)).toEqual([2]);
+  });
+});

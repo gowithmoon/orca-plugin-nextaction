@@ -624,7 +624,8 @@ export const componentCss = `
 }
 
 @media (hover: hover) {
-  .nextaction-project-row:not(:hover, :focus-within) .nextaction-task-card-open {
+  .nextaction-project-row:not(:hover, :focus-within)
+    :is(.nextaction-task-card-open, .nextaction-task-card-extra) {
     opacity: 0;
   }
 }
@@ -698,6 +699,14 @@ export const componentCss = `
 .nextaction-project-group-count {
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A project kept in the review's projects step after it left it (#161),
+ * faded like a kept task card until another step opens.
+ */
+.nextaction-project-group-item[data-kept] {
+  opacity: 0.6;
 }
 
 .nextaction-project-group-list {
