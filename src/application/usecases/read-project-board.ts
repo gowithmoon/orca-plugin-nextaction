@@ -39,6 +39,12 @@ export interface BoardCard {
    * show it: only when it has one, which is not the project's. `null`: none.
    */
   readonly parentText: string | null;
+  /**
+   * Its parent task (GLOSSARY: 父任务), the project's too; `null`: none
+   * (a project block is no task).
+   * A drop on a card tells its parent task apart by it (#169).
+   */
+  readonly parentId: TaskId | null;
   /** It is a next action (GLOSSARY: 下一步行动): the board's dot (#167). */
   readonly nextAction: boolean;
   /**
@@ -67,6 +73,8 @@ export interface BoardRow {
   readonly task: Task;
   /** Its indent: 0 for a direct subtask of the card, 1 below that, … */
   readonly depth: number;
+  /** Its parent task: the card's task or a row above it (#169). */
+  readonly parentId: TaskId | null;
   /** As `BoardCard.blocked`. */
   readonly blocked: boolean;
   /** As `BoardCard.nextAction`. */
@@ -211,6 +219,7 @@ export function createReadProjectBoard(deps: {
         ({ item: row, depth }): BoardRow => ({
           task: row.task,
           depth,
+          parentId: row.parentId,
           blocked: marksBlocked(graph.entry(row.task.id)),
           nextAction: nextAction(row.task.id),
         }),
@@ -222,6 +231,7 @@ export function createReadProjectBoard(deps: {
           item.parentId === null
             ? null
             : (graph.entry(item.parentId)?.task.text ?? null),
+        parentId: item.parentId,
         nextAction: nextAction(item.task.id),
         subtasks: subtaskCounts(children.get(item.task.id) ?? []),
         descendants: descendantCounts(rows),

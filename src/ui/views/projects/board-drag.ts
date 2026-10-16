@@ -1,11 +1,13 @@
-// Dragging on the project board grouped by status (#168): a card or an
-// expanded subtask row dropped in another column changes the task to that
-// column's status (domain/project/board-drop.ts); no block moves, so a
-// subtask stays in its card. The column the pointer is over is highlighted,
-// the done column's narrow strip too; the task's own column is no drop: no
-// highlight, nothing written. A drop on a card or a row counts, for now, as
-// one in the column it is in; becoming its last subtask comes with #169,
-// which `dropAt` leaves the place for (the task marker).
+// Dragging on the project board grouped by status: a card or an expanded
+// subtask row dropped in another column changes the task to that column's
+// status (#168), no block moves, so a subtask stays in its card; dropped on
+// another card or row, it becomes that task's last subtask, its status
+// unchanged (#169), with the tree's lastChild move and its crossing
+// confirmation (`onMove`). What a point takes is domain/project/board-drop.ts:
+// on itself, one of its descendant tasks or its parent task a card or a row
+// falls back to its column; the task's own column is no drop. The column, or
+// the card or row, the pointer is over is highlighted while it would take
+// the drop, the done column's narrow strip too.
 //
 // These are the cards' drops in the plugin panel (`PanelDropTarget`) on the
 // shared card drag (ui/drag/card-drag.tsx), which handles the press, the
@@ -15,12 +17,11 @@
 //
 // Smooth by design: the state lives outside React, the highlight is set on
 // the DOM directly. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import {
-  type BoardDrop,
-  boardStatusDrop,
-} from "../../../domain/project/board-drop";
+import type { TaskMove } from "../../../domain/blocking/task-move";
+import { type BoardDrop, boardDrop } from "../../../domain/project/board-drop";
 import {
   type Task,
+  type TaskId,
   type TaskStatus,
   taskStatuses,
 } from "../../../domain/task/task";
@@ -28,7 +29,7 @@ import type { PanelDropTarget } from "../../drag/card-drag";
 
 /** Marks a column, or the done column's strip, holding its status. */
 export const boardColumnAttribute = "data-nextaction-board-drop-status";
-/** Marks a card or a subtask row, holding its task's ID (for #169). */
+/** Marks a card or a subtask row, holding its task's ID. */
 export const boardTaskAttribute = "data-nextaction-board-drop-task";
 /** Set on the column the pointer is over while it would take the drop. */
 const overAttribute = "data-drop-over";
@@ -50,6 +51,10 @@ interface DropAt {
 export interface BoardDragSetup {
   readonly root: HTMLElement | null;
   readonly changeStatus: (task: Task, status: TaskStatus) => void;
+  /** A task's parent task, as the board shows it (`null`: none, or not on it). */
+  readonly parentOf: (id: TaskId) => TaskId | null;
+  /** Moves a task, asking first when it crosses the project block's boundary. */
+  readonly move: (move: TaskMove, at: { x: number; y: number }) => void;
 }
 
 export interface BoardDrag {
@@ -61,19 +66,29 @@ export interface BoardDrag {
 function dropAt(
   root: HTMLElement,
   task: Task,
+  parentOf: (id: TaskId) => TaskId | null,
   x: number,
   y: number,
 ): DropAt | null {
   const element = document.elementFromPoint(x, y);
   if (!element || !root.contains(element)) return null;
-  // A card or a row (`boardTaskAttribute`) takes its column's drop until
-  // #169 makes it a place of its own.
-  const column = element.closest(`[${boardColumnAttribute}]`);
-  if (!column || !root.contains(column)) return null;
-  const status = column.getAttribute(boardColumnAttribute);
-  if (!isStatus(status)) return null;
-  const drop = boardStatusDrop(task.status, status);
-  return drop ? { drop, highlight: column } : null;
+  const within = (found: Element | null) =>
+    found && root.contains(found) ? found : null;
+  const onTask = within(element.closest(`[${boardTaskAttribute}]`));
+  const column = within(element.closest(`[${boardColumnAttribute}]`));
+  const id = Number(onTask?.getAttribute(boardTaskAttribute));
+  const status = column?.getAttribute(boardColumnAttribute) ?? null;
+  const drop = boardDrop(
+    task,
+    {
+      ...(onTask && Number.isInteger(id) ? { task: id } : {}),
+      ...(isStatus(status) ? { column: status } : {}),
+    },
+    parentOf,
+  );
+  if (!drop) return null;
+  const highlight = drop.kind === "lastChild" ? onTask : column;
+  return highlight ? { drop, highlight } : null;
 }
 
 export function createBoardDrag(setup: () => BoardDragSetup): BoardDrag {
@@ -95,14 +110,21 @@ export function createBoardDrag(setup: () => BoardDragSetup): BoardDrag {
         setup().root?.setAttribute(draggingAttribute, "");
       },
       move(x, y) {
-        const { root } = setup();
-        highlight(root ? dropAt(root, task, x, y) : null);
+        const { root, parentOf } = setup();
+        highlight(root ? dropAt(root, task, parentOf, x, y) : null);
       },
       drop(x, y) {
-        const { root, changeStatus } = setup();
-        const at = root ? dropAt(root, task, x, y) : null;
+        const { root, changeStatus, parentOf, move } = setup();
+        const at = root ? dropAt(root, task, parentOf, x, y) : null;
         if (!at) return false;
-        changeStatus(task, at.drop.status);
+        // One drop, one write.
+        if (at.drop.kind === "status") changeStatus(task, at.drop.status);
+        else {
+          move(
+            { id: task.id, target: at.drop.target, placement: "lastChild" },
+            { x, y },
+          );
+        }
         return true;
       },
       end() {

@@ -5,8 +5,9 @@
 // strip by default; open, its earlier cards open apart. Cards keep their
 // actions: a click opens the task panel, the status icon the status menu,
 // a right-click the task menu, and a card or an expanded subtask row drags
-// into the notes, or into another column to change its status (#168,
-// board-drag.ts). A next action has a small dot at its status
+// into the notes, into another column to change its status (#168), or onto
+// another card or row to become its last subtask, the target card then
+// expanded (#169, board-drag.ts). A next action has a small dot at its status
 // icon's top right. A card with subtasks says "Subtasks done/total" (direct
 // subtasks only), with how many of its descendant tasks are doing or next
 // actions while collapsed; expanded, it lists every descendant task as a
@@ -19,7 +20,8 @@ import type {
   ProjectBoard,
   StatusColumn,
 } from "../../../application/usecases/read-project-board";
-import type { CalendarDate, Task } from "../../../domain/task/task";
+import type { TaskMove } from "../../../domain/blocking/task-move";
+import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
 import { ContextMenu } from "../../components/popup-controls";
@@ -39,10 +41,10 @@ import {
 } from "./board-drag";
 import type { ExpandedCardsStore } from "./project-board-stores";
 
-/** The board's drag (#168), for its cards and rows. */
+/** The board's drag (#168, #169), for its cards and rows. */
 const BoardDragContext = React.createContext<BoardDrag | undefined>(undefined);
 
-/** A card's or a row's drag: into the notes, or into another column. */
+/** A card's or a row's drag: into the notes, a column, a card or a row. */
 function useBoardCardDrag(task: Task): React.HTMLAttributes<HTMLElement> {
   const drag = React.useContext(BoardDragContext);
   // The same target while the task is the same.
@@ -350,20 +352,50 @@ function DoneColumn(props: {
   );
 }
 
+/** Every card's and row's task on the board, with its parent task. */
+function boardParents(board: ProjectBoard): ReadonlyMap<TaskId, TaskId | null> {
+  const parents = new Map<TaskId, TaskId | null>();
+  for (const column of board.columns) {
+    for (const card of [...column.cards, ...column.earlier]) {
+      parents.set(card.task.id, card.parentId);
+      for (const row of card.rows) parents.set(row.task.id, row.parentId);
+    }
+  }
+  return parents;
+}
+
 export function ProjectBoardColumns(props: {
   board: ProjectBoard;
   cards: BoardCards;
   doneColumn: DoneSectionStore;
+  /**
+   * Moves a task as the tree does: asking first across the project block's
+   * boundary, refusals told (#169).
+   */
+  onMove: (move: TaskMove, at: { x: number; y: number }) => void;
 }) {
   const { board, cards } = props;
   const root = React.useRef<HTMLElement>(null);
   const changeStatus = React.useRef(cards.actions.changeStatus);
   changeStatus.current = cards.actions.changeStatus;
+  const boardParentsNow = React.useMemo(() => boardParents(board), [board]);
+  const parents = React.useRef(boardParentsNow);
+  parents.current = boardParentsNow;
+  const onMove = React.useRef(props.onMove);
+  onMove.current = props.onMove;
+  const expanded = React.useRef(cards.expanded);
+  expanded.current = cards.expanded;
   // The same through the board's life: a card's drag keeps its target.
   const [drag] = React.useState(() =>
     createBoardDrag(() => ({
       root: root.current,
       changeStatus: (task, status) => changeStatus.current(task, status),
+      parentOf: (id) => parents.current.get(id) ?? null,
+      move: (move, at) => {
+        // The target card opens to show where it went; a row's card is open.
+        expanded.current.setAll([move.target], true);
+        onMove.current(move, at);
+      },
     })),
   );
   return (
