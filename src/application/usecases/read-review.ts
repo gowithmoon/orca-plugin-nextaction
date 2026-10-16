@@ -212,6 +212,16 @@ export interface ReadReviewResult {
      * recurring task completed 3 times counts 3); skips not counted.
      */
     readonly completedInLookBack: number;
+    /**
+     * The projects lacking a next action (GLOSSARY: 缺少下一步行动), of the
+     * projects step's projects; 0 while the project tag is paused.
+     */
+    readonly projectsWithNoNextAction: number;
+    /**
+     * The projects without recent progress (GLOSSARY: 长期无进展), likewise;
+     * a project with both signals counts in each.
+     */
+    readonly projectsWithoutProgress: number;
   };
   /**
    * When the last full review (GLOSSARY: 完整回顾) was completed, and how
@@ -361,8 +371,12 @@ export function createReadReview(deps: {
      * The projects step: the projects not done, and the done ones with tasks
      * not done, grouped as the project list groups them.
      */
-    const readProjectsStep = (): ProjectsStepRead => {
-      if (snapshot.projectsPaused) return { kind: "paused" };
+    const readProjectsStep = (): {
+      read: ProjectsStepRead;
+      nodes: readonly ProjectNode[];
+    } => {
+      if (snapshot.projectsPaused)
+        return { read: { kind: "paused" }, nodes: [] };
       const kept: ReadonlySet<ProjectId> =
         keep?.step === "projects" ? keep.projects : new Set();
       const context = {
@@ -384,11 +398,19 @@ export function createReadReview(deps: {
             belongs(node) ? node : { ...node, faded: "kept" },
         );
       return {
-        kind: "projects",
-        groups: groupProjects(nodes, today),
-        total: nodes.filter(belongs).length,
+        read: {
+          kind: "projects",
+          groups: groupProjects(nodes, today),
+          total: nodes.filter(belongs).length,
+        },
+        nodes,
       };
     };
+    const projectsStep = readProjectsStep();
+    // From the nodes read for the projects step, kept ones included: how the
+    // projects stand now, whatever this review did to them.
+    const countProjects = (has: (node: ProjectNode) => boolean) =>
+      projectsStep.nodes.filter(has).length;
     return {
       steps: {
         inbox: {
@@ -422,11 +444,15 @@ export function createReadReview(deps: {
             : null,
         ),
       },
-      projects: readProjectsStep(),
+      projects: projectsStep.read,
       summary: {
         completedInLookBack: looked.entries.filter(
           (entry) => entry.kind === "completion",
         ).length,
+        projectsWithNoNextAction: countProjects((node) => node.noNextAction),
+        projectsWithoutProgress: countProjects(
+          (node) => node.noProgressDays !== null,
+        ),
       },
       lastFullReview: lastFullReviewAt && {
         at: lastFullReviewAt,
