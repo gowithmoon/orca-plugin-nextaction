@@ -77,6 +77,8 @@ export interface PanelDropTarget {
   showsChip?(): boolean;
   /** What scrolls while the pointer is near its top or bottom edge, the first that can first. */
   scrollers?(): readonly HTMLElement[];
+  /** What scrolls sideways while the pointer is near its left or right edge (the project board, #168). */
+  sideScrollers?(): readonly HTMLElement[];
   /**
    * The element holds the pointer from the press on, not only once it is a
    * drag: for a thin strip the pointer leaves before it has gone far enough
@@ -269,7 +271,7 @@ function createCardDrag(
     // Nothing drops in the notes: they are not scrolled either.
     if (!dragging || !noteDropOf(dragging)) return;
     const scroller = noteScrollerAt(point.x, point.y);
-    const step = scroller ? scrollAmount(scroller, point.x, point.y) : 0;
+    const step = scroller ? scrollAmount(scroller, point.x, point.y, "y") : 0;
     if (!scroller || step === 0) return;
     const before = scroller.scrollTop;
     scroller.scrollTop = before + step;
@@ -388,9 +390,21 @@ function createCardDrag(
         drag.cancel();
         return;
       }
-      const scrollers = current.inPanel?.scrollers?.() ?? [];
+      const { inPanel } = current;
+      const scrolled = scrollNearEdge(
+        inPanel?.scrollers?.() ?? [],
+        point.x,
+        point.y,
+        "y",
+      );
+      const sideways = scrollNearEdge(
+        inPanel?.sideScrollers?.() ?? [],
+        point.x,
+        point.y,
+        "x",
+      );
       // What lies under a still pointer moved.
-      if (scrollNearEdge(scrollers, point.x, point.y)) update();
+      if (scrolled || sideways) update();
     },
     takeClick() {
       const taken = clickTaken;
@@ -531,6 +545,11 @@ export function useCardDrag(
       const { target } = event;
       if (event.button !== 0 || !(target instanceof Element)) return;
       if (target.closest(ownPress)) return;
+      // A drag source within this one (a board card's subtask row, #168)
+      // drags its own task; this one leaves the press to it.
+      if (target.closest(`[${cardDragAttribute}]`) !== event.currentTarget) {
+        return;
+      }
       const { inPanel } = options;
       const picked =
         (typeof inPanel === "function" ? inPanel(target) : inPanel) ??

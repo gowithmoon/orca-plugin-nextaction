@@ -608,6 +608,31 @@ const zhCN: Record<string, string> = {
   "Back to projects": "返回项目列表",
   Goal: "目标",
   "Could not read the project: ${reason}": "无法读取项目：${reason}",
+  "Project view default layout": "项目视图默认布局",
+  "The layout a project's details show its tasks in. Changing it switches the layout at once.":
+    "项目详情用哪种布局呈现任务。修改后立即切换。",
+  Tree: "层级",
+  Board: "看板",
+  Layout: "布局",
+  "Expand ${column}": "展开${column}",
+  "Collapse ${column}": "收起${column}",
+  "Earlier done ${count}": "更早的已完成 ${count}",
+  // The board's cards (#167).
+  "Next action": "下一步行动",
+  "Subtasks ${done}/${total}": "子任务 ${done}/${total}",
+  "As root task": "作为根任务",
+  "Expand subtasks": "展开子任务",
+  "Collapse subtasks": "折叠子任务",
+  "Doing ${count}": "进行中 ${count}",
+  "Next ${count}": "下一步 ${count}",
+  // The board by project root task (#171).
+  Grouping: "分列方式",
+  "By status": "按状态",
+  "By root task": "按根任务",
+  Other: "其他",
+  "Project root tasks without subtasks": "没有子任务的项目根任务",
+  "Drop here to make it a project root task": "拖到这里，成为项目根任务",
+  "Done ${count}": "已完成 ${count}",
 };
 
 export default zhCN;

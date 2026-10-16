@@ -18,6 +18,7 @@ import { createReadMoveCrossing } from "../application/usecases/read-move-crossi
 import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
+import { createReadProjectBoard } from "../application/usecases/read-project-board";
 import { createReadProjectList } from "../application/usecases/read-project-list";
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
@@ -40,6 +41,7 @@ import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
+import { projectBoardCss } from "../ui/styles/project-board-style";
 import { statsDistributionCss } from "../ui/styles/stats-distribution-style";
 import { statsNowCss } from "../ui/styles/stats-now-style";
 import { statsPeriodCss } from "../ui/styles/stats-period-style";
@@ -60,7 +62,12 @@ import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import { createOpenProjectStore } from "../ui/views/projects/open-project-store";
+import { createProjectBoardStores } from "../ui/views/projects/project-board-stores";
 import { createProjectGroupsStore } from "../ui/views/projects/project-groups-store";
+import {
+  createProjectLayoutStore,
+  projectLayoutFrom,
+} from "../ui/views/projects/project-layout-store";
 import { createProjectsView } from "../ui/views/projects/projects-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
@@ -131,6 +138,11 @@ export function createPanelFeature(deps: {
   // The project details' tree state (#157): in memory only, apart from the
   // all tasks view's stores.
   const projectDetails = createTaskTreeStores();
+  // The project details' layout (#166), one for every project, and the
+  // board's own state: in memory only, likewise. Each load starts the layout
+  // from the default layout setting.
+  const projectLayout = createProjectLayoutStore();
+  const projectBoard = createProjectBoardStores();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The review's projects step's collapsed groups (#161): in memory only,
@@ -260,6 +272,15 @@ export function createPanelFeature(deps: {
       readMoveCrossing: createReadMoveCrossing({ repository }),
       linkTaskInNote,
       details: projectDetails,
+      readProjectBoard: createReadProjectBoard({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      layout: projectLayout,
+      board: projectBoard,
+      openQuickCapture: deps.openQuickCapture,
     }),
   );
   views.register(
@@ -321,7 +342,7 @@ export function createPanelFeature(deps: {
   });
 
   const feature: FeatureModule = (context) => {
-    const { pluginName, registry } = context;
+    const { pluginName, registry, settings } = context;
     loadedPluginName = pluginName;
     registry.add(`${pluginName}.lastFullReviewName`, () => {
       loadedPluginName = undefined;
@@ -335,6 +356,25 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.projectGroups`, projectGroups.clear);
     registry.add(`${pluginName}.openProject`, openProject.clear);
     registry.add(`${pluginName}.projectDetailsStores`, projectDetails.clear);
+    registry.add(`${pluginName}.projectLayout`, projectLayout.clear);
+    registry.add(`${pluginName}.projectBoardStores`, projectBoard.clear);
+    // The default layout (#166): the layout this load starts in; a change of
+    // the setting overrides the layout in memory at once. Every settings
+    // change fires the subscription, the plugin's own writes included
+    // (plugin-lifecycle-settings): only a change of this value counts.
+    const defaultLayout = () =>
+      projectLayoutFrom(settings().projectDefaultLayout);
+    let lastDefaultLayout = defaultLayout();
+    projectLayout.set(lastDefaultLayout);
+    const pluginState = orca.state.plugins[pluginName];
+    if (pluginState) {
+      registry.subscribe(pluginState, () => {
+        const next = defaultLayout();
+        if (next === lastDefaultLayout) return;
+        lastDefaultLayout = next;
+        projectLayout.set(next);
+      });
+    }
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.add(
       `${pluginName}.reviewProjectGroups`,
@@ -345,6 +385,7 @@ export function createPanelFeature(deps: {
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
     registry.css("cardDragStyle", cardDragCss);
+    registry.css("projectBoardStyle", projectBoardCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.

@@ -24,9 +24,14 @@ export interface AllTasksSortStore {
   subscribe(listener: () => void): () => void;
 }
 
-const initial: AllTasksSortState = { sort: "note", direction: "ascending" };
-
-export function createAllTasksSortStore(): AllTasksSortStore {
+/**
+ * A store starting at `sort`, ascending, and cleared back to it: note order
+ * by default; the project board's starts at the score (#166).
+ */
+export function createAllTasksSortStore(
+  sort: AllTasksSort = "note",
+): AllTasksSortStore {
+  const initial: AllTasksSortState = { sort, direction: "ascending" };
   const store = createMemoryStore<AllTasksSortState>(
     initial,
     (a, b) => a.sort === b.sort && a.direction === b.direction,

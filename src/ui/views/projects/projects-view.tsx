@@ -18,6 +18,10 @@ import type {
 import type { ReadCandidates } from "../../../application/usecases/read-candidates";
 import type { ReadMoveCrossing } from "../../../application/usecases/read-move-crossing";
 import type {
+  ProjectBoardRead,
+  ReadProjectBoard,
+} from "../../../application/usecases/read-project-board";
+import type {
   ProjectGroup,
   ProjectListRead,
   ReadProjectList,
@@ -26,6 +30,7 @@ import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
+import type { OpenQuickCapture } from "../../capture/quick-capture-popup";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { projectStatusLabel } from "../../components/project-status-label";
 import { ViewHeader } from "../../components/view-header";
@@ -70,11 +75,20 @@ import {
 import type { TaskTreeStores } from "../all-tasks/task-tree-stores";
 import { useMoveConfirmation } from "./move-confirmation";
 import type { OpenProjectStore } from "./open-project-store";
+import { BoardCollapseAllButton, ProjectBoardColumns } from "./project-board";
+import type {
+  BoardGroupingStore,
+  ProjectBoardStores,
+} from "./project-board-stores";
 import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
   isGroupCollapsed,
   type ProjectGroupsStore,
 } from "./project-groups-store";
+import {
+  type ProjectLayoutStore,
+  projectLayoutFrom,
+} from "./project-layout-store";
 
 export interface ProjectsViewDeps {
   readProjectList: ReadProjectList;
@@ -112,6 +126,17 @@ export interface ProjectsViewDeps {
    * tasks are kept, by task.
    */
   details: TaskTreeStores;
+  /** The project board's read (#166). */
+  readProjectBoard: ReadProjectBoard;
+  /**
+   * The project details' layout, one for every project, in the plugin
+   * instance's memory; the default layout setting overrides it.
+   */
+  layout: ProjectLayoutStore;
+  /** The board's own state, apart from the tree's (#166). */
+  board: ProjectBoardStores;
+  /** The board's "Create task", its 所属项目 filled in with the project. */
+  openQuickCapture: OpenQuickCapture;
 }
 
 /**
@@ -247,10 +272,19 @@ function ProjectsContent(props: {
   );
 }
 
-function DetailsContent(props: {
-  query: ViewQuery<ProjectScopeRead>;
+/**
+ * The project details in either layout: what a read needs (loading, failure,
+ * no such project), then the attribute area and the layout's part.
+ */
+function DetailsContent<R extends ProjectScopeRead | ProjectBoardRead>(props: {
+  query: ViewQuery<R>;
   today: CalendarDate;
   deps: ProjectsViewDeps;
+  /** The layout's toolbar and tasks under the attribute area. */
+  render: (
+    read: Extract<R, { kind: "project" }>,
+    actions: TaskActions,
+  ) => React.ReactNode;
 }) {
   const { query, today, deps } = props;
   const state = useViewQuery(query);
@@ -277,7 +311,7 @@ function DetailsContent(props: {
     );
   }
   if (state.data.kind === "noProject") return null;
-  const read = state.data;
+  const read = state.data as Extract<R, { kind: "project" }>;
   return (
     <>
       <ProjectAttributes
@@ -286,7 +320,193 @@ function DetailsContent(props: {
         menuItems={deps.projectMenuItems()}
         onOpenInNotes={() => actions.openBlockInNotes(read.project.project.id)}
       />
-      <DetailsTree read={read} today={today} actions={actions} deps={deps} />
+      {props.render(read, actions)}
+    </>
+  );
+}
+
+/**
+ * The layout switch (#166), first in the toolbar: icons only, one choice for
+ * every project, kept in memory.
+ */
+function LayoutSwitch(props: { store: ProjectLayoutStore }) {
+  const { Segmented } = orca.components;
+  const layout = React.useSyncExternalStore(
+    props.store.subscribe,
+    props.store.current,
+  );
+  const icon = (className: string, label: string) => (
+    <span
+      className="nextaction-layout-icon"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <i className={className} aria-hidden="true" />
+    </span>
+  );
+  return (
+    <Segmented
+      role="group"
+      aria-label={t("Layout")}
+      className="nextaction-layout-switch"
+      selected={layout}
+      options={[
+        { value: "tree", jsx: icon("ti ti-list-tree", t("Tree")) },
+        { value: "board", jsx: icon("ti ti-layout-kanban", t("Board")) },
+      ]}
+      onChange={(value) => props.store.set(projectLayoutFrom(value))}
+    />
+  );
+}
+
+/**
+ * The board's grouping switch (GLOSSARY: 分列方式, #171), beside the layout
+ * switch: one choice for every project, kept in memory.
+ */
+function GroupingSwitch(props: { store: BoardGroupingStore }) {
+  const { Segmented } = orca.components;
+  const grouping = React.useSyncExternalStore(
+    props.store.subscribe,
+    props.store.current,
+  );
+  return (
+    <Segmented
+      role="group"
+      aria-label={t("Grouping")}
+      className="nextaction-layout-switch"
+      selected={grouping}
+      options={[
+        { value: "status", label: t("By status") },
+        { value: "root", label: t("By root task") },
+      ]}
+      onChange={(value) =>
+        props.store.set(value === "root" ? "root" : "status")
+      }
+    />
+  );
+}
+
+/**
+ * The board layout's toolbar and board (#166): the layout switch, the
+ * board's own sort and "Create task" (quick capture, 所属项目 filled in with
+ * this project), "collapse all / expand all" over the cards' subtasks
+ * (#167), then the columns. The search box and filter are the tree's, on
+ * the same store (#172): switching layout keeps them.
+ */
+function DetailsBoard(props: {
+  read: Extract<ProjectBoardRead, { kind: "project" }>;
+  today: CalendarDate;
+  actions: TaskActions;
+  deps: ProjectsViewDeps;
+}) {
+  const { read, today, actions, deps } = props;
+  const stores = deps.board;
+  // As the tree's moves (#157): crossing the project block's boundary asks.
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const { onMove, confirmation } = useMoveConfirmation({
+    project: read.project.project.id,
+    readMoveCrossing: deps.readMoveCrossing,
+    move: moveTask,
+    notify: deps.taskActions.notify,
+  });
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
+  const { selectedTaskId, selectTask } = usePanel();
+  const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const sort = React.useSyncExternalStore(
+    stores.sort.subscribe,
+    stores.sort.current,
+  );
+  // The tree's filter and search text, shared with it (#172).
+  const filterStore = deps.details.filter;
+  const filter = React.useSyncExternalStore(
+    filterStore.subscribe,
+    filterStore.current,
+  );
+  const filtering = isFilteringAllTasks(filter);
+  const candidates = useCandidates(
+    deps.readCandidates,
+    deps.changes,
+    deps.taskActions.notify,
+  );
+  const { Button, Tooltip } = orca.components;
+  const project = read.project.project.id;
+  const board = read.board;
+  // Narrowed, the read leaves out every empty column; "Other" too.
+  const empty =
+    board.grouping === "status"
+      ? board.columns.length === 0
+      : board.columns.length === 0 &&
+        board.other.cards.length + board.other.done.length === 0;
+  return (
+    <>
+      <div className="nextaction-toolbar">
+        <LayoutSwitch store={deps.layout} />
+        <GroupingSwitch store={stores.grouping} />
+        <AllTasksSearchBox
+          search={filter.search}
+          onChange={(search) => filterStore.set({ ...filter, search })}
+        />
+        <div className="nextaction-toolbar-view">
+          <AllTasksSortSelect state={sort} onChange={stores.sort.set} />
+          <BoardCollapseAllButton
+            board={read.board}
+            expanded={stores.expanded}
+          />
+          <AllTasksFilterButton
+            state={filter}
+            candidates={candidates}
+            onChange={filterStore.set}
+          />
+          <Tooltip text={t("Create task")}>
+            <Button
+              variant="plain"
+              className="nextaction-toolbar-button"
+              aria-label={t("Create task")}
+              onClick={() => deps.openQuickCapture(project)}
+            >
+              <i className="ti ti-circle-plus" aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        </div>
+      </div>
+      {filtering && empty ? (
+        // As the tree's: nothing passes, a way back.
+        <ViewNotice
+          icon="ti ti-filter-off"
+          title={t("No tasks match the filter")}
+          action={
+            <Button variant="outline" onClick={filterStore.clear}>
+              {t("Clear filter")}
+            </Button>
+          }
+        />
+      ) : (
+        <CardDragArea onNoteDrop={linkTaskInNote}>
+          <ProjectBoardColumns
+            board={read.board}
+            project={project}
+            // Narrowed: no "As root task", no empty "Other" (#170, #172).
+            filtering={filtering}
+            doneColumn={stores.doneColumn}
+            rootColumns={stores}
+            onMove={onMove}
+            cards={{
+              today,
+              actions,
+              menuItems: deps.menuItems(),
+              menuPlace,
+              selectedTaskId,
+              selectTask,
+              expanded: stores.expanded,
+            }}
+          />
+        </CardDragArea>
+      )}
+      {confirmation}
     </>
   );
 }
@@ -356,6 +576,7 @@ function DetailsTree(props: {
   return (
     <>
       <div className="nextaction-toolbar">
+        <LayoutSwitch store={deps.layout} />
         <AllTasksSearchBox
           search={filter.search}
           onChange={(search) => stores.filter.set({ ...filter, search })}
@@ -436,6 +657,26 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
       search: stores.filter.current().search,
     });
   }, deps.changes);
+  // The board's read (#166): only while the board shows, as the tree's only
+  // while the tree does.
+  const boardStores = deps.board;
+  const boardQuery = createViewQuery(async (): Promise<ProjectBoardRead> => {
+    const project = deps.openProject.current();
+    if (project === null) return { kind: "noProject" };
+    return deps.readProjectBoard({
+      project,
+      grouping: boardStores.grouping.current(),
+      sort: boardStores.sort.current().sort,
+      direction: boardStores.sort.current().direction,
+      // The tree's filter and search text, shared (#172): switching layout
+      // keeps them.
+      filter: stores.filter.current().filter,
+      search: stores.filter.current().search,
+    });
+  }, deps.changes);
+  boardStores.sort.subscribe(() => boardQuery.reload());
+  stores.filter.subscribe(() => boardQuery.reload());
+  boardStores.grouping.subscribe(() => boardQuery.reload());
   // Another project opened: its filter, search text, sort and "show
   // earlier" start over; the collapsed tasks stay, by task. Going back to
   // the list and into the same project keeps them. Lives as long as the
@@ -449,6 +690,12 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
     stores.sort.clear();
     stores.doneSection.set({
       ...stores.doneSection.current(),
+      showEarlier: false,
+    });
+    // The board's sort and earlier done cards likewise (as phase two's).
+    boardStores.sort.clear();
+    boardStores.doneColumn.set({
+      ...boardStores.doneColumn.current(),
       showEarlier: false,
     });
   });
@@ -468,6 +715,10 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
     const open = React.useSyncExternalStore(
       deps.openProject.subscribe,
       deps.openProject.current,
+    );
+    const layout = React.useSyncExternalStore(
+      deps.layout.subscribe,
+      deps.layout.current,
     );
     const { selectedTaskId } = usePanel();
     // As in the all tasks view: a new selection reads again, so a task kept
@@ -493,11 +744,42 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
         </>
       );
     }
+    const today = deps.today();
     return (
-      <>
+      <div className="nextaction-project-details" data-layout={layout}>
         <BackToProjects onBack={() => deps.openProject.set(null)} />
-        <DetailsContent query={details} today={deps.today()} deps={deps} />
-      </>
+        {layout === "board" ? (
+          <DetailsContent
+            key="board"
+            query={boardQuery}
+            today={today}
+            deps={deps}
+            render={(read, actions) => (
+              <DetailsBoard
+                read={read}
+                today={today}
+                actions={actions}
+                deps={deps}
+              />
+            )}
+          />
+        ) : (
+          <DetailsContent
+            key="tree"
+            query={details}
+            today={today}
+            deps={deps}
+            render={(read, actions) => (
+              <DetailsTree
+                read={read}
+                today={today}
+                actions={actions}
+                deps={deps}
+              />
+            )}
+          />
+        )}
+      </div>
     );
   }
 

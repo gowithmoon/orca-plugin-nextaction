@@ -83,7 +83,7 @@ export function useMoveConfirmation(props: {
   const confirmation = pending && (
     <MoveConfirmBox
       // A new one for every move, opened once.
-      key={`${pending.move.id}:${pending.move.placement}:${pending.move.target}`}
+      key={JSON.stringify(pending.move)}
       pending={pending}
       onConfirm={() => {
         setPending(null);

@@ -282,7 +282,11 @@ export interface ReadAllTasks {
   (options: ReadAllTasksScopedOptions): Promise<ProjectScopeRead>;
 }
 
-function marksBlocked(entry: TaskGraphEntry | undefined): boolean {
+/**
+ * Marked blocked as `TaskNode.blocked` says; shared with the project board
+ * (#166).
+ */
+export function marksBlocked(entry: TaskGraphEntry | undefined): boolean {
   if (!entry) return false;
   const status = entry.task.status;
   if (status !== "todo" && status !== "doing") return false;
@@ -300,27 +304,50 @@ function byDay(
   return sign * compareDays(a, b);
 }
 
-type NodeOrder = (a: AllTasksNode, b: AllTasksNode) => number;
-
 /**
  * What a top-level node is sorted by: a task's own values, or a project's
  * (GLOSSARY: 项目行), each the project's own.
  */
-type Sorted = Pick<
+export type Sorted = Pick<
   Task,
   "due" | "start" | "importance" | "urgency" | "created"
 > & { readonly score: number };
 
 /**
- * How top-level nodes compare for `sort` run `direction`; `null` for note
- * order. Only the comparison flips, so ties still compare equal. A project
- * row takes part with its own values (`sortedOf`).
+ * What task `task` is sorted by: its own values and its score (GLOSSARY:
+ * 评分) on `today`, from its effective start. Shared with the project board.
  */
-function comparator(
+export function taskSorted(
+  task: Task,
+  graph: TaskGraph,
+  today: CalendarDate,
+): Sorted {
+  const entry = graph.entry(task.id);
+  return {
+    ...task,
+    score: score(
+      {
+        task,
+        effectiveStart: entry?.effectiveStart ?? null,
+        ancestorRatings: entry?.ancestorRatings ?? [],
+      },
+      today,
+    ),
+  };
+}
+
+/**
+ * How items compare for `sort` run `direction`; `null` for note order. Only
+ * the comparison flips, so ties still compare equal. Each item takes part
+ * with its own values (`sortedOf`): a project row with the project's.
+ * Shared with the project board's cards.
+ */
+export function comparator<N>(
   sort: AllTasksSort,
   direction: SortDirection,
-  sortedOf: (node: AllTasksNode) => Sorted,
-): NodeOrder | null {
+  sortedOf: (node: N) => Sorted,
+): ((a: N, b: N) => number) | null {
+  type NodeOrder = (a: N, b: N) => number;
   const sign = direction === "descending" ? -1 : 1;
   const by =
     (compare: (a: Sorted, b: Sorted) => number): NodeOrder =>
@@ -355,7 +382,7 @@ type TopLevel =
     };
 
 /** The tasks as a tree, in note order. */
-interface TaskTree {
+export interface TaskTree {
   /** Top-level tasks not under a project block, and the projects. */
   readonly topLevel: readonly TopLevel[];
   /** The task's subtasks; none for a task without. */
@@ -375,21 +402,37 @@ function scopedTaskTree(
   graph: TaskGraph,
   project: ProjectId,
 ): TaskTree {
+  return {
+    topLevel: projectRootTasks(snapshot, graph, project).map((item) => ({
+      kind: "task",
+      item,
+    })),
+    childrenOf: tree.childrenOf,
+  };
+}
+
+/**
+ * The project root tasks of `project` (GLOSSARY: 项目根任务): its tasks whose
+ * parent task is not its, or that have none, wherever they sit, in note
+ * order. Shared with the project board (#166).
+ */
+export function projectRootTasks(
+  snapshot: TaskGraphSnapshot,
+  graph: TaskGraph,
+  project: ProjectId,
+): SnapshotTask[] {
   const owned = (id: TaskId) => graph.entry(id)?.project?.id === project;
-  const roots = [...snapshot.tasks]
+  return [...snapshot.tasks]
     .sort((a, b) => a.position - b.position)
     .filter(
       (item) =>
         owned(item.task.id) &&
         (item.parentId === null || !owned(item.parentId)),
     );
-  return {
-    topLevel: roots.map((item) => ({ kind: "task", item })),
-    childrenOf: tree.childrenOf,
-  };
 }
 
-function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
+/** Shared with the project board (#165). */
+export function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
   const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
   const ids = new Set(ordered.map((item) => item.task.id));
   const projects = new Map(
@@ -565,24 +608,30 @@ function keptPath(
   return undefined;
 }
 
-/** What the filter and the search text let through. */
-interface Narrowing {
+/**
+ * What the filter and the search text let through. Shared with the project
+ * board (#172), which narrows by the same rules.
+ */
+export interface Narrowing {
   readonly filter: AllTasksFilter;
   /** What is searched for, as typed; empty: no search. */
   readonly search: string;
 }
 
-function narrowing(options: ReadAllTasksOptions): Narrowing {
+export function narrowing(options: {
+  readonly filter?: AllTasksFilter;
+  readonly search?: string;
+}): Narrowing {
   return { filter: options.filter ?? {}, search: options.search ?? "" };
 }
 
 /** Something is searched for: not only white space. */
-function searches(narrow: Narrowing): boolean {
+export function searches(narrow: Narrowing): boolean {
   return narrow.search.trim() !== "";
 }
 
 /** The filter or the search lets fewer through than every task. */
-function narrows(narrow: Narrowing): boolean {
+export function narrows(narrow: Narrowing): boolean {
   return (
     searches(narrow) ||
     filterChoosesAny(narrow.filter) ||
@@ -603,9 +652,17 @@ function projectFound(narrow: Narrowing, project: Project): boolean {
   );
 }
 
-/** The task is let through in the tree. */
-function matches(narrow: Narrowing, task: Task): boolean {
-  const statuses = narrow.filter.statuses ?? [];
+/**
+ * The task is let through in the tree. `byStatus: false` leaves the status
+ * filter out (the done section; the board by status, whose columns it
+ * chooses instead, #172).
+ */
+export function matches(
+  narrow: Narrowing,
+  task: Task,
+  byStatus = true,
+): boolean {
+  const statuses = byStatus ? (narrow.filter.statuses ?? []) : [];
   return (
     (statuses.length === 0 ||
       (task.status !== "done" && statuses.includes(task.status))) &&
@@ -665,8 +722,7 @@ function narrowedTree(
   const tree: AllTasksNode[] = [];
   const done: DoneEntry[] = [];
   /** The status filter does not apply to the done section. */
-  const doneLets = (task: Task) =>
-    filterLets(narrow.filter, task) && found(narrow, task);
+  const doneLets = (task: Task) => matches(narrow, task, false);
   for (const entry of context.tree.topLevel) {
     if (entry.kind === "project") {
       const project = entry.item.project;
@@ -751,24 +807,49 @@ function doneSection(
   today: CalendarDate,
   everyDay: boolean,
 ): DoneSection {
-  // A task with no completion recorded (e.g. made done in Orca directly) has
-  // no reliable time, so it is never among the recent ones.
-  const firstDay = addDays(today, 1 - doneSectionDays);
-  const listed = done.filter(
-    (entry) =>
-      everyDay ||
-      (entry.lastCompletion !== undefined &&
-        compareDays(entry.lastCompletion.day, firstDay) >= 0),
+  const { recent, earlier } = byLastCompletion(
+    done,
+    (entry) => entry.lastCompletion,
+    today,
+    everyDay,
   );
-  // The most recent last completion first; those with none after, in note
-  // order (`done` is in note order already, and the sort is stable).
-  const time = (entry: DoneEntry) =>
-    entry.lastCompletion?.at.getTime() ?? Number.NEGATIVE_INFINITY;
-  listed.sort((a, b) => (time(a) === time(b) ? 0 : time(b) - time(a)));
   return {
-    items: listed.map((entry) => entry.item),
-    count: listed.length,
-    hasEarlier: listed.length < done.length,
+    items: recent.map((entry) => entry.item),
+    count: recent.length,
+    hasEarlier: earlier.length > 0,
+  };
+}
+
+/**
+ * Done items (in note order) split by the done section's range (#63): those
+ * last completed within the last `doneSectionDays` logical days, and the
+ * earlier ones. Each part has the most recent last completion first, those
+ * with none after, in note order. A task with no completion recorded (e.g.
+ * made done in Orca directly) has no reliable time, so it is never among the
+ * recent ones. `everyDay`: every item is recent. Shared with the project
+ * board's done column (#166).
+ */
+export function byLastCompletion<T>(
+  done: readonly T[],
+  lastCompletionOf: (item: T) => CompletionEntry | undefined,
+  today: CalendarDate,
+  everyDay = false,
+): { recent: T[]; earlier: T[] } {
+  const firstDay = addDays(today, 1 - doneSectionDays);
+  const isRecent = (item: T) => {
+    if (everyDay) return true;
+    const last = lastCompletionOf(item);
+    return last !== undefined && compareDays(last.day, firstDay) >= 0;
+  };
+  // Stable, and `done` is in note order: ties keep it.
+  const time = (item: T) =>
+    lastCompletionOf(item)?.at.getTime() ?? Number.NEGATIVE_INFINITY;
+  const ordered = [...done].sort((a, b) =>
+    time(a) === time(b) ? 0 : time(b) - time(a),
+  );
+  return {
+    recent: ordered.filter(isRecent),
+    earlier: ordered.filter((item) => !isRecent(item)),
   };
 }
 
@@ -826,23 +907,10 @@ export function createReadAllTasks(deps: {
         : context,
       narrow,
     );
-    const sortedOf = (node: AllTasksNode): Sorted => {
-      if (node.kind === "task") {
-        const entry = graph.entry(node.task.id);
-        return {
-          ...node.task,
-          score: score(
-            {
-              task: node.task,
-              effectiveStart: entry?.effectiveStart ?? null,
-              ancestorRatings: entry?.ancestorRatings ?? [],
-            },
-            today,
-          ),
-        };
-      }
-      return { ...node.project, score: projectScore(node.project, today) };
-    };
+    const sortedOf = (node: AllTasksNode): Sorted =>
+      node.kind === "task"
+        ? taskSorted(node.task, graph, today)
+        : { ...node.project, score: projectScore(node.project, today) };
     const compare = comparator(
       options.sort ?? "note",
       options.direction ?? "ascending",
