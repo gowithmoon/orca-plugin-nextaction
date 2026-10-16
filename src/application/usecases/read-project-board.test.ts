@@ -608,3 +608,182 @@ describe("read project board, by project root task (#171)", () => {
     expect(rootColumns(read)).toEqual([[4, [3]]]);
   });
 });
+
+describe("read project board, filtered and searched (#172)", () => {
+  it("keeps a card when it or any descendant task is found, its rows only what is found and the tasks above it", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", text: "Plan" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", text: "Draft" },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", text: "Call printer" },
+      { parentId: 3 },
+    );
+    repository.addTask(
+      { id: 5, status: "todo", text: "Budget" },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 6, status: "todo", text: "Venue" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 7, status: "todo", text: "Call venue" },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectBoard({
+      project: 1,
+      sort: "note",
+      search: "call",
+    });
+
+    expect(cardIds(read, "todo")).toEqual([2, 7]);
+    expect(
+      column(read, "todo").cards[0]?.rows.map((row) => [
+        row.task.id,
+        row.depth,
+      ]),
+    ).toEqual([
+      [3, 0],
+      [4, 1],
+    ]);
+  });
+
+  it("narrows only a card's rows, not its counts: subtasks and the collapsed card's doing ones stay those of every descendant task", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", text: "Plan" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", text: "Call printer" },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, status: "doing", text: "Budget" },
+      { parentId: 2 },
+    );
+
+    const read = await readProjectBoard({ project: 1, search: "call" });
+
+    const card = column(read, "todo").cards[0];
+    expect(card?.rows.map((row) => row.task.id)).toEqual([3]);
+    expect(card?.subtasks).toEqual({ done: 0, total: 2 });
+    expect(card?.descendants.doing).toBe(1);
+  });
+
+  it("by status lets the status filter choose only the columns, not the cards; the done column, not offered by it, goes too", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // A todo card whose subtasks are of other statuses: kept whole.
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "waiting" }, { parentId: 2 });
+    repository.addTask({ id: 5, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 6, status: "doing" }, { parentId: 1 });
+    repository.addTask(
+      { id: 7, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-08") },
+    );
+
+    const read = await readProjectBoard({
+      project: 1,
+      sort: "note",
+      filter: { statuses: ["todo", "doing"] },
+    });
+
+    expect(
+      byStatus(read).columns.map((col) => [
+        col.status,
+        col.cards.map((card) => card.task.id),
+      ]),
+    ).toEqual([
+      ["todo", [2]],
+      ["doing", [6]],
+    ]);
+    expect(
+      column(read, "todo").cards[0]?.rows.map((row) => row.task.id),
+    ).toEqual([3, 4]);
+  });
+
+  it("by status leaves out the empty columns while narrowed, the others' counts those found; searching lifts the done column's 30 days, as the done section's", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", text: "Call A" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", text: "Write" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "inbox", text: "Read" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 5, status: "done", text: "Call B" },
+      { parentId: 1, ...completedOn("2026-01-08") },
+    );
+
+    const read = await readProjectBoard({ project: 1, search: "call" });
+
+    expect(
+      byStatus(read).columns.map((col) => [
+        col.status,
+        col.count,
+        col.cards.map((card) => card.task.id),
+        col.earlier.map((card) => card.task.id),
+      ]),
+    ).toEqual([
+      ["todo", 1, [2], []],
+      ["done", 1, [5], []],
+    ]);
+  });
+
+  it("by project root task narrows the cards by the status filter too, a column shown when its project root task passes (every card then) or a card in it does", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // Its root passes: the whole column.
+    repository.addTask({ id: 2, status: "doing" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "inbox" }, { parentId: 2 });
+    // A card passes by a descendant task: only that card.
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 6, status: "inbox" }, { parentId: 5 });
+    repository.addTask({ id: 7, status: "todo" }, { parentId: 6 });
+    repository.addTask({ id: 8, status: "doing" }, { parentId: 7 });
+    repository.addTask({ id: 9, status: "todo" }, { parentId: 5 });
+    // Nothing in it passes: no column.
+    repository.addTask({ id: 10, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 11, status: "inbox" }, { parentId: 10 });
+    // "Other": only those passing.
+    repository.addTask({ id: 12, status: "doing" }, { parentId: 1 });
+    repository.addTask({ id: 13, status: "todo" }, { parentId: 1 });
+
+    const read = await readProjectBoard({
+      project: 1,
+      grouping: "root",
+      sort: "note",
+      filter: { statuses: ["doing"] },
+    });
+
+    expect(byRoot(read).other.cards.map((card) => card.task.id)).toEqual([12]);
+    expect(rootColumns(read)).toEqual([
+      [2, [3, 4]],
+      [5, [6]],
+    ]);
+    // Its rows: the doing one and the tasks above it.
+    expect(
+      byRoot(read).columns[1]?.cards[0]?.rows.map((row) => row.task.id),
+    ).toEqual([7, 8]);
+  });
+});

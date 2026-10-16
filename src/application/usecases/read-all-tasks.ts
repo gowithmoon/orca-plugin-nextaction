@@ -607,24 +607,30 @@ function keptPath(
   return undefined;
 }
 
-/** What the filter and the search text let through. */
-interface Narrowing {
+/**
+ * What the filter and the search text let through. Shared with the project
+ * board (#172), which narrows by the same rules.
+ */
+export interface Narrowing {
   readonly filter: AllTasksFilter;
   /** What is searched for, as typed; empty: no search. */
   readonly search: string;
 }
 
-function narrowing(options: ReadAllTasksOptions): Narrowing {
+export function narrowing(options: {
+  readonly filter?: AllTasksFilter;
+  readonly search?: string;
+}): Narrowing {
   return { filter: options.filter ?? {}, search: options.search ?? "" };
 }
 
 /** Something is searched for: not only white space. */
-function searches(narrow: Narrowing): boolean {
+export function searches(narrow: Narrowing): boolean {
   return narrow.search.trim() !== "";
 }
 
 /** The filter or the search lets fewer through than every task. */
-function narrows(narrow: Narrowing): boolean {
+export function narrows(narrow: Narrowing): boolean {
   return (
     searches(narrow) ||
     filterChoosesAny(narrow.filter) ||
@@ -645,9 +651,17 @@ function projectFound(narrow: Narrowing, project: Project): boolean {
   );
 }
 
-/** The task is let through in the tree. */
-function matches(narrow: Narrowing, task: Task): boolean {
-  const statuses = narrow.filter.statuses ?? [];
+/**
+ * The task is let through in the tree. `byStatus: false` leaves the status
+ * filter out (the done section; the board by status, whose columns it
+ * chooses instead, #172).
+ */
+export function matches(
+  narrow: Narrowing,
+  task: Task,
+  byStatus = true,
+): boolean {
+  const statuses = byStatus ? (narrow.filter.statuses ?? []) : [];
   return (
     (statuses.length === 0 ||
       (task.status !== "done" && statuses.includes(task.status))) &&
@@ -707,8 +721,7 @@ function narrowedTree(
   const tree: AllTasksNode[] = [];
   const done: DoneEntry[] = [];
   /** The status filter does not apply to the done section. */
-  const doneLets = (task: Task) =>
-    filterLets(narrow.filter, task) && found(narrow, task);
+  const doneLets = (task: Task) => matches(narrow, task, false);
   for (const entry of context.tree.topLevel) {
     if (entry.kind === "project") {
       const project = entry.item.project;
