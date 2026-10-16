@@ -627,6 +627,17 @@ function SummaryPage(props: {
       count: steps.dueForReview.total,
       icon: "ti ti-list-check",
     },
+    // The icons of the project row's signals.
+    {
+      label: t("Projects with no next action"),
+      count: summary.projectsWithNoNextAction,
+      icon: "ti ti-alert-triangle",
+    },
+    {
+      label: t("Projects without progress"),
+      count: summary.projectsWithoutProgress,
+      icon: "ti ti-clock",
+    },
   ];
   return (
     <div className="nextaction-review-summary">

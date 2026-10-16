@@ -509,6 +509,8 @@ const zhCN: Record<string, string> = {
   "Review completed": "回顾已完成",
   "Could not complete the review: ${reason}": "无法完成回顾：${reason}",
   "Completions in look back": "回看过去中完成的次数",
+  "Projects with no next action": "缺少下一步行动的项目",
+  "Projects without progress": "长期无进展的项目",
   "Since ${moment}": "从 ${moment} 起",
   "Completed and skipped": "完成与跳过",
   "Nothing completed or skipped": "这段时间没有完成或跳过的任务",
