@@ -365,15 +365,19 @@ export function createReadReview(deps: {
       if (snapshot.projectsPaused) return { kind: "paused" };
       const kept: ReadonlySet<ProjectId> =
         keep?.step === "projects" ? keep.projects : new Set();
-      const summaries = summarizeProjects(snapshot, graph);
-      const startsBy = addDays(today, deps.startPreviewDays.current());
+      const context = {
+        summaries: summarizeProjects(snapshot, graph),
+        today,
+        startsBy: addDays(today, deps.startPreviewDays.current()),
+        boundary,
+      };
       const belongs = (node: ProjectNode) =>
         node.project.status !== "done" || node.unfinished > 0;
       // Only projects in the snapshot: a block that is no longer a project
       // is not listed, kept or not.
       const nodes = [...(snapshot.projects ?? [])]
         .sort((a, b) => a.position - b.position)
-        .map(({ project }) => projectNode(summaries, startsBy, project, []))
+        .map(({ project }) => projectNode(context, project, []))
         .filter((node) => belongs(node) || kept.has(node.project.id))
         .map(
           (node): ProjectNode =>

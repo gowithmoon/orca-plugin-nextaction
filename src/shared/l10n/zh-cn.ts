@@ -574,6 +574,7 @@ const zhCN: Record<string, string> = {
   Progress: "进度",
   "No tasks": "没有任务",
   "No next action": "缺少下一步行动",
+  "${days} days without progress": "${days} 天无进展",
   "${count} tasks not done yet": "还有 ${count} 个任务未完成",
   "${count} tasks": "${count} 个任务",
   "Starts ${date}": "${date} 开始",

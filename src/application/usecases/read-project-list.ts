@@ -48,14 +48,19 @@ export function createReadProjectList(deps: {
   return async () => {
     const snapshot = await deps.repository.readTaskGraph();
     if (snapshot.projectsPaused) return { kind: "paused" };
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
+    const boundary = deps.dayBoundary.current();
+    const today = logicalDay(deps.clock.now(), boundary);
     const previewDays = deps.startPreviewDays.current();
     const graph = analyzeTaskGraph(snapshot, { today, previewDays });
-    const summaries = summarizeProjects(snapshot, graph);
-    const startsBy = addDays(today, previewDays);
+    const context = {
+      summaries: summarizeProjects(snapshot, graph),
+      today,
+      startsBy: addDays(today, previewDays),
+      boundary,
+    };
     const nodes = [...(snapshot.projects ?? [])]
       .sort((a, b) => a.position - b.position)
-      .map(({ project }) => projectNode(summaries, startsBy, project, []));
+      .map(({ project }) => projectNode(context, project, []));
     return { kind: "projects", groups: groupProjects(nodes, today) };
   };
 }
