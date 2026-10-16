@@ -583,6 +583,14 @@ const zhCN: Record<string, string> = {
   // Quick capture's 所属项目 (#151).
   "No project": "无所属项目",
   "Could not read the projects: ${reason}": "无法读取项目：${reason}",
+  // The projects view (#155).
+  Projects: "项目",
+  "Projects are paused": "项目功能已暂停",
+  "The project tag could not be set up. Check the project tag name in the plugin settings.":
+    "项目标签无法设置。请在插件设置中检查项目标签名。",
+  "No projects yet": "还没有项目",
+  "To start a project, add the project tag to a page or block in Orca.":
+    "在 Orca 中给页面或块打上项目标签，就新建了一个项目。",
 };
 
 export default zhCN;

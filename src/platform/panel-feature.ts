@@ -17,6 +17,7 @@ import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
+import { createReadProjectList } from "../application/usecases/read-project-list";
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
@@ -59,6 +60,8 @@ import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
+import { createProjectGroupsStore } from "../ui/views/projects/project-groups-store";
+import { createProjectsView } from "../ui/views/projects/projects-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
 import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
@@ -74,7 +77,7 @@ export function pluginPanelType(pluginName: string): string {
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
  * style sheet, with the next action view (#53), the My Day view (#83), the
- * inbox view (#37), the all tasks view (#65), the review view (#98, #99), the stats view (#132) and their
+ * inbox view (#37), the all tasks view (#65), the projects view (#155), the review view (#98, #99), the stats view (#132) and their
  * card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
@@ -123,6 +126,8 @@ export function createPanelFeature(deps: {
   // The all tasks view's filter and search text (#69): in memory only, apart
   // from the next action view's filter.
   const allTasksFilter = createAllTasksFilterStore();
+  // The project list's collapsed groups (#155): in memory only, likewise.
+  const projectGroups = createProjectGroupsStore();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The stats view's scale (#135): in memory only, likewise.
@@ -225,6 +230,21 @@ export function createPanelFeature(deps: {
     }),
   );
   views.register(
+    createProjectsView({
+      readProjectList: createReadProjectList({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      projectMenuItems: deps.projectMenuItems,
+      groups: projectGroups,
+    }),
+  );
+  views.register(
     createReviewView({
       readReview: createReadReview({
         ...myDayDeps,
@@ -294,6 +314,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
     registry.add(`${pluginName}.doneSection`, doneSection.clear);
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
+    registry.add(`${pluginName}.projectGroups`, projectGroups.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);

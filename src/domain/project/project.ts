@@ -16,6 +16,18 @@ export const projectStatuses = [
 ] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
+/**
+ * The order of the project list's groups (GLOSSARY: 项目视图): the projects
+ * moving on first, the done ones last.
+ */
+export const projectListOrder: readonly ProjectStatus[] = [
+  "active",
+  "planning",
+  "paused",
+  "someday",
+  "done",
+];
+
 /** A new project, and one whose status is empty or unknown, is planning. */
 export const defaultProjectStatus: ProjectStatus = "planning";
 
