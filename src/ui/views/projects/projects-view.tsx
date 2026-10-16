@@ -371,6 +371,14 @@ function DetailsBoard(props: {
 }) {
   const { read, today, actions, deps } = props;
   const stores = deps.board;
+  // As the tree's moves (#157): crossing the project block's boundary asks.
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const { onMove, confirmation } = useMoveConfirmation({
+    project: read.project.project.id,
+    readMoveCrossing: deps.readMoveCrossing,
+    move: moveTask,
+    notify: deps.taskActions.notify,
+  });
   const linkTaskInNote = useLinkTaskInNote(
     deps.linkTaskInNote,
     deps.taskActions.notify,
@@ -409,6 +417,7 @@ function DetailsBoard(props: {
         <ProjectBoardColumns
           board={read.board}
           doneColumn={stores.doneColumn}
+          onMove={onMove}
           cards={{
             today,
             actions,
@@ -420,6 +429,7 @@ function DetailsBoard(props: {
           }}
         />
       </CardDragArea>
+      {confirmation}
     </>
   );
 }

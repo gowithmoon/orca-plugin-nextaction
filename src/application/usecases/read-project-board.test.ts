@@ -131,6 +131,37 @@ describe("read project board, by status", () => {
     ]);
   });
 
+  it("gives each card and each row its parent task, for a drop on them", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    // Written outside the project block.
+    repository.addTask({ id: 5, status: "todo" }, { project: [1] });
+
+    const read = await readProjectBoard({ project: 1, sort: "note" });
+
+    expect(
+      column(read, "todo").cards.map((card) => [
+        card.task.id,
+        card.parentId,
+        card.rows.map((row) => [row.task.id, row.parentId]),
+      ]),
+    ).toEqual([
+      // A project block is no parent task.
+      [
+        2,
+        null,
+        [
+          [3, 2],
+          [4, 3],
+        ],
+      ],
+      [5, null, []],
+    ]);
+  });
+
   it("orders each column's cards by score by default, highest first, ties in note order", async () => {
     const { repository, readProjectBoard } = setup();
     const day = (d: number) => ({ year: 2026, month: 10, day: d });

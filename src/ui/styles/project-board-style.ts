@@ -65,6 +65,19 @@ export const projectBoardCss = `
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--orca-color-primary-5) 60%, transparent);
 }
 
+/* The card or subtask row a drop would make the task the last subtask of (#169). */
+.nextaction-board-card[data-drop-over],
+.nextaction-board-row[data-drop-over] {
+  outline: 2px solid var(--orca-color-primary-5);
+  outline-offset: 1px;
+  border-radius: var(--orca-radius-md);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 10%, transparent);
+}
+
+.nextaction-board-row[data-drop-over] {
+  border-radius: var(--orca-radius-sm);
+}
+
 .nextaction-board-column {
   flex: 0 0 min(260px, calc(100cqw * 0.85));
   display: flex;
