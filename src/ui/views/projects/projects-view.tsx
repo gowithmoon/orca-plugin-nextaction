@@ -391,7 +391,8 @@ function GroupingSwitch(props: { store: BoardGroupingStore }) {
  * The board layout's toolbar and board (#166): the layout switch, the
  * board's own sort and "Create task" (quick capture, 所属项目 filled in with
  * this project), "collapse all / expand all" over the cards' subtasks
- * (#167), then the columns. The filter and search come with #172.
+ * (#167), then the columns. The search box and filter are the tree's, on
+ * the same store (#172): switching layout keeps them.
  */
 function DetailsBoard(props: {
   read: Extract<ProjectBoardRead, { kind: "project" }>;
@@ -419,18 +420,46 @@ function DetailsBoard(props: {
     stores.sort.subscribe,
     stores.sort.current,
   );
+  // The tree's filter and search text, shared with it (#172).
+  const filterStore = deps.details.filter;
+  const filter = React.useSyncExternalStore(
+    filterStore.subscribe,
+    filterStore.current,
+  );
+  const filtering = isFilteringAllTasks(filter);
+  const candidates = useCandidates(
+    deps.readCandidates,
+    deps.changes,
+    deps.taskActions.notify,
+  );
   const { Button, Tooltip } = orca.components;
   const project = read.project.project.id;
+  const board = read.board;
+  // Narrowed, the read leaves out every empty column; "Other" too.
+  const empty =
+    board.grouping === "status"
+      ? board.columns.length === 0
+      : board.columns.length === 0 &&
+        board.other.cards.length + board.other.done.length === 0;
   return (
     <>
       <div className="nextaction-toolbar">
         <LayoutSwitch store={deps.layout} />
         <GroupingSwitch store={stores.grouping} />
+        <AllTasksSearchBox
+          search={filter.search}
+          onChange={(search) => filterStore.set({ ...filter, search })}
+        />
         <div className="nextaction-toolbar-view">
           <AllTasksSortSelect state={sort} onChange={stores.sort.set} />
           <BoardCollapseAllButton
             board={read.board}
             expanded={stores.expanded}
+          />
+          <AllTasksFilterButton
+            state={filter}
+            candidates={candidates}
+            onChange={filterStore.set}
           />
           <Tooltip text={t("Create task")}>
             <Button
@@ -444,27 +473,39 @@ function DetailsBoard(props: {
           </Tooltip>
         </div>
       </div>
-      <CardDragArea onNoteDrop={linkTaskInNote}>
-        <ProjectBoardColumns
-          board={read.board}
-          project={project}
-          // The board reads no filter or search yet (#172 adds them; it then
-          // passes whether one is set, hiding "As root task").
-          filtering={false}
-          doneColumn={stores.doneColumn}
-          rootColumns={stores}
-          onMove={onMove}
-          cards={{
-            today,
-            actions,
-            menuItems: deps.menuItems(),
-            menuPlace,
-            selectedTaskId,
-            selectTask,
-            expanded: stores.expanded,
-          }}
+      {filtering && empty ? (
+        // As the tree's: nothing passes, a way back.
+        <ViewNotice
+          icon="ti ti-filter-off"
+          title={t("No tasks match the filter")}
+          action={
+            <Button variant="outline" onClick={filterStore.clear}>
+              {t("Clear filter")}
+            </Button>
+          }
         />
-      </CardDragArea>
+      ) : (
+        <CardDragArea onNoteDrop={linkTaskInNote}>
+          <ProjectBoardColumns
+            board={read.board}
+            project={project}
+            // Narrowed: no "As root task", no empty "Other" (#170, #172).
+            filtering={filtering}
+            doneColumn={stores.doneColumn}
+            rootColumns={stores}
+            onMove={onMove}
+            cards={{
+              today,
+              actions,
+              menuItems: deps.menuItems(),
+              menuPlace,
+              selectedTaskId,
+              selectTask,
+              expanded: stores.expanded,
+            }}
+          />
+        </CardDragArea>
+      )}
       {confirmation}
     </>
   );
@@ -627,9 +668,14 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
       grouping: boardStores.grouping.current(),
       sort: boardStores.sort.current().sort,
       direction: boardStores.sort.current().direction,
+      // The tree's filter and search text, shared (#172): switching layout
+      // keeps them.
+      filter: stores.filter.current().filter,
+      search: stores.filter.current().search,
     });
   }, deps.changes);
   boardStores.sort.subscribe(() => boardQuery.reload());
+  stores.filter.subscribe(() => boardQuery.reload());
   boardStores.grouping.subscribe(() => boardQuery.reload());
   // Another project opened: its filter, search text, sort and "show
   // earlier" start over; the collapsed tasks stay, by task. Going back to

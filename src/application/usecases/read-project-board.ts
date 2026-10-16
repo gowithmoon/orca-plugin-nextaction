@@ -16,13 +16,18 @@ import type { StartPreviewDaysSetting } from "../ports/start-preview-days-settin
 import type { TaskRepository } from "../ports/task-repository";
 import { projectNode, projectNodeContext } from "./project-nodes";
 import {
+  type AllTasksFilter,
   type AllTasksSort,
   byLastCompletion,
   comparator,
   marksBlocked,
+  matches,
+  narrowing,
+  narrows,
   type ProjectNode,
   projectRootTasks,
   type SortDirection,
+  searches,
   taskSorted,
 } from "./read-all-tasks";
 
@@ -189,6 +194,17 @@ export interface ReadProjectBoardOptions {
   readonly sort?: AllTasksSort;
   /** As `ReadAllTasksOptions.direction`. Defaults to `ascending`. */
   readonly direction?: SortDirection;
+  /**
+   * The project details' filter, shared with the tree (#172), by the tree's
+   * rules (`matches`). A card shows when it or any descendant task passes;
+   * its rows are those that pass and the tasks above them. By status the
+   * status filter only chooses the columns; by project root task it
+   * narrows the cards as the tree's does. Narrowed, empty columns are left
+   * out.
+   */
+  readonly filter?: AllTasksFilter;
+  /** As `ReadAllTasksOptions.search`, shared with the tree likewise. */
+  readonly search?: string;
 }
 
 export type ReadProjectBoard = (
@@ -257,7 +273,7 @@ export function createReadProjectBoard(deps: {
       (item) => item.project.id === options.project,
     );
     if (!scoped) return { kind: "noProject" };
-    const roots = projectRootTasks(snapshot, graph, scoped.project.id);
+    const allRoots = projectRootTasks(snapshot, graph, scoped.project.id);
     const children = childrenByParent(snapshot);
     const compare = comparator(
       options.sort ?? "score",
@@ -265,8 +281,19 @@ export function createReadProjectBoard(deps: {
       (card: BoardCard) => taskSorted(card.task, graph, today),
     );
     const nextAction = (id: TaskId) => graph.entry(id)?.nextAction ?? false;
+    const byId = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
+    const narrow = narrowing(options);
+    const narrowed = narrows(narrow);
+    // By status the status filter chooses the columns, not the cards.
+    const passes = (task: Task) =>
+      matches(narrow, task, options.grouping === "root");
+    /** Not narrowed, or it or any of its descendant tasks passes. */
+    const visible = (item: SnapshotTask): boolean =>
+      !narrowed ||
+      passes(item.task) ||
+      (children.get(item.task.id) ?? []).some(visible);
     const cardOf = (item: SnapshotTask): BoardCard => {
-      const rows = descendantsOf(children, item.task.id).map(
+      const allRows = descendantsOf(children, item.task.id).map(
         ({ item: row, depth }): BoardRow => ({
           task: row.task,
           depth,
@@ -275,6 +302,14 @@ export function createReadProjectBoard(deps: {
           nextAction: nextAction(row.task.id),
         }),
       );
+      // Narrowed, the rows are those passing and the tasks above them; the
+      // counts stay every descendant task's.
+      const rows = narrowed
+        ? allRows.filter((row) => {
+            const entry = byId.get(row.task.id);
+            return entry !== undefined && visible(entry);
+          })
+        : allRows;
       return {
         task: item.task,
         blocked: marksBlocked(graph.entry(item.task.id)),
@@ -285,7 +320,7 @@ export function createReadProjectBoard(deps: {
         parentId: item.parentId,
         nextAction: nextAction(item.task.id),
         subtasks: subtaskCounts(children.get(item.task.id) ?? []),
-        descendants: descendantCounts(rows),
+        descendants: descendantCounts(allRows),
         rows,
       };
     };
@@ -295,6 +330,7 @@ export function createReadProjectBoard(deps: {
       if (compare) cards.sort(compare);
       return cards;
     };
+    const roots = allRoots.filter(visible);
     const project = projectNode(
       projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
       scoped.project,
@@ -315,6 +351,12 @@ export function createReadProjectBoard(deps: {
           true,
         ).recent.map(cardOf),
       });
+      // A column's project root task passing shows every card in it; else
+      // only the cards that do (by themselves or a descendant task).
+      const cardsIn = (root: SnapshotTask) =>
+        !narrowed || passes(root.task)
+          ? subtasksOf(root)
+          : subtasksOf(root).filter(visible);
       const columns = roots
         .filter((root) => subtasksOf(root).length > 0)
         .map(
@@ -330,7 +372,7 @@ export function createReadProjectBoard(deps: {
               descendantsOf(children, root.task.id).every(
                 ({ item }) => item.task.status === "done",
               ),
-            ...cardsOf(subtasksOf(root)),
+            ...cardsOf(cardsIn(root)),
           }),
         );
       // Stable: the finished ones last, each part in note order.
@@ -345,24 +387,37 @@ export function createReadProjectBoard(deps: {
         },
       };
     }
-    const columns = columnOrder.map((status): StatusColumn => {
+    // The status filter offers only open statuses: choosing any leaves the
+    // done column out, as every column not chosen.
+    const chosen = options.filter?.statuses ?? [];
+    const shownColumns = columnOrder.filter(
+      (status) =>
+        chosen.length === 0 || (status !== "done" && chosen.includes(status)),
+    );
+    const columns = shownColumns.flatMap((status): StatusColumn[] => {
       const items = roots.filter((item) => item.task.status === status);
+      // Narrowed, an empty column goes.
+      if (narrowed && items.length === 0) return [];
       if (status === "done") {
-        // Done cards go by completion, not by the sort.
+        // Done cards go by completion, not by the sort; searching lifts the
+        // range, as the done section's.
         const { recent, earlier } = byLastCompletion(
           items,
           (item) => item.lastCompletion,
           today,
+          searches(narrow),
         );
-        return {
-          status,
-          count: items.length,
-          cards: recent.map(cardOf),
-          earlier: earlier.map(cardOf),
-        };
+        return [
+          {
+            status,
+            count: items.length,
+            cards: recent.map(cardOf),
+            earlier: earlier.map(cardOf),
+          },
+        ];
       }
       const cards = sorted(items);
-      return { status, count: cards.length, cards, earlier: [] };
+      return [{ status, count: cards.length, cards, earlier: [] }];
     });
     return {
       kind: "project",
