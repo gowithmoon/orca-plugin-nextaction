@@ -9,17 +9,20 @@
 // list. Each part reads when it shows and again on every task change signal
 // (ADR 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
+import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   ProjectScopeRead,
   ReadAllTasks,
 } from "../../../application/usecases/read-all-tasks";
+import type { ReadCandidates } from "../../../application/usecases/read-candidates";
 import type {
   ProjectGroup,
   ProjectListRead,
   ReadProjectList,
 } from "../../../application/usecases/read-project-list";
 import type { ProjectId } from "../../../domain/project/project";
-import type { CalendarDate } from "../../../domain/task/task";
+import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
@@ -30,6 +33,10 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { CardDragArea } from "../../drag/card-drag";
+import { useCandidates } from "../../hooks/use-candidates";
+import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
+import { useMoveTask } from "../../hooks/use-move-task";
 import {
   type TaskActions,
   type TaskActionsDeps,
@@ -40,9 +47,31 @@ import {
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
+import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
+import type { TaskMenuItems } from "../../task-menu/menu-items";
+import type { AllTasksCollapseStore } from "../all-tasks/all-tasks-collapse-store";
+import {
+  AllTasksFilterButton,
+  AllTasksSearchBox,
+} from "../all-tasks/all-tasks-filter-button";
+import {
+  type AllTasksFilterStore,
+  isFilteringAllTasks,
+} from "../all-tasks/all-tasks-filter-store";
+import { AllTasksSortSelect } from "../all-tasks/all-tasks-sort-select";
+import type { AllTasksSortStore } from "../all-tasks/all-tasks-sort-store";
+import type { DoneSectionStore } from "../all-tasks/done-section-store";
 import { ProjectRow } from "../all-tasks/project-row";
+import { TaskDragArea } from "../all-tasks/task-drag";
+import {
+  CollapseAllButton,
+  shownNodes,
+  TaskDoneSection,
+  TaskTree,
+  type TaskTreeCards,
+} from "../all-tasks/task-tree";
 import type { OpenProjectStore } from "./open-project-store";
 import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
@@ -66,6 +95,29 @@ export interface ProjectsViewDeps {
   groups: ProjectGroupsStore;
   /** The project open, `null` for the list; in the plugin instance's memory. */
   openProject: OpenProjectStore;
+  /** The task menu's registrations, for a right-click on a card (#157). */
+  menuItems: () => TaskMenuItems | undefined;
+  /** The filter's contexts and labels to offer: the task panel's. */
+  readCandidates: ReadCandidates;
+  /** Dragging a card onto another or into a gap moves its block. */
+  moveTask: MoveTask;
+  /** A card dropped on a block in a note panel links the task there. */
+  linkTaskInNote: LinkTaskInNote;
+  /**
+   * The project details' tree state (#157), in the plugin instance's
+   * memory apart from the all tasks view's. The filter, search text, sort
+   * and "show earlier" start over when another project opens; the collapsed
+   * tasks are kept, by task.
+   */
+  details: ProjectDetailsStores;
+}
+
+/** The project details' own stores (#157). */
+export interface ProjectDetailsStores {
+  collapse: AllTasksCollapseStore;
+  sort: AllTasksSortStore;
+  filter: AllTasksFilterStore;
+  doneSection: DoneSectionStore;
 }
 
 function GroupPart(props: {
@@ -216,14 +268,129 @@ function DetailsContent(props: {
     );
   }
   if (state.data.kind === "noProject") return null;
-  const { project } = state.data;
+  const read = state.data;
   return (
-    <ProjectAttributes
-      node={project}
-      today={today}
-      menuItems={deps.projectMenuItems()}
-      onOpenInNotes={() => actions.openBlockInNotes(project.project.id)}
-    />
+    <>
+      <ProjectAttributes
+        node={read.project}
+        today={today}
+        menuItems={deps.projectMenuItems()}
+        onOpenInNotes={() => actions.openBlockInNotes(read.project.project.id)}
+      />
+      <DetailsTree read={read} today={today} actions={actions} deps={deps} />
+    </>
+  );
+}
+
+/**
+ * The project details' toolbar and tree (#157): the all tasks view's search
+ * box, sort, "collapse all" and filter, then the shared tree and done
+ * section over the scoped read, with the details' own stores.
+ */
+function DetailsTree(props: {
+  read: Extract<ProjectScopeRead, { kind: "project" }>;
+  today: CalendarDate;
+  actions: TaskActions;
+  deps: ProjectsViewDeps;
+}) {
+  const { read, today, actions, deps } = props;
+  const stores = deps.details;
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
+  const { selectedTaskId, selectTask } = usePanel();
+  const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const collapsed = React.useSyncExternalStore(
+    stores.collapse.subscribe,
+    stores.collapse.current,
+  );
+  const sort = React.useSyncExternalStore(
+    stores.sort.subscribe,
+    stores.sort.current,
+  );
+  const filter = React.useSyncExternalStore(
+    stores.filter.subscribe,
+    stores.filter.current,
+  );
+  const filtering = isFilteringAllTasks(filter);
+  const candidates = useCandidates(
+    deps.readCandidates,
+    deps.changes,
+    deps.taskActions.notify,
+  );
+  const nodes = shownNodes(read.tree, selectedTaskId);
+  const done = read.done;
+  const cards: TaskTreeCards = {
+    today,
+    actions,
+    menuItems: deps.menuItems(),
+    menuPlace,
+    projectMenuItems: deps.projectMenuItems(),
+    selectedTaskId,
+    selectTask,
+    collapsed,
+    toggleCollapsed: stores.collapse.toggle,
+    topLevelGaps: sort.sort === "note",
+    // No project rows in a scope: nothing to expand for the filter.
+    projectsExpanded: filtering,
+  };
+  const { Button } = orca.components;
+  const empty = nodes.length === 0 && done.count === 0;
+  return (
+    <>
+      <div className="nextaction-toolbar">
+        <AllTasksSearchBox
+          search={filter.search}
+          onChange={(search) => stores.filter.set({ ...filter, search })}
+        />
+        <div className="nextaction-toolbar-view">
+          <AllTasksSortSelect state={sort} onChange={stores.sort.set} />
+          <CollapseAllButton
+            nodes={nodes}
+            collapse={stores.collapse}
+            projectsExpanded={filtering}
+          />
+          <AllTasksFilterButton
+            state={filter}
+            candidates={candidates}
+            onChange={stores.filter.set}
+          />
+        </div>
+      </div>
+      {filtering && empty ? (
+        <>
+          <ViewNotice
+            icon="ti ti-filter-off"
+            title={t("No tasks match the filter")}
+            action={
+              <Button variant="outline" onClick={stores.filter.clear}>
+                {t("Clear filter")}
+              </Button>
+            }
+          />
+          <CardDragArea onNoteDrop={linkTaskInNote}>
+            <TaskDoneSection
+              done={done}
+              cards={cards}
+              store={stores.doneSection}
+            />
+          </CardDragArea>
+        </>
+      ) : empty && !done.hasEarlier ? (
+        <ViewNotice icon="ti ti-list-tree" title={t("No tasks")} />
+      ) : (
+        <TaskDragArea onMove={moveTask} onNoteDrop={linkTaskInNote}>
+          {nodes.length > 0 && <TaskTree nodes={nodes} cards={cards} />}
+          <TaskDoneSection
+            done={done}
+            cards={cards}
+            store={stores.doneSection}
+          />
+        </TaskDragArea>
+      )}
+    </>
   );
 }
 
@@ -233,18 +400,73 @@ function DetailsContent(props: {
  */
 export function createProjectsView(deps: ProjectsViewDeps): PanelView {
   const query = createViewQuery(() => deps.readProjectList(), deps.changes);
+  const stores = deps.details;
+  /**
+   * The selected task, kept by every details read while it is selected, as
+   * in the all tasks view. One value: there is at most one plugin panel.
+   */
+  let selected: TaskId | undefined;
   // Reads the project open at the time of each read.
   const details = createViewQuery(async (): Promise<ProjectScopeRead> => {
     const project = deps.openProject.current();
     if (project === null) return { kind: "noProject" };
-    return deps.readAllTasks({ project });
+    return deps.readAllTasks({
+      project,
+      keep: selected,
+      sort: stores.sort.current().sort,
+      direction: stores.sort.current().direction,
+      showEarlierDone: stores.doneSection.current().showEarlier,
+      filter: stores.filter.current().filter,
+      search: stores.filter.current().search,
+    });
   }, deps.changes);
+  // Another project opened: its filter, search text, sort and "show
+  // earlier" start over; the collapsed tasks stay, by task. Going back to
+  // the list and into the same project keeps them. Lives as long as the
+  // plugin instance.
+  let lastOpened: ProjectId | null = null;
+  deps.openProject.subscribe(() => {
+    const open = deps.openProject.current();
+    if (open === null || open === lastOpened) return;
+    lastOpened = open;
+    stores.filter.clear();
+    stores.sort.clear();
+    stores.doneSection.set({
+      ...stores.doneSection.current(),
+      showEarlier: false,
+    });
+  });
+  // A new sort, filter or search text reads again; so does showing earlier
+  // items, while expanding only renders what is read.
+  stores.sort.subscribe(() => details.reload());
+  stores.filter.subscribe(() => details.reload());
+  let showEarlier = stores.doneSection.current().showEarlier;
+  stores.doneSection.subscribe(() => {
+    const next = stores.doneSection.current().showEarlier;
+    if (next === showEarlier) return;
+    showEarlier = next;
+    details.reload();
+  });
 
   function ProjectsView() {
     const open = React.useSyncExternalStore(
       deps.openProject.subscribe,
       deps.openProject.current,
     );
+    const { selectedTaskId } = usePanel();
+    // As in the all tasks view: a new selection reads again, so a task kept
+    // for the earlier one leaves at once.
+    const readFor = React.useRef<TaskId | undefined>(undefined);
+    React.useEffect(() => {
+      selected = selectedTaskId;
+      if (readFor.current !== selectedTaskId) {
+        readFor.current = selectedTaskId;
+        details.reload();
+      }
+      return () => {
+        selected = undefined;
+      };
+    }, [selectedTaskId]);
     // A project opens only from the list, where the details query stops and
     // forgets what it read: nothing of the one before shows for it.
     if (open === null) {

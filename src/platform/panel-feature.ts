@@ -131,6 +131,14 @@ export function createPanelFeature(deps: {
   const projectGroups = createProjectGroupsStore();
   // The project open in the projects view (#156): in memory only, likewise.
   const openProject = createOpenProjectStore();
+  // The project details' tree state (#157): in memory only, apart from the
+  // all tasks view's stores.
+  const projectDetails = {
+    collapse: createAllTasksCollapseStore(),
+    sort: createAllTasksSortStore(),
+    filter: createAllTasksFilterStore(),
+    doneSection: createDoneSectionStore(),
+  };
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The stats view's scale (#135): in memory only, likewise.
@@ -217,6 +225,8 @@ export function createPanelFeature(deps: {
     dayBoundary: deps.dayBoundary,
     startPreviewDays: deps.startPreviewDays,
   });
+  // Moving a block from a tree: the all tasks view's and the project details'.
+  const moveTask = createMoveTask({ repository });
   views.register(
     createAllTasksView({
       readAllTasks,
@@ -230,7 +240,7 @@ export function createPanelFeature(deps: {
       doneSection,
       readCandidates,
       filter: allTasksFilter,
-      moveTask: createMoveTask({ repository }),
+      moveTask,
       linkTaskInNote,
     }),
   );
@@ -249,6 +259,11 @@ export function createPanelFeature(deps: {
       groups: projectGroups,
       readAllTasks,
       openProject,
+      menuItems: deps.menuItems,
+      readCandidates,
+      moveTask,
+      linkTaskInNote,
+      details: projectDetails,
     }),
   );
   views.register(
@@ -323,6 +338,19 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.add(`${pluginName}.projectGroups`, projectGroups.clear);
     registry.add(`${pluginName}.openProject`, openProject.clear);
+    registry.add(
+      `${pluginName}.projectDetailsCollapse`,
+      projectDetails.collapse.clear,
+    );
+    registry.add(`${pluginName}.projectDetailsSort`, projectDetails.sort.clear);
+    registry.add(
+      `${pluginName}.projectDetailsFilter`,
+      projectDetails.filter.clear,
+    );
+    registry.add(
+      `${pluginName}.projectDetailsDoneSection`,
+      projectDetails.doneSection.clear,
+    );
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);

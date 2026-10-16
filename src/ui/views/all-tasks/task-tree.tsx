@@ -291,6 +291,7 @@ function TaskTreeItem(props: TreeItemProps & { node: TaskNode }) {
             keptStatusShown={false}
             blocked={node.blocked}
             project={node.shownProject}
+            parentText={node.parentText}
           />
         </TaskDropTarget>
       </div>
@@ -352,6 +353,7 @@ export function TaskDoneSection(props: {
                       onOpen={(open) => cards.selectTask(open.id)}
                       selected={item.task.id === cards.selectedTaskId}
                       project={item.shownProject}
+                      parentText={item.parentText}
                     />
                   </DoneItem>
                 ) : (
