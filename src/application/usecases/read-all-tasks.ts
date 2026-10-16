@@ -93,7 +93,9 @@ export interface TaskNode extends TreeNode {
  * A project in the tree (GLOSSARY: 项目行): the top-level tasks under its
  * block sit below it; a task that belongs to it by its own setting stays
  * where it sits. It is never faded in the tree (`faded` is `null`); in the
- * done section it stands for itself and its tasks.
+ * done section it stands for itself and its tasks. The review's projects
+ * step fades a project kept there after it left the step (`faded` is
+ * `"kept"`).
  */
 export interface ProjectNode extends TreeNode {
   readonly kind: "project";
