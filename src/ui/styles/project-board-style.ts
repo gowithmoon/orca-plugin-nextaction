@@ -342,6 +342,7 @@ export const projectBoardCss = `
   outline-offset: 1px;
 }
 
+.nextaction-board-subtasks-count,
 .nextaction-board-subtasks-summary {
   font-variant-numeric: tabular-nums;
 }

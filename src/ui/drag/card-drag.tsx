@@ -32,11 +32,7 @@ import {
 } from "../../domain/blocking/note-drop";
 import type { Task } from "../../domain/task/task";
 import { shownText } from "../components/format";
-import {
-  scrollAmount,
-  scrollNearEdge,
-  scrollNearSideEdge,
-} from "./auto-scroll";
+import { scrollAmount, scrollNearEdge } from "./auto-scroll";
 import {
   type NoteDropProbe,
   noteScrollerAt,
@@ -275,7 +271,7 @@ function createCardDrag(
     // Nothing drops in the notes: they are not scrolled either.
     if (!dragging || !noteDropOf(dragging)) return;
     const scroller = noteScrollerAt(point.x, point.y);
-    const step = scroller ? scrollAmount(scroller, point.x, point.y) : 0;
+    const step = scroller ? scrollAmount(scroller, point.x, point.y, "y") : 0;
     if (!scroller || step === 0) return;
     const before = scroller.scrollTop;
     scroller.scrollTop = before + step;
@@ -399,11 +395,13 @@ function createCardDrag(
         inPanel?.scrollers?.() ?? [],
         point.x,
         point.y,
+        "y",
       );
-      const sideways = scrollNearSideEdge(
+      const sideways = scrollNearEdge(
         inPanel?.sideScrollers?.() ?? [],
         point.x,
         point.y,
+        "x",
       );
       // What lies under a still pointer moved.
       if (scrolled || sideways) update();

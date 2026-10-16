@@ -157,9 +157,14 @@ describe("boardDrop, by project root task (#171)", () => {
 
   it("falls back to the column on a card or row it cannot go under", () => {
     // A row on its parent task's card: up to the column's project root task.
+    // A row on itself or on its parent task's card: its own column, no drop;
+    // it stays under its card.
     expect(
       boardDrop({ id: 3, status: "todo" }, { task: 2, root: 1 }, parentOf),
-    ).toEqual({ kind: "lastChild", target: 1 });
+    ).toBeNull();
+    expect(
+      boardDrop({ id: 3, status: "todo" }, { task: 3, root: 1 }, parentOf),
+    ).toBeNull();
     // A card on its own row: its own column, no drop.
     expect(
       boardDrop({ id: 2, status: "todo" }, { task: 3, root: 1 }, parentOf),

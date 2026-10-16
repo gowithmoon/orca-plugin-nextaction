@@ -72,6 +72,12 @@ export function boardDrop(
     return { kind: "lastChild", target: point.task };
   }
   if (point.root !== undefined) {
+    // Fallen back from a card or row to the task's own column: no drop, it
+    // stays where it is. In the column's empty space a deeper descendant
+    // task still becomes a direct subtask of the project root task.
+    if (point.task !== undefined && isAbove(point.root, dragged.id, parentOf)) {
+      return null;
+    }
     return takesSubtask(dragged.id, point.root, parentOf)
       ? { kind: "lastChild", target: point.root }
       : null;
@@ -80,6 +86,24 @@ export function boardDrop(
   return point.column === undefined
     ? null
     : boardStatusDrop(dragged.status, point.column);
+}
+
+/** Task `above` is task `id` or on the way up from it. */
+function isAbove(
+  above: TaskId,
+  id: TaskId,
+  parentOf: (id: TaskId) => TaskId | null,
+): boolean {
+  const seen = new Set<TaskId>();
+  for (
+    let current: TaskId | null = id;
+    current !== null && !seen.has(current);
+    current = parentOf(current)
+  ) {
+    if (current === above) return true;
+    seen.add(current);
+  }
+  return false;
 }
 
 /** Task `target` can take task `id` as its last subtask on the board. */
@@ -91,14 +115,5 @@ function takesSubtask(
   // Its parent task already has it.
   if (parentOf(id) === target) return false;
   // Itself, or one of its descendant tasks: `id` is on the way up.
-  const seen = new Set<TaskId>();
-  for (
-    let current: TaskId | null = target;
-    current !== null && !seen.has(current);
-    current = parentOf(current)
-  ) {
-    if (current === id) return false;
-    seen.add(current);
-  }
-  return true;
+  return !isAbove(id, target, parentOf);
 }

@@ -4,7 +4,6 @@
 import {
   analyzeTaskGraph,
   type SnapshotTask,
-  type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
@@ -18,6 +17,7 @@ import { projectNode, projectNodeContext } from "./project-nodes";
 import {
   type AllTasksFilter,
   type AllTasksSort,
+  buildTaskTree,
   byLastCompletion,
   comparator,
   marksBlocked,
@@ -28,6 +28,7 @@ import {
   projectRootTasks,
   type SortDirection,
   searches,
+  type TaskTree,
   taskSorted,
 } from "./read-all-tasks";
 
@@ -214,21 +215,6 @@ export type ReadProjectBoard = (
 /** The board's columns by status, in order (GLOSSARY: 状态). */
 const columnOrder: readonly TaskStatus[] = taskStatuses;
 
-/** Every task's subtasks, in note order. */
-function childrenByParent(
-  snapshot: TaskGraphSnapshot,
-): ReadonlyMap<TaskId, readonly SnapshotTask[]> {
-  const children = new Map<TaskId, SnapshotTask[]>();
-  const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
-  for (const item of ordered) {
-    if (item.parentId === null) continue;
-    const siblings = children.get(item.parentId) ?? [];
-    siblings.push(item);
-    children.set(item.parentId, siblings);
-  }
-  return children;
-}
-
 function subtaskCounts(
   subtasks: readonly SnapshotTask[],
 ): BoardCard["subtasks"] {
@@ -240,14 +226,16 @@ function subtaskCounts(
 
 /** Every descendant task of `id` with its depth, in note order (preorder). */
 function descendantsOf(
-  children: ReadonlyMap<TaskId, readonly SnapshotTask[]>,
+  tree: TaskTree,
   id: TaskId,
   depth = 0,
 ): { readonly item: SnapshotTask; readonly depth: number }[] {
-  return (children.get(id) ?? []).flatMap((item) => [
-    { item, depth },
-    ...descendantsOf(children, item.task.id, depth + 1),
-  ]);
+  return tree
+    .childrenOf(id)
+    .flatMap((item) => [
+      { item, depth },
+      ...descendantsOf(tree, item.task.id, depth + 1),
+    ]);
 }
 
 function descendantCounts(rows: readonly BoardRow[]): BoardCard["descendants"] {
@@ -274,7 +262,7 @@ export function createReadProjectBoard(deps: {
     );
     if (!scoped) return { kind: "noProject" };
     const allRoots = projectRootTasks(snapshot, graph, scoped.project.id);
-    const children = childrenByParent(snapshot);
+    const tree = buildTaskTree(snapshot);
     const compare = comparator(
       options.sort ?? "score",
       options.direction ?? "ascending",
@@ -287,13 +275,33 @@ export function createReadProjectBoard(deps: {
     // By status the status filter chooses the columns, not the cards.
     const passes = (task: Task) =>
       matches(narrow, task, options.grouping === "root");
-    /** Not narrowed, or it or any of its descendant tasks passes. */
-    const visible = (item: SnapshotTask): boolean =>
-      !narrowed ||
-      passes(item.task) ||
-      (children.get(item.task.id) ?? []).some(visible);
+    /**
+     * Not narrowed, or it or any of its descendant tasks passes; worked out
+     * once per task for the read.
+     */
+    const visibleById = new Map<TaskId, boolean>();
+    const visible = (item: SnapshotTask): boolean => {
+      if (!narrowed) return true;
+      const known = visibleById.get(item.task.id);
+      if (known !== undefined) return known;
+      const found =
+        passes(item.task) || tree.childrenOf(item.task.id).some(visible);
+      visibleById.set(item.task.id, found);
+      return found;
+    };
+    /**
+     * A parent task's text, only when it is not the project's: by project
+     * root task a column's cards have the column head as their parent task.
+     */
+    const parentTextOf = (parentId: TaskId | null): string | null => {
+      if (parentId === null) return null;
+      const entry = graph.entry(parentId);
+      return entry === undefined || entry.project?.id === scoped.project.id
+        ? null
+        : entry.task.text;
+    };
     const cardOf = (item: SnapshotTask): BoardCard => {
-      const allRows = descendantsOf(children, item.task.id).map(
+      const allRows = descendantsOf(tree, item.task.id).map(
         ({ item: row, depth }): BoardRow => ({
           task: row.task,
           depth,
@@ -313,13 +321,10 @@ export function createReadProjectBoard(deps: {
       return {
         task: item.task,
         blocked: marksBlocked(graph.entry(item.task.id)),
-        parentText:
-          item.parentId === null
-            ? null
-            : (graph.entry(item.parentId)?.task.text ?? null),
+        parentText: parentTextOf(item.parentId),
         parentId: item.parentId,
         nextAction: nextAction(item.task.id),
-        subtasks: subtaskCounts(children.get(item.task.id) ?? []),
+        subtasks: subtaskCounts(tree.childrenOf(item.task.id)),
         descendants: descendantCounts(allRows),
         rows,
       };
@@ -339,8 +344,7 @@ export function createReadProjectBoard(deps: {
     if (options.grouping === "root") {
       // A project root task's descendant tasks are all the project's: the
       // parent task's ownership decides (domain/project/ownership.ts).
-      const subtasksOf = (item: SnapshotTask) =>
-        children.get(item.task.id) ?? [];
+      const subtasksOf = (item: SnapshotTask) => tree.childrenOf(item.task.id);
       const cardsOf = (items: readonly SnapshotTask[]): RootBoardCards => ({
         cards: sorted(items.filter((item) => item.task.status !== "done")),
         // Every day's: no earlier ones apart.
@@ -369,7 +373,7 @@ export function createReadProjectBoard(deps: {
             },
             finished:
               root.task.status === "done" &&
-              descendantsOf(children, root.task.id).every(
+              descendantsOf(tree, root.task.id).every(
                 ({ item }) => item.task.status === "done",
               ),
             ...cardsOf(cardsIn(root)),
