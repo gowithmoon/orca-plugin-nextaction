@@ -78,6 +78,24 @@ export const settingsDefinition: SettingsDefinition = {
       defaultValue: localTime(defaultReminderTime),
     }),
   },
+  // The layout the project details open in (#166): holds the choice's value,
+  // an English key (project-board spike C); anything else reads as the tree
+  // (ui/views/projects/project-layout-store.ts). Each load starts from it,
+  // and a change overrides the layout in memory at once.
+  projectDefaultLayout: {
+    schema: () => ({
+      label: t("Project view default layout"),
+      description: t(
+        "The layout a project's details show its tasks in. Changing it switches the layout at once.",
+      ),
+      type: "singleChoice",
+      choices: [
+        { label: t("Tree"), value: "tree" },
+        { label: t("Board"), value: "board" },
+      ],
+      defaultValue: "tree",
+    }),
+  },
   // Read through startPreviewDaysFrom: anything but a whole number from 0 to
   // 14 counts as 0 (infra/settings-start-preview-days.ts).
   startPreviewDays: {

@@ -608,6 +608,15 @@ const zhCN: Record<string, string> = {
   "Back to projects": "返回项目列表",
   Goal: "目标",
   "Could not read the project: ${reason}": "无法读取项目：${reason}",
+  "Project view default layout": "项目视图默认布局",
+  "The layout a project's details show its tasks in. Changing it switches the layout at once.":
+    "项目详情用哪种布局呈现任务。修改后立即切换。",
+  Tree: "层级",
+  Board: "看板",
+  Layout: "布局",
+  "Expand ${column}": "展开${column}",
+  "Collapse ${column}": "收起${column}",
+  "Earlier done ${count}": "更早的已完成 ${count}",
 };
 
 export default zhCN;
