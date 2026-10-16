@@ -81,7 +81,10 @@ export function signalChips(node: ProjectNode): React.ReactNode[] {
   const items: React.ReactNode[] = [];
   if (node.noProgressDays !== null) {
     items.push(
-      <span key="stale" className="nextaction-property nextaction-project-warn">
+      <span
+        key="noProgress"
+        className="nextaction-property nextaction-project-warn"
+      >
         <i className="ti ti-clock" aria-hidden="true" />
         {t("${days} days without progress", {
           days: String(node.noProgressDays),
