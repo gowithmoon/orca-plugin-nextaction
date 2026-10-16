@@ -9,6 +9,7 @@
 import type * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { ProjectProgress } from "../../../domain/project/progress";
+import type { ProjectStatus } from "../../../domain/project/project";
 import type { CalendarDate } from "../../../domain/task/task";
 import { compareDays } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
@@ -26,6 +27,47 @@ import { projectStatusIcons } from "../../project-menu/project-status-icons";
 export function progressValue(progress: ProjectProgress): number | null {
   if (progress.kind !== "measured") return null;
   return Math.floor((100 * progress.done) / progress.total);
+}
+
+/**
+ * The project status icon: with `open`, a button opening the project menu
+ * (`shown`: the menu is open); without, only the icon.
+ */
+export function ProjectStatusIcon(props: {
+  status: ProjectStatus;
+  open?: (event: React.MouseEvent) => void;
+  shown?: boolean;
+}) {
+  const { open } = props;
+  const icon = projectStatusIcons[props.status];
+  const status = projectStatusLabel(props.status);
+  return open ? (
+    <button
+      type="button"
+      className="nextaction-task-card-button nextaction-project-row-status"
+      style={{ color: icon.color }}
+      aria-haspopup="menu"
+      aria-expanded={props.shown}
+      aria-label={t("Project status: ${status}", { status })}
+      title={status}
+      onClick={(event) => {
+        // Not a click on the row around it.
+        event.stopPropagation();
+        open(event);
+      }}
+    >
+      <i className={icon.className} aria-hidden="true" />
+    </button>
+  ) : (
+    <span
+      className="nextaction-project-row-status"
+      style={{ color: icon.color }}
+      role="img"
+      aria-label={t("Project status: ${status}", { status })}
+    >
+      <i className={icon.className} aria-hidden="true" />
+    </span>
+  );
 }
 
 /** A click that selected text is not a click on the row. */
@@ -126,8 +168,6 @@ export function ProjectRow(props: ProjectRowProps) {
   const inDone = props.inDone ?? false;
   const { project } = node;
   const { Tooltip } = orca.components;
-  const icon = projectStatusIcons[project.status];
-  const status = projectStatusLabel(project.status);
   const shownProgress = inDone ? null : progressValue(node.progress);
   const name = project.text.trim() === "" ? t("(No text)") : project.text;
 
@@ -160,32 +200,7 @@ export function ProjectRow(props: ProjectRowProps) {
       }
     >
       <div className="nextaction-project-row-line">
-        {open ? (
-          <button
-            type="button"
-            className="nextaction-task-card-button nextaction-project-row-status"
-            style={{ color: icon.color }}
-            aria-haspopup="menu"
-            aria-expanded={shown}
-            aria-label={t("Project status: ${status}", { status })}
-            title={status}
-            onClick={(event) => {
-              event.stopPropagation();
-              open(event);
-            }}
-          >
-            <i className={icon.className} aria-hidden="true" />
-          </button>
-        ) : (
-          <span
-            className="nextaction-project-row-status"
-            style={{ color: icon.color }}
-            role="img"
-            aria-label={t("Project status: ${status}", { status })}
-          >
-            <i className={icon.className} aria-hidden="true" />
-          </span>
-        )}
+        <ProjectStatusIcon status={project.status} open={open} shown={shown} />
         <span className="nextaction-project-row-name" title={name}>
           {name}
         </span>

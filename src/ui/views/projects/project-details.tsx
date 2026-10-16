@@ -19,11 +19,9 @@ import {
   urgencyName,
 } from "../../components/format";
 import { ContextMenu } from "../../components/popup-controls";
-import { projectStatusLabel } from "../../components/project-status-label";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import { ProjectMenu } from "../../project-menu/project-menu";
-import { projectStatusIcons } from "../../project-menu/project-status-icons";
-import { progressValue } from "../all-tasks/project-row";
+import { ProjectStatusIcon, progressValue } from "../all-tasks/project-row";
 
 /** The "‹ Projects" button above the attribute area. */
 export function BackToProjects(props: { onBack: () => void }) {
@@ -192,8 +190,6 @@ export function ProjectAttributes(props: {
 }) {
   const { node, today, menuItems } = props;
   const { project } = node;
-  const icon = projectStatusIcons[project.status];
-  const status = projectStatusLabel(project.status);
   const shownProgress = progressValue(node.progress);
   const name = project.text.trim() === "" ? t("(No text)") : project.text;
   const goal = project.goal?.trim() ?? "";
@@ -201,30 +197,7 @@ export function ProjectAttributes(props: {
   const statusIcon = (
     open?: (event: React.MouseEvent) => void,
     shown?: boolean,
-  ) =>
-    open ? (
-      <button
-        type="button"
-        className="nextaction-task-card-button nextaction-project-row-status"
-        style={{ color: icon.color }}
-        aria-haspopup="menu"
-        aria-expanded={shown}
-        aria-label={t("Project status: ${status}", { status })}
-        title={status}
-        onClick={open}
-      >
-        <i className={icon.className} aria-hidden="true" />
-      </button>
-    ) : (
-      <span
-        className="nextaction-project-row-status"
-        style={{ color: icon.color }}
-        role="img"
-        aria-label={t("Project status: ${status}", { status })}
-      >
-        <i className={icon.className} aria-hidden="true" />
-      </span>
-    );
+  ) => <ProjectStatusIcon status={project.status} open={open} shown={shown} />;
 
   return (
     <section
