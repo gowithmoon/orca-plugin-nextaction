@@ -81,6 +81,16 @@ export interface SnapshotProject {
   readonly position: number;
   /** Its block is a page: it has an alias. Absent when it is not. */
   readonly page?: boolean;
+  /**
+   * Its block's nearest task ancestor, the block itself not counting (ADR
+   * 0025 lets a project block sit below a task; #170). Absent for none.
+   */
+  readonly parentId?: TaskId;
+  /**
+   * Its block's nearest ancestor among the project blocks, the block itself
+   * not counting. Absent for none.
+   */
+  readonly projectBlock?: ProjectId;
 }
 
 /** Every task, done ones included, as they stand in the notes. */

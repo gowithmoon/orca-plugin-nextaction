@@ -295,6 +295,16 @@ export interface TaskRepository {
   moveTask(id: TaskId, target: TaskId, placement: MovePlacement): Promise<void>;
 
   /**
+   * Moves the task's block, with every block below it, to the end of project
+   * `project`'s block: its last child block (#170), page or block alike. The
+   * user undoes it with one undo. A mirror block's ID stands for its source
+   * block. Fails, writing nothing, when the block is not a task, `project`
+   * is not a project (the project tag paused included), the project's block
+   * is the moved block or below it, or the write fails.
+   */
+  moveTaskToProjectEnd(id: TaskId, project: ProjectId): Promise<void>;
+
+  /**
    * Writes a link to the task into the notes at `target`, as `plan` says
    * (#122): a reference at the inline caret, or a new block holding only a
    * reference to the task (#125; mirror blocks come with #126).

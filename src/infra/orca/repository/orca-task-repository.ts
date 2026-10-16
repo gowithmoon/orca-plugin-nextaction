@@ -792,10 +792,16 @@ export function createOrcaTaskRepository(
       ...(projectsRead.paused && { projectsPaused: true }),
       projects: projectsRead.projects.map((project) => {
         const block = projectsRead.blocks.get(project.id);
+        const place = places.get(project.id);
         return {
           project,
-          position: places.get(project.id)?.position ?? Number.MAX_SAFE_INTEGER,
+          position: place?.position ?? Number.MAX_SAFE_INTEGER,
           ...(block && block.aliases.length > 0 && { page: true }),
+          // A project block may sit below a task (ADR 0025, #170).
+          ...(place?.parentId != null && { parentId: place.parentId }),
+          ...(place?.projectBlock !== undefined && {
+            projectBlock: place.projectBlock,
+          }),
         };
       }),
       tasks: tasks.map((task) => {
@@ -1469,6 +1475,19 @@ export function createOrcaTaskRepository(
       // children go with it.
       await writeTo(block, () =>
         moveBlocks(block.id, targetBlock.id, placement),
+      );
+    },
+
+    async moveTaskToProjectEnd(id: TaskId, project: ProjectId): Promise<void> {
+      // A mirror resolves to its source block; the project's block is a
+      // source block itself (projectBlock).
+      const block = await taskBlockToWrite(id, currentTag());
+      const read = await projectBlock(project);
+      if (!read) throw new OrcaError(`block ${project} is not a project`);
+      // The project block's last child block, page or block alike
+      // (project-board A1–A3); moveBlocks fetches it first (move-blocks 64e).
+      await writeTo(block, () =>
+        moveBlocks(block.id, read.block.id, "lastChild"),
       );
     },
 

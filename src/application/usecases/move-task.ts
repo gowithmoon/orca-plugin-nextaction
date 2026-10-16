@@ -6,8 +6,9 @@
 import { moveCycle } from "../../domain/blocking/dependency-cycles";
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import {
-  isSelfOrBelow,
   leavesTasksInPlace,
+  movesOntoSelfOrBelow,
+  movesToProjectEnd,
   type TaskMove,
 } from "../../domain/blocking/task-move";
 import type { TaskId } from "../../domain/task/task";
@@ -57,12 +58,13 @@ export function checkMove(
   snapshot: TaskGraphSnapshot,
   move: TaskMove,
 ): MoveCheck {
-  if (isSelfOrBelow(snapshot, move.target, move.id)) {
+  if (movesOntoSelfOrBelow(snapshot, move)) {
     return { kind: "refused", reason: "onto-self-or-below" };
   }
   const item = (id: TaskId) =>
     snapshot.tasks.find((candidate) => candidate.task.id === id);
   if (
+    !movesToProjectEnd(move) &&
     move.placement !== "lastChild" &&
     item(move.target)?.root &&
     !item(move.id)?.page
@@ -95,6 +97,10 @@ export function createMoveTask(deps: { repository: TaskRepository }): MoveTask {
         cycleWith: task(check.cycleWith),
       });
     }
-    await deps.repository.moveTask(move.id, move.target, move.placement);
+    if (movesToProjectEnd(move)) {
+      await deps.repository.moveTaskToProjectEnd(move.id, move.projectEnd);
+    } else {
+      await deps.repository.moveTask(move.id, move.target, move.placement);
+    }
   };
 }

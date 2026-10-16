@@ -99,4 +99,10 @@ describe("boardDrop", () => {
   it("is no drop off a column and off a card", () => {
     expect(boardDrop({ id: 4, status: "todo" }, {}, parentOf)).toBeNull();
   });
+
+  it("moves the task to the end of the project block on the project root drop, its status unchanged (#170)", () => {
+    expect(
+      boardDrop({ id: 3, status: "doing" }, { projectEnd: true }, parentOf),
+    ).toEqual({ kind: "projectEnd" });
+  });
 });

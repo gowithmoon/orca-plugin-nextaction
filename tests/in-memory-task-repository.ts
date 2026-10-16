@@ -16,7 +16,7 @@ import type {
   ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { NoteDropPlan } from "../src/domain/blocking/note-drop";
-import type { TaskMove } from "../src/domain/blocking/task-move";
+import type { MovePlacement, TaskMove } from "../src/domain/blocking/task-move";
 import type { ProjectSetting } from "../src/domain/project/ownership";
 import type { Project, ProjectId } from "../src/domain/project/project";
 import { normalizeReminders } from "../src/domain/reminder/reminder";
@@ -380,6 +380,43 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     return false;
   };
 
+  /**
+   * Moves block `id` with every block below it, as Orca moves blocks: in
+   * their order, before the target, or after the target's last block. Fails,
+   * writing nothing, when the target is the block or below it.
+   */
+  const moveBlock = (id: number, target: number, placement: MovePlacement) => {
+    const targetBlock = blocks.get(target) as StoredBlock;
+    if (id === target || isBelow(target, id)) {
+      throw new Error(`block ${target} is block ${id} or below it`);
+    }
+    write(() => {
+      const inMoved = (blockId: number) =>
+        blockId === id || isBelow(blockId, id);
+      const ordered = [...blocks.entries()].sort(
+        ([, a], [, b]) => a.position - b.position,
+      );
+      const moved = ordered.filter(([blockId]) => inMoved(blockId));
+      const rest = ordered.filter(([blockId]) => !inMoved(blockId));
+      const targetAt = rest.findIndex(([blockId]) => blockId === target);
+      let afterTarget = targetAt + 1;
+      while (
+        afterTarget < rest.length &&
+        isBelow((rest[afterTarget] as [number, StoredBlock])[0], target)
+      ) {
+        afterTarget += 1;
+      }
+      const at = placement === "before" ? targetAt : afterTarget;
+      [...rest.slice(0, at), ...moved, ...rest.slice(at)].forEach(
+        ([, block], position) => {
+          block.position = position;
+        },
+      );
+      (blocks.get(id) as StoredBlock).parentId =
+        placement === "lastChild" ? target : targetBlock.parentId;
+    });
+  };
+
   return {
     addBlock(id, setup = {}) {
       store(id, {
@@ -477,38 +514,18 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async moveTask(id, target, placement) {
       taskToWrite(id);
-      const targetBlock = taskToWrite(target);
-      if (id === target || isBelow(target, id)) {
-        throw new Error(`block ${target} is block ${id} or below it`);
+      taskToWrite(target);
+      moveBlock(id, target, placement);
+      moves.push({ id, target, placement });
+    },
+
+    async moveTaskToProjectEnd(id, project) {
+      taskToWrite(id);
+      if (!blocks.get(project)?.project || projectTagPaused) {
+        throw new Error(`block ${project} is not a project`);
       }
-      write(() => {
-        // As Orca moves blocks: the block with every block below it, in
-        // their order, before the target, or after the target's last block.
-        const inMoved = (blockId: number) =>
-          blockId === id || isBelow(blockId, id);
-        const ordered = [...blocks.entries()].sort(
-          ([, a], [, b]) => a.position - b.position,
-        );
-        const moved = ordered.filter(([blockId]) => inMoved(blockId));
-        const rest = ordered.filter(([blockId]) => !inMoved(blockId));
-        const targetAt = rest.findIndex(([blockId]) => blockId === target);
-        let afterTarget = targetAt + 1;
-        while (
-          afterTarget < rest.length &&
-          isBelow((rest[afterTarget] as [number, StoredBlock])[0], target)
-        ) {
-          afterTarget += 1;
-        }
-        const at = placement === "before" ? targetAt : afterTarget;
-        [...rest.slice(0, at), ...moved, ...rest.slice(at)].forEach(
-          ([, block], position) => {
-            block.position = position;
-          },
-        );
-        (blocks.get(id) as StoredBlock).parentId =
-          placement === "lastChild" ? target : targetBlock.parentId;
-        moves.push({ id, target, placement });
-      });
+      moveBlock(id, project, "lastChild");
+      moves.push({ id, projectEnd: project });
     },
 
     async getTask(id) {
@@ -663,12 +680,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         return undefined;
       };
       const projects = [];
-      for (const block of blocks.values()) {
+      for (const [id, block] of blocks) {
         if (!block.project || projectTagPaused) continue;
+        const parentId = parentTaskOf(id);
+        const projectBlock = projectBlockOf(id);
         projects.push({
           project: block.project,
           position: block.position,
           ...(block.page && { page: true }),
+          // A project block may sit below a task (ADR 0025).
+          ...(parentId !== null && { parentId }),
+          ...(projectBlock !== undefined && { projectBlock }),
         });
       }
       const tasks = [];

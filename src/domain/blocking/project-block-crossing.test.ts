@@ -31,10 +31,16 @@ function task(
   };
 }
 
-function project(id: ProjectId, position: number): SnapshotProject {
+function project(
+  id: ProjectId,
+  position: number,
+  /** The task its block sits below (ADR 0025). */
+  parent?: TaskId,
+): SnapshotProject {
   return {
     project: { id, text: `project ${id}`, status: "active" },
     position,
+    ...(parent !== undefined && { parentId: parent }),
   } as SnapshotProject;
 }
 
@@ -180,6 +186,46 @@ describe("跨越项目块的移动 (#157)", () => {
         10,
       ),
     ).toBeNull();
+  });
+
+  describe("to the end of the project block (#170)", () => {
+    it("a task written outside the project block, set to the project, moves in", () => {
+      const graph = snapshot(
+        task(1, { block: 10, position: 1 }),
+        task(3, { set: 10, position: 100 }),
+      );
+
+      expect(
+        projectBlockCrossing(graph, { id: 3, projectEnd: 10 }, 10),
+      ).toEqual({ kind: "moveIn" });
+    });
+
+    it("a subtask below the project block, promoted to a project root task, does not cross", () => {
+      const graph = snapshot(
+        task(1, { block: 10, position: 1 }),
+        task(2, { parent: 1, block: 10, position: 2 }),
+      );
+
+      expect(
+        projectBlockCrossing(graph, { id: 2, projectEnd: 10 }, 10),
+      ).toBeNull();
+    });
+
+    it("below a project block that sits below a task of another project, it belongs to that project", () => {
+      // Project 12's block sits below task 5, which is set to project 11:
+      // the parent task decides (ADR 0025).
+      const graph: TaskGraphSnapshot = {
+        tasks: [
+          task(5, { set: 11, position: 60 }),
+          task(3, { set: 12, position: 100 }),
+        ],
+        projects: [project(11, 50), project(12, 61, 5)],
+      };
+
+      expect(
+        projectBlockCrossing(graph, { id: 3, projectEnd: 12 }, 12),
+      ).toEqual({ kind: "otherProject", project: 11 });
+    });
   });
 
   it("a move that cannot be made does not cross", () => {

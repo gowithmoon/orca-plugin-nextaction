@@ -7,7 +7,9 @@
 // a right-click the task menu, and a card or an expanded subtask row drags
 // into the notes, into another column to change its status (#168), or onto
 // another card or row to become its last subtask, the target card then
-// expanded (#169, board-drag.ts). A next action has a small dot at its status
+// expanded (#169, board-drag.ts); a subtask row onto "As root task", at the
+// right end while it is dragged, to the end of the project block (#170). A
+// next action has a small dot at its status
 // icon's top right. A card with subtasks says "Subtasks done/total" (direct
 // subtasks only), with how many of its descendant tasks are doing or next
 // actions while collapsed; expanded, it lists every descendant task as a
@@ -20,7 +22,11 @@ import type {
   ProjectBoard,
   StatusColumn,
 } from "../../../application/usecases/read-project-board";
-import type { TaskMove } from "../../../domain/blocking/task-move";
+import {
+  movesToProjectEnd,
+  type TaskMove,
+} from "../../../domain/blocking/task-move";
+import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
@@ -36,6 +42,7 @@ import type { DoneSectionStore } from "../all-tasks/done-section-store";
 import {
   type BoardDrag,
   boardColumnAttribute,
+  boardProjectEndAttribute,
   boardTaskAttribute,
   createBoardDrag,
 } from "./board-drag";
@@ -352,6 +359,31 @@ function DoneColumn(props: {
   );
 }
 
+/**
+ * The "As root task" drop (#170): shown by the board's style only while a
+ * subtask row is dragged, a dashed place at the right end.
+ */
+function ProjectEndDrop() {
+  return (
+    <div
+      className="nextaction-board-project-end"
+      {...{ [boardProjectEndAttribute]: "" }}
+    >
+      <i className="ti ti-corner-left-up" aria-hidden="true" />
+      <span>{t("As root task")}</span>
+    </div>
+  );
+}
+
+/** Every card's task on the board: the project root tasks. */
+function boardCards(board: ProjectBoard): ReadonlySet<TaskId> {
+  return new Set(
+    board.columns.flatMap((column) =>
+      [...column.cards, ...column.earlier].map((card) => card.task.id),
+    ),
+  );
+}
+
 /** Every card's and row's task on the board, with its parent task. */
 function boardParents(board: ProjectBoard): ReadonlyMap<TaskId, TaskId | null> {
   const parents = new Map<TaskId, TaskId | null>();
@@ -366,6 +398,10 @@ function boardParents(board: ProjectBoard): ReadonlyMap<TaskId, TaskId | null> {
 
 export function ProjectBoardColumns(props: {
   board: ProjectBoard;
+  /** The project shown, for "As root task" (#170). */
+  project: ProjectId;
+  /** A filter or search is set: no "As root task" (#170). */
+  filtering: boolean;
   cards: BoardCards;
   doneColumn: DoneSectionStore;
   /**
@@ -381,6 +417,17 @@ export function ProjectBoardColumns(props: {
   const boardParentsNow = React.useMemo(() => boardParents(board), [board]);
   const parents = React.useRef(boardParentsNow);
   parents.current = boardParentsNow;
+  const boardCardsNow = React.useMemo(() => boardCards(board), [board]);
+  const projectEnd = React.useRef({
+    cards: boardCardsNow,
+    project: props.project,
+    filtering: props.filtering,
+  });
+  projectEnd.current = {
+    cards: boardCardsNow,
+    project: props.project,
+    filtering: props.filtering,
+  };
   const onMove = React.useRef(props.onMove);
   onMove.current = props.onMove;
   const expanded = React.useRef(cards.expanded);
@@ -391,9 +438,15 @@ export function ProjectBoardColumns(props: {
       root: root.current,
       changeStatus: (task, status) => changeStatus.current(task, status),
       parentOf: (id) => parents.current.get(id) ?? null,
+      // Only a subtask row: every card is a project root task already.
+      takesProjectEnd: (id) =>
+        !projectEnd.current.filtering && !projectEnd.current.cards.has(id),
+      project: projectEnd.current.project,
       move: (move, at) => {
         // The target card opens to show where it went; a row's card is open.
-        expanded.current.setAll([move.target], true);
+        if (!movesToProjectEnd(move)) {
+          expanded.current.setAll([move.target], true);
+        }
         onMove.current(move, at);
       },
     })),
@@ -413,6 +466,7 @@ export function ProjectBoardColumns(props: {
             <Column key={column.status} column={column} cards={cards} />
           ),
         )}
+        {!props.filtering && <ProjectEndDrop />}
       </section>
     </BoardDragContext.Provider>
   );
