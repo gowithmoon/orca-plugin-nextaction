@@ -7,7 +7,7 @@ import {
   analyzeTaskGraph,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
-import type { Project } from "../../domain/project/project";
+import type { Project, ProjectId } from "../../domain/project/project";
 import { isDueSoon } from "../../domain/review/due-steps";
 import {
   type LookBackEntry,
@@ -18,13 +18,20 @@ import { isDueForReview, reviewDueDay } from "../../domain/review/review";
 import { rankByScore } from "../../domain/scoring/score";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
-import { compareDays, daysBetween } from "../../domain/time/calendar-days";
+import {
+  addDays,
+  compareDays,
+  daysBetween,
+} from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { LastFullReviewStore } from "../ports/last-full-review";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import { projectNode, summarizeProjects } from "./project-nodes";
+import type { ProjectNode } from "./read-all-tasks";
+import { groupProjects, type ProjectGroup } from "./read-project-list";
 
 /** The review's steps that list tasks (GLOSSARY: 回顾), by key. */
 export type ReviewStepKey = keyof ReadReviewResult["steps"];
@@ -48,6 +55,12 @@ export type ReviewKeep =
       readonly step: Exclude<ReviewStepKey, DatedReviewStepKey>;
       /** Placed by capture or by score, as the step orders its own. */
       readonly tasks: ReadonlySet<TaskId>;
+    }
+  | {
+      /** The projects step (#161). */
+      readonly step: "projects";
+      /** Placed in the group of their project status now, by score. */
+      readonly projects: ReadonlySet<ProjectId>;
     };
 
 /**
@@ -73,7 +86,7 @@ export function isDatedReviewStep(
 function isDatedKeep(
   keep: ReviewKeep,
 ): keep is Extract<ReviewKeep, { step: DatedReviewStepKey }> {
-  return isDatedReviewStep(keep.step);
+  return keep.step !== "projects" && isDatedReviewStep(keep.step);
 }
 
 export interface ReadReviewOptions {
@@ -134,6 +147,26 @@ export interface DueForReviewItem extends ReviewItem {
   readonly dueOn: CalendarDate;
 }
 
+/**
+ * The projects step (#161): the projects not done, and the done ones with
+ * tasks not done, grouped as the project list groups them.
+ * - `projects`: the groups, those without a project left out (none at all:
+ *   no project).
+ * - `paused`: the project tag is paused (#143); there is no project to list.
+ */
+export type ProjectsStepRead =
+  | {
+      readonly kind: "projects";
+      /**
+       * Kept projects (`ReviewKeep`) that left the step are in the group of
+       * their project status now, faded as `kept`.
+       */
+      readonly groups: readonly ProjectGroup[];
+      /** How many projects belong to the step; kept ones are not counted. */
+      readonly total: number;
+    }
+  | { readonly kind: "paused" };
+
 export interface ReadReviewResult {
   /** Each step's list, by step. */
   readonly steps: {
@@ -166,6 +199,8 @@ export interface ReadReviewResult {
      */
     readonly dueForReview: ReviewStepRead<DueForReviewItem>;
   };
+  /** The projects step (GLOSSARY: 回顾), apart from the steps that list tasks. */
+  readonly projects: ProjectsStepRead;
   /**
    * The summary's numbers besides the steps' totals (the tasks left in the
    * inbox, the overdue tasks, the tasks due for review), which it reads
@@ -224,7 +259,9 @@ export function createReadReview(deps: {
       graph.entry(task.id)?.project ?? null;
     /** The tasks kept in `step`; none for any other step. */
     const keptIn = (step: ReviewStepKey): ReadonlySet<TaskId> =>
-      keep?.step === step && !isDatedKeep(keep) ? keep.tasks : new Set();
+      keep?.step === step && "tasks" in keep && !isDatedKeep(keep)
+        ? keep.tasks
+        : new Set();
     /** The day `id` was listed under in `step`, when kept there. */
     const keptOnDay = (
       step: DatedReviewStepKey,
@@ -320,6 +357,38 @@ export function createReadReview(deps: {
         kept: !notDone.has(task.id),
         project: projectOf(task),
       }));
+    /**
+     * The projects step: the projects not done, and the done ones with tasks
+     * not done, grouped as the project list groups them.
+     */
+    const readProjectsStep = (): ProjectsStepRead => {
+      if (snapshot.projectsPaused) return { kind: "paused" };
+      const kept: ReadonlySet<ProjectId> =
+        keep?.step === "projects" ? keep.projects : new Set();
+      const context = {
+        summaries: summarizeProjects(snapshot, graph),
+        today,
+        startsBy: addDays(today, deps.startPreviewDays.current()),
+        boundary,
+      };
+      const belongs = (node: ProjectNode) =>
+        node.project.status !== "done" || node.unfinished > 0;
+      // Only projects in the snapshot: a block that is no longer a project
+      // is not listed, kept or not.
+      const nodes = [...(snapshot.projects ?? [])]
+        .sort((a, b) => a.position - b.position)
+        .map(({ project }) => projectNode(context, project, []))
+        .filter((node) => belongs(node) || kept.has(node.project.id))
+        .map(
+          (node): ProjectNode =>
+            belongs(node) ? node : { ...node, faded: "kept" },
+        );
+      return {
+        kind: "projects",
+        groups: groupProjects(nodes, today),
+        total: nodes.filter(belongs).length,
+      };
+    };
     return {
       steps: {
         inbox: {
@@ -353,6 +422,7 @@ export function createReadReview(deps: {
             : null,
         ),
       },
+      projects: readProjectsStep(),
       summary: {
         completedInLookBack: looked.entries.filter(
           (entry) => entry.kind === "completion",

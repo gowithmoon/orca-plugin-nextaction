@@ -9,6 +9,7 @@ export const fullReviewStepIds = [
   "dueSoon",
   "nextActions",
   "waiting",
+  "projects",
   "someday",
   "dueForReview",
   "summary",

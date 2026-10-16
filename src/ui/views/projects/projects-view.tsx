@@ -114,7 +114,12 @@ export interface ProjectsViewDeps {
   details: TaskTreeStores;
 }
 
-function GroupPart(props: {
+/**
+ * One project status's group: its toggle with the count, then its project
+ * rows. The review's projects step shows its groups with it too (#161), a
+ * project kept there after it left the step faded.
+ */
+export function ProjectGroupPart(props: {
   group: ProjectGroup;
   collapsed: boolean;
   onToggle: () => void;
@@ -145,7 +150,11 @@ function GroupPart(props: {
       {!collapsed && (
         <ul className="nextaction-project-group-list">
           {group.projects.map((node) => (
-            <li key={node.project.id}>
+            <li
+              key={node.project.id}
+              className="nextaction-project-group-item"
+              data-kept={node.faded === "kept" || undefined}
+            >
               <ProjectRow
                 node={node}
                 today={props.today}
@@ -160,6 +169,19 @@ function GroupPart(props: {
         </ul>
       )}
     </section>
+  );
+}
+
+/** The project tag is paused (#143): the review's projects step says it too. */
+export function ProjectsPausedNotice() {
+  return (
+    <ViewNotice
+      icon="ti ti-player-pause"
+      title={t("Projects are paused")}
+      detail={t(
+        "The project tag could not be set up. Check the project tag name in the plugin settings.",
+      )}
+    />
   );
 }
 
@@ -190,17 +212,7 @@ function ProjectsContent(props: {
       />
     );
   }
-  if (state.data.kind === "paused") {
-    return (
-      <ViewNotice
-        icon="ti ti-player-pause"
-        title={t("Projects are paused")}
-        detail={t(
-          "The project tag could not be set up. Check the project tag name in the plugin settings.",
-        )}
-      />
-    );
-  }
+  if (state.data.kind === "paused") return <ProjectsPausedNotice />;
   const { groups } = state.data;
   if (groups.length === 0) {
     return (
@@ -217,7 +229,7 @@ function ProjectsContent(props: {
   return (
     <div className="nextaction-project-groups">
       {groups.map((group) => (
-        <GroupPart
+        <ProjectGroupPart
           key={group.status}
           group={group}
           collapsed={isGroupCollapsed(turned, group.status)}

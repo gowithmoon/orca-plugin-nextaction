@@ -129,6 +129,9 @@ export function createPanelFeature(deps: {
   const projectDetails = createTaskTreeStores();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
+  // The review's projects step's collapsed groups (#161): in memory only,
+  // apart from the project list's.
+  const reviewProjectGroups = createProjectGroupsStore();
   // The stats view's scale (#135): in memory only, likewise.
   const statsScale = createStatsScaleStore();
   // When the last full review was completed (#101), in `plugins.setData`
@@ -279,6 +282,9 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       page: reviewPage,
+      projectMenuItems: deps.projectMenuItems,
+      projectGroups: reviewProjectGroups,
+      openProject,
     }),
   );
   views.register(
@@ -326,6 +332,10 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.openProject`, openProject.clear);
     registry.add(`${pluginName}.projectDetailsStores`, projectDetails.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
+    registry.add(
+      `${pluginName}.reviewProjectGroups`,
+      reviewProjectGroups.clear,
+    );
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);

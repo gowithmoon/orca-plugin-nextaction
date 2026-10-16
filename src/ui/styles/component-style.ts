@@ -700,6 +700,14 @@ export const componentCss = `
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * A project kept in the review's projects step after it left it (#161),
+ * faded like a kept task card until another step opens.
+ */
+.nextaction-project-group-item[data-kept] {
+  opacity: 0.6;
+}
+
 .nextaction-project-group-list {
   display: flex;
   flex-direction: column;

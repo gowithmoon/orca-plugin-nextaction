@@ -3,7 +3,9 @@
 // views and closing the plugin panel keep them; unloading clears them
 // (platform/panel-feature.ts), and they are never written with
 // `plugins.setData`. The done group is collapsed by default, every other
-// expanded; the store records the groups turned the other way.
+// expanded; the store records the groups turned the other way. The review's
+// projects step has a store of its own, every group expanded by default
+// (#161).
 import type { ProjectStatus } from "../../../domain/project/project";
 import { createMemoryStore } from "../../components/memory-store";
 
@@ -18,12 +20,18 @@ export interface ProjectGroupsStore {
   subscribe(listener: () => void): () => void;
 }
 
-/** Whether the group of `status` is collapsed, given the store's `turned` set. */
+/**
+ * Whether the group of `status` is collapsed, given the store's `turned`
+ * set and the groups collapsed by default: the project list's done group
+ * unless told otherwise (the review's projects step expands every group by
+ * default, #161).
+ */
 export function isGroupCollapsed(
   turned: ReadonlySet<ProjectStatus>,
   status: ProjectStatus,
+  collapsedByDefault: readonly ProjectStatus[] = ["done"],
 ): boolean {
-  return (status === "done") !== turned.has(status);
+  return collapsedByDefault.includes(status) !== turned.has(status);
 }
 
 export function createProjectGroupsStore(): ProjectGroupsStore {

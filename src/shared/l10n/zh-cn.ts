@@ -599,6 +599,7 @@ const zhCN: Record<string, string> = {
   "The project tag could not be set up. Check the project tag name in the plugin settings.":
     "项目标签无法设置。请在插件设置中检查项目标签名。",
   "No projects yet": "还没有项目",
+  "No projects": "没有项目",
   "To start a project, add the project tag to a page or block in Orca.":
     "在 Orca 中给页面或块打上项目标签，就新建了一个项目。",
   // The project details (#156).
