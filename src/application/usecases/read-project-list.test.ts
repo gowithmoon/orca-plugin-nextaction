@@ -121,6 +121,62 @@ describe("read project list", () => {
     expect(rows).toEqual([3, 5, 1, 4, 2]);
   });
 
+  it("brings each project's days without progress and whether it is overdue", async () => {
+    const { repository, readProjectList } = setup();
+    const at = (iso: string) => new Date(iso);
+    // Today is 2026-10-09. Project 1's latest progress is a task created
+    // on 09-20: 19 days. Project 2's task was completed on 10-01: 8 days,
+    // not yet. Project 3 was due on 10-08.
+    repository.addProject({
+      id: 1,
+      status: "active",
+      created: at("2026-09-01T10:00:00+08:00"),
+    });
+    repository.addTask(
+      { id: 2, status: "todo", created: at("2026-09-20T10:00:00+08:00") },
+      { parentId: 1 },
+    );
+    repository.addProject({
+      id: 3,
+      status: "active",
+      created: at("2026-09-01T10:00:00+08:00"),
+    });
+    repository.addTask(
+      { id: 4, status: "done", created: at("2026-09-01T10:00:00+08:00") },
+      {
+        parentId: 3,
+        completionHistory: {
+          kind: "readable",
+          history: [
+            {
+              at: at("2026-10-01T10:00:00+08:00"),
+              day: { year: 2026, month: 10, day: 1 },
+            },
+          ],
+        },
+      },
+    );
+    repository.addProject({
+      id: 5,
+      status: "planning",
+      due: { year: 2026, month: 10, day: 8 },
+    });
+
+    const read = await readProjectList();
+    if (read.kind !== "projects") throw new Error(read.kind);
+    const byId = new Map(
+      read.groups
+        .flatMap((group) => group.projects)
+        .map((node) => [node.project.id, node]),
+    );
+
+    expect(byId.get(1)?.noProgressDays).toBe(19);
+    expect(byId.get(1)?.overdue).toBe(false);
+    expect(byId.get(3)?.noProgressDays).toBe(null);
+    expect(byId.get(5)?.noProgressDays).toBe(null);
+    expect(byId.get(5)?.overdue).toBe(true);
+  });
+
   it("reads no group when there is no project", async () => {
     const { repository, readProjectList } = setup();
     repository.addTask({ id: 1, status: "todo" });
