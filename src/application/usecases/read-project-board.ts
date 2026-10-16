@@ -275,11 +275,20 @@ export function createReadProjectBoard(deps: {
     // By status the status filter chooses the columns, not the cards.
     const passes = (task: Task) =>
       matches(narrow, task, options.grouping === "root");
-    /** Not narrowed, or it or any of its descendant tasks passes. */
-    const visible = (item: SnapshotTask): boolean =>
-      !narrowed ||
-      passes(item.task) ||
-      tree.childrenOf(item.task.id).some(visible);
+    /**
+     * Not narrowed, or it or any of its descendant tasks passes; worked out
+     * once per task for the read.
+     */
+    const visibleById = new Map<TaskId, boolean>();
+    const visible = (item: SnapshotTask): boolean => {
+      if (!narrowed) return true;
+      const known = visibleById.get(item.task.id);
+      if (known !== undefined) return known;
+      const found =
+        passes(item.task) || tree.childrenOf(item.task.id).some(visible);
+      visibleById.set(item.task.id, found);
+      return found;
+    };
     /**
      * A parent task's text, only when it is not the project's: by project
      * root task a column's cards have the column head as their parent task.
