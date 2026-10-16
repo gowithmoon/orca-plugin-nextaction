@@ -84,6 +84,8 @@ const captureTextStyle: React.CSSProperties = {
  */
 function ProjectChoice(props: {
   value: ProjectId | null;
+  /** Filled in on opening: offered even when done (#162). */
+  filledIn: ProjectId | null;
   readProjectCandidates: ReadProjectCandidates;
   pluginName: string;
   onChange: (project: ProjectId | null) => void;
@@ -92,7 +94,11 @@ function ProjectChoice(props: {
     () => createNotify(props.pluginName),
     [props.pluginName],
   );
-  const candidates = useProjectCandidates(props.readProjectCandidates, notify);
+  const candidates = useProjectCandidates(
+    props.readProjectCandidates,
+    notify,
+    props.filledIn,
+  );
   const options: SelectOption[] = candidates.map((candidate) => ({
     value: String(candidate.id),
     label: shownText(candidate).text,
@@ -244,6 +250,7 @@ function QuickCapturePopup(props: {
             <Field label={t("Project")} labelId={id("project")}>
               <ProjectChoice
                 value={draft.project}
+                filledIn={props.project}
                 readProjectCandidates={props.readProjectCandidates}
                 pluginName={props.pluginName}
                 onChange={set("project")}

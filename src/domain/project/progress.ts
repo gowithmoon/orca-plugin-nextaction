@@ -83,7 +83,7 @@ export function unfinishedTaskCount(tasks: readonly ProjectTask[]): number {
 }
 
 /** Days after the latest progress that make no recent progress; fixed. */
-export const noProgressDays = 14;
+export const noProgressThresholdDays = 14;
 
 /** What the tasks that belong to a project say about its latest progress. */
 export interface ProjectActivity {
@@ -95,7 +95,7 @@ export interface ProjectActivity {
 
 /**
  * How many logical days the project has gone without progress (GLOSSARY: 长
- * 期无进展), once that is `noProgressDays` or more; `null` otherwise.
+ * 期无进展), once that is `noProgressThresholdDays` or more; `null` otherwise.
  */
 export function daysWithoutProgress(
   project: Project,
@@ -113,7 +113,7 @@ export function daysWithoutProgress(
       logicalDay(project.created, boundary),
     ) ?? today;
   const days = daysBetween(latest, today);
-  return days >= noProgressDays ? days : null;
+  return days >= noProgressThresholdDays ? days : null;
 }
 
 /**

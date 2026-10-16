@@ -35,6 +35,20 @@ describe("read project candidates", () => {
     expect(offered.map((candidate) => candidate.id)).toEqual([10]);
   });
 
+  it("also offers a done project filled in as the task's, in note order", async () => {
+    const { repository, readProjectCandidates } = setup();
+    repository.addProject({ id: 11, text: "Trip", status: "active" });
+    repository.addProject({ id: 12, text: "Old site", status: "done" });
+    repository.addProject({ id: 13, text: "Older site", status: "done" });
+    repository.addProject({ id: 10, text: "Move house", status: "planning" });
+
+    expect(await readProjectCandidates(undefined, 12)).toEqual([
+      { id: 11, text: "Trip", status: "active" },
+      { id: 12, text: "Old site", status: "done" },
+      { id: 10, text: "Move house", status: "planning" },
+    ]);
+  });
+
   it("matches the candidates by every word of the search, ignoring case", () => {
     const candidates = [
       { id: 10, text: "Move house", status: "active" as const },

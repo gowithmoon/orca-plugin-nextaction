@@ -1,5 +1,5 @@
 // Shared by the use cases that read project rows (GLOSSARY: 项目行): the all
-// tasks view's tree and the project list.
+// tasks view's tree, the project list and the review's projects step.
 import type {
   TaskGraph,
   TaskGraphSnapshot,
@@ -16,7 +16,7 @@ import type { Project, ProjectId } from "../../domain/project/project";
 import { recurs } from "../../domain/recurrence/recurrence";
 import type { CompletionEntry } from "../../domain/task/completion-history";
 import type { CalendarDate } from "../../domain/task/task";
-import { compareDays } from "../../domain/time/calendar-days";
+import { addDays, compareDays } from "../../domain/time/calendar-days";
 import type { DayBoundary } from "../../domain/time/logical-day";
 import type { AllTasksNode, ProjectNode } from "./read-all-tasks";
 
@@ -83,6 +83,34 @@ export interface ProjectNodeContext {
   readonly startsBy: CalendarDate;
   /** Turns creation times into logical days (GLOSSARY: 长期无进展). */
   readonly boundary: DayBoundary;
+}
+
+/** The context of `projectNode` for `snapshot`, analyzed as `graph`. */
+export function projectNodeContext(
+  snapshot: TaskGraphSnapshot,
+  graph: TaskGraph,
+  days: {
+    readonly today: CalendarDate;
+    readonly previewDays: number;
+    readonly boundary: DayBoundary;
+  },
+): ProjectNodeContext {
+  return {
+    summaries: summarizeProjects(snapshot, graph),
+    today: days.today,
+    startsBy: addDays(days.today, days.previewDays),
+    boundary: days.boundary,
+  };
+}
+
+/** The nodes of the snapshot's projects, in note order, with no children. */
+export function projectNodesInNoteOrder(
+  context: ProjectNodeContext,
+  snapshot: TaskGraphSnapshot,
+): ProjectNode[] {
+  return [...(snapshot.projects ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map(({ project }) => projectNode(context, project, []));
 }
 
 /**
