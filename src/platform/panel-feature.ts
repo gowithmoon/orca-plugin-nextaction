@@ -49,11 +49,8 @@ import type { OpenReviewPopup } from "../ui/task-panel/review-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
-import { createAllTasksCollapseStore } from "../ui/views/all-tasks/all-tasks-collapse-store";
-import { createAllTasksFilterStore } from "../ui/views/all-tasks/all-tasks-filter-store";
-import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-store";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
-import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
+import { createTaskTreeStores } from "../ui/views/all-tasks/task-tree-stores";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createMyDayScheduleActions } from "../ui/views/my-day/my-day-schedule-actions";
 import { createMyDayView } from "../ui/views/my-day/my-day-view";
@@ -118,27 +115,17 @@ export function createPanelFeature(deps: {
   // The next action view's filter (#55): in memory only, so it outlives the
   // plugin panel closing and is gone with the load (cleared on release).
   const nextActionFilter = createNextActionFilterStore();
-  // The all tasks view's collapsed nodes (#67): in memory only, likewise.
-  const allTasksCollapse = createAllTasksCollapseStore();
-  // The all tasks view's sort (#68): in memory only, likewise.
-  const allTasksSort = createAllTasksSortStore();
-  // The all tasks view's done section (#66): in memory only, as the filter.
-  const doneSection = createDoneSectionStore();
-  // The all tasks view's filter and search text (#69): in memory only, apart
+  // The all tasks view's collapsed nodes (#67), sort (#68), done section
+  // (#66), filter and search text (#69): in memory only, likewise, apart
   // from the next action view's filter.
-  const allTasksFilter = createAllTasksFilterStore();
+  const allTasks = createTaskTreeStores();
   // The project list's collapsed groups (#155): in memory only, likewise.
   const projectGroups = createProjectGroupsStore();
   // The project open in the projects view (#156): in memory only, likewise.
   const openProject = createOpenProjectStore();
   // The project details' tree state (#157): in memory only, apart from the
   // all tasks view's stores.
-  const projectDetails = {
-    collapse: createAllTasksCollapseStore(),
-    sort: createAllTasksSortStore(),
-    filter: createAllTasksFilterStore(),
-    doneSection: createDoneSectionStore(),
-  };
+  const projectDetails = createTaskTreeStores();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The stats view's scale (#135): in memory only, likewise.
@@ -235,11 +222,11 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       projectMenuItems: deps.projectMenuItems,
-      collapse: allTasksCollapse,
-      sort: allTasksSort,
-      doneSection,
+      collapse: allTasks.collapse,
+      sort: allTasks.sort,
+      doneSection: allTasks.doneSection,
       readCandidates,
-      filter: allTasksFilter,
+      filter: allTasks.filter,
       moveTask,
       linkTaskInNote,
     }),
@@ -301,7 +288,7 @@ export function createPanelFeature(deps: {
       today: deps.today,
       changes,
       scale: statsScale,
-      allTasksFilter,
+      allTasksFilter: allTasks.filter,
       reviewPage,
       linkTaskInNote,
       taskActions: deps.taskActions,
@@ -332,25 +319,10 @@ export function createPanelFeature(deps: {
     // Each load is a new module instance already (plugin-lifecycle-settings);
     // clearing on release also covers a load → unload → load in one instance.
     registry.add(`${pluginName}.nextActionFilter`, nextActionFilter.clear);
-    registry.add(`${pluginName}.allTasksCollapse`, allTasksCollapse.clear);
-    registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
-    registry.add(`${pluginName}.doneSection`, doneSection.clear);
-    registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
+    registry.add(`${pluginName}.allTasksStores`, allTasks.clear);
     registry.add(`${pluginName}.projectGroups`, projectGroups.clear);
     registry.add(`${pluginName}.openProject`, openProject.clear);
-    registry.add(
-      `${pluginName}.projectDetailsCollapse`,
-      projectDetails.collapse.clear,
-    );
-    registry.add(`${pluginName}.projectDetailsSort`, projectDetails.sort.clear);
-    registry.add(
-      `${pluginName}.projectDetailsFilter`,
-      projectDetails.filter.clear,
-    );
-    registry.add(
-      `${pluginName}.projectDetailsDoneSection`,
-      projectDetails.doneSection.clear,
-    );
+    registry.add(`${pluginName}.projectDetailsStores`, projectDetails.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);

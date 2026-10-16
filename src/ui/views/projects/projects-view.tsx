@@ -51,18 +51,12 @@ import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
-import type { AllTasksCollapseStore } from "../all-tasks/all-tasks-collapse-store";
 import {
   AllTasksFilterButton,
   AllTasksSearchBox,
 } from "../all-tasks/all-tasks-filter-button";
-import {
-  type AllTasksFilterStore,
-  isFilteringAllTasks,
-} from "../all-tasks/all-tasks-filter-store";
+import { isFilteringAllTasks } from "../all-tasks/all-tasks-filter-store";
 import { AllTasksSortSelect } from "../all-tasks/all-tasks-sort-select";
-import type { AllTasksSortStore } from "../all-tasks/all-tasks-sort-store";
-import type { DoneSectionStore } from "../all-tasks/done-section-store";
 import { ProjectRow } from "../all-tasks/project-row";
 import { TaskDragArea } from "../all-tasks/task-drag";
 import {
@@ -72,6 +66,7 @@ import {
   TaskTree,
   type TaskTreeCards,
 } from "../all-tasks/task-tree";
+import type { TaskTreeStores } from "../all-tasks/task-tree-stores";
 import type { OpenProjectStore } from "./open-project-store";
 import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
@@ -109,15 +104,7 @@ export interface ProjectsViewDeps {
    * and "show earlier" start over when another project opens; the collapsed
    * tasks are kept, by task.
    */
-  details: ProjectDetailsStores;
-}
-
-/** The project details' own stores (#157). */
-export interface ProjectDetailsStores {
-  collapse: AllTasksCollapseStore;
-  sort: AllTasksSortStore;
-  filter: AllTasksFilterStore;
-  doneSection: DoneSectionStore;
+  details: TaskTreeStores;
 }
 
 function GroupPart(props: {
