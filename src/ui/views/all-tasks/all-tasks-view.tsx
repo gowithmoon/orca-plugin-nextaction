@@ -10,36 +10,32 @@
 // gap goes there (#71). Every card, the done section's too, dragged onto a
 // block in a note panel links the task there (#127). A project shows as a
 // project row, collapsed by default, the tasks under its block below it
-// (#147). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// (#147). The tree, the done section and "collapse all" are the shared ones
+// of `task-tree.tsx` (#154); this view wires its own query and stores to
+// them. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
-  AllTasksNode,
   AllTasksRead,
-  DoneSection,
-  ProjectNode,
   ReadAllTasks,
-  TaskNode,
 } from "../../../application/usecases/read-all-tasks";
 import type { ReadCandidates } from "../../../application/usecases/read-candidates";
-import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
+import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
-import { TaskCard } from "../../components/task-card";
 import { ViewHeader } from "../../components/view-header";
 import {
   FailedNotice,
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
-import { CardDragArea, useCardDrag } from "../../drag/card-drag";
+import { CardDragArea } from "../../drag/card-drag";
 import { useCandidates } from "../../hooks/use-candidates";
 import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import { useMoveTask } from "../../hooks/use-move-task";
 import {
-  type TaskActions,
   type TaskActionsDeps,
   useTaskActions,
 } from "../../hooks/use-task-actions";
@@ -51,13 +47,8 @@ import {
 import { usePanel } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
-import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
-import {
-  type AllTasksCollapseStore,
-  type CollapseKey,
-  collapseKey,
-  isCollapsed,
-} from "./all-tasks-collapse-store";
+import type { TaskMenuItems } from "../../task-menu/menu-items";
+import type { AllTasksCollapseStore } from "./all-tasks-collapse-store";
 import {
   AllTasksFilterButton,
   AllTasksSearchBox,
@@ -69,8 +60,14 @@ import {
 import { AllTasksSortSelect } from "./all-tasks-sort-select";
 import type { AllTasksSortStore } from "./all-tasks-sort-store";
 import type { DoneSectionStore } from "./done-section-store";
-import { ProjectRow } from "./project-row";
-import { TaskDragArea, TaskDropGap, TaskDropTarget } from "./task-drag";
+import { TaskDragArea } from "./task-drag";
+import {
+  CollapseAllButton,
+  shownNodes,
+  TaskDoneSection,
+  TaskTree,
+  type TaskTreeCards,
+} from "./task-tree";
 
 export interface AllTasksViewDeps {
   readAllTasks: ReadAllTasks;
@@ -104,355 +101,6 @@ export interface AllTasksViewDeps {
   moveTask: MoveTask;
   /** A card dropped on a block in a note panel links the task there (#127). */
   linkTaskInNote: LinkTaskInNote;
-}
-
-/** The node or a node below it is a task not done. */
-function holdsOpenTask(node: AllTasksNode): boolean {
-  switch (node.kind) {
-    case "task":
-      return node.task.status !== "done" || node.children.some(holdsOpenTask);
-    case "project":
-      return node.children.some(holdsOpenTask);
-  }
-}
-
-/** The node was kept for a selection other than `selected`. */
-function keptBefore(node: AllTasksNode, selected: TaskId | undefined): boolean {
-  switch (node.kind) {
-    case "task":
-      return node.faded === "kept" && node.task.id !== selected;
-    case "project":
-      return false;
-  }
-}
-
-/**
- * What the tree shows of a read: a task kept for an earlier selection is no
- * longer shown once the selection moves on (only for where matching tasks
- * below it sit, if any), and neither are the ancestor tasks that only showed
- * above it. A project row always stays: it is shown for itself.
- */
-function shownNodes(
-  nodes: readonly AllTasksNode[],
-  selected: TaskId | undefined,
-): AllTasksNode[] {
-  const shown: AllTasksNode[] = [];
-  for (const node of nodes) {
-    const children = shownNodes(node.children, selected);
-    if (node.kind === "project") {
-      shown.push({ ...node, children });
-      continue;
-    }
-    if (keptBefore(node, selected)) {
-      if (children.length > 0)
-        shown.push({ ...node, faded: "ancestor", children });
-      continue;
-    }
-    const onlyAboveKept =
-      node.children.length > 0 &&
-      children.length === 0 &&
-      (node.faded === "ancestor" || !holdsOpenTask(node));
-    if (onlyAboveKept) continue;
-    shown.push({ ...node, children });
-  }
-  return shown;
-}
-
-/**
- * The nodes of the tree that have children: what "collapse all" collapses.
- * `projectsExpanded`: project rows, then temporarily expanded, are left out,
- * so their saved state stays as it is (#148); the tasks below still count.
- */
-function parentKeys(
-  nodes: readonly AllTasksNode[],
-  projectsExpanded: boolean,
-): CollapseKey[] {
-  return nodes.flatMap((node) => {
-    if (node.children.length === 0) return [];
-    const below = parentKeys(node.children, projectsExpanded);
-    return node.kind === "project" && projectsExpanded
-      ? below
-      : [collapseKey(node), ...below];
-  });
-}
-
-/** What every card in the tree shares. */
-interface TreeCards {
-  today: CalendarDate;
-  actions: TaskActions;
-  menuItems: TaskMenuItems | undefined;
-  menuPlace: TaskMenuPlace;
-  /** The project menu's registrations, for the project rows. */
-  projectMenuItems: ProjectMenuItems | undefined;
-  selectedTaskId: TaskId | undefined;
-  selectTask: (id: TaskId) => void;
-  /** The nodes turned from their default (`isCollapsed`). */
-  collapsed: ReadonlySet<CollapseKey>;
-  toggleCollapsed: (key: CollapseKey) => void;
-  /**
-   * Top-level tasks have gaps to drop in: only in note order, where a place
-   * among them means something (#63).
-   */
-  topLevelGaps: boolean;
-  /**
-   * A filter or search is set: project rows show expanded, without a toggle,
-   * and the saved collapse state is left as it is, back once cleared (#148).
-   */
-  projectsExpanded: boolean;
-}
-
-/** A node's collapse button. */
-function CollapseButton(props: { collapsed: boolean; onToggle: () => void }) {
-  const { Tooltip } = orca.components;
-  const label = props.collapsed ? t("Expand") : t("Collapse");
-  return (
-    <Tooltip text={label}>
-      <button
-        type="button"
-        className="nextaction-task-card-button nextaction-task-tree-toggle"
-        aria-expanded={!props.collapsed}
-        aria-label={label}
-        onClick={props.onToggle}
-      >
-        <i
-          className={
-            props.collapsed ? "ti ti-chevron-right" : "ti ti-chevron-down"
-          }
-          aria-hidden="true"
-        />
-      </button>
-    </Tooltip>
-  );
-}
-
-function TreeNodes(props: {
-  nodes: readonly AllTasksNode[];
-  cards: TreeCards;
-  /** The top-level list, whose width the cards' container queries follow. */
-  top?: boolean;
-}) {
-  const { cards } = props;
-  const gaps = !props.top || cards.topLevelGaps;
-  const last = props.nodes.at(-1);
-  return (
-    <ul
-      className={
-        props.top
-          ? "nextaction-task-list nextaction-task-tree"
-          : "nextaction-task-tree-children"
-      }
-    >
-      {props.nodes.map((node) => (
-        <TreeItem
-          key={collapseKey(node)}
-          node={node}
-          cards={cards}
-          gaps={gaps}
-          // The bottom gap: after the last top-level node.
-          bottomGap={props.top === true && gaps && node === last}
-        />
-      ))}
-    </ul>
-  );
-}
-
-/** What a node's list item is given besides its node. */
-interface TreeItemProps {
-  cards: TreeCards;
-  /** Has a gap to drop in above it. */
-  gaps: boolean;
-  /** Has a gap to drop in below it: the last top-level node. */
-  bottomGap: boolean;
-}
-
-/** A node's list item, as its kind shows it. */
-function TreeItem(props: TreeItemProps & { node: AllTasksNode }) {
-  const { node, ...rest } = props;
-  switch (node.kind) {
-    case "task":
-      return <TaskTreeItem node={node} {...rest} />;
-    case "project":
-      return <ProjectTreeItem node={node} cards={rest.cards} />;
-  }
-}
-
-/**
- * A project row's list item: the row, and the tasks under its block below
- * it. The row itself is never dragged nor a place to drop (#147); the gaps
- * between its tasks are, so tasks still move into and out of the project
- * block. It has no gap of its own: a gap goes next to a task.
- */
-function ProjectTreeItem(props: { node: ProjectNode; cards: TreeCards }) {
-  const { node, cards } = props;
-  const key = collapseKey(node);
-  const expanded = cards.projectsExpanded;
-  // Temporarily expanded, it has nothing to toggle.
-  const parent = node.children.length > 0 && !expanded;
-  const collapsed = parent && isCollapsed(cards.collapsed, key);
-  return (
-    <li>
-      <div className="nextaction-task-tree-row nextaction-project-tree-row">
-        {parent ? (
-          <CollapseButton
-            collapsed={collapsed}
-            onToggle={() => cards.toggleCollapsed(key)}
-          />
-        ) : (
-          <span className="nextaction-task-tree-toggle" aria-hidden="true" />
-        )}
-        <ProjectRow
-          node={node}
-          today={cards.today}
-          menuItems={cards.projectMenuItems}
-          onToggle={parent ? () => cards.toggleCollapsed(key) : undefined}
-          onOpenInNotes={() => cards.actions.openBlockInNotes(node.project.id)}
-        />
-      </div>
-      {node.children.length > 0 && (expanded || !collapsed) && (
-        <TreeNodes nodes={node.children} cards={cards} />
-      )}
-    </li>
-  );
-}
-
-/** A task node's list item: its card, and its subtree below it. */
-function TaskTreeItem(props: TreeItemProps & { node: TaskNode }) {
-  const { node, cards } = props;
-  const key = collapseKey(node);
-  const parent = node.children.length > 0;
-  const collapsed = parent && isCollapsed(cards.collapsed, key);
-  return (
-    <li>
-      {/* Before the card below it; a task the filter hides stays
-          where it is (#71). */}
-      {props.gaps && <TaskDropGap target={node.task.id} placement="before" />}
-      <div className="nextaction-task-tree-row">
-        {parent ? (
-          <CollapseButton
-            collapsed={collapsed}
-            onToggle={() => cards.toggleCollapsed(key)}
-          />
-        ) : (
-          // Keeps the cards of a level in line, toggle or not.
-          <span className="nextaction-task-tree-toggle" aria-hidden="true" />
-        )}
-        {/* Only tree cards are dragged and dropped on, never the done
-            section's (#70). */}
-        <TaskDropTarget task={node.task}>
-          <TaskCard
-            task={node.task}
-            today={cards.today}
-            actions={cards.actions}
-            menuItems={cards.menuItems}
-            menuPlace={cards.menuPlace}
-            onOpen={(open) => cards.selectTask(open.id)}
-            selected={node.task.id === cards.selectedTaskId}
-            // Done or kept: the card's faded "kept" look (#65).
-            kept={node.faded !== null}
-            // Only faded: a done task's status icon already says why, and a
-            // kept one leaves for more reasons than its status.
-            keptStatusShown={false}
-            blocked={node.blocked}
-            project={node.shownProject}
-          />
-        </TaskDropTarget>
-      </div>
-      {/* Collapsed, the toggle alone says there is more below. */}
-      {parent && !collapsed && (
-        <TreeNodes nodes={node.children} cards={cards} />
-      )}
-      {props.bottomGap && (
-        <TaskDropGap target={node.task.id} placement="after" />
-      )}
-    </li>
-  );
-}
-
-/**
- * The done section below the tree: its title, a toggle, counts the items of
- * the current range. Collapsed, it renders none of them.
- */
-function DoneSectionPart(props: {
-  done: DoneSection;
-  cards: TreeCards;
-  store: DoneSectionStore;
-}) {
-  const { done, cards, store } = props;
-  const state = React.useSyncExternalStore(store.subscribe, store.current);
-  // Nothing done at all: no section.
-  if (done.count === 0 && !done.hasEarlier) return null;
-  return (
-    <section className="nextaction-done-section">
-      <button
-        type="button"
-        className="nextaction-done-section-toggle"
-        aria-expanded={state.expanded}
-        onClick={() => store.set({ ...state, expanded: !state.expanded })}
-      >
-        <i
-          className={
-            state.expanded ? "ti ti-chevron-down" : "ti ti-chevron-right"
-          }
-          aria-hidden="true"
-        />
-        {t("Done · ${count}", { count: String(done.count) })}
-      </button>
-      {state.expanded && (
-        <>
-          {done.items.length > 0 && (
-            <ul className="nextaction-task-list">
-              {done.items.map((item) =>
-                item.kind === "task" ? (
-                  <DoneItem key={`task:${item.task.id}`} task={item.task}>
-                    <TaskCard
-                      task={item.task}
-                      today={cards.today}
-                      actions={cards.actions}
-                      menuItems={cards.menuItems}
-                      menuPlace={cards.menuPlace}
-                      onOpen={(open) => cards.selectTask(open.id)}
-                      selected={item.task.id === cards.selectedTaskId}
-                      project={item.shownProject}
-                    />
-                  </DoneItem>
-                ) : (
-                  // One item for the project and its tasks; not dragged.
-                  <li key={`project:${item.project.id}`}>
-                    <ProjectRow
-                      node={item}
-                      today={cards.today}
-                      menuItems={cards.projectMenuItems}
-                      onOpenInNotes={() =>
-                        cards.actions.openBlockInNotes(item.project.id)
-                      }
-                      inDone
-                    />
-                  </li>
-                ),
-              )}
-            </ul>
-          )}
-          {done.hasEarlier && (
-            <button
-              type="button"
-              className="nextaction-done-section-earlier"
-              onClick={() => store.set({ ...state, showEarlier: true })}
-            >
-              {t("Show earlier")}
-            </button>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-/**
- * A done card's list item: dragged by a press anywhere on it into the notes
- * only, never moved in the plugin panel nor a place to move to (#70, #127).
- */
-function DoneItem(props: { task: Task; children: React.ReactNode }) {
-  return <li {...useCardDrag(props.task)}>{props.children}</li>;
 }
 
 function AllTasksContent(props: {
@@ -497,7 +145,7 @@ function AllTasksContent(props: {
   }
   const nodes = shownNodes(state.data.tree, selectedTaskId);
   const done = state.data.done;
-  const cards: TreeCards = {
+  const cards: TaskTreeCards = {
     today,
     actions,
     menuItems,
@@ -524,7 +172,7 @@ function AllTasksContent(props: {
           }
         />
         <CardDragArea onNoteDrop={linkTaskInNote}>
-          <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
+          <TaskDoneSection done={done} cards={cards} store={deps.doneSection} />
         </CardDragArea>
       </>
     );
@@ -542,57 +190,9 @@ function AllTasksContent(props: {
   }
   return (
     <TaskDragArea onMove={moveTask} onNoteDrop={linkTaskInNote}>
-      {nodes.length > 0 && <TreeNodes top nodes={nodes} cards={cards} />}
-      <DoneSectionPart done={done} cards={cards} store={deps.doneSection} />
+      {nodes.length > 0 && <TaskTree nodes={nodes} cards={cards} />}
+      <TaskDoneSection done={done} cards={cards} store={deps.doneSection} />
     </TaskDragArea>
-  );
-}
-
-/**
- * One button for "collapse all" and "expand all", once the tree has a node
- * to collapse: while any of them is expanded it collapses them all,
- * otherwise it expands them all.
- */
-function CollapseAllButton(props: {
-  query: ViewQuery<AllTasksRead>;
-  selectedTaskId: TaskId | undefined;
-  collapse: AllTasksCollapseStore;
-  /** A filter or search is set: project rows are temporarily expanded. */
-  filtered: boolean;
-}) {
-  const { Button, Tooltip } = orca.components;
-  const state = useViewQuery(props.query);
-  const collapsed = React.useSyncExternalStore(
-    props.collapse.subscribe,
-    props.collapse.current,
-  );
-  if (state.kind !== "loaded") return null;
-  const keys = parentKeys(
-    shownNodes(state.data.tree, props.selectedTaskId),
-    props.filtered,
-  );
-  if (keys.length === 0) return null;
-  // Records of nodes no longer in the tree count for nothing.
-  const anyExpanded = keys.some((key) => !isCollapsed(collapsed, key));
-  const label = anyExpanded ? t("Collapse all") : t("Expand all");
-  return (
-    <Tooltip text={label}>
-      <Button
-        variant="plain"
-        className="nextaction-toolbar-button"
-        aria-label={label}
-        onClick={() =>
-          anyExpanded
-            ? props.collapse.collapse(keys)
-            : props.collapse.expand(keys)
-        }
-      >
-        <i
-          className={anyExpanded ? "ti ti-fold" : "ti ti-fold-down"}
-          aria-hidden="true"
-        />
-      </Button>
-    </Tooltip>
   );
 }
 
@@ -690,10 +290,13 @@ export function createAllTasksView(deps: AllTasksViewDeps): PanelView {
           <div className="nextaction-toolbar-view">
             <AllTasksSortSelect state={sort} onChange={deps.sort.set} />
             <CollapseAllButton
-              query={query}
-              selectedTaskId={selectedTaskId}
+              nodes={
+                state.kind === "loaded"
+                  ? shownNodes(state.data.tree, selectedTaskId)
+                  : undefined
+              }
               collapse={deps.collapse}
-              filtered={filtering}
+              projectsExpanded={filtering}
             />
             <AllTasksFilterButton
               state={filter}
