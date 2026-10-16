@@ -522,6 +522,59 @@ describe("read review", () => {
       expect((await readReview()).lastFullReview?.daysAgo).toBe(1);
     });
 
+    it("counts the projects with no next action and those without progress, a project with both in each", async () => {
+      const { repository, readReview } = setup();
+      const longAgo = new Date("2026-09-01T10:00:00+08:00");
+      const recently = new Date("2026-10-10T10:00:00+08:00");
+      // Both: active, no task, created long ago.
+      repository.addProject({ id: 1, status: "active", created: longAgo });
+      // Neither: a next action added recently.
+      repository.addProject({ id: 2, status: "active", created: longAgo });
+      repository.addTask(
+        { id: 3, status: "todo", created: recently },
+        { parentId: 2 },
+      );
+      // Without progress only: waiting since long ago.
+      repository.addProject({ id: 4, status: "active", created: longAgo });
+      repository.addTask(
+        { id: 5, status: "waiting", created: longAgo },
+        { parentId: 4 },
+      );
+      // No next action only: active, no task, created recently.
+      repository.addProject({ id: 6, status: "active", created: recently });
+      // Neither: planning.
+      repository.addProject({ id: 7, status: "planning", created: longAgo });
+
+      const { summary } = await readReview();
+
+      expect(summary.projectsWithNoNextAction).toBe(2);
+      expect(summary.projectsWithoutProgress).toBe(2);
+    });
+
+    it("counts no project when there is none", async () => {
+      const { readReview } = setup();
+
+      const { summary } = await readReview();
+
+      expect(summary.projectsWithNoNextAction).toBe(0);
+      expect(summary.projectsWithoutProgress).toBe(0);
+    });
+
+    it("counts no project while the project tag is paused", async () => {
+      const { repository, readReview } = setup();
+      repository.addProject({
+        id: 1,
+        status: "active",
+        created: new Date("2026-09-01T10:00:00+08:00"),
+      });
+      repository.pauseProjectTag(true);
+
+      const { summary } = await readReview();
+
+      expect(summary.projectsWithNoNextAction).toBe(0);
+      expect(summary.projectsWithoutProgress).toBe(0);
+    });
+
     it("gives no last full review when none was completed or its moment is lost", async () => {
       const { readReview } = setup(null);
 
