@@ -68,9 +68,28 @@ export function movedSnapshot(
   const insertAt = move.placement === "before" ? targetIndex : afterTarget;
   const parentId =
     move.placement === "lastChild" ? move.target : target.parentId;
+  // The nearest project block (#157): as the last child, the target's block
+  // if it is a project, else the target's own nearest one; as a sibling, the
+  // target's. Below the moved task, those that had its old one get the new
+  // one; a project block within the subtree stays theirs.
+  const targetIsProject = (snapshot.projects ?? []).some(
+    (entry) => entry.project.id === move.target,
+  );
+  const newBlock =
+    move.placement === "lastChild" && targetIsProject
+      ? move.target
+      : target.projectBlock;
+  const oldBlock = moved.projectBlock;
+  const withBlock = (item: SnapshotTask): SnapshotTask => {
+    if (item !== moved && item.projectBlock !== oldBlock) return item;
+    const { projectBlock: _old, ...rest } = item;
+    return newBlock === undefined ? rest : { ...rest, projectBlock: newBlock };
+  };
   const order = [
     ...rest.slice(0, insertAt),
-    ...subtree.map((item) => (item === moved ? { ...item, parentId } : item)),
+    ...subtree.map((item) =>
+      withBlock(item === moved ? { ...item, parentId } : item),
+    ),
     ...rest.slice(insertAt),
   ];
   return {
@@ -80,8 +99,8 @@ export function movedSnapshot(
 }
 
 /**
- * The move leaves every task where it is: each keeps its parent task and its
- * place among the others. Plain blocks are not in the snapshot, so a move
+ * The move leaves every task where it is: each keeps its parent task, its
+ * nearest project block (#157) and its place among the others. Plain blocks are not in the snapshot, so a move
  * that only changes where the task sits among plain blocks counts as none.
  * `false` when the move cannot be made (see `movedSnapshot`).
  */
@@ -94,7 +113,9 @@ export function leavesTasksInPlace(
   const arrangement = (tasks: readonly SnapshotTask[]) =>
     [...tasks]
       .sort((a, b) => a.position - b.position)
-      .map((item) => `${item.task.id}:${item.parentId}`)
+      .map(
+        (item) => `${item.task.id}:${item.parentId}:${item.projectBlock}`,
+      )
       .join(",");
   return arrangement(after.tasks) === arrangement(snapshot.tasks);
 }
