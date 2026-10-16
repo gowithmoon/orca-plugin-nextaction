@@ -21,6 +21,12 @@ export interface PanelView {
   readonly useCount?: () => number | undefined;
   /** The view's content. Panel details come from `usePanel`. */
   readonly component: ComponentType;
+  /**
+   * Its navigation item was clicked while it is the current view (the
+   * projects view goes back from the project details to the list, #156).
+   * Absent: such a click changes nothing.
+   */
+  readonly onReselect?: () => void;
 }
 
 export interface PanelViews {

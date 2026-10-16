@@ -1,16 +1,24 @@
-// The projects view (GLOSSARY: 项目视图, #155): for now only the project list,
-// every project grouped by project status, each as the project row of the
-// all tasks view (GLOSSARY: 项目行). Groups collapse, the done group by
-// default. After the all tasks view in the navigation, with no count there.
-// It reads when the plugin panel opens and again on every task change signal
-// (ADR 0007). A click on the rest of a row does nothing yet: the project
-// details come with #156. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// The projects view (GLOSSARY: 项目视图, #155): the project list, every
+// project grouped by project status, each as the project row of the all
+// tasks view (GLOSSARY: 项目行). Groups collapse, the done group by default.
+// After the all tasks view in the navigation, with no count there. A click
+// on the rest of a row opens its project details (#156); "‹ Projects" or the
+// navigation item clicked again goes back to the list. The project open
+// stays across views, in the plugin instance's memory; one no longer there
+// (dropped, its project tag removed, or the tag paused) goes back to the
+// list. Each part reads when it shows and again on every task change signal
+// (ADR 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type {
+  ProjectScopeRead,
+  ReadAllTasks,
+} from "../../../application/usecases/read-all-tasks";
 import type {
   ProjectGroup,
   ProjectListRead,
   ReadProjectList,
 } from "../../../application/usecases/read-project-list";
+import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
@@ -35,6 +43,8 @@ import {
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import { ProjectRow } from "../all-tasks/project-row";
+import type { OpenProjectStore } from "./open-project-store";
+import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
   isGroupCollapsed,
   type ProjectGroupsStore,
@@ -42,6 +52,8 @@ import {
 
 export interface ProjectsViewDeps {
   readProjectList: ReadProjectList;
+  /** With a project scope, for the project details. */
+  readAllTasks: ReadAllTasks;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
   /** Tasks or projects may have changed: the list is read again. */
@@ -52,6 +64,8 @@ export interface ProjectsViewDeps {
   projectMenuItems: () => ProjectMenuItems | undefined;
   /** The collapsed groups, kept in the plugin instance's memory. */
   groups: ProjectGroupsStore;
+  /** The project open, `null` for the list; in the plugin instance's memory. */
+  openProject: OpenProjectStore;
 }
 
 function GroupPart(props: {
@@ -61,6 +75,8 @@ function GroupPart(props: {
   today: CalendarDate;
   actions: TaskActions;
   menuItems: ProjectMenuItems | undefined;
+  /** Opens the project details of project `id`. */
+  onOpen: (id: ProjectId) => void;
 }) {
   const { group, collapsed } = props;
   return (
@@ -88,6 +104,7 @@ function GroupPart(props: {
                 node={node}
                 today={props.today}
                 menuItems={props.menuItems}
+                onToggle={() => props.onOpen(node.project.id)}
                 onOpenInNotes={() =>
                   props.actions.openBlockInNotes(node.project.id)
                 }
@@ -162,9 +179,51 @@ function ProjectsContent(props: {
           today={today}
           actions={actions}
           menuItems={menuItems}
+          onOpen={deps.openProject.set}
         />
       ))}
     </div>
+  );
+}
+
+function DetailsContent(props: {
+  query: ViewQuery<ProjectScopeRead>;
+  today: CalendarDate;
+  deps: ProjectsViewDeps;
+}) {
+  const { query, today, deps } = props;
+  const state = useViewQuery(query);
+  const actions = useTaskActions(deps.taskActions);
+  const gone = state.kind === "loaded" && state.data.kind === "noProject";
+  // No longer a project (dropped, its tag removed, the tag paused): back to
+  // the list, which tells a paused project tag apart.
+  React.useEffect(() => {
+    if (gone) deps.openProject.set(null);
+  }, [gone, deps.openProject]);
+
+  if (state.kind === "loading") return <TaskListPlaceholder />;
+  // Task features paused: nothing can be read.
+  if (state.kind === "paused") return <PausedNotice />;
+  if (state.kind === "failed") {
+    return (
+      <FailedNotice
+        error={state.error}
+        message={(reason) =>
+          t("Could not read the project: ${reason}", { reason })
+        }
+        onRetry={() => query.reset()}
+      />
+    );
+  }
+  if (state.data.kind === "noProject") return null;
+  const { project } = state.data;
+  return (
+    <ProjectAttributes
+      node={project}
+      today={today}
+      menuItems={deps.projectMenuItems()}
+      onOpenInNotes={() => actions.openBlockInNotes(project.project.id)}
+    />
   );
 }
 
@@ -174,12 +233,32 @@ function ProjectsContent(props: {
  */
 export function createProjectsView(deps: ProjectsViewDeps): PanelView {
   const query = createViewQuery(() => deps.readProjectList(), deps.changes);
+  // Reads the project open at the time of each read.
+  const details = createViewQuery(async (): Promise<ProjectScopeRead> => {
+    const project = deps.openProject.current();
+    if (project === null) return { kind: "noProject" };
+    return deps.readAllTasks({ project });
+  }, deps.changes);
 
   function ProjectsView() {
+    const open = React.useSyncExternalStore(
+      deps.openProject.subscribe,
+      deps.openProject.current,
+    );
+    // A project opens only from the list, where the details query stops and
+    // forgets what it read: nothing of the one before shows for it.
+    if (open === null) {
+      return (
+        <>
+          <ViewHeader title={t("Projects")} />
+          <ProjectsContent query={query} today={deps.today()} deps={deps} />
+        </>
+      );
+    }
     return (
       <>
-        <ViewHeader title={t("Projects")} />
-        <ProjectsContent query={query} today={deps.today()} deps={deps} />
+        <BackToProjects onBack={() => deps.openProject.set(null)} />
+        <DetailsContent query={details} today={deps.today()} deps={deps} />
       </>
     );
   }
@@ -192,5 +271,8 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
     icon: "ti ti-folder",
     label: () => t("Projects"),
     component: ProjectsView,
+    // In the project details, the navigation item goes back to the list; in
+    // the list it changes nothing.
+    onReselect: () => deps.openProject.set(null),
   };
 }

@@ -60,6 +60,7 @@ import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
+import { createOpenProjectStore } from "../ui/views/projects/open-project-store";
 import { createProjectGroupsStore } from "../ui/views/projects/project-groups-store";
 import { createProjectsView } from "../ui/views/projects/projects-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
@@ -128,6 +129,8 @@ export function createPanelFeature(deps: {
   const allTasksFilter = createAllTasksFilterStore();
   // The project list's collapsed groups (#155): in memory only, likewise.
   const projectGroups = createProjectGroupsStore();
+  // The project open in the projects view (#156): in memory only, likewise.
+  const openProject = createOpenProjectStore();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The stats view's scale (#135): in memory only, likewise.
@@ -207,14 +210,16 @@ export function createPanelFeature(deps: {
       menuItems: deps.menuItems,
     }),
   );
+  // The all tasks view, and the project details with a project scope.
+  const readAllTasks = createReadAllTasks({
+    repository,
+    clock: systemClock,
+    dayBoundary: deps.dayBoundary,
+    startPreviewDays: deps.startPreviewDays,
+  });
   views.register(
     createAllTasksView({
-      readAllTasks: createReadAllTasks({
-        repository,
-        clock: systemClock,
-        dayBoundary: deps.dayBoundary,
-        startPreviewDays: deps.startPreviewDays,
-      }),
+      readAllTasks,
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
@@ -242,6 +247,8 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       projectMenuItems: deps.projectMenuItems,
       groups: projectGroups,
+      readAllTasks,
+      openProject,
     }),
   );
   views.register(
@@ -315,6 +322,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.doneSection`, doneSection.clear);
     registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
     registry.add(`${pluginName}.projectGroups`, projectGroups.clear);
+    registry.add(`${pluginName}.openProject`, openProject.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);

@@ -172,6 +172,20 @@ export function createNextActionPanel(
       setSelectedTaskId(undefined);
       setCurrentId(id);
     }, []);
+    /**
+     * A navigation item clicked: another view shows; the current one is told
+     * it was clicked again (`PanelView.onReselect`), the selection kept.
+     */
+    const selectFromNavigation = React.useCallback(
+      (id: string) => {
+        if (id !== shownId.current) return showView(id);
+        views
+          .list()
+          .find((view) => view.id === id)
+          ?.onReselect?.();
+      },
+      [showView],
+    );
     useSelectionPopup(
       openPopup,
       tier !== undefined && tier !== "wide",
@@ -217,7 +231,7 @@ export function createNextActionPanel(
                 <PanelNavigation
                   views={list}
                   currentId={current?.id}
-                  onSelect={showView}
+                  onSelect={selectFromNavigation}
                   onRefresh={onRefresh}
                 />
                 <div className="nextaction-panel-body">

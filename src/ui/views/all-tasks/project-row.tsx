@@ -23,7 +23,7 @@ import { projectStatusIcons } from "../../project-menu/project-status-icons";
  * The progress shown, out of 100 and rounded down: 100 only when all is
  * done; `null` for no progress.
  */
-function progressValue(progress: ProjectProgress): number | null {
+export function progressValue(progress: ProjectProgress): number | null {
   if (progress.kind !== "measured") return null;
   return Math.floor((100 * progress.done) / progress.total);
 }
