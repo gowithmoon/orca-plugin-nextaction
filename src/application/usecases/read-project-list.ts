@@ -3,24 +3,17 @@
 // project row shows (GLOSSARY: 项目行).
 import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import {
-  lacksNextAction,
-  type ProjectTask,
-  projectProgress,
-  unfinishedTaskCount,
-} from "../../domain/project/progress";
-import {
-  type ProjectId,
   type ProjectStatus,
   projectListOrder,
 } from "../../domain/project/project";
-import { recurs } from "../../domain/recurrence/recurrence";
 import { projectScore } from "../../domain/scoring/score";
-import { addDays, compareDays } from "../../domain/time/calendar-days";
+import { addDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import { projectNode, summarizeProjects } from "./project-nodes";
 import type { ProjectNode } from "./read-all-tasks";
 
 /** The projects of one project status. */
@@ -57,41 +50,11 @@ export function createReadProjectList(deps: {
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const previewDays = deps.startPreviewDays.current();
     const graph = analyzeTaskGraph(snapshot, { today, previewDays });
+    const summaries = summarizeProjects(snapshot, graph);
     const startsBy = addDays(today, previewDays);
-    // The tasks that belong to each project, through the task graph, which
-    // works ownership out (GLOSSARY: 所属项目).
-    const tasksOf = new Map<ProjectId, ProjectTask[]>();
-    for (const item of snapshot.tasks) {
-      const entry = graph.entry(item.task.id);
-      if (!entry?.project) continue;
-      const tasks = tasksOf.get(entry.project.id) ?? [];
-      tasks.push({
-        status: item.task.status,
-        effort: item.task.effort,
-        recurs: recurs(item.task.recurrence),
-        doneAncestor: entry.doneAncestor !== null,
-        nextAction: entry.nextAction,
-      });
-      tasksOf.set(entry.project.id, tasks);
-    }
     const nodes = [...(snapshot.projects ?? [])]
       .sort((a, b) => a.position - b.position)
-      .map(({ project }): ProjectNode => {
-        const tasks = tasksOf.get(project.id) ?? [];
-        const notStarted =
-          project.start !== null && compareDays(project.start, startsBy) > 0;
-        return {
-          kind: "project",
-          project,
-          faded: null,
-          children: [],
-          progress: projectProgress(tasks),
-          noNextAction: lacksNextAction(project, !notStarted, tasks),
-          unfinished: unfinishedTaskCount(tasks),
-          taskCount: tasks.length,
-          notStarted,
-        };
-      });
+      .map(({ project }) => projectNode(summaries, startsBy, project, []));
     // Highest score first; stable, so ties keep note order.
     const scoreOf = new Map(
       nodes.map((node) => [node.project.id, projectScore(node.project, today)]),

@@ -9,14 +9,10 @@ import {
   type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import {
-  lacksNextAction,
   type ProjectProgress,
-  type ProjectTask,
-  projectProgress,
   unfinishedTaskCount,
 } from "../../domain/project/progress";
 import type { Project, ProjectId } from "../../domain/project/project";
-import { recurs } from "../../domain/recurrence/recurrence";
 import { projectScore, score } from "../../domain/scoring/score";
 import type { CompletionEntry } from "../../domain/task/completion-history";
 import type {
@@ -37,6 +33,11 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import {
+  type ProjectSummary,
+  projectNode,
+  summarizeProjects,
+} from "./project-nodes";
 
 /**
  * Why a node is faded:
@@ -438,49 +439,6 @@ function holdsOpen(tree: TaskTree, item: SnapshotTask): boolean {
   );
 }
 
-/** What the tasks that belong to a project say about it. */
-interface ProjectSummary {
-  readonly tasks: readonly ProjectTask[];
-  /** The latest last completion among them; absent for none recorded. */
-  readonly lastCompletion?: CompletionEntry;
-}
-
-/**
- * The tasks that belong to each project, by its ID: through the task graph,
- * which works ownership out (GLOSSARY: 所属项目), never from the block
- * hierarchy alone.
- */
-function summarizeProjects(
-  snapshot: TaskGraphSnapshot,
-  graph: TaskGraph,
-): Map<ProjectId, ProjectSummary> {
-  const summaries = new Map<
-    ProjectId,
-    { tasks: ProjectTask[]; lastCompletion?: CompletionEntry }
-  >();
-  for (const item of snapshot.tasks) {
-    const entry = graph.entry(item.task.id);
-    if (!entry?.project) continue;
-    const summary = summaries.get(entry.project.id) ?? { tasks: [] };
-    summary.tasks.push({
-      status: item.task.status,
-      effort: item.task.effort,
-      recurs: recurs(item.task.recurrence),
-      doneAncestor: entry.doneAncestor !== null,
-      nextAction: entry.nextAction,
-    });
-    const last = item.lastCompletion;
-    if (
-      last &&
-      (!summary.lastCompletion ||
-        last.at.getTime() > summary.lastCompletion.at.getTime())
-    )
-      summary.lastCompletion = last;
-    summaries.set(entry.project.id, summary);
-  }
-  return summaries;
-}
-
 /** What turning snapshot tasks into nodes needs. */
 interface NodeContext {
   readonly tree: TaskTree;
@@ -515,27 +473,6 @@ function asRoot(
   top: TaskNode,
 ): TaskNode {
   return { ...top, parentText: rootParentText(context, item) };
-}
-
-function projectNode(
-  context: NodeContext,
-  project: Project,
-  children: readonly AllTasksNode[],
-): ProjectNode {
-  const tasks = context.projects.get(project.id)?.tasks ?? [];
-  const notStarted =
-    project.start !== null && compareDays(project.start, context.startsBy) > 0;
-  return {
-    kind: "project",
-    project,
-    faded: null,
-    children,
-    progress: projectProgress(tasks),
-    noNextAction: lacksNextAction(project, !notStarted, tasks),
-    unfinished: unfinishedTaskCount(tasks),
-    taskCount: tasks.length,
-    notStarted,
-  };
 }
 
 /**
@@ -738,7 +675,9 @@ function narrowedTree(
         );
         // Narrowed, a row with no task let through below it is hidden.
         if (children.length > 0 || !narrows(narrow))
-          tree.push(projectNode(context, project, children));
+          tree.push(
+            projectNode(context.projects, context.startsBy, project, children),
+          );
         continue;
       }
       // A finished project holding the kept task stays in the tree for it.
@@ -746,7 +685,9 @@ function narrowedTree(
         (item) => keptPath(context, item, project.id) ?? [],
       );
       if (kept.length > 0) {
-        tree.push(projectNode(context, project, kept));
+        tree.push(
+          projectNode(context.projects, context.startsBy, project, kept),
+        );
         continue;
       }
       // Its tasks let through as the top-level tasks of done subtrees are,
@@ -763,7 +704,7 @@ function narrowedTree(
             )
       ) {
         done.push({
-          item: projectNode(context, project, []),
+          item: projectNode(context.projects, context.startsBy, project, []),
           lastCompletion: context.projects.get(project.id)?.lastCompletion,
         });
       }
@@ -771,23 +712,23 @@ function narrowedTree(
     }
     const item = entry.item;
     // In a project scope the scope's project goes without saying.
-    const said = context.scope;
+    const scopeProject = context.scope;
     if (holdsOpen(context.tree, item)) {
-      const shown = shownNode(context, narrow, item, counted, said);
+      const shown = shownNode(context, narrow, item, counted, scopeProject);
       if (shown) tree.push(asRoot(context, item, shown));
       continue;
     }
     // A done subtree holding the kept task stays in the tree for it, so it
     // is not in the done section too; the other dimensions and the search
     // look at the item's own top-level task.
-    const kept = keptPath(context, item, said);
+    const kept = keptPath(context, item, scopeProject);
     if (kept) tree.push(asRoot(context, item, kept));
     else if (doneLets(item.task))
       done.push({
         item: {
           kind: "task",
           task: item.task,
-          shownProject: shownProjectOf(context, item, said),
+          shownProject: shownProjectOf(context, item, scopeProject),
           parentText: rootParentText(context, item),
         },
         lastCompletion: item.lastCompletion,
@@ -906,7 +847,12 @@ export function createReadAllTasks(deps: {
     if (!scoped) return read;
     return {
       kind: "project",
-      project: projectNode(context, scoped.project, []),
+      project: projectNode(
+        context.projects,
+        context.startsBy,
+        scoped.project,
+        [],
+      ),
       ...read,
     };
   }
