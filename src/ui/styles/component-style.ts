@@ -660,6 +660,209 @@ export const componentCss = `
   background-color: var(--orca-color-bg-2);
 }
 
+/*
+ * The project list's groups (#155), as the done section's title: a quiet
+ * toggle with the status and its count, then the project rows.
+ */
+.nextaction-project-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+}
+
+.nextaction-project-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-project-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  align-self: flex-start;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nextaction-project-group-toggle:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-project-group-count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-project-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The project details' "‹ Projects" button (#156). */
+.nextaction-project-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  align-self: flex-start;
+  height: 24px;
+  margin-bottom: var(--orca-spacing-sm);
+  padding: 0 var(--orca-spacing-sm) 0 2px;
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  cursor: pointer;
+}
+
+.nextaction-project-back:hover {
+  background-color: var(--orca-color-bg-2);
+  color: var(--orca-color-text-1);
+}
+
+/*
+ * The project details' attribute area (#156, the prototype's variant C): a
+ * line with the status icon, the name and the progress, a line of chips, the
+ * goal folded to one line, and the progress bar on the bottom edge. From a
+ * roomy width the chips sit beside the first line.
+ */
+.nextaction-project-attr {
+  container: nextaction-project-attr / inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-bottom: var(--orca-spacing-md);
+  padding-bottom: 7px;
+}
+
+.nextaction-project-attr-top {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nextaction-project-attr-line {
+  display: flex;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+}
+
+.nextaction-project-attr-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--orca-fontweight-lg);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.nextaction-project-attr-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nextaction-project-attr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px var(--orca-spacing-lg);
+  min-width: 0;
+  padding-left: calc(22px + var(--orca-spacing-sm));
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+  line-height: var(--orca-lineheight-sm);
+}
+
+.nextaction-project-attr-goal {
+  display: flex;
+  align-items: baseline;
+  gap: var(--orca-spacing-sm);
+  width: 100%;
+  margin-top: 3px;
+  padding: 0 0 0 calc(22px + var(--orca-spacing-sm));
+  border: none;
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-project-attr-goal-label {
+  flex: none;
+}
+
+.nextaction-project-attr-goal-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--orca-color-text-1);
+}
+
+.nextaction-project-attr-goal[aria-expanded="true"] .nextaction-project-attr-goal-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.nextaction-project-attr-goal > i {
+  flex: none;
+  align-self: center;
+}
+
+.nextaction-project-attr-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: color-mix(in srgb, var(--orca-color-border) 70%, transparent);
+}
+
+.nextaction-project-attr-bar > i {
+  display: block;
+  height: 100%;
+  background-color: var(--orca-color-primary-5);
+}
+
+@container nextaction-project-attr (min-width: 560px) {
+  .nextaction-project-attr-top {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--orca-spacing-lg);
+  }
+  .nextaction-project-attr-line {
+    flex: 0 1 auto;
+  }
+  .nextaction-project-attr-chips {
+    padding-left: 0;
+  }
+}
+
 /* A narrow list: tighter cards, so the text keeps its room. */
 @container nextaction-task-list (max-width: 320px) {
   .nextaction-task-card,

@@ -65,12 +65,12 @@ const DragContext = React.createContext<DragArea | undefined>(undefined);
 
 /**
  * The area cards can be dragged and dropped in. A drop on a card or a gap
- * calls `onMove` with its task as the target; the use case refuses what
- * cannot be done. A drop on a block in a note panel calls `onNoteDrop`
+ * calls `onMove` with its task as the target and the point let go at; the
+ * use case refuses what cannot be done. A drop on a block in a note panel calls `onNoteDrop`
  * (#127).
  */
 export function TaskDragArea(props: {
-  onMove: (move: TaskMove) => void;
+  onMove: (move: TaskMove, at: { x: number; y: number }) => void;
   onNoteDrop: (drop: NoteCardDrop) => void;
   children: React.ReactNode;
 }) {
@@ -116,7 +116,7 @@ export function TaskDragArea(props: {
         if (!current.current) return false;
         const at = targetAt(x, y);
         if (at === null) return false;
-        onMove.current({ id: task.id, ...at });
+        onMove.current({ id: task.id, ...at }, { x, y });
         return true;
       },
       end: () => update(null),

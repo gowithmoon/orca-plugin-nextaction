@@ -58,6 +58,21 @@ describe("move task", () => {
     expect(repository.writeCount()).toBe(0);
   });
 
+  it("moves a task into a project block even when its parent task and place among the tasks stay the same (#157)", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addProject({ id: 10, text: "Move house" });
+    repository.addTask({ id: 1 }, { parentId: 10 });
+    repository.addTask({ id: 3 });
+    const moveTask = createMoveTask({ repository });
+
+    // Neither has a parent task, and 3 already comes after 1.
+    await moveTask({ id: 3, target: 1, placement: "after" });
+
+    expect(repository.moves()).toEqual([
+      { id: 3, target: 1, placement: "after" },
+    ]);
+  });
+
   it("hands any other move to the repository with the target and placement given, in one write", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 1, text: "Move house" });

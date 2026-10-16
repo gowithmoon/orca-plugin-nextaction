@@ -14,9 +14,11 @@ import { createMoveTask } from "../application/usecases/move-task";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
+import { createReadMoveCrossing } from "../application/usecases/read-move-crossing";
 import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
+import { createReadProjectList } from "../application/usecases/read-project-list";
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
@@ -48,17 +50,17 @@ import type { OpenReviewPopup } from "../ui/task-panel/review-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
 import type { OpenTaskPanelPopup } from "../ui/task-panel/task-panel-popup";
 import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
-import { createAllTasksCollapseStore } from "../ui/views/all-tasks/all-tasks-collapse-store";
-import { createAllTasksFilterStore } from "../ui/views/all-tasks/all-tasks-filter-store";
-import { createAllTasksSortStore } from "../ui/views/all-tasks/all-tasks-sort-store";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
-import { createDoneSectionStore } from "../ui/views/all-tasks/done-section-store";
+import { createTaskTreeStores } from "../ui/views/all-tasks/task-tree-stores";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
 import { createMyDayScheduleActions } from "../ui/views/my-day/my-day-schedule-actions";
 import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
 import { createNextActionFilterStore } from "../ui/views/next-action/next-action-filter-store";
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
+import { createOpenProjectStore } from "../ui/views/projects/open-project-store";
+import { createProjectGroupsStore } from "../ui/views/projects/project-groups-store";
+import { createProjectsView } from "../ui/views/projects/projects-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
 import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
@@ -74,7 +76,7 @@ export function pluginPanelType(pluginName: string): string {
 /**
  * The plugin panel (#36): the editor sidetool button, the panel type and its
  * style sheet, with the next action view (#53), the My Day view (#83), the
- * inbox view (#37), the all tasks view (#65), the review view (#98, #99), the stats view (#132) and their
+ * inbox view (#37), the all tasks view (#65), the projects view (#155), the review view (#98, #99), the stats view (#132) and their
  * card actions (#39). `views`
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
@@ -114,15 +116,17 @@ export function createPanelFeature(deps: {
   // The next action view's filter (#55): in memory only, so it outlives the
   // plugin panel closing and is gone with the load (cleared on release).
   const nextActionFilter = createNextActionFilterStore();
-  // The all tasks view's collapsed nodes (#67): in memory only, likewise.
-  const allTasksCollapse = createAllTasksCollapseStore();
-  // The all tasks view's sort (#68): in memory only, likewise.
-  const allTasksSort = createAllTasksSortStore();
-  // The all tasks view's done section (#66): in memory only, as the filter.
-  const doneSection = createDoneSectionStore();
-  // The all tasks view's filter and search text (#69): in memory only, apart
+  // The all tasks view's collapsed nodes (#67), sort (#68), done section
+  // (#66), filter and search text (#69): in memory only, likewise, apart
   // from the next action view's filter.
-  const allTasksFilter = createAllTasksFilterStore();
+  const allTasks = createTaskTreeStores();
+  // The project list's collapsed groups (#155): in memory only, likewise.
+  const projectGroups = createProjectGroupsStore();
+  // The project open in the projects view (#156): in memory only, likewise.
+  const openProject = createOpenProjectStore();
+  // The project details' tree state (#157): in memory only, apart from the
+  // all tasks view's stores.
+  const projectDetails = createTaskTreeStores();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The stats view's scale (#135): in memory only, likewise.
@@ -202,9 +206,35 @@ export function createPanelFeature(deps: {
       menuItems: deps.menuItems,
     }),
   );
+  // The all tasks view, and the project details with a project scope.
+  const readAllTasks = createReadAllTasks({
+    repository,
+    clock: systemClock,
+    dayBoundary: deps.dayBoundary,
+    startPreviewDays: deps.startPreviewDays,
+  });
+  // Moving a block from a tree: the all tasks view's and the project details'.
+  const moveTask = createMoveTask({ repository });
   views.register(
     createAllTasksView({
-      readAllTasks: createReadAllTasks({
+      readAllTasks,
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      projectMenuItems: deps.projectMenuItems,
+      collapse: allTasks.collapse,
+      sort: allTasks.sort,
+      doneSection: allTasks.doneSection,
+      readCandidates,
+      filter: allTasks.filter,
+      moveTask,
+      linkTaskInNote,
+    }),
+  );
+  views.register(
+    createProjectsView({
+      readProjectList: createReadProjectList({
         repository,
         clock: systemClock,
         dayBoundary: deps.dayBoundary,
@@ -213,15 +243,16 @@ export function createPanelFeature(deps: {
       today: deps.today,
       changes,
       taskActions: deps.taskActions,
-      menuItems: deps.menuItems,
       projectMenuItems: deps.projectMenuItems,
-      collapse: allTasksCollapse,
-      sort: allTasksSort,
-      doneSection,
+      groups: projectGroups,
+      readAllTasks,
+      openProject,
+      menuItems: deps.menuItems,
       readCandidates,
-      filter: allTasksFilter,
-      moveTask: createMoveTask({ repository }),
+      moveTask,
+      readMoveCrossing: createReadMoveCrossing({ repository }),
       linkTaskInNote,
+      details: projectDetails,
     }),
   );
   views.register(
@@ -259,7 +290,7 @@ export function createPanelFeature(deps: {
       today: deps.today,
       changes,
       scale: statsScale,
-      allTasksFilter,
+      allTasksFilter: allTasks.filter,
       reviewPage,
       linkTaskInNote,
       taskActions: deps.taskActions,
@@ -290,10 +321,10 @@ export function createPanelFeature(deps: {
     // Each load is a new module instance already (plugin-lifecycle-settings);
     // clearing on release also covers a load → unload → load in one instance.
     registry.add(`${pluginName}.nextActionFilter`, nextActionFilter.clear);
-    registry.add(`${pluginName}.allTasksCollapse`, allTasksCollapse.clear);
-    registry.add(`${pluginName}.allTasksSort`, allTasksSort.clear);
-    registry.add(`${pluginName}.doneSection`, doneSection.clear);
-    registry.add(`${pluginName}.allTasksFilter`, allTasksFilter.clear);
+    registry.add(`${pluginName}.allTasksStores`, allTasks.clear);
+    registry.add(`${pluginName}.projectGroups`, projectGroups.clear);
+    registry.add(`${pluginName}.openProject`, openProject.clear);
+    registry.add(`${pluginName}.projectDetailsStores`, projectDetails.clear);
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
     registry.css("panelStyle", panelCss);

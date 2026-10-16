@@ -4,11 +4,12 @@
 // the progress; a thin progress bar below; then, as needed, "no next action"
 // (yellow), a start still ahead, the due date (red when overdue) and, for a
 // done project, how many tasks are not done yet. The status icon and a
-// right-click open the project menu; a click elsewhere collapses or expands
-// it. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// right-click open the project menu; a click elsewhere activates it (the all
+// tasks view collapses or expands it, the project list opens it). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { ProjectProgress } from "../../../domain/project/progress";
+import type { Project, ProjectStatus } from "../../../domain/project/project";
 import type { CalendarDate } from "../../../domain/task/task";
 import { compareDays } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
@@ -23,9 +24,62 @@ import { projectStatusIcons } from "../../project-menu/project-status-icons";
  * The progress shown, out of 100 and rounded down: 100 only when all is
  * done; `null` for no progress.
  */
-function progressValue(progress: ProjectProgress): number | null {
+export function progressValue(progress: ProjectProgress): number | null {
   if (progress.kind !== "measured") return null;
   return Math.floor((100 * progress.done) / progress.total);
+}
+
+/**
+ * The project status icon: with `open`, a button opening the project menu
+ * (`shown`: the menu is open); without, only the icon.
+ */
+export function ProjectStatusIcon(props: {
+  status: ProjectStatus;
+  open?: (event: React.MouseEvent) => void;
+  shown?: boolean;
+}) {
+  const { open } = props;
+  const icon = projectStatusIcons[props.status];
+  const status = projectStatusLabel(props.status);
+  return open ? (
+    <button
+      type="button"
+      className="nextaction-task-card-button nextaction-project-row-status"
+      style={{ color: icon.color }}
+      aria-haspopup="menu"
+      aria-expanded={props.shown}
+      aria-label={t("Project status: ${status}", { status })}
+      title={status}
+      onClick={(event) => {
+        // Not a click on the row around it.
+        event.stopPropagation();
+        open(event);
+      }}
+    >
+      <i className={icon.className} aria-hidden="true" />
+    </button>
+  ) : (
+    <span
+      className="nextaction-project-row-status"
+      style={{ color: icon.color }}
+      role="img"
+      aria-label={t("Project status: ${status}", { status })}
+    >
+      <i className={icon.className} aria-hidden="true" />
+    </span>
+  );
+}
+
+/** Overdue: not done, and its due day is before `today`. */
+export function projectOverdue(
+  project: Pick<Project, "status" | "due">,
+  today: CalendarDate,
+): boolean {
+  return (
+    project.due !== null &&
+    project.status !== "done" &&
+    compareDays(project.due, today) < 0
+  );
 }
 
 /** A click that selected text is not a click on the row. */
@@ -39,8 +93,11 @@ export interface ProjectRowProps {
   today: CalendarDate;
   /** The project menu's registrations; the row has no menu without them. */
   menuItems: ProjectMenuItems | undefined;
-  /** Collapses or expands it; absent when it has nothing below it. */
-  onToggle?: () => void;
+  /**
+   * A click on the rest of the row: the all tasks view collapses or expands
+   * it, the project list opens its project details. Absent: does nothing.
+   */
+  onActivate?: () => void;
   /** Opens the project's block in a note panel. */
   onOpenInNotes: () => void;
   /**
@@ -57,10 +114,7 @@ function ProjectMeta(props: {
 }) {
   const { node, today, inDone } = props;
   const { project } = node;
-  const overdue =
-    project.due !== null &&
-    project.status !== "done" &&
-    compareDays(project.due, today) < 0;
+  const overdue = projectOverdue(project, today);
   const items: React.ReactNode[] = [];
   if (inDone) {
     items.push(
@@ -119,12 +173,10 @@ function ProjectMeta(props: {
 }
 
 export function ProjectRow(props: ProjectRowProps) {
-  const { node, today, menuItems, onToggle, onOpenInNotes } = props;
+  const { node, today, menuItems, onActivate, onOpenInNotes } = props;
   const inDone = props.inDone ?? false;
   const { project } = node;
   const { Tooltip } = orca.components;
-  const icon = projectStatusIcons[project.status];
-  const status = projectStatusLabel(project.status);
   const shownProgress = inDone ? null : progressValue(node.progress);
   const name = project.text.trim() === "" ? t("(No text)") : project.text;
 
@@ -138,13 +190,13 @@ export function ProjectRow(props: ProjectRowProps) {
       data-faded={inDone || undefined}
       aria-label={t("Project ${name}", { name })}
       onClick={
-        onToggle &&
+        onActivate &&
         ((event) => {
           // React bubbles clicks out of portals: a menu item chosen in the
           // menu opened from this row is not a click on the row.
           if (!(event.target instanceof Node)) return;
           if (!event.currentTarget.contains(event.target)) return;
-          if (!selectsText()) onToggle();
+          if (!selectsText()) onActivate();
         })
       }
       onContextMenu={
@@ -157,32 +209,7 @@ export function ProjectRow(props: ProjectRowProps) {
       }
     >
       <div className="nextaction-project-row-line">
-        {open ? (
-          <button
-            type="button"
-            className="nextaction-task-card-button nextaction-project-row-status"
-            style={{ color: icon.color }}
-            aria-haspopup="menu"
-            aria-expanded={shown}
-            aria-label={t("Project status: ${status}", { status })}
-            title={status}
-            onClick={(event) => {
-              event.stopPropagation();
-              open(event);
-            }}
-          >
-            <i className={icon.className} aria-hidden="true" />
-          </button>
-        ) : (
-          <span
-            className="nextaction-project-row-status"
-            style={{ color: icon.color }}
-            role="img"
-            aria-label={t("Project status: ${status}", { status })}
-          >
-            <i className={icon.className} aria-hidden="true" />
-          </span>
-        )}
+        <ProjectStatusIcon status={project.status} open={open} shown={shown} />
         <span className="nextaction-project-row-name" title={name}>
           {name}
         </span>

@@ -11,6 +11,7 @@ import {
   createReadAllTasks,
   type DoneItem,
   type ProjectNode,
+  type ProjectScopeRead,
 } from "./read-all-tasks";
 
 /** 2026-10-09 10:00 in UTC+8: the logical day 2026-10-09. */
@@ -1686,3 +1687,252 @@ describe("read all tasks: project rows filtered and searched", () => {
     expect(read.matchCount).toBe(0);
   });
 });
+
+describe("read all tasks: project scope", () => {
+  it("brings the project, its progress, whether it lacks a next action and how many tasks are not done", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "active" });
+    repository.addTask({ id: 2, status: "done", effort: 2 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox", effort: 6 }, { parentId: 1 });
+    // Set to project 1 from a journal: it belongs to it too.
+    repository.addTask({ id: 4, status: "inbox", effort: 4 }, { project: [1] });
+    // Under project 1's block, but set to project 5: not project 1's.
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask(
+      { id: 6, status: "todo", effort: 3 },
+      { parentId: 1, project: [5] },
+    );
+
+    const read = await readAllTasks({ project: 1 });
+
+    if (read.kind !== "project") throw new Error(read.kind);
+    expect(read.project.project.text).toBe("Move house");
+    expect(read.project.progress).toEqual({
+      kind: "measured",
+      done: 2,
+      total: 12,
+    });
+    expect(read.project.noNextAction).toBe(true);
+    expect(read.project.unfinished).toBe(2);
+    expect(read.project.taskCount).toBe(3);
+  });
+
+  it("reads no project for a block that is not a project", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addBlock(2);
+
+    expect(await readAllTasks({ project: 1 })).toEqual({ kind: "noProject" });
+    expect(await readAllTasks({ project: 2 })).toEqual({ kind: "noProject" });
+    expect(await readAllTasks({ project: 3 })).toEqual({ kind: "noProject" });
+  });
+
+  it("reads no project while the project tag is paused", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.pauseProjectTag(true);
+
+    expect(await readAllTasks({ project: 1 })).toEqual({ kind: "noProject" });
+  });
+
+  it("brings a project's numbers the same as its project row in the unscoped read", async () => {
+    const { repository, readAllTasks } = setup();
+    const day = (d: number) => ({ year: 2026, month: 10, day: d });
+    repository.addProject({ id: 1, status: "active", start: day(20) });
+    repository.addTask({ id: 2, status: "done", effort: 1 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo", effort: 3 }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "someday" }, { project: [1] });
+
+    const scoped = await readAllTasks({ project: 1 });
+    const row = projectNode(await readAllTasks(), 1);
+
+    if (scoped.kind !== "project") throw new Error(scoped.kind);
+    expect(scoped.project).toEqual({ ...row, children: [] });
+    expect(scoped.project.notStarted).toBe(true);
+  });
+});
+
+/** A scoped read of a project; fails the test for no project. */
+function inScope(
+  read: ProjectScopeRead,
+): Extract<ProjectScopeRead, { kind: "project" }> {
+  if (read.kind !== "project") throw new Error(read.kind);
+  return read;
+}
+
+describe("read all tasks: the tree of a project scope", () => {
+  it("holds every task that belongs to the project, wherever it sits, roots in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    // Set to project 1 from a journal, above the project block in the notes.
+    repository.addTask({ id: 7, status: "todo" }, { project: [1] });
+    repository.addTask({ id: 8, status: "todo" }, { parentId: 7 });
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Parent task first: set to project 5, yet project 1's through task 2.
+    repository.addTask(
+      { id: 3, status: "todo" },
+      { parentId: 2, project: [5] },
+    );
+    // Under project 1's block, set to project 5: neither it nor its subtask.
+    repository.addTask(
+      { id: 4, status: "todo" },
+      { parentId: 1, project: [5] },
+    );
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 4 });
+    repository.addProject({ id: 5, status: "active" });
+    // A parent task of no project, its subtask set to project 1: a root.
+    repository.addTask({ id: 10, status: "todo" });
+    repository.addTask(
+      { id: 11, status: "todo" },
+      { parentId: 10, project: [1] },
+    );
+    repository.addTask({ id: 9, status: "todo" });
+
+    const read = inScope(await readAllTasks({ project: 1 }));
+
+    expect(shape(read.tree)).toEqual([[7, [8]], [2, [3]], 11]);
+  });
+
+  it("shows no project on any card, and a root's parent task text when it has one", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, text: "Errands", status: "todo" });
+    repository.addTask(
+      { id: 5, status: "todo" },
+      { parentId: 4, project: [1] },
+    );
+    repository.addTask(
+      { id: 6, status: "done" },
+      { parentId: 4, project: [1] },
+    );
+
+    const read = inScope(
+      await readAllTasks({ project: 1, showEarlierDone: true }),
+    );
+
+    expect(shownProjects(read.tree)).toEqual([
+      [2, null],
+      [3, null],
+      [5, null],
+    ]);
+    expect(parentTexts(read.tree)).toEqual([
+      [2, null],
+      [3, null],
+      [5, "Errands"],
+    ]);
+    expect(
+      read.done.items.map((item) =>
+        item.kind === "task"
+          ? [item.task.id, item.shownProject, item.parentText]
+          : key(item),
+      ),
+    ).toEqual([[6, null, "Errands"]]);
+  });
+
+  it("filters and searches within the scope, ancestor tasks showing where a task sits", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, text: "Pack", status: "inbox" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, text: "Pack books", status: "todo" },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, text: "Book van", status: "todo" },
+      { project: [1] },
+    );
+    // Not the project's: never let through here.
+    repository.addTask({ id: 5, text: "Return books", status: "todo" });
+
+    const filtered = inScope(
+      await readAllTasks({ project: 1, filter: { statuses: ["todo"] } }),
+    );
+    const searched = inScope(
+      await readAllTasks({ project: 1, search: "books" }),
+    );
+
+    expect(shape(filtered.tree)).toEqual([[2, [3]], 4]);
+    expect(fades(filtered.tree)).toEqual([
+      [2, "ancestor"],
+      [3, null],
+      [4, null],
+    ]);
+    expect(filtered.matchCount).toBe(2);
+    expect(shape(searched.tree)).toEqual([[2, [3]]]);
+    expect(searched.matchCount).toBe(1);
+  });
+
+  it("sorts only the roots, their subtasks kept in note order", async () => {
+    const { repository, readAllTasks } = setup();
+    const day = (d: number) => ({ year: 2026, month: 10, day: d });
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", due: day(30) },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", due: day(10) },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 5, status: "todo", due: day(15) },
+      { project: [1] },
+    );
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 1 });
+
+    const read = inScope(await readAllTasks({ project: 1, sort: "due" }));
+
+    expect(shape(read.tree)).toEqual([5, [2, [3, 4]], 6]);
+  });
+
+  it("puts a root done with all its descendant tasks in the done section, by the last 30 logical days unless earlier ones are shown", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "done" });
+    repository.addTask(
+      { id: 2, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-08") },
+    );
+    repository.addTask(
+      { id: 3, status: "done" },
+      { parentId: 2, ...completedOn("2026-10-07") },
+    );
+    repository.addTask(
+      { id: 4, status: "done" },
+      { project: [1], ...completedOn("2026-08-01") },
+    );
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 6, status: "done" }, { parentId: 5 });
+
+    const recent = inScope(await readAllTasks({ project: 1 }));
+    const every = inScope(
+      await readAllTasks({ project: 1, showEarlierDone: true }),
+    );
+
+    // A done project is no single item here: its done roots are.
+    expect(shape(recent.tree)).toEqual([[5, [6]]]);
+    expect(doneIds(recent)).toEqual([2]);
+    expect(recent.done.hasEarlier).toBe(true);
+    expect(doneIds(every)).toEqual([2, 4]);
+  });
+});
+
+/** Every task node in the tree, depth first, with the parent text its card shows. */
+function parentTexts(
+  nodes: readonly AllTasksNode[],
+): [NodeKey, string | null][] {
+  return nodes.flatMap((node) => [
+    ...(node.kind === "task"
+      ? [[key(node), node.parentText] as [NodeKey, string | null]]
+      : []),
+    ...parentTexts(node.children),
+  ]);
+}

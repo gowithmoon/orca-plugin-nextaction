@@ -9,22 +9,17 @@ import {
   type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import {
-  lacksNextAction,
   type ProjectProgress,
-  type ProjectTask,
-  projectProgress,
   unfinishedTaskCount,
 } from "../../domain/project/progress";
 import type { Project, ProjectId } from "../../domain/project/project";
-import { recurs } from "../../domain/recurrence/recurrence";
-import { score } from "../../domain/scoring/score";
+import { projectScore, score } from "../../domain/scoring/score";
 import type { CompletionEntry } from "../../domain/task/completion-history";
-import {
-  type CalendarDate,
-  defaultRating,
-  type Task,
-  type TaskId,
-  type TaskStatus,
+import type {
+  CalendarDate,
+  Task,
+  TaskId,
+  TaskStatus,
 } from "../../domain/task/task";
 import {
   filterChoosesAny,
@@ -38,6 +33,11 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
+import {
+  type ProjectSummary,
+  projectNode,
+  summarizeProjects,
+} from "./project-nodes";
 
 /**
  * Why a node is faded:
@@ -81,6 +81,12 @@ export interface TaskNode extends TreeNode {
    * showing it already. `null`: none to show.
    */
   readonly shownProject: Project | null;
+  /**
+   * The text of its parent task (GLOSSARY: 父任务), for its card, when the
+   * tree does not show it above: only a top-level task of a project scope
+   * whose parent task is not the project's. `null`: none to show.
+   */
+  readonly parentText: string | null;
 }
 
 /**
@@ -120,6 +126,8 @@ export type DoneItem =
       readonly task: Task;
       /** The project it belongs to, for its card; `null`: none. */
       readonly shownProject: Project | null;
+      /** As `TaskNode.parentText`. */
+      readonly parentText: string | null;
     }
   | ProjectNode;
 
@@ -227,10 +235,43 @@ export interface ReadAllTasksOptions {
  */
 export const doneSectionDays = 30;
 
-/** Reads all tasks. Errors are thrown as they are. */
-export type ReadAllTasks = (
-  options?: ReadAllTasksOptions,
-) => Promise<AllTasksRead>;
+/**
+ * Read with a project scope (`ReadAllTasksScopedOptions`), for the project
+ * details (GLOSSARY: 项目视图):
+ * - `project`: the project itself, as its project row would show it (progress,
+ *   whether it lacks a next action, how many tasks are not done), for the
+ *   attribute area; with it, as `AllTasksRead`, the tree of the tasks that
+ *   belong to it (#157), wherever they sit: no project rows, its tasks whose
+ *   parent task is not its as the roots, in note order, a root showing its
+ *   parent task's text and no card the project. Filter, search, sort and
+ *   the done section apply as unscoped; there a done project is no single
+ *   item, its done roots are.
+ * - `noProject`: the block is not a project, or the project tag is paused
+ *   (#143): there is no such project to show.
+ */
+export type ProjectScopeRead =
+  | (AllTasksRead & {
+      readonly kind: "project";
+      /** Without children. */
+      readonly project: ProjectNode;
+    })
+  | { readonly kind: "noProject" };
+
+export interface ReadAllTasksScopedOptions extends ReadAllTasksOptions {
+  /** Only what belongs to this project (GLOSSARY: 所属项目). */
+  readonly project: ProjectId;
+}
+
+/**
+ * Reads all tasks, or with `project` only that project's. Errors are thrown
+ * as they are.
+ */
+export interface ReadAllTasks {
+  (
+    options?: ReadAllTasksOptions & { readonly project?: undefined },
+  ): Promise<AllTasksRead>;
+  (options: ReadAllTasksScopedOptions): Promise<ProjectScopeRead>;
+}
 
 function marksBlocked(entry: TaskGraphEntry | undefined): boolean {
   if (!entry) return false;
@@ -312,6 +353,33 @@ interface TaskTree {
   childrenOf(id: TaskId): readonly SnapshotTask[];
 }
 
+/**
+ * The tasks that belong to `project` (GLOSSARY: 所属项目) as a tree, for a
+ * project scope: no project rows; the roots are its tasks whose parent task
+ * is not its, wherever they sit, in note order. Parent task first, every
+ * descendant task of one of its tasks is its too, so a root keeps its whole
+ * subtree.
+ */
+function scopedTaskTree(
+  tree: TaskTree,
+  snapshot: TaskGraphSnapshot,
+  graph: TaskGraph,
+  project: ProjectId,
+): TaskTree {
+  const owned = (id: TaskId) => graph.entry(id)?.project?.id === project;
+  const roots = [...snapshot.tasks]
+    .sort((a, b) => a.position - b.position)
+    .filter(
+      (item) =>
+        owned(item.task.id) &&
+        (item.parentId === null || !owned(item.parentId)),
+    );
+  return {
+    topLevel: roots.map((item) => ({ kind: "task", item })),
+    childrenOf: tree.childrenOf,
+  };
+}
+
 function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
   const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
   const ids = new Set(ordered.map((item) => item.task.id));
@@ -371,49 +439,6 @@ function holdsOpen(tree: TaskTree, item: SnapshotTask): boolean {
   );
 }
 
-/** What the tasks that belong to a project say about it. */
-interface ProjectSummary {
-  readonly tasks: readonly ProjectTask[];
-  /** The latest last completion among them; absent for none recorded. */
-  readonly lastCompletion?: CompletionEntry;
-}
-
-/**
- * The tasks that belong to each project, by its ID: through the task graph,
- * which works ownership out (GLOSSARY: 所属项目), never from the block
- * hierarchy alone.
- */
-function summarizeProjects(
-  snapshot: TaskGraphSnapshot,
-  graph: TaskGraph,
-): Map<ProjectId, ProjectSummary> {
-  const summaries = new Map<
-    ProjectId,
-    { tasks: ProjectTask[]; lastCompletion?: CompletionEntry }
-  >();
-  for (const item of snapshot.tasks) {
-    const entry = graph.entry(item.task.id);
-    if (!entry?.project) continue;
-    const summary = summaries.get(entry.project.id) ?? { tasks: [] };
-    summary.tasks.push({
-      status: item.task.status,
-      effort: item.task.effort,
-      recurs: recurs(item.task.recurrence),
-      doneAncestor: entry.doneAncestor !== null,
-      nextAction: entry.nextAction,
-    });
-    const last = item.lastCompletion;
-    if (
-      last &&
-      (!summary.lastCompletion ||
-        last.at.getTime() > summary.lastCompletion.at.getTime())
-    )
-      summary.lastCompletion = last;
-    summaries.set(entry.project.id, summary);
-  }
-  return summaries;
-}
-
 /** What turning snapshot tasks into nodes needs. */
 interface NodeContext {
   readonly tree: TaskTree;
@@ -422,27 +447,32 @@ interface NodeContext {
   readonly projects: ReadonlyMap<ProjectId, ProjectSummary>;
   /** The last start that is reached: today plus the start preview days. */
   readonly startsBy: CalendarDate;
+  /**
+   * The project of a project scope: every card is its, so none shows it,
+   * and a top-level task shows its parent task's text. `null`: no scope.
+   */
+  readonly scope: ProjectId | null;
 }
 
-function projectNode(
+/**
+ * The parent task text a top-level task's card shows: in a project scope,
+ * its parent task's, which the tree does not hold; `null` otherwise.
+ */
+function rootParentText(
   context: NodeContext,
-  project: Project,
-  children: readonly AllTasksNode[],
-): ProjectNode {
-  const tasks = context.projects.get(project.id)?.tasks ?? [];
-  const notStarted =
-    project.start !== null && compareDays(project.start, context.startsBy) > 0;
-  return {
-    kind: "project",
-    project,
-    faded: null,
-    children,
-    progress: projectProgress(tasks),
-    noNextAction: lacksNextAction(project, !notStarted, tasks),
-    unfinished: unfinishedTaskCount(tasks),
-    taskCount: tasks.length,
-    notStarted,
-  };
+  item: SnapshotTask,
+): string | null {
+  if (context.scope === null || item.parentId === null) return null;
+  return context.graph.entry(item.parentId)?.task.text ?? null;
+}
+
+/** `top`, the node of top-level task `item`, with its parent task text. */
+function asRoot(
+  context: NodeContext,
+  item: SnapshotTask,
+  top: TaskNode,
+): TaskNode {
+  return { ...top, parentText: rootParentText(context, item) };
 }
 
 /**
@@ -499,6 +529,7 @@ function node(
     faded: item.task.status === "done" ? "done" : null,
     blocked: marksBlocked(context.graph.entry(item.task.id)),
     shownProject,
+    parentText: null,
     children: context.tree
       .childrenOf(item.task.id)
       .map((child) => node(context, child, below)),
@@ -644,7 +675,9 @@ function narrowedTree(
         );
         // Narrowed, a row with no task let through below it is hidden.
         if (children.length > 0 || !narrows(narrow))
-          tree.push(projectNode(context, project, children));
+          tree.push(
+            projectNode(context.projects, context.startsBy, project, children),
+          );
         continue;
       }
       // A finished project holding the kept task stays in the tree for it.
@@ -652,7 +685,9 @@ function narrowedTree(
         (item) => keptPath(context, item, project.id) ?? [],
       );
       if (kept.length > 0) {
-        tree.push(projectNode(context, project, kept));
+        tree.push(
+          projectNode(context.projects, context.startsBy, project, kept),
+        );
         continue;
       }
       // Its tasks let through as the top-level tasks of done subtrees are,
@@ -669,29 +704,32 @@ function narrowedTree(
             )
       ) {
         done.push({
-          item: projectNode(context, project, []),
+          item: projectNode(context.projects, context.startsBy, project, []),
           lastCompletion: context.projects.get(project.id)?.lastCompletion,
         });
       }
       continue;
     }
     const item = entry.item;
+    // In a project scope the scope's project goes without saying.
+    const scopeProject = context.scope;
     if (holdsOpen(context.tree, item)) {
-      const shown = shownNode(context, narrow, item, counted, null);
-      if (shown) tree.push(shown);
+      const shown = shownNode(context, narrow, item, counted, scopeProject);
+      if (shown) tree.push(asRoot(context, item, shown));
       continue;
     }
     // A done subtree holding the kept task stays in the tree for it, so it
     // is not in the done section too; the other dimensions and the search
     // look at the item's own top-level task.
-    const kept = keptPath(context, item, null);
-    if (kept) tree.push(kept);
+    const kept = keptPath(context, item, scopeProject);
+    if (kept) tree.push(asRoot(context, item, kept));
     else if (doneLets(item.task))
       done.push({
         item: {
           kind: "task",
           task: item.task,
-          shownProject: shownProjectOf(context, item, null),
+          shownProject: shownProjectOf(context, item, scopeProject),
+          parentText: rootParentText(context, item),
         },
         lastCompletion: item.lastCompletion,
       });
@@ -735,7 +773,15 @@ export function createReadAllTasks(deps: {
   dayBoundary: DayBoundarySetting;
   startPreviewDays: StartPreviewDaysSetting;
 }): ReadAllTasks {
-  return async (options = {}) => {
+  function readAllTasks(
+    options?: ReadAllTasksOptions & { readonly project?: undefined },
+  ): Promise<AllTasksRead>;
+  function readAllTasks(
+    options: ReadAllTasksScopedOptions,
+  ): Promise<ProjectScopeRead>;
+  async function readAllTasks(
+    options: ReadAllTasksOptions & { readonly project?: ProjectId } = {},
+  ): Promise<AllTasksRead | ProjectScopeRead> {
     const snapshot = await deps.repository.readTaskGraph();
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const previewDays = deps.startPreviewDays.current();
@@ -746,9 +792,31 @@ export function createReadAllTasks(deps: {
       keep: options.keep,
       projects: summarizeProjects(snapshot, graph),
       startsBy: addDays(today, previewDays),
+      scope: null,
     };
+    const scoped =
+      options.project === undefined
+        ? undefined
+        : (snapshot.projects ?? []).find(
+            (item) => item.project.id === options.project,
+          );
+    if (options.project !== undefined && !scoped) return { kind: "noProject" };
     const narrow = narrowing(options);
-    const { tree, matchCount, done } = narrowedTree(context, narrow);
+    const { tree, matchCount, done } = narrowedTree(
+      scoped
+        ? {
+            ...context,
+            scope: scoped.project.id,
+            tree: scopedTaskTree(
+              context.tree,
+              snapshot,
+              graph,
+              scoped.project.id,
+            ),
+          }
+        : context,
+      narrow,
+    );
     const sortedOf = (node: AllTasksNode): Sorted => {
       if (node.kind === "task") {
         const entry = graph.entry(node.task.id);
@@ -764,19 +832,7 @@ export function createReadAllTasks(deps: {
           ),
         };
       }
-      // The same formula, at the default effort and with no ancestor factor.
-      const project = node.project;
-      return {
-        ...project,
-        score: score(
-          {
-            task: { ...project, effort: defaultRating },
-            effectiveStart: project.start,
-            ancestorRatings: [],
-          },
-          today,
-        ),
-      };
+      return { ...node.project, score: projectScore(node.project, today) };
     };
     const compare = comparator(
       options.sort ?? "note",
@@ -787,6 +843,18 @@ export function createReadAllTasks(deps: {
     if (compare) tree.sort(compare);
     // Showing earlier items or searching lifts the done section's range.
     const everyDay = options.showEarlierDone === true || searches(narrow);
-    return { tree, matchCount, done: doneSection(done, today, everyDay) };
-  };
+    const read = { tree, matchCount, done: doneSection(done, today, everyDay) };
+    if (!scoped) return read;
+    return {
+      kind: "project",
+      project: projectNode(
+        context.projects,
+        context.startsBy,
+        scoped.project,
+        [],
+      ),
+      ...read,
+    };
+  }
+  return readAllTasks;
 }

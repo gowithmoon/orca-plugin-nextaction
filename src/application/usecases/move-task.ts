@@ -4,6 +4,7 @@
 // without a parent block, or when the move would make a dependency cycle
 // (ADR 0015).
 import { moveCycle } from "../../domain/blocking/dependency-cycles";
+import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import {
   isSelfOrBelow,
   leavesTasksInPlace,
@@ -40,30 +41,58 @@ export class MoveRefusedError extends Error {
  */
 export type MoveTask = (move: TaskMove) => Promise<void>;
 
+/**
+ * What the move use case makes of `move` on `snapshot`, checked in this
+ * order: refused (`refused`, or `cycle` naming the task it would make one
+ * with), nothing to write (`inPlace`), else `move`. Shared with the project
+ * details' crossing check (#157), so both refuse alike.
+ */
+export type MoveCheck =
+  | { readonly kind: "refused"; readonly reason: MoveRefusal }
+  | { readonly kind: "inPlace" }
+  | { readonly kind: "cycle"; readonly cycleWith: TaskId }
+  | { readonly kind: "move" };
+
+export function checkMove(
+  snapshot: TaskGraphSnapshot,
+  move: TaskMove,
+): MoveCheck {
+  if (isSelfOrBelow(snapshot, move.target, move.id)) {
+    return { kind: "refused", reason: "onto-self-or-below" };
+  }
+  const item = (id: TaskId) =>
+    snapshot.tasks.find((candidate) => candidate.task.id === id);
+  if (
+    move.placement !== "lastChild" &&
+    item(move.target)?.root &&
+    !item(move.id)?.page
+  ) {
+    return { kind: "refused", reason: "page-level-only-pages" };
+  }
+  // Nothing written, so the undo history gets no empty step (#63).
+  if (leavesTasksInPlace(snapshot, move)) return { kind: "inPlace" };
+  const cycle = moveCycle(snapshot, move);
+  if (cycle) return { kind: "cycle", cycleWith: cycle.cycleWith };
+  return { kind: "move" };
+}
+
 export function createMoveTask(deps: { repository: TaskRepository }): MoveTask {
   return async (move) => {
     const snapshot = await deps.repository.readTaskGraph();
-    if (isSelfOrBelow(snapshot, move.target, move.id)) {
-      throw new MoveRefusedError("onto-self-or-below");
-    }
-    const item = (id: TaskId) =>
-      snapshot.tasks.find((candidate) => candidate.task.id === id);
-    if (
-      move.placement !== "lastChild" &&
-      item(move.target)?.root &&
-      !item(move.id)?.page
-    ) {
-      throw new MoveRefusedError("page-level-only-pages");
-    }
-    // Nothing written, so the undo history gets no empty step (#63).
-    if (leavesTasksInPlace(snapshot, move)) return;
-    const cycle = moveCycle(snapshot, move);
-    if (cycle) {
-      const task = (id: TaskId) => ({ id, text: item(id)?.task.text ?? "" });
+    const check = checkMove(snapshot, move);
+    if (check.kind === "refused") throw new MoveRefusedError(check.reason);
+    if (check.kind === "inPlace") return;
+    if (check.kind === "cycle") {
+      const task = (id: TaskId) => ({
+        id,
+        text:
+          snapshot.tasks.find((candidate) => candidate.task.id === id)?.task
+            .text ?? "",
+      });
       throw new DependencyCycleError({
         kind: "move",
         moved: task(move.id),
-        cycleWith: task(cycle.cycleWith),
+        cycleWith: task(check.cycleWith),
       });
     }
     await deps.repository.moveTask(move.id, move.target, move.placement);
