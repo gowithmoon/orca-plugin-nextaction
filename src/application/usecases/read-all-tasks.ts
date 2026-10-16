@@ -712,23 +712,23 @@ function narrowedTree(
     }
     const item = entry.item;
     // In a project scope the scope's project goes without saying.
-    const said = context.scope;
+    const scopeProject = context.scope;
     if (holdsOpen(context.tree, item)) {
-      const shown = shownNode(context, narrow, item, counted, said);
+      const shown = shownNode(context, narrow, item, counted, scopeProject);
       if (shown) tree.push(asRoot(context, item, shown));
       continue;
     }
     // A done subtree holding the kept task stays in the tree for it, so it
     // is not in the done section too; the other dimensions and the search
     // look at the item's own top-level task.
-    const kept = keptPath(context, item, said);
+    const kept = keptPath(context, item, scopeProject);
     if (kept) tree.push(asRoot(context, item, kept));
     else if (doneLets(item.task))
       done.push({
         item: {
           kind: "task",
           task: item.task,
-          shownProject: shownProjectOf(context, item, said),
+          shownProject: shownProjectOf(context, item, scopeProject),
           parentText: rootParentText(context, item),
         },
         lastCompletion: item.lastCompletion,
