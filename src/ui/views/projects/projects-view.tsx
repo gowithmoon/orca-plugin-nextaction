@@ -76,7 +76,10 @@ import type { TaskTreeStores } from "../all-tasks/task-tree-stores";
 import { useMoveConfirmation } from "./move-confirmation";
 import type { OpenProjectStore } from "./open-project-store";
 import { BoardCollapseAllButton, ProjectBoardColumns } from "./project-board";
-import type { ProjectBoardStores } from "./project-board-stores";
+import type {
+  BoardGroupingStore,
+  ProjectBoardStores,
+} from "./project-board-stores";
 import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
   isGroupCollapsed,
@@ -358,6 +361,33 @@ function LayoutSwitch(props: { store: ProjectLayoutStore }) {
 }
 
 /**
+ * The board's grouping switch (GLOSSARY: 分列方式, #171), beside the layout
+ * switch: one choice for every project, kept in memory.
+ */
+function GroupingSwitch(props: { store: BoardGroupingStore }) {
+  const { Segmented } = orca.components;
+  const grouping = React.useSyncExternalStore(
+    props.store.subscribe,
+    props.store.current,
+  );
+  return (
+    <Segmented
+      role="group"
+      aria-label={t("Grouping")}
+      className="nextaction-layout-switch"
+      selected={grouping}
+      options={[
+        { value: "status", label: t("By status") },
+        { value: "root", label: t("By root task") },
+      ]}
+      onChange={(value) =>
+        props.store.set(value === "root" ? "root" : "status")
+      }
+    />
+  );
+}
+
+/**
  * The board layout's toolbar and board (#166): the layout switch, the
  * board's own sort and "Create task" (quick capture, 所属项目 filled in with
  * this project), "collapse all / expand all" over the cards' subtasks
@@ -395,6 +425,7 @@ function DetailsBoard(props: {
     <>
       <div className="nextaction-toolbar">
         <LayoutSwitch store={deps.layout} />
+        <GroupingSwitch store={stores.grouping} />
         <div className="nextaction-toolbar-view">
           <AllTasksSortSelect state={sort} onChange={stores.sort.set} />
           <BoardCollapseAllButton
@@ -421,6 +452,7 @@ function DetailsBoard(props: {
           // passes whether one is set, hiding "As root task").
           filtering={false}
           doneColumn={stores.doneColumn}
+          rootColumns={stores}
           onMove={onMove}
           cards={{
             today,
@@ -592,11 +624,13 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
     if (project === null) return { kind: "noProject" };
     return deps.readProjectBoard({
       project,
+      grouping: boardStores.grouping.current(),
       sort: boardStores.sort.current().sort,
       direction: boardStores.sort.current().direction,
     });
   }, deps.changes);
   boardStores.sort.subscribe(() => boardQuery.reload());
+  boardStores.grouping.subscribe(() => boardQuery.reload());
   // Another project opened: its filter, search text, sort and "show
   // earlier" start over; the collapsed tasks stay, by task. Going back to
   // the list and into the same project keeps them. Lives as long as the

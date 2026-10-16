@@ -2,8 +2,10 @@
 // from the tree's: its sort (by score by default, kept apart from the
 // tree's) and its done column (collapsed to a narrow strip by default;
 // earlier done cards shown or not). Unloading clears them through `clear`
-// (platform/panel-feature.ts); never written with `plugins.setData`. Later
-// steps add the board's collapsed cards (#167).
+// (platform/panel-feature.ts); never written with `plugins.setData`. With
+// them the board's collapsed cards (#167), and its grouping, its columns'
+// "Done N" and its opened finished columns (#171).
+import type { BoardGrouping } from "../../../application/usecases/read-project-board";
 import type { TaskId } from "../../../domain/task/task";
 import { createMemoryStore } from "../../components/memory-store";
 import {
@@ -21,22 +23,46 @@ export interface ProjectBoardStores {
   readonly doneColumn: DoneSectionStore;
   /** The cards whose subtasks are expanded (#167); collapsed by default. */
   readonly expanded: ExpandedCardsStore;
+  /**
+   * How the board groups its columns (GLOSSARY: 分列方式, #171), one choice
+   * for every project; by status by default, never a setting.
+   */
+  readonly grouping: BoardGroupingStore;
+  /**
+   * By project root task (#171): the columns whose "Done N" is open, by
+   * their project root task, `"other"` for "Other"; collapsed by default.
+   */
+  readonly doneOpen: IdSetStore<TaskId | "other">;
+  /**
+   * By project root task (#171): the finished columns opened from their
+   * narrow strip, by their project root task.
+   */
+  readonly finishedOpen: IdSetStore<TaskId>;
   /** Clears them all. */
   clear(): void;
 }
 
-export interface ExpandedCardsStore {
-  /** The expanded cards' tasks; a new set after every change. */
-  current(): ReadonlySet<TaskId>;
-  /** Expands the card if collapsed, collapses it if expanded. */
-  toggle(id: TaskId): void;
-  /** Sets every one of `ids` expanded or not ("expand all", "collapse all"). */
-  setAll(ids: readonly TaskId[], expanded: boolean): void;
+export interface BoardGroupingStore {
+  current(): BoardGrouping;
+  set(grouping: BoardGrouping): void;
   subscribe(listener: () => void): () => void;
 }
 
-function createExpandedCardsStore(): ExpandedCardsStore & { clear(): void } {
-  const store = createMemoryStore<ReadonlySet<TaskId>>(new Set());
+/** A set of IDs in memory, each on or off; a new set after every change. */
+export interface IdSetStore<Id> {
+  current(): ReadonlySet<Id>;
+  /** Turns the ID on if off, off if on. */
+  toggle(id: Id): void;
+  /** Sets every one of `ids` on or off. */
+  setAll(ids: readonly Id[], on: boolean): void;
+  subscribe(listener: () => void): () => void;
+}
+
+/** The expanded cards' tasks (#167). */
+export type ExpandedCardsStore = IdSetStore<TaskId>;
+
+function createIdSetStore<Id>(): IdSetStore<Id> & { clear(): void } {
+  const store = createMemoryStore<ReadonlySet<Id>>(new Set());
   return {
     current: store.current,
     toggle(id) {
@@ -44,12 +70,12 @@ function createExpandedCardsStore(): ExpandedCardsStore & { clear(): void } {
       if (!next.delete(id)) next.add(id);
       store.set(next);
     },
-    setAll(ids, expanded) {
+    setAll(ids, on) {
       const current = store.current();
-      if (ids.every((id) => current.has(id) === expanded)) return;
+      if (ids.every((id) => current.has(id) === on)) return;
       const next = new Set(current);
       for (const id of ids) {
-        if (expanded) next.add(id);
+        if (on) next.add(id);
         else next.delete(id);
       }
       store.set(next);
@@ -64,15 +90,24 @@ function createExpandedCardsStore(): ExpandedCardsStore & { clear(): void } {
 export function createProjectBoardStores(): ProjectBoardStores {
   const sort = createAllTasksSortStore("score");
   const doneColumn = createDoneSectionStore();
-  const expanded = createExpandedCardsStore();
+  const expanded = createIdSetStore<TaskId>();
+  const grouping = createMemoryStore<BoardGrouping>("status");
+  const doneOpen = createIdSetStore<TaskId | "other">();
+  const finishedOpen = createIdSetStore<TaskId>();
   return {
     sort,
     doneColumn,
     expanded,
+    grouping,
+    doneOpen,
+    finishedOpen,
     clear: () => {
       sort.clear();
       doneColumn.clear();
       expanded.clear();
+      grouping.set("status");
+      doneOpen.clear();
+      finishedOpen.clear();
     },
   };
 }

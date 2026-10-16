@@ -5,7 +5,11 @@
 // lastChild move. On itself, one of its descendant tasks or its parent task
 // a card or a row is no place to drop: the drop falls back to the column it
 // is in, and a drop back in the task's own column is no drop at all: it
-// writes nothing and nothing is highlighted. One drop makes one write. Pure.
+// writes nothing and nothing is highlighted. Grouped by project root task
+// (#171), a drop in a project root task's column makes the task its last
+// subtask, and a drop in "Other" moves it to the end of the project block, a
+// project root task; a task already there is no drop. One drop makes one
+// write. Pure.
 import type { TaskId, TaskStatus } from "../task/task";
 
 /** The single write a board drop makes. */
@@ -37,14 +41,26 @@ export interface BoardDropPoint {
    * a project root task is dragged.
    */
   readonly projectEnd?: boolean;
+  /**
+   * By project root task (#171): the project root task whose column it is
+   * in, if any.
+   */
+  readonly root?: TaskId;
+  /** By project root task (#171): in the "Other" column. */
+  readonly other?: boolean;
 }
 
 /**
  * Task `dragged` dropped at `point`: the write, or `null` for none.
+ * `dragged.projectRoot`: it is a project root task already (#171).
  * `parentOf` gives a task's parent task (`null`: none, or not known).
  */
 export function boardDrop(
-  dragged: { readonly id: TaskId; readonly status: TaskStatus },
+  dragged: {
+    readonly id: TaskId;
+    readonly status: TaskStatus;
+    readonly projectRoot?: boolean;
+  },
   point: BoardDropPoint,
   parentOf: (id: TaskId) => TaskId | null,
 ): BoardDrop | null {
@@ -55,6 +71,12 @@ export function boardDrop(
   ) {
     return { kind: "lastChild", target: point.task };
   }
+  if (point.root !== undefined) {
+    return takesSubtask(dragged.id, point.root, parentOf)
+      ? { kind: "lastChild", target: point.root }
+      : null;
+  }
+  if (point.other) return dragged.projectRoot ? null : { kind: "projectEnd" };
   return point.column === undefined
     ? null
     : boardStatusDrop(dragged.status, point.column);

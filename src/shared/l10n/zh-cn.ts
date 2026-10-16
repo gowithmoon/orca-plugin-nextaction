@@ -625,6 +625,14 @@ const zhCN: Record<string, string> = {
   "Collapse subtasks": "折叠子任务",
   "Doing ${count}": "进行中 ${count}",
   "Next ${count}": "下一步 ${count}",
+  // The board by project root task (#171).
+  Grouping: "分列方式",
+  "By status": "按状态",
+  "By root task": "按根任务",
+  Other: "其他",
+  "Project root tasks without subtasks": "没有子任务的项目根任务",
+  "Drop here to make it a project root task": "拖到这里，成为项目根任务",
+  "Done ${count}": "已完成 ${count}",
 };
 
 export default zhCN;

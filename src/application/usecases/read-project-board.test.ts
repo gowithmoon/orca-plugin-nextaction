@@ -8,6 +8,8 @@ import type { CompletionHistoryRead } from "../ports/task-repository";
 import {
   createReadProjectBoard,
   type ProjectBoardRead,
+  type RootBoard,
+  type StatusBoard,
   type StatusColumn,
 } from "./read-project-board";
 
@@ -33,9 +35,31 @@ function board(
   return read;
 }
 
+/** The board by status; fails the test for another grouping. */
+function byStatus(read: ProjectBoardRead): StatusBoard {
+  const found = board(read).board;
+  if (found.grouping !== "status") throw new Error(found.grouping);
+  return found;
+}
+
+/** The board by project root task; fails the test for another grouping. */
+function byRoot(read: ProjectBoardRead): RootBoard {
+  const found = board(read).board;
+  if (found.grouping !== "root") throw new Error(found.grouping);
+  return found;
+}
+
+/** Each column of a board by project root task: its head's task, its cards. */
+function rootColumns(read: ProjectBoardRead): [TaskId, TaskId[]][] {
+  return byRoot(read).columns.map((col) => [
+    col.head.task.id,
+    col.cards.map((card) => card.task.id),
+  ]);
+}
+
 /** The column of `status`; fails the test without one. */
 function column(read: ProjectBoardRead, status: TaskStatus): StatusColumn {
-  const found = board(read).board.columns.find((col) => col.status === status);
+  const found = byStatus(read).columns.find((col) => col.status === status);
   if (!found) throw new Error(`no column ${status}`);
   return found;
 }
@@ -75,9 +99,9 @@ describe("read project board, by status", () => {
     repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
     repository.addTask({ id: 5, status: "waiting" }, { parentId: 1 });
 
-    const read = board(await readProjectBoard({ project: 1 }));
+    const read = byStatus(await readProjectBoard({ project: 1 }));
 
-    expect(read.board.columns.map((col) => [col.status, col.count])).toEqual([
+    expect(read.columns.map((col) => [col.status, col.count])).toEqual([
       ["inbox", 1],
       ["todo", 2],
       ["doing", 0],
@@ -278,7 +302,7 @@ describe("read project board, by status", () => {
 
     const read = await readProjectBoard({ project: 1, sort: "note" });
 
-    const marks = board(read).board.columns.flatMap((col) =>
+    const marks = byStatus(read).columns.flatMap((col) =>
       col.cards.map((card) => [card.task.id, card.blocked]),
     );
     expect(marks).toEqual([
@@ -301,7 +325,7 @@ describe("read project board, by status", () => {
 
     const read = await readProjectBoard({ project: 1, sort: "note" });
 
-    const marks = board(read).board.columns.flatMap((col) =>
+    const marks = byStatus(read).columns.flatMap((col) =>
       col.cards.map((card) => [card.task.id, card.nextAction]),
     );
     expect(marks).toEqual([
@@ -349,7 +373,7 @@ describe("read project board, by status", () => {
 
     const read = await readProjectBoard({ project: 1, sort: "note" });
 
-    const counts = board(read).board.columns.flatMap((col) =>
+    const counts = byStatus(read).columns.flatMap((col) =>
       col.cards.map((card) => [card.task.id, card.descendants]),
     );
     expect(counts).toEqual([
@@ -427,5 +451,160 @@ describe("read project board, by status", () => {
       total: 8,
     });
     expect(read.project.noNextAction).toBe(true);
+  });
+});
+
+describe("read project board, by project root task (#171)", () => {
+  it('gives each project root task with subtasks a column in note order, its direct subtasks the cards, the others in "Other"', async () => {
+    const { repository, readProjectBoard } = setup();
+    // Set to project 1 from a journal, above the project block.
+    repository.addTask({ id: 7, status: "todo" }, { project: [1] });
+    repository.addTask({ id: 8, status: "todo" }, { parentId: 7 });
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    // Deeper: folded in card 3, no card of its own.
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    // No subtasks: in "Other".
+    repository.addTask({ id: 5, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 9, status: "doing" }, { parentId: 6 });
+    // Not the project's at all.
+    repository.addTask({ id: 10, status: "todo" });
+
+    const read = await readProjectBoard({
+      project: 1,
+      grouping: "root",
+      sort: "note",
+    });
+
+    expect(byRoot(read).other.cards.map((card) => card.task.id)).toEqual([5]);
+    expect(rootColumns(read)).toEqual([
+      [7, [8]],
+      [2, [3]],
+      [6, [9]],
+    ]);
+  });
+
+  it("orders each column's open cards by the sort, its done ones apart, all of them, by their last completion, most recent first", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask(
+      { id: 3, status: "todo", importance: 1 },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, status: "done", importance: 7 },
+      { parentId: 2, ...completedOn("2026-10-01") },
+    );
+    repository.addTask(
+      { id: 5, status: "todo", importance: 5 },
+      { parentId: 2 },
+    );
+    // Long ago: still among them, no 30 days.
+    repository.addTask(
+      { id: 6, status: "done" },
+      { parentId: 2, ...completedOn("2026-03-01") },
+    );
+    repository.addTask(
+      { id: 7, status: "done" },
+      { parentId: 2, ...completedOn("2026-10-08") },
+    );
+    // "Other" likewise.
+    repository.addTask(
+      { id: 8, status: "done" },
+      { parentId: 1, ...completedOn("2026-01-01") },
+    );
+    repository.addTask(
+      { id: 9, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-02") },
+    );
+    repository.addTask({ id: 10, status: "inbox" }, { parentId: 1 });
+
+    const read = byRoot(
+      await readProjectBoard({
+        project: 1,
+        grouping: "root",
+        sort: "importance",
+      }),
+    );
+
+    expect(read.columns[0]?.cards.map((card) => card.task.id)).toEqual([5, 3]);
+    expect(read.columns[0]?.done.map((card) => card.task.id)).toEqual([
+      7, 4, 6,
+    ]);
+    expect(read.other.cards.map((card) => card.task.id)).toEqual([10]);
+    expect(read.other.done.map((card) => card.task.id)).toEqual([9, 8]);
+  });
+
+  it("marks a column finished when its project root task and all its descendant tasks are done, after every other column", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // Finished, deeper ones too.
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "done" }, { parentId: 3 });
+    // Done, a descendant task not: not finished.
+    repository.addTask({ id: 5, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 6, status: "done" }, { parentId: 5 });
+    repository.addTask({ id: 7, status: "todo" }, { parentId: 6 });
+    // Its subtasks done, itself not: not finished.
+    repository.addTask({ id: 8, status: "doing" }, { parentId: 1 });
+    repository.addTask({ id: 9, status: "done" }, { parentId: 8 });
+
+    const read = await readProjectBoard({ project: 1, grouping: "root" });
+
+    expect(
+      byRoot(read).columns.map((col) => [col.head.task.id, col.finished]),
+    ).toEqual([
+      [5, false],
+      [8, false],
+      [2, true],
+    ]);
+  });
+
+  it("heads a column with its project root task: its lock and its direct subtasks done and in all", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 9, status: "todo" }, { parentId: 1 });
+    repository.addTask(
+      { id: 2, status: "todo", dependencies: [9] },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 3, status: "done" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 2 });
+    // Deeper: not counted.
+    repository.addTask({ id: 5, status: "done" }, { parentId: 4 });
+    // Held back only by its subtask: no lock.
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 7, status: "todo" }, { parentId: 6 });
+
+    const read = await readProjectBoard({ project: 1, grouping: "root" });
+
+    expect(
+      byRoot(read).columns.map((col) => [
+        col.head.task.id,
+        col.head.blocked,
+        col.head.subtasks,
+      ]),
+    ).toEqual([
+      [2, true, { done: 1, total: 2 }],
+      [6, false, { done: 0, total: 1 }],
+    ]);
+  });
+
+  it('brings a project root task back to "Other" once its last subtask is moved away', async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
+
+    await repository.moveTask(3, 4, "lastChild");
+    const read = await readProjectBoard({ project: 1, grouping: "root" });
+
+    expect(byRoot(read).other.cards.map((card) => card.task.id)).toEqual([2]);
+    expect(rootColumns(read)).toEqual([[4, [3]]]);
   });
 });
