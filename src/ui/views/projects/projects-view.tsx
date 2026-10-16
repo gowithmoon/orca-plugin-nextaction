@@ -16,6 +16,7 @@ import type {
   ReadAllTasks,
 } from "../../../application/usecases/read-all-tasks";
 import type { ReadCandidates } from "../../../application/usecases/read-candidates";
+import type { ReadMoveCrossing } from "../../../application/usecases/read-move-crossing";
 import type {
   ProjectGroup,
   ProjectListRead,
@@ -67,6 +68,7 @@ import {
   type TaskTreeCards,
 } from "../all-tasks/task-tree";
 import type { TaskTreeStores } from "../all-tasks/task-tree-stores";
+import { useMoveConfirmation } from "./move-confirmation";
 import type { OpenProjectStore } from "./open-project-store";
 import { BackToProjects, ProjectAttributes } from "./project-details";
 import {
@@ -96,6 +98,11 @@ export interface ProjectsViewDeps {
   readCandidates: ReadCandidates;
   /** Dragging a card onto another or into a gap moves its block. */
   moveTask: MoveTask;
+  /**
+   * Whether a details tree move crosses the project block, asked first
+   * when it does (#157).
+   */
+  readMoveCrossing: ReadMoveCrossing;
   /** A card dropped on a block in a note panel links the task there. */
   linkTaskInNote: LinkTaskInNote;
   /**
@@ -283,6 +290,12 @@ function DetailsTree(props: {
   const { read, today, actions, deps } = props;
   const stores = deps.details;
   const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const { onMove, confirmation } = useMoveConfirmation({
+    project: read.project.project.id,
+    readMoveCrossing: deps.readMoveCrossing,
+    move: moveTask,
+    notify: deps.taskActions.notify,
+  });
   const linkTaskInNote = useLinkTaskInNote(
     deps.linkTaskInNote,
     deps.taskActions.notify,
@@ -368,7 +381,7 @@ function DetailsTree(props: {
       ) : empty && !done.hasEarlier ? (
         <ViewNotice icon="ti ti-list-tree" title={t("No tasks")} />
       ) : (
-        <TaskDragArea onMove={moveTask} onNoteDrop={linkTaskInNote}>
+        <TaskDragArea onMove={onMove} onNoteDrop={linkTaskInNote}>
           {nodes.length > 0 && <TaskTree nodes={nodes} cards={cards} />}
           <TaskDoneSection
             done={done}
@@ -377,6 +390,7 @@ function DetailsTree(props: {
           />
         </TaskDragArea>
       )}
+      {confirmation}
     </>
   );
 }

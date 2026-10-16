@@ -14,6 +14,7 @@ import { createMoveTask } from "../application/usecases/move-task";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
+import { createReadMoveCrossing } from "../application/usecases/read-move-crossing";
 import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
@@ -249,6 +250,7 @@ export function createPanelFeature(deps: {
       menuItems: deps.menuItems,
       readCandidates,
       moveTask,
+      readMoveCrossing: createReadMoveCrossing({ repository }),
       linkTaskInNote,
       details: projectDetails,
     }),
