@@ -591,6 +591,10 @@ const zhCN: Record<string, string> = {
   "No projects yet": "还没有项目",
   "To start a project, add the project tag to a page or block in Orca.":
     "在 Orca 中给页面或块打上项目标签，就新建了一个项目。",
+  // The project details (#156).
+  "Back to projects": "返回项目列表",
+  Goal: "目标",
+  "Could not read the project: ${reason}": "无法读取项目：${reason}",
 };
 
 export default zhCN;

@@ -254,9 +254,9 @@ export interface ReadAllTasksScopedOptions extends ReadAllTasksOptions {
  * as they are.
  */
 export interface ReadAllTasks {
-  (options?: ReadAllTasksOptions & { readonly project?: undefined }): Promise<
-    AllTasksRead
-  >;
+  (
+    options?: ReadAllTasksOptions & { readonly project?: undefined },
+  ): Promise<AllTasksRead>;
   (options: ReadAllTasksScopedOptions): Promise<ProjectScopeRead>;
 }
 
