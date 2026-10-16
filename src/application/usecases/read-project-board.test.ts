@@ -1,0 +1,300 @@
+import { describe, expect, it } from "vitest";
+import { createFixedClock } from "../../../tests/fixed-clock";
+import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
+import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
+import type { TaskId, TaskStatus } from "../../domain/task/task";
+import type { CompletionHistoryRead } from "../ports/task-repository";
+import {
+  createReadProjectBoard,
+  type ProjectBoardRead,
+  type StatusColumn,
+} from "./read-project-board";
+
+/** 2026-10-09 10:00 in UTC+8: the logical day 2026-10-09. */
+const morning = "2026-10-09T10:00:00+08:00";
+
+function setup() {
+  const repository = createInMemoryTaskRepository();
+  const readProjectBoard = createReadProjectBoard({
+    repository,
+    clock: createFixedClock(morning),
+    dayBoundary: createFixedDayBoundary(),
+    startPreviewDays: createFixedStartPreviewDays(),
+  });
+  return { repository, readProjectBoard };
+}
+
+/** The board of a project; fails the test for no project. */
+function board(
+  read: ProjectBoardRead,
+): Extract<ProjectBoardRead, { kind: "project" }> {
+  if (read.kind !== "project") throw new Error(read.kind);
+  return read;
+}
+
+/** The column of `status`; fails the test without one. */
+function column(read: ProjectBoardRead, status: TaskStatus): StatusColumn {
+  const found = board(read).board.columns.find((col) => col.status === status);
+  if (!found) throw new Error(`no column ${status}`);
+  return found;
+}
+
+/** The task IDs of a column's cards, in order. */
+function cardIds(read: ProjectBoardRead, status: TaskStatus): TaskId[] {
+  return column(read, status).cards.map((card) => card.task.id);
+}
+
+function completedOn(...days: string[]): {
+  completionHistory: CompletionHistoryRead;
+} {
+  return {
+    completionHistory: {
+      kind: "readable",
+      history: days.map((day) => {
+        const [year, month, date] = day.split("-").map(Number) as [
+          number,
+          number,
+          number,
+        ];
+        return {
+          at: new Date(`${day}T12:00:00+08:00`),
+          day: { year, month, day: date },
+        };
+      }),
+    },
+  };
+}
+
+describe("read project board, by status", () => {
+  it("has the six status columns in a fixed order, each with its count, empty ones kept", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 5, status: "waiting" }, { parentId: 1 });
+
+    const read = board(await readProjectBoard({ project: 1 }));
+
+    expect(read.board.columns.map((col) => [col.status, col.count])).toEqual([
+      ["inbox", 1],
+      ["todo", 2],
+      ["doing", 0],
+      ["waiting", 1],
+      ["someday", 0],
+      ["done", 0],
+    ]);
+  });
+
+  it("makes cards only of project root tasks: outside the project block too, not another project's below it", async () => {
+    const { repository, readProjectBoard } = setup();
+    // Set to project 1 from a journal, above the project block.
+    repository.addTask({ id: 7, status: "todo" }, { project: [1] });
+    repository.addTask({ id: 8, status: "todo" }, { parentId: 7 });
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // A descendant task of a root: no card of its own.
+    repository.addTask({ id: 3, status: "inbox" }, { parentId: 2 });
+    // Under project 1's block, set to project 5: not project 1's.
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask(
+      { id: 4, status: "todo" },
+      { parentId: 1, project: [5] },
+    );
+    // Not the project's at all.
+    repository.addTask({ id: 9, status: "todo" });
+
+    const read = await readProjectBoard({ project: 1 });
+
+    expect(cardIds(read, "todo")).toEqual([7, 2]);
+    expect(cardIds(read, "inbox")).toEqual([]);
+  });
+
+  it("shows a card's parent task text when its parent task is not the project's", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 4, text: "Errands", status: "todo" });
+    repository.addTask(
+      { id: 5, status: "todo" },
+      { parentId: 4, project: [1] },
+    );
+
+    const read = await readProjectBoard({ project: 1 });
+
+    expect(
+      column(read, "todo").cards.map((card) => [card.task.id, card.parentText]),
+    ).toEqual([
+      [2, null],
+      [5, "Errands"],
+    ]);
+  });
+
+  it("orders each column's cards by score by default, highest first, ties in note order", async () => {
+    const { repository, readProjectBoard } = setup();
+    const day = (d: number) => ({ year: 2026, month: 10, day: d });
+    // Scores on 2026-10-09: 2 and 5 are 54.75, 3 (due today) 77.5, 4
+    // (importance 7) 64.75.
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo", due: day(9) }, { parentId: 1 });
+    repository.addTask(
+      { id: 4, status: "todo", importance: 7 },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 1 });
+
+    const read = await readProjectBoard({ project: 1 });
+
+    expect(cardIds(read, "todo")).toEqual([3, 4, 2, 5]);
+  });
+
+  it("orders cards by another sort and direction when asked, those without the day last", async () => {
+    const { repository, readProjectBoard } = setup();
+    const day = (d: number) => ({ year: 2026, month: 10, day: d });
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask(
+      { id: 3, status: "todo", due: day(20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", due: day(12) },
+      { parentId: 1 },
+    );
+
+    const due = await readProjectBoard({ project: 1, sort: "due" });
+    const note = await readProjectBoard({ project: 1, sort: "note" });
+    const latest = await readProjectBoard({
+      project: 1,
+      sort: "due",
+      direction: "descending",
+    });
+
+    expect(cardIds(due, "todo")).toEqual([4, 3, 2]);
+    expect(cardIds(note, "todo")).toEqual([2, 3, 4]);
+    expect(cardIds(latest, "todo")).toEqual([3, 4, 2]);
+  });
+
+  it("orders done cards by their last completion, most recent first, whatever the sort", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "done", importance: 7 },
+      { parentId: 1, ...completedOn("2026-10-01") },
+    );
+    // Completed twice: the later completion counts.
+    repository.addTask(
+      { id: 3, status: "done" },
+      { parentId: 1, ...completedOn("2026-09-20", "2026-10-05") },
+    );
+    repository.addTask(
+      { id: 4, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-03") },
+    );
+
+    const read = await readProjectBoard({ project: 1, sort: "importance" });
+
+    expect(cardIds(read, "done")).toEqual([3, 4, 2]);
+  });
+
+  it("splits the done cards into the last 30 logical days and earlier ones, those with no completion recorded earlier, in note order", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // Made done in Orca directly: no completion recorded.
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    // The 30th logical day back from today (2026-10-09), counting today.
+    repository.addTask(
+      { id: 3, status: "done" },
+      { parentId: 1, ...completedOn("2026-09-10") },
+    );
+    // The 31st.
+    repository.addTask(
+      { id: 4, status: "done" },
+      { parentId: 1, ...completedOn("2026-09-09") },
+    );
+    repository.addTask(
+      { id: 5, status: "done" },
+      { parentId: 1, ...completedOn("2026-10-09") },
+    );
+    repository.addTask({ id: 6, status: "done" }, { parentId: 1 });
+
+    const read = await readProjectBoard({ project: 1 });
+
+    const done = column(read, "done");
+    expect(done.cards.map((card) => card.task.id)).toEqual([5, 3]);
+    expect(done.earlier.map((card) => card.task.id)).toEqual([4, 2, 6]);
+    expect(done.count).toBe(5);
+  });
+
+  it("marks a card blocked by a dependency, not by its subtasks alone", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask(
+      { id: 3, status: "doing", dependencies: [2] },
+      { parentId: 1 },
+    );
+    // Held back only by its subtask: not marked.
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 4 });
+    // Waiting is never marked.
+    repository.addTask(
+      { id: 6, status: "waiting", dependencies: [2] },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectBoard({ project: 1, sort: "note" });
+
+    const marks = board(read).board.columns.flatMap((col) =>
+      col.cards.map((card) => [card.task.id, card.blocked]),
+    );
+    expect(marks).toEqual([
+      [2, false],
+      [4, false],
+      [3, true],
+      [6, false],
+    ]);
+  });
+
+  it("reads no project for a block that is not a project", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addBlock(2);
+
+    expect(await readProjectBoard({ project: 1 })).toEqual({
+      kind: "noProject",
+    });
+    expect(await readProjectBoard({ project: 2 })).toEqual({
+      kind: "noProject",
+    });
+  });
+
+  it("reads no project while the project tag is paused", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.pauseProjectTag(true);
+
+    expect(await readProjectBoard({ project: 1 })).toEqual({
+      kind: "noProject",
+    });
+  });
+
+  it("brings the project as the project details' attribute area shows it", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "active" });
+    repository.addTask({ id: 2, status: "done", effort: 2 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox", effort: 6 }, { parentId: 1 });
+
+    const read = board(await readProjectBoard({ project: 1 }));
+
+    expect(read.project.project.text).toBe("Move house");
+    expect(read.project.progress).toEqual({
+      kind: "measured",
+      done: 2,
+      total: 8,
+    });
+    expect(read.project.noNextAction).toBe(true);
+  });
+});
