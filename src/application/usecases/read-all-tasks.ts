@@ -34,7 +34,7 @@ import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
 import {
-  type ProjectSummary,
+  type ProjectNodeContext,
   projectNode,
   summarizeProjects,
 } from "./project-nodes";
@@ -102,6 +102,13 @@ export interface ProjectNode extends TreeNode {
   readonly progress: ProjectProgress;
   /** GLOSSARY: 缺少下一步行动. */
   readonly noNextAction: boolean;
+  /**
+   * The logical days without progress (GLOSSARY: 长期无进展); `null`: it
+   * is not without recent progress.
+   */
+  readonly noProgressDays: number | null;
+  /** GLOSSARY: 逾期项目. */
+  readonly overdue: boolean;
   /**
    * How many tasks that belong to it are not done; for a done project kept
    * in the tree, the N of "N tasks not done yet".
@@ -444,9 +451,8 @@ interface NodeContext {
   readonly tree: TaskTree;
   readonly graph: TaskGraph;
   readonly keep: TaskId | undefined;
-  readonly projects: ReadonlyMap<ProjectId, ProjectSummary>;
-  /** The last start that is reached: today plus the start preview days. */
-  readonly startsBy: CalendarDate;
+  /** What project nodes read; its summaries are the projects' tasks. */
+  readonly projects: ProjectNodeContext;
   /**
    * The project of a project scope: every card is its, so none shows it,
    * and a top-level task shows its parent task's text. `null`: no scope.
@@ -488,7 +494,7 @@ function projectFinished(
   return (
     entry.item.project.status === "done" &&
     unfinishedTaskCount(
-      context.projects.get(entry.item.project.id)?.tasks ?? [],
+      context.projects.summaries.get(entry.item.project.id)?.tasks ?? [],
     ) === 0 &&
     !entry.below.some((item) => holdsOpen(context.tree, item))
   );
@@ -675,9 +681,7 @@ function narrowedTree(
         );
         // Narrowed, a row with no task let through below it is hidden.
         if (children.length > 0 || !narrows(narrow))
-          tree.push(
-            projectNode(context.projects, context.startsBy, project, children),
-          );
+          tree.push(projectNode(context.projects, project, children));
         continue;
       }
       // A finished project holding the kept task stays in the tree for it.
@@ -685,9 +689,7 @@ function narrowedTree(
         (item) => keptPath(context, item, project.id) ?? [],
       );
       if (kept.length > 0) {
-        tree.push(
-          projectNode(context.projects, context.startsBy, project, kept),
-        );
+        tree.push(projectNode(context.projects, project, kept));
         continue;
       }
       // Its tasks let through as the top-level tasks of done subtrees are,
@@ -704,8 +706,9 @@ function narrowedTree(
             )
       ) {
         done.push({
-          item: projectNode(context.projects, context.startsBy, project, []),
-          lastCompletion: context.projects.get(project.id)?.lastCompletion,
+          item: projectNode(context.projects, project, []),
+          lastCompletion: context.projects.summaries.get(project.id)
+            ?.lastCompletion,
         });
       }
       continue;
@@ -783,15 +786,20 @@ export function createReadAllTasks(deps: {
     options: ReadAllTasksOptions & { readonly project?: ProjectId } = {},
   ): Promise<AllTasksRead | ProjectScopeRead> {
     const snapshot = await deps.repository.readTaskGraph();
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
+    const boundary = deps.dayBoundary.current();
+    const today = logicalDay(deps.clock.now(), boundary);
     const previewDays = deps.startPreviewDays.current();
     const graph = analyzeTaskGraph(snapshot, { today, previewDays });
     const context: NodeContext = {
       tree: buildTaskTree(snapshot),
       graph,
       keep: options.keep,
-      projects: summarizeProjects(snapshot, graph),
-      startsBy: addDays(today, previewDays),
+      projects: {
+        summaries: summarizeProjects(snapshot, graph),
+        today,
+        startsBy: addDays(today, previewDays),
+        boundary,
+      },
       scope: null,
     };
     const scoped =
@@ -847,12 +855,7 @@ export function createReadAllTasks(deps: {
     if (!scoped) return read;
     return {
       kind: "project",
-      project: projectNode(
-        context.projects,
-        context.startsBy,
-        scoped.project,
-        [],
-      ),
+      project: projectNode(context.projects, scoped.project, []),
       ...read,
     };
   }

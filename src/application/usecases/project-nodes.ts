@@ -5,8 +5,10 @@ import type {
   TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import {
+  daysWithoutProgress,
   lacksNextAction,
   type ProjectTask,
+  projectOverdue,
   projectProgress,
   unfinishedTaskCount,
 } from "../../domain/project/progress";
@@ -15,6 +17,7 @@ import { recurs } from "../../domain/recurrence/recurrence";
 import type { CompletionEntry } from "../../domain/task/completion-history";
 import type { CalendarDate } from "../../domain/task/task";
 import { compareDays } from "../../domain/time/calendar-days";
+import type { DayBoundary } from "../../domain/time/logical-day";
 import type { AllTasksNode, ProjectNode } from "./read-all-tasks";
 
 /** What the tasks that belong to a project say about it. */
@@ -22,6 +25,8 @@ export interface ProjectSummary {
   readonly tasks: readonly ProjectTask[];
   /** The latest last completion among them; absent for none recorded. */
   readonly lastCompletion?: CompletionEntry;
+  /** When the latest of them was created; absent for no task. */
+  readonly lastTaskCreated?: Date;
 }
 
 /**
@@ -35,7 +40,11 @@ export function summarizeProjects(
 ): Map<ProjectId, ProjectSummary> {
   const summaries = new Map<
     ProjectId,
-    { tasks: ProjectTask[]; lastCompletion?: CompletionEntry }
+    {
+      tasks: ProjectTask[];
+      lastCompletion?: CompletionEntry;
+      lastTaskCreated?: Date;
+    }
   >();
   for (const item of snapshot.tasks) {
     const entry = graph.entry(item.task.id);
@@ -48,6 +57,11 @@ export function summarizeProjects(
       doneAncestor: entry.doneAncestor !== null,
       nextAction: entry.nextAction,
     });
+    if (
+      !summary.lastTaskCreated ||
+      item.task.created.getTime() > summary.lastTaskCreated.getTime()
+    )
+      summary.lastTaskCreated = item.task.created;
     const last = item.lastCompletion;
     if (
       last &&
@@ -60,20 +74,30 @@ export function summarizeProjects(
   return summaries;
 }
 
+/** What `projectNode` reads besides the project. */
+export interface ProjectNodeContext {
+  readonly summaries: ReadonlyMap<ProjectId, ProjectSummary>;
+  /** The current logical day. */
+  readonly today: CalendarDate;
+  /** The last start that is reached: today plus the start preview days. */
+  readonly startsBy: CalendarDate;
+  /** Turns creation times into logical days (GLOSSARY: 长期无进展). */
+  readonly boundary: DayBoundary;
+}
+
 /**
- * The node of `project` with `children` below it, from what `summaries`
- * says about its tasks; `startsBy` is the last start that is reached (today
- * plus the start preview days).
+ * The node of `project` with `children` below it, from what the context's
+ * summaries say about its tasks.
  */
 export function projectNode(
-  summaries: ReadonlyMap<ProjectId, ProjectSummary>,
-  startsBy: CalendarDate,
+  context: ProjectNodeContext,
   project: Project,
   children: readonly AllTasksNode[],
 ): ProjectNode {
-  const tasks = summaries.get(project.id)?.tasks ?? [];
+  const summary = context.summaries.get(project.id);
+  const tasks = summary?.tasks ?? [];
   const notStarted =
-    project.start !== null && compareDays(project.start, startsBy) > 0;
+    project.start !== null && compareDays(project.start, context.startsBy) > 0;
   return {
     kind: "project",
     project,
@@ -81,6 +105,17 @@ export function projectNode(
     children,
     progress: projectProgress(tasks),
     noNextAction: lacksNextAction(project, !notStarted, tasks),
+    noProgressDays: daysWithoutProgress(
+      project,
+      !notStarted,
+      {
+        lastCompletion: summary?.lastCompletion?.day ?? null,
+        lastTaskCreated: summary?.lastTaskCreated ?? null,
+      },
+      context.today,
+      context.boundary,
+    ),
+    overdue: projectOverdue(project, context.today),
     unfinished: unfinishedTaskCount(tasks),
     taskCount: tasks.length,
     notStarted,

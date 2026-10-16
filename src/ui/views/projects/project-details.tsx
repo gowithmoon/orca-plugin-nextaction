@@ -24,7 +24,7 @@ import { ProjectMenu } from "../../project-menu/project-menu";
 import {
   ProjectStatusIcon,
   progressValue,
-  projectOverdue,
+  signalChips,
 } from "../all-tasks/project-row";
 
 /** The "‹ Projects" button above the attribute area. */
@@ -69,7 +69,7 @@ function AttributeChips(props: { node: ProjectNode; today: CalendarDate }) {
   const { node, today } = props;
   const { project } = node;
   const { Tooltip } = orca.components;
-  const overdue = projectOverdue(project, today);
+  const { overdue } = node;
   const items: React.ReactNode[] = [];
   if (node.noNextAction) {
     items.push(
@@ -79,6 +79,7 @@ function AttributeChips(props: { node: ProjectNode; today: CalendarDate }) {
       </span>,
     );
   }
+  items.push(...signalChips(node));
   if (project.status === "done" && node.unfinished > 0) {
     items.push(
       <span key="open" className="nextaction-property nextaction-project-warn">
@@ -111,17 +112,10 @@ function AttributeChips(props: { node: ProjectNode; today: CalendarDate }) {
           className="nextaction-property"
           data-overdue={overdue || undefined}
           role="img"
-          aria-label={
-            overdue
-              ? `${t("Due day")} ${date} ${t("Overdue")}`
-              : `${t("Due day")} ${date}`
-          }
+          aria-label={`${t("Due day")} ${date}`}
         >
           <i className="ti ti-calendar" aria-hidden="true" />
           {date}
-          {overdue && (
-            <span className="nextaction-property-overdue">{t("Overdue")}</span>
-          )}
         </span>
       </Tooltip>,
     );
