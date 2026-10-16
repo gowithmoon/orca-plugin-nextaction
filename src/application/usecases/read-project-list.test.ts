@@ -39,12 +39,14 @@ describe("read project list", () => {
     repository.addProject({ id: 3, status: "planning" });
     repository.addProject({ id: 4, status: "active" });
     repository.addProject({ id: 5, status: "done" });
+    repository.addProject({ id: 6, status: "paused" });
 
     const read = await readProjectList();
 
     expect(groups(read)).toEqual([
       ["active", [4]],
       ["planning", [3]],
+      ["paused", [6]],
       ["someday", [2]],
       ["done", [1, 5]],
     ]);
