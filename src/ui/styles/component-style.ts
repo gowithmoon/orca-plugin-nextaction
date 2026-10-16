@@ -660,6 +660,55 @@ export const componentCss = `
   background-color: var(--orca-color-bg-2);
 }
 
+/*
+ * The project list's groups (#155), as the done section's title: a quiet
+ * toggle with the status and its count, then the project rows.
+ */
+.nextaction-project-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+}
+
+.nextaction-project-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-project-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  align-self: flex-start;
+  padding: var(--orca-spacing-xs) var(--orca-spacing-sm);
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nextaction-project-group-toggle:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-project-group-count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.nextaction-project-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* A narrow list: tighter cards, so the text keeps its room. */
 @container nextaction-task-list (max-width: 320px) {
   .nextaction-task-card,
