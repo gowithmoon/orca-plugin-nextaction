@@ -292,6 +292,17 @@ export function createReadProjectBoard(deps: {
       !narrowed ||
       passes(item.task) ||
       (children.get(item.task.id) ?? []).some(visible);
+    /**
+     * A parent task's text, only when it is not the project's: by project
+     * root task a column's cards have the column head as their parent task.
+     */
+    const parentTextOf = (parentId: TaskId | null): string | null => {
+      if (parentId === null) return null;
+      const entry = graph.entry(parentId);
+      return entry === undefined || entry.project?.id === scoped.project.id
+        ? null
+        : entry.task.text;
+    };
     const cardOf = (item: SnapshotTask): BoardCard => {
       const allRows = descendantsOf(children, item.task.id).map(
         ({ item: row, depth }): BoardRow => ({
@@ -313,10 +324,7 @@ export function createReadProjectBoard(deps: {
       return {
         task: item.task,
         blocked: marksBlocked(graph.entry(item.task.id)),
-        parentText:
-          item.parentId === null
-            ? null
-            : (graph.entry(item.parentId)?.task.text ?? null),
+        parentText: parentTextOf(item.parentId),
         parentId: item.parentId,
         nextAction: nextAction(item.task.id),
         subtasks: subtaskCounts(children.get(item.task.id) ?? []),

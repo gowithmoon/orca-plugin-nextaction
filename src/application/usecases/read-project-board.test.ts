@@ -594,6 +594,32 @@ describe("read project board, by project root task (#171)", () => {
     ]);
   });
 
+  it('shows no parent task text on a column\'s cards, the column head their parent task; in "Other" a project root task\'s parent task not the project\'s still shows', async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, text: "Launch", status: "todo" },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, text: "Errands", status: "todo" });
+    repository.addTask(
+      { id: 5, status: "todo" },
+      { parentId: 4, project: [1] },
+    );
+
+    const read = byRoot(
+      await readProjectBoard({ project: 1, grouping: "root" }),
+    );
+
+    expect(
+      read.columns[0]?.cards.map((card) => [card.task.id, card.parentText]),
+    ).toEqual([[3, null]]);
+    expect(
+      read.other.cards.map((card) => [card.task.id, card.parentText]),
+    ).toEqual([[5, "Errands"]]);
+  });
+
   it('brings a project root task back to "Other" once its last subtask is moved away', async () => {
     const { repository, readProjectBoard } = setup();
     repository.addProject({ id: 1, status: "active" });
