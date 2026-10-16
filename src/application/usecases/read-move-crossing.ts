@@ -3,14 +3,11 @@
 // user to confirm first. A move the move use case would refuse, or that
 // leaves every task in place, asks nothing: it is refused (or does nothing)
 // as before.
-import { moveCycle } from "../../domain/blocking/dependency-cycles";
 import { projectBlockCrossing } from "../../domain/blocking/project-block-crossing";
-import {
-  leavesTasksInPlace,
-  type TaskMove,
-} from "../../domain/blocking/task-move";
+import type { TaskMove } from "../../domain/blocking/task-move";
 import type { ProjectId } from "../../domain/project/project";
 import type { TaskRepository } from "../ports/task-repository";
+import { checkMove } from "./move-task";
 
 /**
  * A crossing move, with the texts its question names: the moved task's,
@@ -47,17 +44,8 @@ export function createReadMoveCrossing(deps: {
     const snapshot = await deps.repository.readTaskGraph();
     const item = (id: number) =>
       snapshot.tasks.find((candidate) => candidate.task.id === id);
-    // As `createMoveTask` refuses: a non-page next to a page with no parent
-    // block, a dependency cycle; a move onto itself or below is no crossing.
-    if (
-      move.placement !== "lastChild" &&
-      item(move.target)?.root &&
-      !item(move.id)?.page
-    ) {
-      return null;
-    }
-    if (leavesTasksInPlace(snapshot, move)) return null;
-    if (moveCycle(snapshot, move)) return null;
+    // Only a move the move use case would make asks.
+    if (checkMove(snapshot, move).kind !== "move") return null;
     const crossing = projectBlockCrossing(snapshot, move, project);
     if (!crossing) return null;
     const projectText = (id: ProjectId) =>
