@@ -4,9 +4,10 @@
 import {
   analyzeTaskGraph,
   type SnapshotTask,
+  type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
-import type { Task, TaskStatus } from "../../domain/task/task";
+import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import { taskStatuses } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
@@ -38,6 +39,38 @@ export interface BoardCard {
    * show it: only when it has one, which is not the project's. `null`: none.
    */
   readonly parentText: string | null;
+  /** It is a next action (GLOSSARY: 下一步行动): the board's dot (#167). */
+  readonly nextAction: boolean;
+  /**
+   * Its direct subtasks (GLOSSARY: 子任务), deeper descendant tasks not
+   * counted: how many are done, and how many in all (0: none).
+   */
+  readonly subtasks: { readonly done: number; readonly total: number };
+  /**
+   * Among all its descendant tasks (GLOSSARY: 后代任务), at any depth: how
+   * many are doing, and how many are next actions; the collapsed card's
+   * "Doing N · Next N".
+   */
+  readonly descendants: {
+    readonly doing: number;
+    readonly nextActions: number;
+  };
+  /**
+   * All its descendant tasks, the rows the expanded card lists: in note
+   * order (document preorder), whatever the sort; none without subtasks.
+   */
+  readonly rows: readonly BoardRow[];
+}
+
+/** A descendant task's row in an expanded card (#167). */
+export interface BoardRow {
+  readonly task: Task;
+  /** Its indent: 0 for a direct subtask of the card, 1 below that, … */
+  readonly depth: number;
+  /** As `BoardCard.blocked`. */
+  readonly blocked: boolean;
+  /** As `BoardCard.nextAction`. */
+  readonly nextAction: boolean;
 }
 
 /** A column of the board by status: every card of that status. */
@@ -106,6 +139,49 @@ export type ReadProjectBoard = (
 /** The board's columns by status, in order (GLOSSARY: 状态). */
 const columnOrder: readonly TaskStatus[] = taskStatuses;
 
+/** Every task's subtasks, in note order. */
+function childrenByParent(
+  snapshot: TaskGraphSnapshot,
+): ReadonlyMap<TaskId, readonly SnapshotTask[]> {
+  const children = new Map<TaskId, SnapshotTask[]>();
+  const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
+  for (const item of ordered) {
+    if (item.parentId === null) continue;
+    const siblings = children.get(item.parentId) ?? [];
+    siblings.push(item);
+    children.set(item.parentId, siblings);
+  }
+  return children;
+}
+
+function subtaskCounts(
+  subtasks: readonly SnapshotTask[],
+): BoardCard["subtasks"] {
+  return {
+    done: subtasks.filter((item) => item.task.status === "done").length,
+    total: subtasks.length,
+  };
+}
+
+/** Every descendant task of `id` with its depth, in note order (preorder). */
+function descendantsOf(
+  children: ReadonlyMap<TaskId, readonly SnapshotTask[]>,
+  id: TaskId,
+  depth = 0,
+): { readonly item: SnapshotTask; readonly depth: number }[] {
+  return (children.get(id) ?? []).flatMap((item) => [
+    { item, depth },
+    ...descendantsOf(children, item.task.id, depth + 1),
+  ]);
+}
+
+function descendantCounts(rows: readonly BoardRow[]): BoardCard["descendants"] {
+  return {
+    doing: rows.filter((row) => row.task.status === "doing").length,
+    nextActions: rows.filter((row) => row.nextAction).length,
+  };
+}
+
 export function createReadProjectBoard(deps: {
   repository: TaskRepository;
   clock: Clock;
@@ -123,19 +199,35 @@ export function createReadProjectBoard(deps: {
     );
     if (!scoped) return { kind: "noProject" };
     const roots = projectRootTasks(snapshot, graph, scoped.project.id);
+    const children = childrenByParent(snapshot);
     const compare = comparator(
       options.sort ?? "score",
       options.direction ?? "ascending",
       (card: BoardCard) => taskSorted(card.task, graph, today),
     );
-    const cardOf = (item: SnapshotTask): BoardCard => ({
-      task: item.task,
-      blocked: marksBlocked(graph.entry(item.task.id)),
-      parentText:
-        item.parentId === null
-          ? null
-          : (graph.entry(item.parentId)?.task.text ?? null),
-    });
+    const nextAction = (id: TaskId) => graph.entry(id)?.nextAction ?? false;
+    const cardOf = (item: SnapshotTask): BoardCard => {
+      const rows = descendantsOf(children, item.task.id).map(
+        ({ item: row, depth }): BoardRow => ({
+          task: row.task,
+          depth,
+          blocked: marksBlocked(graph.entry(row.task.id)),
+          nextAction: nextAction(row.task.id),
+        }),
+      );
+      return {
+        task: item.task,
+        blocked: marksBlocked(graph.entry(item.task.id)),
+        parentText:
+          item.parentId === null
+            ? null
+            : (graph.entry(item.parentId)?.task.text ?? null),
+        nextAction: nextAction(item.task.id),
+        subtasks: subtaskCounts(children.get(item.task.id) ?? []),
+        descendants: descendantCounts(rows),
+        rows,
+      };
+    };
     const columns = columnOrder.map((status): StatusColumn => {
       const items = roots.filter((item) => item.task.status === status);
       if (status === "done") {

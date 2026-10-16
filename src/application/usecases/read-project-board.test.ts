@@ -258,6 +258,106 @@ describe("read project board, by status", () => {
     ]);
   });
 
+  it("marks a card that is a next action", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Held back by its open subtask: not a next action.
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    // Never a next action.
+    repository.addTask({ id: 5, status: "inbox" }, { parentId: 1 });
+
+    const read = await readProjectBoard({ project: 1, sort: "note" });
+
+    const marks = board(read).board.columns.flatMap((col) =>
+      col.cards.map((card) => [card.task.id, card.nextAction]),
+    );
+    expect(marks).toEqual([
+      [5, false],
+      [2, true],
+      [3, false],
+    ]);
+  });
+
+  it("counts a card's direct subtasks, done and in all, not deeper descendant tasks", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 2 });
+    // Deeper: not counted.
+    repository.addTask({ id: 5, status: "done" }, { parentId: 4 });
+    repository.addTask({ id: 6, status: "someday" }, { parentId: 2 });
+    // No subtasks.
+    repository.addTask({ id: 7, status: "todo" }, { parentId: 1 });
+
+    const read = await readProjectBoard({ project: 1, sort: "note" });
+
+    expect(
+      column(read, "todo").cards.map((card) => [card.task.id, card.subtasks]),
+    ).toEqual([
+      [2, { done: 1, total: 3 }],
+      [7, { done: 0, total: 0 }],
+    ]);
+  });
+
+  it("counts the doing tasks and the next actions among a card's descendant tasks, at any depth", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Doing, held back by its own subtask: doing, not a next action.
+    repository.addTask({ id: 3, status: "doing" }, { parentId: 2 });
+    // Two levels down: a next action.
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    // Doing and a next action: counted in both.
+    repository.addTask({ id: 5, status: "doing" }, { parentId: 2 });
+    repository.addTask({ id: 6, status: "done" }, { parentId: 2 });
+    // The card itself is not its own descendant task.
+    repository.addTask({ id: 7, status: "doing" }, { parentId: 1 });
+
+    const read = await readProjectBoard({ project: 1, sort: "note" });
+
+    const counts = board(read).board.columns.flatMap((col) =>
+      col.cards.map((card) => [card.task.id, card.descendants]),
+    );
+    expect(counts).toEqual([
+      [2, { doing: 2, nextActions: 2 }],
+      [7, { doing: 0, nextActions: 0 }],
+    ]);
+  });
+
+  it("lists a card's descendant tasks as rows in note order, whatever the sort, each with its depth, blocked mark and next action mark", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    // Blocked by a dependency on 4.
+    repository.addTask(
+      { id: 5, status: "todo", importance: 7, dependencies: [4] },
+      { parentId: 2 },
+    );
+    repository.addTask({ id: 6, status: "done" }, { parentId: 5 });
+
+    const read = await readProjectBoard({ project: 1, sort: "importance" });
+
+    const [card] = column(read, "todo").cards;
+    expect(
+      card?.rows.map((row) => [
+        row.task.id,
+        row.depth,
+        row.blocked,
+        row.nextAction,
+      ]),
+    ).toEqual([
+      [3, 0, false, false],
+      [4, 1, false, true],
+      [5, 0, true, false],
+      [6, 1, false, false],
+    ]);
+  });
+
   it("reads no project for a block that is not a project", async () => {
     const { repository, readProjectBoard } = setup();
     repository.addTask({ id: 1, status: "todo" });
