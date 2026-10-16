@@ -1,8 +1,9 @@
 // The project details of the projects view (GLOSSARY: 项目视图, #156): a
 // "‹ Projects" button back to the list, then the read-only attribute area as
 // the prototype's variant C chose: the project status icon, the name and the
-// progress on one line; start, due (red when overdue), "no next action" and
-// a non-default importance and urgency squeezed on one line; the goal folded
+// progress ("No tasks" without any) on one line; start, due (red when
+// overdue, as the project row), "no next action" and a non-default
+// importance and urgency squeezed on one line; the goal folded
 // to one line, a click showing all of it; the progress bar on the area's
 // bottom edge. The status icon opens the project menu, the name opens the
 // project block in the notes. The tree below is the projects view's (#157). Verified by
@@ -11,7 +12,6 @@ import * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { CalendarDate } from "../../../domain/task/task";
 import { defaultRating } from "../../../domain/task/task";
-import { compareDays } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
 import {
   formatDate,
@@ -21,7 +21,11 @@ import {
 import { ContextMenu } from "../../components/popup-controls";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import { ProjectMenu } from "../../project-menu/project-menu";
-import { ProjectStatusIcon, progressValue } from "../all-tasks/project-row";
+import {
+  ProjectStatusIcon,
+  progressValue,
+  projectOverdue,
+} from "../all-tasks/project-row";
 
 /** The "‹ Projects" button above the attribute area. */
 export function BackToProjects(props: { onBack: () => void }) {
@@ -65,18 +69,8 @@ function AttributeChips(props: { node: ProjectNode; today: CalendarDate }) {
   const { node, today } = props;
   const { project } = node;
   const { Tooltip } = orca.components;
-  const overdue =
-    project.due !== null &&
-    project.status !== "done" &&
-    compareDays(project.due, today) < 0;
+  const overdue = projectOverdue(project, today);
   const items: React.ReactNode[] = [];
-  if (node.progress.kind === "noTasks") {
-    items.push(
-      <span key="none" className="nextaction-property">
-        {t("No tasks")}
-      </span>,
-    );
-  }
   if (node.noNextAction) {
     items.push(
       <span key="nna" className="nextaction-property nextaction-project-warn">
@@ -229,8 +223,12 @@ export function ProjectAttributes(props: {
           >
             {name}
           </button>
-          {shownProgress !== null && (
+          {shownProgress !== null ? (
             <span className="nextaction-project-row-progress-value">{`${shownProgress}%`}</span>
+          ) : (
+            node.progress.kind === "noTasks" && (
+              <span className="nextaction-property">{t("No tasks")}</span>
+            )
           )}
         </div>
         <AttributeChips node={node} today={today} />

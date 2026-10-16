@@ -9,7 +9,7 @@
 import type * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { ProjectProgress } from "../../../domain/project/progress";
-import type { ProjectStatus } from "../../../domain/project/project";
+import type { Project, ProjectStatus } from "../../../domain/project/project";
 import type { CalendarDate } from "../../../domain/task/task";
 import { compareDays } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
@@ -70,6 +70,18 @@ export function ProjectStatusIcon(props: {
   );
 }
 
+/** Overdue: not done, and its due day is before `today`. */
+export function projectOverdue(
+  project: Pick<Project, "status" | "due">,
+  today: CalendarDate,
+): boolean {
+  return (
+    project.due !== null &&
+    project.status !== "done" &&
+    compareDays(project.due, today) < 0
+  );
+}
+
 /** A click that selected text is not a click on the row. */
 function selectsText(): boolean {
   const selection = window.getSelection();
@@ -102,10 +114,7 @@ function ProjectMeta(props: {
 }) {
   const { node, today, inDone } = props;
   const { project } = node;
-  const overdue =
-    project.due !== null &&
-    project.status !== "done" &&
-    compareDays(project.due, today) < 0;
+  const overdue = projectOverdue(project, today);
   const items: React.ReactNode[] = [];
   if (inDone) {
     items.push(
