@@ -1,8 +1,11 @@
-// What a project's tasks say about it (GLOSSARY: 进度, 缺少下一步行动):
-// its progress, whether it lacks a next action, and how many of its tasks are
-// not done. "Its tasks" are those that belong to it (GLOSSARY: 所属项目),
+// What a project's tasks say about it (GLOSSARY: 进度, 缺少下一步行动, 长期
+// 无进展, 逾期项目): its progress, whether it lacks a next action or has no
+// recent progress, whether it is overdue, and how many of its tasks are not
+// done. "Its tasks" are those that belong to it (GLOSSARY: 所属项目),
 // however they do; the caller works that out with `owningProject`. Pure.
-import type { Effort, TaskStatus } from "../task/task";
+import type { CalendarDate, Effort, TaskStatus } from "../task/task";
+import { compareDays, daysBetween, laterDay } from "../time/calendar-days";
+import { type DayBoundary, logicalDay } from "../time/logical-day";
 import { type Project, projectAllowsNextAction } from "./project";
 
 /** What the rules here read of one task that belongs to the project. */
@@ -77,4 +80,53 @@ export function lacksNextAction(
  */
 export function unfinishedTaskCount(tasks: readonly ProjectTask[]): number {
   return tasks.filter((task) => task.status !== "done").length;
+}
+
+/** Days after the latest progress that make no recent progress; fixed. */
+export const noProgressDays = 14;
+
+/** What the tasks that belong to a project say about its latest progress. */
+export interface ProjectActivity {
+  /** The logical day of their latest last completion; `null` for none. */
+  readonly lastCompletion: CalendarDate | null;
+  /** When the latest of them was created; `null` for none. */
+  readonly lastTaskCreated: Date | null;
+}
+
+/**
+ * How many logical days the project has gone without progress (GLOSSARY: 长
+ * 期无进展), once that is `noProgressDays` or more; `null` otherwise.
+ */
+export function daysWithoutProgress(
+  project: Project,
+  started: boolean,
+  activity: ProjectActivity,
+  today: CalendarDate,
+  boundary: DayBoundary,
+): number | null {
+  if (!projectAllowsNextAction(project.status) || !started) return null;
+  const taskCreated =
+    activity.lastTaskCreated && logicalDay(activity.lastTaskCreated, boundary);
+  const latest =
+    [activity.lastCompletion, taskCreated, project.start].reduce(
+      laterDay,
+      logicalDay(project.created, boundary),
+    ) ?? today;
+  const days = daysBetween(latest, today);
+  return days >= noProgressDays ? days : null;
+}
+
+/**
+ * The project is overdue (GLOSSARY: 逾期项目): not done, and its own due day
+ * is before `today`; its tasks' due days do not count.
+ */
+export function projectOverdue(
+  project: Pick<Project, "status" | "due">,
+  today: CalendarDate,
+): boolean {
+  return (
+    project.due !== null &&
+    project.status !== "done" &&
+    compareDays(project.due, today) < 0
+  );
 }
