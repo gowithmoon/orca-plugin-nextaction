@@ -2,7 +2,14 @@
 // effective start, importance, urgency and effort (#76, #73 "领域：评分").
 // Pure; the parameters are fixed here and not offered as settings. Days are
 // whole logical days.
-import type { AncestorRatings, CalendarDate, Rating, Task } from "../task/task";
+import type { Project } from "../project/project";
+import {
+  type AncestorRatings,
+  type CalendarDate,
+  defaultRating,
+  type Rating,
+  type Task,
+} from "../task/task";
 import { compareDays, daysBetween } from "../time/calendar-days";
 
 /** What a task's score is computed from. */
@@ -94,6 +101,25 @@ function byDueDay(a: CalendarDate | null, b: CalendarDate | null): number {
   if (a === null || b === null)
     return (a === null ? 1 : 0) - (b === null ? 1 : 0);
   return compareDays(a, b);
+}
+
+/**
+ * A project's score (GLOSSARY: 评分): the same formula from its own values,
+ * at the default effort and with no ancestor factor, its effective start its
+ * own start. Orders project rows (#148) and the project list (#155).
+ */
+export function projectScore(
+  project: Pick<Project, "id" | "due" | "start" | "importance" | "urgency">,
+  today: CalendarDate,
+): number {
+  return score(
+    {
+      task: { ...project, effort: defaultRating },
+      effectiveStart: project.start,
+      ancestorRatings: [],
+    },
+    today,
+  );
 }
 
 /** The task's score: higher comes first among next actions. */

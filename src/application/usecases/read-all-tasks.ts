@@ -17,14 +17,13 @@ import {
 } from "../../domain/project/progress";
 import type { Project, ProjectId } from "../../domain/project/project";
 import { recurs } from "../../domain/recurrence/recurrence";
-import { score } from "../../domain/scoring/score";
+import { projectScore, score } from "../../domain/scoring/score";
 import type { CompletionEntry } from "../../domain/task/completion-history";
-import {
-  type CalendarDate,
-  defaultRating,
-  type Task,
-  type TaskId,
-  type TaskStatus,
+import type {
+  CalendarDate,
+  Task,
+  TaskId,
+  TaskStatus,
 } from "../../domain/task/task";
 import {
   filterChoosesAny,
@@ -764,19 +763,7 @@ export function createReadAllTasks(deps: {
           ),
         };
       }
-      // The same formula, at the default effort and with no ancestor factor.
-      const project = node.project;
-      return {
-        ...project,
-        score: score(
-          {
-            task: { ...project, effort: defaultRating },
-            effectiveStart: project.start,
-            ancestorRatings: [],
-          },
-          today,
-        ),
-      };
+      return { ...node.project, score: projectScore(node.project, today) };
     };
     const compare = comparator(
       options.sort ?? "note",
