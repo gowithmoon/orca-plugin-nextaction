@@ -220,6 +220,73 @@ export const projectBoardCss = `
   font-weight: 600;
 }
 
+/* By project root task (#171): a project root task's column, or "Other",
+   or a finished column's strip, a drop would make the task a subtask of, or
+   a project root task. */
+.nextaction-board-column[data-nextaction-board-drop-root][data-drop-over],
+.nextaction-board-strip[data-nextaction-board-drop-root][data-drop-over],
+.nextaction-board-column[data-nextaction-board-drop-other][data-drop-over] {
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 10%, var(--orca-color-bg-2));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--orca-color-primary-5) 60%, transparent);
+}
+
+/* An empty "Other" shows only while dragging. */
+.nextaction-board-column[data-nextaction-board-drop-other][data-empty] {
+  display: none;
+}
+
+.nextaction-board[data-nextaction-board-dragging] .nextaction-board-column[data-nextaction-board-drop-other][data-empty] {
+  display: flex;
+}
+
+/* The column head's project root task name: opens its task panel. */
+.nextaction-board-root-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--orca-color-text-1);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-board-root-name:hover {
+  text-decoration: underline;
+}
+
+.nextaction-board-root-name[data-empty] {
+  color: var(--orca-color-text-2);
+  font-style: italic;
+}
+
+.nextaction-board-root-name:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+/* "Done N" at a column's bottom, its done cards faded. */
+.nextaction-board-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-board-done > .nextaction-board-card {
+  opacity: 0.6;
+}
+
+.nextaction-board-strip-label {
+  max-height: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* A next action (#167): a small dot at the status icon's top right. */
 .nextaction-task-card-status-button,
 .nextaction-task-card-status-mark {

@@ -106,3 +106,85 @@ describe("boardDrop", () => {
     ).toEqual({ kind: "projectEnd" });
   });
 });
+
+describe("boardDrop, by project root task (#171)", () => {
+  // Columns: project root task 1 ─ 2 ─ 3 and 5 ─ 6; project root task 4 in
+  // "Other".
+  const parents = new Map<TaskId, TaskId | null>([
+    [1, null],
+    [2, 1],
+    [3, 2],
+    [4, null],
+    [5, null],
+    [6, 5],
+  ]);
+  const parentOf = (id: TaskId) => parents.get(id) ?? null;
+
+  it("makes the task the last subtask of the column's project root task", () => {
+    expect(boardDrop({ id: 6, status: "todo" }, { root: 1 }, parentOf)).toEqual(
+      { kind: "lastChild", target: 1 },
+    );
+    expect(
+      boardDrop(
+        { id: 4, status: "todo", projectRoot: true },
+        { root: 5 },
+        parentOf,
+      ),
+    ).toEqual({ kind: "lastChild", target: 5 });
+  });
+
+  it("makes a deeper descendant task a direct subtask of the column's project root task", () => {
+    expect(boardDrop({ id: 3, status: "todo" }, { root: 1 }, parentOf)).toEqual(
+      { kind: "lastChild", target: 1 },
+    );
+  });
+
+  it("writes nothing back in its own column", () => {
+    expect(
+      boardDrop({ id: 2, status: "todo" }, { root: 1 }, parentOf),
+    ).toBeNull();
+  });
+
+  it("writes nothing for a project root task dropped in its own column", () => {
+    expect(
+      boardDrop(
+        { id: 1, status: "todo", projectRoot: true },
+        { root: 1 },
+        parentOf,
+      ),
+    ).toBeNull();
+  });
+
+  it("falls back to the column on a card or row it cannot go under", () => {
+    // A row on its parent task's card: up to the column's project root task.
+    expect(
+      boardDrop({ id: 3, status: "todo" }, { task: 2, root: 1 }, parentOf),
+    ).toEqual({ kind: "lastChild", target: 1 });
+    // A card on its own row: its own column, no drop.
+    expect(
+      boardDrop({ id: 2, status: "todo" }, { task: 3, root: 1 }, parentOf),
+    ).toBeNull();
+  });
+
+  it("makes the task the last subtask of a card in another column", () => {
+    expect(
+      boardDrop({ id: 6, status: "todo" }, { task: 2, root: 1 }, parentOf),
+    ).toEqual({ kind: "lastChild", target: 2 });
+  });
+
+  it('moves a subtask dropped in "Other" to the end of the project block', () => {
+    expect(
+      boardDrop({ id: 3, status: "todo" }, { other: true }, parentOf),
+    ).toEqual({ kind: "projectEnd" });
+  });
+
+  it('writes nothing for a project root task dropped in "Other"', () => {
+    expect(
+      boardDrop(
+        { id: 4, status: "todo", projectRoot: true },
+        { other: true },
+        parentOf,
+      ),
+    ).toBeNull();
+  });
+});

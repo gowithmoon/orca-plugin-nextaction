@@ -107,10 +107,59 @@ export interface StatusBoard {
 }
 
 /**
- * The board, told apart by its grouping (GLOSSARY: 分列方式). Only by status
- * so far; by project root task joins it (#171).
+ * A project root task's column head (#171): the project root task itself,
+ * as a column head shows it.
  */
-export type ProjectBoard = StatusBoard;
+export interface RootColumnHead {
+  readonly task: Task;
+  /** As `BoardCard.blocked`. */
+  readonly blocked: boolean;
+  /** Its parent task, as `BoardCard.parentId`: for a drop on its column. */
+  readonly parentId: TaskId | null;
+  /** Its direct subtasks: how many are done, and how many in all. */
+  readonly subtasks: { readonly done: number; readonly total: number };
+}
+
+/**
+ * The cards of a column by project root task: the open ones by the sort
+ * asked for, the done ones apart ("Done N", collapsed by default): every
+ * one, not only the last `doneSectionDays` days, the most recent completion
+ * first.
+ */
+export interface RootBoardCards {
+  readonly cards: readonly BoardCard[];
+  readonly done: readonly BoardCard[];
+}
+
+/**
+ * A project root task with subtasks: its column, its direct subtasks the
+ * cards (deeper descendant tasks folded in them).
+ */
+export interface RootColumn extends RootBoardCards {
+  readonly head: RootColumnHead;
+  /**
+   * It and all its descendant tasks are done: the column is collapsed to a
+   * narrow strip by default, after every other column.
+   */
+  readonly finished: boolean;
+}
+
+/**
+ * The board by project root task (GLOSSARY: 分列方式, #171): "Other" first,
+ * the project root tasks without subtasks its cards; then a column for each
+ * project root task with subtasks, in note order, finished ones last.
+ */
+export interface RootBoard {
+  readonly grouping: "root";
+  readonly other: RootBoardCards;
+  readonly columns: readonly RootColumn[];
+}
+
+/** The board, told apart by its grouping (GLOSSARY: 分列方式). */
+export type ProjectBoard = StatusBoard | RootBoard;
+
+/** How the board groups its columns (GLOSSARY: 分列方式). */
+export type BoardGrouping = ProjectBoard["grouping"];
 
 /**
  * - `project`: the project itself, as the project details' attribute area
@@ -130,6 +179,8 @@ export type ProjectBoardRead =
 export interface ReadProjectBoardOptions {
   /** The project whose board is read. */
   readonly project: ProjectId;
+  /** How the columns are grouped (#171). Defaults to `status`. */
+  readonly grouping?: BoardGrouping;
   /**
    * How each column's cards are ordered; done cards are not (most recent
    * completion first). The options are the tree's (`AllTasksSort`), ties in
@@ -238,6 +289,62 @@ export function createReadProjectBoard(deps: {
         rows,
       };
     };
+    const sorted = (items: readonly SnapshotTask[]): BoardCard[] => {
+      const cards = items.map(cardOf);
+      // Stable: ties keep note order.
+      if (compare) cards.sort(compare);
+      return cards;
+    };
+    const project = projectNode(
+      projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
+      scoped.project,
+      [],
+    );
+    if (options.grouping === "root") {
+      // A project root task's descendant tasks are all the project's: the
+      // parent task's ownership decides (domain/project/ownership.ts).
+      const subtasksOf = (item: SnapshotTask) =>
+        children.get(item.task.id) ?? [];
+      const cardsOf = (items: readonly SnapshotTask[]): RootBoardCards => ({
+        cards: sorted(items.filter((item) => item.task.status !== "done")),
+        // Every day's: no earlier ones apart.
+        done: byLastCompletion(
+          items.filter((item) => item.task.status === "done"),
+          (item) => item.lastCompletion,
+          today,
+          true,
+        ).recent.map(cardOf),
+      });
+      const columns = roots
+        .filter((root) => subtasksOf(root).length > 0)
+        .map(
+          (root): RootColumn => ({
+            head: {
+              task: root.task,
+              blocked: marksBlocked(graph.entry(root.task.id)),
+              parentId: root.parentId,
+              subtasks: subtaskCounts(subtasksOf(root)),
+            },
+            finished:
+              root.task.status === "done" &&
+              descendantsOf(children, root.task.id).every(
+                ({ item }) => item.task.status === "done",
+              ),
+            ...cardsOf(subtasksOf(root)),
+          }),
+        );
+      // Stable: the finished ones last, each part in note order.
+      columns.sort((a, b) => Number(a.finished) - Number(b.finished));
+      return {
+        kind: "project",
+        project,
+        board: {
+          grouping: "root",
+          other: cardsOf(roots.filter((root) => subtasksOf(root).length === 0)),
+          columns,
+        },
+      };
+    }
     const columns = columnOrder.map((status): StatusColumn => {
       const items = roots.filter((item) => item.task.status === status);
       if (status === "done") {
@@ -254,18 +361,12 @@ export function createReadProjectBoard(deps: {
           earlier: earlier.map(cardOf),
         };
       }
-      const cards = items.map(cardOf);
-      // Stable: ties keep note order.
-      if (compare) cards.sort(compare);
+      const cards = sorted(items);
       return { status, count: cards.length, cards, earlier: [] };
     });
     return {
       kind: "project",
-      project: projectNode(
-        projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
-        scoped.project,
-        [],
-      ),
+      project,
       board: { grouping: "status", columns },
     };
   };
