@@ -36,7 +36,7 @@ import type { TaskRepository } from "../ports/task-repository";
 import {
   type ProjectNodeContext,
   projectNode,
-  summarizeProjects,
+  projectNodeContext,
 } from "./project-nodes";
 
 /**
@@ -796,12 +796,11 @@ export function createReadAllTasks(deps: {
       tree: buildTaskTree(snapshot),
       graph,
       keep: options.keep,
-      projects: {
-        summaries: summarizeProjects(snapshot, graph),
+      projects: projectNodeContext(snapshot, graph, {
         today,
-        startsBy: addDays(today, previewDays),
+        previewDays,
         boundary,
-      },
+      }),
       scope: null,
     };
     const scoped =

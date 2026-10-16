@@ -18,18 +18,14 @@ import { isDueForReview, reviewDueDay } from "../../domain/review/review";
 import { rankByScore } from "../../domain/scoring/score";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
-import {
-  addDays,
-  compareDays,
-  daysBetween,
-} from "../../domain/time/calendar-days";
+import { compareDays, daysBetween } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { LastFullReviewStore } from "../ports/last-full-review";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
-import { projectNode, summarizeProjects } from "./project-nodes";
+import { projectNodeContext, projectNodesInNoteOrder } from "./project-nodes";
 import type { ProjectNode } from "./read-all-tasks";
 import { groupProjects, type ProjectGroup } from "./read-project-list";
 
@@ -379,19 +375,16 @@ export function createReadReview(deps: {
         return { read: { kind: "paused" }, nodes: [] };
       const kept: ReadonlySet<ProjectId> =
         keep?.step === "projects" ? keep.projects : new Set();
-      const context = {
-        summaries: summarizeProjects(snapshot, graph),
+      const context = projectNodeContext(snapshot, graph, {
         today,
-        startsBy: addDays(today, deps.startPreviewDays.current()),
+        previewDays: deps.startPreviewDays.current(),
         boundary,
-      };
+      });
       const belongs = (node: ProjectNode) =>
         node.project.status !== "done" || node.unfinished > 0;
       // Only projects in the snapshot: a block that is no longer a project
       // is not listed, kept or not.
-      const nodes = [...(snapshot.projects ?? [])]
-        .sort((a, b) => a.position - b.position)
-        .map(({ project }) => projectNode(context, project, []))
+      const nodes = projectNodesInNoteOrder(context, snapshot)
         .filter((node) => belongs(node) || kept.has(node.project.id))
         .map(
           (node): ProjectNode =>

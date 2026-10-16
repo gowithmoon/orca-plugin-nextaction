@@ -8,13 +8,12 @@ import {
 } from "../../domain/project/project";
 import { projectScore } from "../../domain/scoring/score";
 import type { CalendarDate } from "../../domain/task/task";
-import { addDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
 import type { TaskRepository } from "../ports/task-repository";
-import { projectNode, summarizeProjects } from "./project-nodes";
+import { projectNodeContext, projectNodesInNoteOrder } from "./project-nodes";
 import type { ProjectNode } from "./read-all-tasks";
 
 /** The projects of one project status. */
@@ -52,15 +51,10 @@ export function createReadProjectList(deps: {
     const today = logicalDay(deps.clock.now(), boundary);
     const previewDays = deps.startPreviewDays.current();
     const graph = analyzeTaskGraph(snapshot, { today, previewDays });
-    const context = {
-      summaries: summarizeProjects(snapshot, graph),
-      today,
-      startsBy: addDays(today, previewDays),
-      boundary,
-    };
-    const nodes = [...(snapshot.projects ?? [])]
-      .sort((a, b) => a.position - b.position)
-      .map(({ project }) => projectNode(context, project, []));
+    const nodes = projectNodesInNoteOrder(
+      projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
+      snapshot,
+    );
     return { kind: "projects", groups: groupProjects(nodes, today) };
   };
 }
