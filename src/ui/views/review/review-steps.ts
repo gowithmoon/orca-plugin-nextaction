@@ -143,6 +143,8 @@ const stepDisplays: Readonly<
       empty: () => t("No waiting tasks"),
     },
   },
+  // Not built yet: its own page of project rows (#161).
+  projects: { label: () => t("Projects") },
   someday: {
     label: () => t("Someday"),
     list: {
