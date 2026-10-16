@@ -67,3 +67,45 @@ export function scrollNearEdge(
   }
   return false;
 }
+
+/**
+ * As `scrollAmount`, sideways: how far to scroll `scroller` this frame with
+ * the pointer near its left or right edge (the project board, #168).
+ */
+export function scrollAmountX(
+  scroller: HTMLElement,
+  x: number,
+  y: number,
+): number {
+  const box = scroller.getBoundingClientRect();
+  if (y < box.top || y > box.bottom) return 0;
+  const right = scroller.scrollWidth - scroller.clientWidth;
+  if (x >= box.left && x < box.left + scrollEdge && scroller.scrollLeft > 0) {
+    return -Math.ceil(((box.left + scrollEdge - x) / scrollEdge) * scrollStep);
+  }
+  if (
+    x <= box.right &&
+    x > box.right - scrollEdge &&
+    scroller.scrollLeft < right
+  ) {
+    return Math.ceil(
+      ((x - (box.right - scrollEdge)) / scrollEdge) * scrollStep,
+    );
+  }
+  return 0;
+}
+
+/** As `scrollNearEdge`, sideways, near the left and right edges. */
+export function scrollNearSideEdge(
+  scrollers: readonly HTMLElement[],
+  x: number,
+  y: number,
+): boolean {
+  for (const scroller of scrollers) {
+    const by = scrollAmountX(scroller, x, y);
+    if (by === 0) continue;
+    scroller.scrollLeft += by;
+    return true;
+  }
+  return false;
+}

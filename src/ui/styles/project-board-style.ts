@@ -52,6 +52,19 @@ export const projectBoardCss = `
 
 /* About 260px; in a narrow view about 85% of its width, the next column's
    edge showing. */
+/* Dragging a card or a row (#168): no snapping while the board scrolls by
+   itself near its edges; back on letting go. */
+.nextaction-board[data-nextaction-board-dragging] {
+  scroll-snap-type: none;
+}
+
+/* The column, or the done column's strip, a drop would change the status to. */
+.nextaction-board-column[data-drop-over],
+.nextaction-board-strip[data-drop-over] {
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 10%, var(--orca-color-bg-2));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--orca-color-primary-5) 60%, transparent);
+}
+
 .nextaction-board-column {
   flex: 0 0 min(260px, calc(100cqw * 0.85));
   display: flex;

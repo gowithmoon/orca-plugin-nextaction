@@ -4,8 +4,9 @@
 // scrolls up and down on its own. The done column is collapsed to a narrow
 // strip by default; open, its earlier cards open apart. Cards keep their
 // actions: a click opens the task panel, the status icon the status menu,
-// a right-click the task menu, and a card drags into the notes. No drag
-// within the board yet (#168). A next action has a small dot at its status
+// a right-click the task menu, and a card or an expanded subtask row drags
+// into the notes, or into another column to change its status (#168,
+// board-drag.ts). A next action has a small dot at its status
 // icon's top right. A card with subtasks says "Subtasks done/total" (direct
 // subtasks only), with how many of its descendant tasks are doing or next
 // actions while collapsed; expanded, it lists every descendant task as a
@@ -18,7 +19,7 @@ import type {
   ProjectBoard,
   StatusColumn,
 } from "../../../application/usecases/read-project-board";
-import type { CalendarDate } from "../../../domain/task/task";
+import type { CalendarDate, Task } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
 import { ContextMenu } from "../../components/popup-controls";
@@ -30,7 +31,27 @@ import type { TaskActions } from "../../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { TaskMenu } from "../../task-menu/task-menu";
 import type { DoneSectionStore } from "../all-tasks/done-section-store";
+import {
+  type BoardDrag,
+  boardColumnAttribute,
+  boardTaskAttribute,
+  createBoardDrag,
+} from "./board-drag";
 import type { ExpandedCardsStore } from "./project-board-stores";
+
+/** The board's drag (#168), for its cards and rows. */
+const BoardDragContext = React.createContext<BoardDrag | undefined>(undefined);
+
+/** A card's or a row's drag: into the notes, or into another column. */
+function useBoardCardDrag(task: Task): React.HTMLAttributes<HTMLElement> {
+  const drag = React.useContext(BoardDragContext);
+  // The same target while the task is the same.
+  const inPanel = React.useMemo(() => drag?.target(task), [drag, task]);
+  return {
+    ...useCardDrag(task, inPanel ? { inPanel } : {}),
+    [boardTaskAttribute]: task.id,
+  } as React.HTMLAttributes<HTMLElement>;
+}
 
 /** What the board's cards need. */
 export interface BoardCards {
@@ -49,8 +70,10 @@ function Row(props: { row: BoardRow; cards: BoardCards }) {
   const { row, cards } = props;
   const text = shownText(row.task);
   const selected = row.task.id === cards.selectedTaskId;
+  const drag = useBoardCardDrag(row.task);
   const item = (onContextMenu?: (event: React.MouseEvent) => void) => (
     <li
+      {...drag}
       className="nextaction-board-row"
       style={{ "--nextaction-row-depth": row.depth } as React.CSSProperties}
       data-done={row.task.status === "done" || undefined}
@@ -178,7 +201,7 @@ function Card(props: { card: BoardCard; cards: BoardCards }) {
     cards.expanded.current().has(card.task.id),
   );
   return (
-    <div className="nextaction-board-card" {...useCardDrag(card.task)}>
+    <div className="nextaction-board-card" {...useBoardCardDrag(card.task)}>
       <TaskCard
         task={card.task}
         today={cards.today}
@@ -223,6 +246,7 @@ function Column(props: { column: StatusColumn; cards: BoardCards }) {
     <section
       className="nextaction-board-column"
       aria-label={statusLabel(column.status)}
+      {...{ [boardColumnAttribute]: column.status }}
     >
       <ColumnHead column={column} />
       <div className="nextaction-board-column-body">
@@ -257,6 +281,7 @@ function DoneColumn(props: {
         aria-label={t("Expand ${column}", { column: label })}
         title={t("Expand ${column}", { column: label })}
         onClick={() => store.set({ ...state, expanded: true })}
+        {...{ [boardColumnAttribute]: column.status }}
       >
         <StatusIcon status={column.status} />
         <span className="nextaction-board-strip-label">{label}</span>
@@ -266,7 +291,11 @@ function DoneColumn(props: {
   }
   const collapse = t("Collapse ${column}", { column: label });
   return (
-    <section className="nextaction-board-column" aria-label={label}>
+    <section
+      className="nextaction-board-column"
+      aria-label={label}
+      {...{ [boardColumnAttribute]: column.status }}
+    >
       <ColumnHead column={column}>
         <span className="nextaction-board-column-spacer" />
         <Tooltip text={collapse}>
@@ -327,21 +356,33 @@ export function ProjectBoardColumns(props: {
   doneColumn: DoneSectionStore;
 }) {
   const { board, cards } = props;
+  const root = React.useRef<HTMLElement>(null);
+  const changeStatus = React.useRef(cards.actions.changeStatus);
+  changeStatus.current = cards.actions.changeStatus;
+  // The same through the board's life: a card's drag keeps its target.
+  const [drag] = React.useState(() =>
+    createBoardDrag(() => ({
+      root: root.current,
+      changeStatus: (task, status) => changeStatus.current(task, status),
+    })),
+  );
   return (
-    <section className="nextaction-board" aria-label={t("Board")}>
-      {board.columns.map((column) =>
-        column.status === "done" ? (
-          <DoneColumn
-            key={column.status}
-            column={column}
-            cards={cards}
-            store={props.doneColumn}
-          />
-        ) : (
-          <Column key={column.status} column={column} cards={cards} />
-        ),
-      )}
-    </section>
+    <BoardDragContext.Provider value={drag}>
+      <section ref={root} className="nextaction-board" aria-label={t("Board")}>
+        {board.columns.map((column) =>
+          column.status === "done" ? (
+            <DoneColumn
+              key={column.status}
+              column={column}
+              cards={cards}
+              store={props.doneColumn}
+            />
+          ) : (
+            <Column key={column.status} column={column} cards={cards} />
+          ),
+        )}
+      </section>
+    </BoardDragContext.Provider>
   );
 }
 
