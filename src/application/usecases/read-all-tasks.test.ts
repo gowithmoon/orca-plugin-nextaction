@@ -1686,3 +1686,67 @@ describe("read all tasks: project rows filtered and searched", () => {
     expect(read.matchCount).toBe(0);
   });
 });
+
+describe("read all tasks: project scope", () => {
+  it("brings the project, its progress, whether it lacks a next action and how many tasks are not done", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, text: "Move house", status: "active" });
+    repository.addTask({ id: 2, status: "done", effort: 2 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "inbox", effort: 6 }, { parentId: 1 });
+    // Set to project 1 from a journal: it belongs to it too.
+    repository.addTask({ id: 4, status: "inbox", effort: 4 }, { project: [1] });
+    // Under project 1's block, but set to project 5: not project 1's.
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask(
+      { id: 6, status: "todo", effort: 3 },
+      { parentId: 1, project: [5] },
+    );
+
+    const read = await readAllTasks({ project: 1 });
+
+    if (read.kind !== "project") throw new Error(read.kind);
+    expect(read.project.project.text).toBe("Move house");
+    expect(read.project.progress).toEqual({
+      kind: "measured",
+      done: 2,
+      total: 12,
+    });
+    expect(read.project.noNextAction).toBe(true);
+    expect(read.project.unfinished).toBe(2);
+    expect(read.project.taskCount).toBe(3);
+  });
+
+  it("reads no project for a block that is not a project", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addBlock(2);
+
+    expect(await readAllTasks({ project: 1 })).toEqual({ kind: "noProject" });
+    expect(await readAllTasks({ project: 2 })).toEqual({ kind: "noProject" });
+    expect(await readAllTasks({ project: 3 })).toEqual({ kind: "noProject" });
+  });
+
+  it("reads no project while the project tag is paused", async () => {
+    const { repository, readAllTasks } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.pauseProjectTag(true);
+
+    expect(await readAllTasks({ project: 1 })).toEqual({ kind: "noProject" });
+  });
+
+  it("brings a project's numbers the same as its project row in the unscoped read", async () => {
+    const { repository, readAllTasks } = setup();
+    const day = (d: number) => ({ year: 2026, month: 10, day: d });
+    repository.addProject({ id: 1, status: "active", start: day(20) });
+    repository.addTask({ id: 2, status: "done", effort: 1 }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo", effort: 3 }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "someday" }, { project: [1] });
+
+    const scoped = await readAllTasks({ project: 1 });
+    const row = projectNode(await readAllTasks(), 1);
+
+    if (scoped.kind !== "project") throw new Error(scoped.kind);
+    expect(scoped.project).toEqual({ ...row, children: [] });
+    expect(scoped.project.notStarted).toBe(true);
+  });
+});

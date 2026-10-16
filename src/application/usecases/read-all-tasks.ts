@@ -226,10 +226,39 @@ export interface ReadAllTasksOptions {
  */
 export const doneSectionDays = 30;
 
-/** Reads all tasks. Errors are thrown as they are. */
-export type ReadAllTasks = (
-  options?: ReadAllTasksOptions,
-) => Promise<AllTasksRead>;
+/**
+ * Read with a project scope (`ReadAllTasksScopedOptions`), for the project
+ * details (GLOSSARY: 项目视图):
+ * - `project`: the project itself, as its project row would show it (progress,
+ *   whether it lacks a next action, how many tasks are not done), for the
+ *   attribute area. The tree of its tasks and their done section join it
+ *   later (#157), under the names `AllTasksRead` uses.
+ * - `noProject`: the block is not a project, or the project tag is paused
+ *   (#143): there is no such project to show.
+ */
+export type ProjectScopeRead =
+  | {
+      readonly kind: "project";
+      /** Without children. */
+      readonly project: ProjectNode;
+    }
+  | { readonly kind: "noProject" };
+
+export interface ReadAllTasksScopedOptions extends ReadAllTasksOptions {
+  /** Only what belongs to this project (GLOSSARY: 所属项目). */
+  readonly project: ProjectId;
+}
+
+/**
+ * Reads all tasks, or with `project` only that project's. Errors are thrown
+ * as they are.
+ */
+export interface ReadAllTasks {
+  (options?: ReadAllTasksOptions & { readonly project?: undefined }): Promise<
+    AllTasksRead
+  >;
+  (options: ReadAllTasksScopedOptions): Promise<ProjectScopeRead>;
+}
 
 function marksBlocked(entry: TaskGraphEntry | undefined): boolean {
   if (!entry) return false;
@@ -734,7 +763,15 @@ export function createReadAllTasks(deps: {
   dayBoundary: DayBoundarySetting;
   startPreviewDays: StartPreviewDaysSetting;
 }): ReadAllTasks {
-  return async (options = {}) => {
+  function readAllTasks(
+    options?: ReadAllTasksOptions & { readonly project?: undefined },
+  ): Promise<AllTasksRead>;
+  function readAllTasks(
+    options: ReadAllTasksScopedOptions,
+  ): Promise<ProjectScopeRead>;
+  async function readAllTasks(
+    options: ReadAllTasksOptions & { readonly project?: ProjectId } = {},
+  ): Promise<AllTasksRead | ProjectScopeRead> {
     const snapshot = await deps.repository.readTaskGraph();
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const previewDays = deps.startPreviewDays.current();
@@ -746,6 +783,16 @@ export function createReadAllTasks(deps: {
       projects: summarizeProjects(snapshot, graph),
       startsBy: addDays(today, previewDays),
     };
+    if (options.project !== undefined) {
+      const scoped = (snapshot.projects ?? []).find(
+        (item) => item.project.id === options.project,
+      );
+      if (!scoped) return { kind: "noProject" };
+      return {
+        kind: "project",
+        project: projectNode(context, scoped.project, []),
+      };
+    }
     const narrow = narrowing(options);
     const { tree, matchCount, done } = narrowedTree(context, narrow);
     const sortedOf = (node: AllTasksNode): Sorted => {
@@ -775,5 +822,6 @@ export function createReadAllTasks(deps: {
     // Showing earlier items or searching lifts the done section's range.
     const everyDay = options.showEarlierDone === true || searches(narrow);
     return { tree, matchCount, done: doneSection(done, today, everyDay) };
-  };
+  }
+  return readAllTasks;
 }
