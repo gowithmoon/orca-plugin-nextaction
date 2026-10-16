@@ -83,15 +83,14 @@ export function movesOntoSelfOrBelow(
 }
 
 /**
- * Block `id` (a task's or a project's) sits below project block `project`,
- * going up by parent tasks and nearest project blocks: between them they
- * reach every task and project above it.
+ * Whether block `id` (a task's or a project's) sits below project block
+ * `project`, going up by parent tasks and nearest project blocks: between
+ * them they reach every task and project above it. The snapshot's lookups
+ * are built once, for many calls.
  */
-function isBelowProjectBlock(
+function belowProjectBlock(
   snapshot: TaskGraphSnapshot,
-  id: number,
-  project: ProjectId,
-): boolean {
+): (id: number, project: ProjectId) => boolean {
   const tasks = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
   const projects = new Map(
     (snapshot.projects ?? []).map((entry) => [entry.project.id, entry]),
@@ -107,15 +106,17 @@ function isBelowProjectBlock(
       entry?.projectBlock,
     ].filter((next): next is number => next !== null && next !== undefined);
   };
-  const seen = new Set<number>([id]);
-  const pending = above(id);
-  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    if (next === project) return true;
-    if (seen.has(next)) continue;
-    seen.add(next);
-    pending.push(...above(next));
-  }
-  return false;
+  return (id, project) => {
+    const seen = new Set<number>([id]);
+    const pending = above(id);
+    for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+      if (next === project) return true;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      pending.push(...above(next));
+    }
+    return false;
+  };
 }
 
 /** Where a move puts the moved task among the other tasks (`rest`). */
@@ -182,10 +183,10 @@ function landingAtProjectEnd(
   // The tasks below the block come right after it (document preorder).
   let insertAt = rest.findIndex((item) => item.position > project.position);
   if (insertAt === -1) insertAt = rest.length;
+  const isBelowProjectBlock = belowProjectBlock(snapshot);
   while (
     insertAt < rest.length &&
     isBelowProjectBlock(
-      snapshot,
       (rest[insertAt] as SnapshotTask).task.id,
       move.projectEnd,
     )
