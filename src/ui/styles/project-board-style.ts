@@ -78,6 +78,34 @@ export const projectBoardCss = `
   border-radius: var(--orca-radius-sm);
 }
 
+/* "As root task" (#170): a dashed drop at the right end, only while a task
+   that is not a project root task is dragged. */
+.nextaction-board-project-end {
+  display: none;
+  flex: 0 0 116px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--orca-spacing-md);
+  border: 1.5px dashed var(--orca-color-border);
+  border-radius: var(--orca-radius-md);
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-xs);
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.nextaction-board[data-nextaction-board-dragging-subtask] .nextaction-board-project-end {
+  display: flex;
+}
+
+.nextaction-board-project-end[data-drop-over] {
+  border-color: var(--orca-color-primary-5);
+  color: var(--orca-color-primary-5);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 8%, transparent);
+}
+
 .nextaction-board-column {
   flex: 0 0 min(260px, calc(100cqw * 0.85));
   display: flex;

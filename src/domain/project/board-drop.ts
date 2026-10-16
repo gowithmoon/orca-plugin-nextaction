@@ -11,7 +11,9 @@ import type { TaskId, TaskStatus } from "../task/task";
 /** The single write a board drop makes. */
 export type BoardDrop =
   | { readonly kind: "status"; readonly status: TaskStatus }
-  | { readonly kind: "lastChild"; readonly target: TaskId };
+  | { readonly kind: "lastChild"; readonly target: TaskId }
+  /** To the end of the project block, a project root task (#170). */
+  | { readonly kind: "projectEnd" };
 
 /**
  * A task with status `current` dropped in the column of status `column`:
@@ -30,6 +32,11 @@ export interface BoardDropPoint {
   readonly task?: TaskId;
   /** The status of the column it is in, if any. */
   readonly column?: TaskStatus;
+  /**
+   * On the "As root task" drop (#170), shown only while a task that is not
+   * a project root task is dragged.
+   */
+  readonly projectEnd?: boolean;
 }
 
 /**
@@ -41,6 +48,7 @@ export function boardDrop(
   point: BoardDropPoint,
   parentOf: (id: TaskId) => TaskId | null,
 ): BoardDrop | null {
+  if (point.projectEnd) return { kind: "projectEnd" };
   if (
     point.task !== undefined &&
     takesSubtask(dragged.id, point.task, parentOf)

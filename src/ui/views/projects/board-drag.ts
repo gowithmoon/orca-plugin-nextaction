@@ -3,7 +3,10 @@
 // status (#168), no block moves, so a subtask stays in its card; dropped on
 // another card or row, it becomes that task's last subtask, its status
 // unchanged (#169), with the tree's lastChild move and its crossing
-// confirmation (`onMove`). What a point takes is domain/project/board-drop.ts:
+// confirmation (`onMove`). While a subtask row (not a card: a card is a
+// project root task) is dragged, an "As root task" drop shows at the right
+// end; dropped there, it moves to the end of the project block (#170), its
+// status unchanged, with the same confirmation. What a point takes is domain/project/board-drop.ts:
 // on itself, one of its descendant tasks or its parent task a card or a row
 // falls back to its column; the task's own column is no drop. The column, or
 // the card or row, the pointer is over is highlighted while it would take
@@ -19,6 +22,7 @@
 // the DOM directly. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type { TaskMove } from "../../../domain/blocking/task-move";
 import { type BoardDrop, boardDrop } from "../../../domain/project/board-drop";
+import type { ProjectId } from "../../../domain/project/project";
 import {
   type Task,
   type TaskId,
@@ -33,8 +37,17 @@ export const boardColumnAttribute = "data-nextaction-board-drop-status";
 export const boardTaskAttribute = "data-nextaction-board-drop-task";
 /** Set on the column the pointer is over while it would take the drop. */
 const overAttribute = "data-drop-over";
+/** Marks the "As root task" drop (#170). */
+export const boardProjectEndAttribute =
+  "data-nextaction-board-drop-project-end";
 /** Set on the board while dragging: no scroll snapping. */
 const draggingAttribute = "data-nextaction-board-dragging";
+/**
+ * Set on the board while a task that is not a project root task is dragged:
+ * the "As root task" drop shows (#170).
+ */
+export const draggingSubtaskAttribute =
+  "data-nextaction-board-dragging-subtask";
 /** What scrolls up and down in a column. */
 const columnBodyClass = "nextaction-board-column-body";
 
@@ -53,6 +66,13 @@ export interface BoardDragSetup {
   readonly changeStatus: (task: Task, status: TaskStatus) => void;
   /** A task's parent task, as the board shows it (`null`: none, or not on it). */
   readonly parentOf: (id: TaskId) => TaskId | null;
+  /**
+   * Task `id` may go to the end of the project block: it is not a card (a
+   * project root task), and there is no filter or search (#170).
+   */
+  readonly takesProjectEnd: (id: TaskId) => boolean;
+  /** The project whose block "As root task" moves a task to the end of. */
+  readonly project: ProjectId;
   /** Moves a task, asking first when it crosses the project block's boundary. */
   readonly move: (move: TaskMove, at: { x: number; y: number }) => void;
 }
@@ -74,6 +94,7 @@ function dropAt(
   if (!element || !root.contains(element)) return null;
   const within = (found: Element | null) =>
     found && root.contains(found) ? found : null;
+  const onProjectEnd = within(element.closest(`[${boardProjectEndAttribute}]`));
   const onTask = within(element.closest(`[${boardTaskAttribute}]`));
   const column = within(element.closest(`[${boardColumnAttribute}]`));
   const id = Number(onTask?.getAttribute(boardTaskAttribute));
@@ -83,11 +104,17 @@ function dropAt(
     {
       ...(onTask && Number.isInteger(id) ? { task: id } : {}),
       ...(isStatus(status) ? { column: status } : {}),
+      ...(onProjectEnd ? { projectEnd: true } : {}),
     },
     parentOf,
   );
   if (!drop) return null;
-  const highlight = drop.kind === "lastChild" ? onTask : column;
+  const highlight =
+    drop.kind === "lastChild"
+      ? onTask
+      : drop.kind === "projectEnd"
+        ? onProjectEnd
+        : column;
   return highlight ? { drop, highlight } : null;
 }
 
@@ -107,19 +134,25 @@ export function createBoardDrag(setup: () => BoardDragSetup): BoardDrag {
   return {
     target: (task) => ({
       begin() {
-        setup().root?.setAttribute(draggingAttribute, "");
+        const { root, takesProjectEnd } = setup();
+        root?.setAttribute(draggingAttribute, "");
+        if (takesProjectEnd(task.id)) {
+          root?.setAttribute(draggingSubtaskAttribute, "");
+        }
       },
       move(x, y) {
         const { root, parentOf } = setup();
         highlight(root ? dropAt(root, task, parentOf, x, y) : null);
       },
       drop(x, y) {
-        const { root, changeStatus, parentOf, move } = setup();
+        const { root, changeStatus, parentOf, move, project } = setup();
         const at = root ? dropAt(root, task, parentOf, x, y) : null;
         if (!at) return false;
         // One drop, one write.
         if (at.drop.kind === "status") changeStatus(task, at.drop.status);
-        else {
+        else if (at.drop.kind === "projectEnd") {
+          move({ id: task.id, projectEnd: project }, { x, y });
+        } else {
           move(
             { id: task.id, target: at.drop.target, placement: "lastChild" },
             { x, y },
@@ -130,6 +163,7 @@ export function createBoardDrag(setup: () => BoardDragSetup): BoardDrag {
       end() {
         highlight(null);
         setup().root?.removeAttribute(draggingAttribute);
+        setup().root?.removeAttribute(draggingSubtaskAttribute);
       },
       scrollers() {
         const root = setup().root;

@@ -199,6 +199,106 @@ describe("move task", () => {
     expect(repository.writeCount()).toBe(0);
   });
 
+  describe("to the end of a project block (#170)", () => {
+    it("moves a task written outside the project block to its last child block, in one write", async () => {
+      const repository = createInMemoryTaskRepository();
+      repository.addProject({ id: 10, text: "Move house" });
+      repository.addTask({ id: 1, text: "Pack" }, { parentId: 10 });
+      repository.addTask({ id: 2, text: "Unpack" }, { parentId: 1 });
+      repository.addBlock(20, { text: "Journal" });
+      repository.addTask({ id: 3, text: "Book a van" }, { parentId: 20 });
+      const moveTask = createMoveTask({ repository });
+
+      await moveTask({ id: 3, projectEnd: 10 });
+
+      expect(repository.moves()).toEqual([{ id: 3, projectEnd: 10 }]);
+      expect(repository.writeCount()).toBe(1);
+      const { tasks } = await repository.readTaskGraph();
+      const placeOf = (id: number) =>
+        tasks.find((item) => item.task.id === id) as (typeof tasks)[number];
+      expect(placeOf(3)).toMatchObject({ parentId: null, projectBlock: 10 });
+      // After Pack and its subtask Unpack.
+      expect(placeOf(3).position).toBeGreaterThan(placeOf(2).position);
+    });
+
+    it("writes nothing for a task already last among the project block's child blocks", async () => {
+      const repository = createInMemoryTaskRepository();
+      repository.addProject({ id: 10, text: "Move house" });
+      repository.addTask({ id: 1, text: "Pack" }, { parentId: 10 });
+      repository.addTask({ id: 2, text: "Unpack" }, { parentId: 1 });
+      repository.addTask({ id: 3, text: "Book a van" }, { parentId: 10 });
+      const moveTask = createMoveTask({ repository });
+
+      await moveTask({ id: 3, projectEnd: 10 });
+
+      expect(repository.moves()).toEqual([]);
+      expect(repository.writeCount()).toBe(0);
+    });
+
+    it("promotes a subtask below the project block to a project root task, last in the block", async () => {
+      const repository = createInMemoryTaskRepository();
+      repository.addProject({ id: 10, text: "Move house" }, { page: true });
+      repository.addTask({ id: 1, text: "Pack" }, { parentId: 10 });
+      repository.addTask({ id: 2, text: "Wrap the plates" }, { parentId: 1 });
+      repository.addTask({ id: 3, text: "Book a van" }, { parentId: 10 });
+      const moveTask = createMoveTask({ repository });
+
+      await moveTask({ id: 2, projectEnd: 10 });
+
+      expect(repository.moves()).toEqual([{ id: 2, projectEnd: 10 }]);
+      const { tasks } = await repository.readTaskGraph();
+      const order = [...tasks]
+        .sort((a, b) => a.position - b.position)
+        .map((item) => [item.task.text, item.parentId, item.projectBlock]);
+      expect(order).toEqual([
+        ["Pack", null, 10],
+        ["Book a van", null, 10],
+        ["Wrap the plates", null, 10],
+      ]);
+    });
+
+    it("refuses to move a task to the end of a project block that sits below it, writing nothing", async () => {
+      const repository = createInMemoryTaskRepository();
+      repository.addTask({ id: 1, text: "Life admin" });
+      // A project block below a task (ADR 0025).
+      repository.addProject({ id: 10, text: "Move house" }, { parentId: 1 });
+      repository.addTask({ id: 2, text: "Pack" }, { parentId: 10 });
+      // A block both a task and a project.
+      repository.addTask({ id: 11, text: "Garden" });
+      repository.addProject({ id: 11 });
+      const moveTask = createMoveTask({ repository });
+
+      for (const move of [
+        { id: 1, projectEnd: 10 },
+        { id: 11, projectEnd: 11 },
+      ]) {
+        const refused = moveTask(move);
+        await expect(refused).rejects.toBeInstanceOf(MoveRefusedError);
+        await expect(refused).rejects.toMatchObject({
+          reason: "onto-self-or-below",
+        });
+      }
+      expect(repository.writeCount()).toBe(0);
+    });
+
+    it("refuses a move to the end of a project block below a task when that would make a dependency cycle", async () => {
+      const repository = createInMemoryTaskRepository();
+      // Move house waits for Book a van; the project block sits below it.
+      repository.addTask({ id: 1, text: "Move house", dependencies: [3] });
+      repository.addProject({ id: 10, text: "Boxes" }, { parentId: 1 });
+      repository.addTask({ id: 3, text: "Book a van" });
+      const moveTask = createMoveTask({ repository });
+
+      const refused = moveTask({ id: 3, projectEnd: 10 });
+
+      await expect(refused).rejects.toBeInstanceOf(DependencyCycleError);
+      await expect(refused).rejects.toMatchObject({
+        cycle: { kind: "move", moved: { id: 3 }, cycleWith: { id: 1 } },
+      });
+      expect(repository.writeCount()).toBe(0);
+    });
+  });
+
   it("fails as the repository fails, having refused nothing", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 1 });

@@ -69,6 +69,61 @@ describe("read whether a move crosses the project block (#157)", () => {
     ).toBeNull();
   });
 
+  describe("to the end of the project block (#170)", () => {
+    it("a task written outside a page project's block, set to it, moves in", async () => {
+      const { repository, readMoveCrossing } = setup();
+      repository.addProject(moveHouse, { page: true });
+      repository.addTask({ id: 1, text: "Pack" }, { parentId: 10 });
+      repository.addBlock(20, { text: "Journal" });
+      repository.addTask(
+        { id: 3, text: "Book a van" },
+        { parentId: 20, project: [10] },
+      );
+
+      expect(await readMoveCrossing({ id: 3, projectEnd: 10 }, 10)).toEqual({
+        kind: "moveIn",
+        task: "Book a van",
+        project: "Move house",
+      });
+    });
+
+    it("a subtask below a block project, promoted to a project root task, asks nothing", async () => {
+      const { repository, readMoveCrossing } = setup();
+      repository.addBlock(20, { text: "Journal" });
+      repository.addProject(moveHouse, { parentId: 20 });
+      repository.addTask({ id: 1, text: "Pack" }, { parentId: 10 });
+      repository.addTask({ id: 2, text: "Wrap the plates" }, { parentId: 1 });
+
+      expect(await readMoveCrossing({ id: 2, projectEnd: 10 }, 10)).toBeNull();
+    });
+
+    it("to a project block below a task set to another project, it names that project (ADR 0025)", async () => {
+      const { repository, readMoveCrossing } = setup();
+      repository.addProject(trip);
+      repository.addTask({ id: 1, text: "Life admin" }, { project: [11] });
+      // Project 10's block sits below task 1.
+      repository.addProject(moveHouse, { parentId: 1 });
+      repository.addTask({ id: 3, text: "Pack" }, { project: [10] });
+      repository.addTask({ id: 4, text: "Wrap the plates" }, { parentId: 3 });
+
+      expect(await readMoveCrossing({ id: 4, projectEnd: 10 }, 10)).toEqual({
+        kind: "otherProject",
+        task: "Wrap the plates",
+        project: "Move house",
+        otherProject: "Year-end trip",
+      });
+    });
+
+    it("a task already last in the project block asks nothing", async () => {
+      const { repository, readMoveCrossing } = setup();
+      repository.addProject(moveHouse);
+      repository.addTask({ id: 1, text: "Pack" }, { parentId: 10 });
+
+      expect(await readMoveCrossing({ id: 1, projectEnd: 10 }, 10)).toBeNull();
+      expect(repository.writeCount()).toBe(0);
+    });
+  });
+
   it("a crossing move the move would refuse asks nothing", async () => {
     const { repository, readMoveCrossing } = setup();
     repository.addProject(moveHouse);

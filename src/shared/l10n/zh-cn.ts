@@ -620,6 +620,7 @@ const zhCN: Record<string, string> = {
   // The board's cards (#167).
   "Next action": "下一步行动",
   "Subtasks ${done}/${total}": "子任务 ${done}/${total}",
+  "As root task": "作为根任务",
   "Expand subtasks": "展开子任务",
   "Collapse subtasks": "折叠子任务",
   "Doing ${count}": "进行中 ${count}",

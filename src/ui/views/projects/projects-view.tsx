@@ -416,6 +416,10 @@ function DetailsBoard(props: {
       <CardDragArea onNoteDrop={linkTaskInNote}>
         <ProjectBoardColumns
           board={read.board}
+          project={project}
+          // The board reads no filter or search yet (#172 adds them; it then
+          // passes whether one is set, hiding "As root task").
+          filtering={false}
           doneColumn={stores.doneColumn}
           onMove={onMove}
           cards={{
