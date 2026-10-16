@@ -624,7 +624,8 @@ export const componentCss = `
 }
 
 @media (hover: hover) {
-  .nextaction-project-row:not(:hover, :focus-within) .nextaction-task-card-open {
+  .nextaction-project-row:not(:hover, :focus-within)
+    :is(.nextaction-task-card-open, .nextaction-task-card-extra) {
     opacity: 0;
   }
 }

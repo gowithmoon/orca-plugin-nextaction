@@ -128,6 +128,8 @@ export function ProjectGroupPart(props: {
   menuItems: ProjectMenuItems | undefined;
   /** Opens the project details of project `id`. */
   onOpen: (id: ProjectId) => void;
+  /** Each row's action button (the review's "Create task", #162). */
+  action?: (id: ProjectId) => React.ReactNode;
 }) {
   const { group, collapsed } = props;
   return (
@@ -163,6 +165,7 @@ export function ProjectGroupPart(props: {
                 onOpenInNotes={() =>
                   props.actions.openBlockInNotes(node.project.id)
                 }
+                action={props.action?.(node.project.id)}
               />
             </li>
           ))}

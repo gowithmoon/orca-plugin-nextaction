@@ -29,6 +29,7 @@ import { quickDueDate } from "../../../domain/review/due-steps";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
+import type { OpenQuickCapture } from "../../capture/quick-capture-popup";
 import { formatClock, formatDate, shownText } from "../../components/format";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { ContextMenu, DatePicker } from "../../components/popup-controls";
@@ -103,8 +104,11 @@ export interface ReviewViewDeps {
   editTask: EditTask;
   /** A card dropped on a block in a note panel links the task there (#127). */
   linkTaskInNote: LinkTaskInNote;
-  /** Every step's "Create task": the quick capture popup. */
-  openQuickCapture: () => void;
+  /**
+   * Every step's "Create task": the quick capture popup; the projects step's
+   * rows fill in their project (#162).
+   */
+  openQuickCapture: OpenQuickCapture;
   /** The current logical day, for dates and overdue. */
   today: () => CalendarDate;
   /** Tasks may have changed: the review is read again. */
@@ -465,6 +469,14 @@ function ProjectsStepPage(props: {
           actions={actions}
           menuItems={menuItems}
           onOpen={open}
+          // "Create task" on every row, the done group's too (#162).
+          action={(id) => (
+            <CardButton
+              label={t("Create task")}
+              icon="ti ti-plus"
+              onClick={() => deps.openQuickCapture(id)}
+            />
+          )}
         />
       ))}
     </div>
@@ -485,7 +497,7 @@ function CaptureButton(props: { onClick: () => void }) {
         variant="plain"
         className="nextaction-review-capture"
         aria-label={t("Create task")}
-        onClick={props.onClick}
+        onClick={() => props.onClick()}
       >
         <i className="ti ti-plus" aria-hidden="true" />
       </Button>
@@ -777,7 +789,7 @@ function DueForReviewPage(props: {
       <BackButton onClick={props.onBack} />
       <div className="nextaction-review-title">
         <ViewHeader title={t("Tasks due for review")} count={props.total} />
-        <CaptureButton onClick={props.deps.openQuickCapture} />
+        <CaptureButton onClick={() => props.deps.openQuickCapture()} />
       </div>
       <StepList
         query={props.query}
@@ -830,7 +842,7 @@ function FullReviewPage(props: {
       <StepBar current={page.step} opened={page.opened} onOpen={onOpen} />
       <div className="nextaction-review-title">
         <ViewHeader title={step.label()} count={total} countInEveryTier />
-        <CaptureButton onClick={deps.openQuickCapture} />
+        <CaptureButton onClick={() => deps.openQuickCapture()} />
       </div>
       {page.step === "lookBack" && (
         <LookBackHistory query={query} deps={deps} />

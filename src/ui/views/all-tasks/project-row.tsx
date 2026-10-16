@@ -6,7 +6,9 @@
 // ahead, the due date (red when overdue) and, for a done project, how many
 // tasks are not done yet. The status icon and a
 // right-click open the project menu; a click elsewhere activates it (the all
-// tasks view collapses or expands it, the project list opens it). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// tasks view collapses or expands it, the project list opens it). The review's
+// projects step adds "Create task" to the first line (#162). Verified by hand
+// in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { ProjectProgress } from "../../../domain/project/progress";
@@ -124,6 +126,11 @@ export interface ProjectRowProps {
    * of its progress.
    */
   inDone?: boolean;
+  /**
+   * One action button at the right end of the first line, before "open in
+   * notes": only the review's projects step passes one ("Create task", #162).
+   */
+  action?: React.ReactNode;
 }
 
 function ProjectMeta(props: {
@@ -232,6 +239,7 @@ export function ProjectRow(props: ProjectRowProps) {
         {shownProgress !== null && (
           <span className="nextaction-project-row-progress-value">{`${shownProgress}%`}</span>
         )}
+        {props.action}
         <Tooltip text={t("Open in notes")}>
           <button
             type="button"
