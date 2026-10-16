@@ -3,6 +3,7 @@ import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
+import { createReadAllTasks } from "./read-all-tasks";
 import {
   createReadProjectList,
   type ProjectListRead,
@@ -19,7 +20,13 @@ function setup() {
     dayBoundary: createFixedDayBoundary(),
     startPreviewDays: createFixedStartPreviewDays(),
   });
-  return { repository, readProjectList };
+  const readAllTasks = createReadAllTasks({
+    repository,
+    clock: createFixedClock(morning),
+    dayBoundary: createFixedDayBoundary(),
+    startPreviewDays: createFixedStartPreviewDays(),
+  });
+  return { repository, readProjectList, readAllTasks };
 }
 
 /** The groups as their project status and the IDs of their projects. */
@@ -89,6 +96,29 @@ describe("read project list", () => {
     const read = await readProjectList();
 
     expect(groups(read)).toEqual([["active", [3, 5, 1, 4, 2]]]);
+  });
+
+  it("orders a group as the all tasks view sorted by score orders its project rows", async () => {
+    const { repository, readProjectList, readAllTasks } = setup();
+    const day = (month: number, d: number) => ({ year: 2026, month, day: d });
+    // Scores and tasks as in the test above; a task of each project, which
+    // does not change its score, keeps the rows in the all tasks view.
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 2, status: "active", start: day(10, 29) });
+    repository.addProject({ id: 3, status: "active", due: day(10, 9) });
+    repository.addProject({ id: 4, status: "active" });
+    repository.addProject({ id: 5, status: "active", importance: 7 });
+    for (const id of [1, 2, 3, 4, 5])
+      repository.addTask({ id: id + 10, status: "todo" }, { parentId: id });
+
+    const list = await readProjectList();
+    const all = await readAllTasks({ sort: "score" });
+    const rows = all.tree.flatMap((node) =>
+      node.kind === "project" ? [node.project.id] : [],
+    );
+
+    expect(groups(list)).toEqual([["active", [3, 5, 1, 4, 2]]]);
+    expect(rows).toEqual([3, 5, 1, 4, 2]);
   });
 
   it("reads no group when there is no project", async () => {
