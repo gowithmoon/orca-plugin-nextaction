@@ -239,8 +239,12 @@ export const doneSectionDays = 30;
  * details (GLOSSARY: 项目视图):
  * - `project`: the project itself, as its project row would show it (progress,
  *   whether it lacks a next action, how many tasks are not done), for the
- *   attribute area. The tree of its tasks and their done section join it
- *   later (#157), under the names `AllTasksRead` uses.
+ *   attribute area; with it, as `AllTasksRead`, the tree of the tasks that
+ *   belong to it (#157), wherever they sit: no project rows, its tasks whose
+ *   parent task is not its as the roots, in note order, a root showing its
+ *   parent task's text and no card the project. Filter, search, sort and
+ *   the done section apply as unscoped; there a done project is no single
+ *   item, its done roots are.
  * - `noProject`: the block is not a project, or the project tag is paused
  *   (#143): there is no such project to show.
  */

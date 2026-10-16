@@ -5,7 +5,7 @@
 // a non-default importance and urgency squeezed on one line; the goal folded
 // to one line, a click showing all of it; the progress bar on the area's
 // bottom edge. The status icon opens the project menu, the name opens the
-// project block in the notes. The tree below comes with #157. Verified by
+// project block in the notes. The tree below is the projects view's (#157). Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
