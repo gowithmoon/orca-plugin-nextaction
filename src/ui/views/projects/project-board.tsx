@@ -168,34 +168,47 @@ function Subtasks(props: {
   cards: BoardCards;
   expanded: boolean;
 }) {
-  const { card, cards, expanded } = props;
+  const { card, cards } = props;
+  // Narrowed so that none of its descendant tasks is found: the counts stay,
+  // there is nothing to expand.
+  const expandable = card.rows.length > 0;
+  const expanded = expandable && props.expanded;
   const { doing, nextActions } = card.descendants;
   const summary = [
     doing > 0 ? t("Doing ${count}", { count: String(doing) }) : null,
     nextActions > 0 ? t("Next ${count}", { count: String(nextActions) }) : null,
   ].filter((part) => part !== null);
+  const counts = t("Subtasks ${done}/${total}", {
+    done: String(card.subtasks.done),
+    total: String(card.subtasks.total),
+  });
   return (
     <>
       <div className="nextaction-board-subtasks">
-        <button
-          type="button"
-          className="nextaction-board-subtasks-toggle"
-          aria-expanded={expanded}
-          aria-label={expanded ? t("Collapse subtasks") : t("Expand subtasks")}
-          onClick={(event) => {
-            event.stopPropagation();
-            cards.expanded.toggle(card.task.id);
-          }}
-        >
-          <i
-            className={expanded ? "ti ti-chevron-down" : "ti ti-chevron-right"}
-            aria-hidden="true"
-          />
-          {t("Subtasks ${done}/${total}", {
-            done: String(card.subtasks.done),
-            total: String(card.subtasks.total),
-          })}
-        </button>
+        {!expandable ? (
+          <span className="nextaction-board-subtasks-count">{counts}</span>
+        ) : (
+          <button
+            type="button"
+            className="nextaction-board-subtasks-toggle"
+            aria-expanded={expanded}
+            aria-label={
+              expanded ? t("Collapse subtasks") : t("Expand subtasks")
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              cards.expanded.toggle(card.task.id);
+            }}
+          >
+            <i
+              className={
+                expanded ? "ti ti-chevron-down" : "ti ti-chevron-right"
+              }
+              aria-hidden="true"
+            />
+            {counts}
+          </button>
+        )}
         {!expanded && summary.length > 0 && (
           <span className="nextaction-board-subtasks-summary">
             {summary.join(" · ")}
@@ -784,7 +797,7 @@ export function BoardCollapseAllButton(props: {
     expanded.current,
   );
   const ids = allCards(board)
-    .filter((card) => card.subtasks.total > 0)
+    .filter((card) => card.rows.length > 0)
     .map((card) => card.task.id);
   if (ids.length === 0) return null;
   const anyExpanded = ids.some((id) => current.has(id));

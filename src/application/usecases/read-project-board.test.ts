@@ -706,6 +706,29 @@ describe("read project board, filtered and searched (#172)", () => {
     expect(card?.descendants.doing).toBe(1);
   });
 
+  it("gives a card found by itself, none of its descendant tasks found, no rows while still counting its subtasks", async () => {
+    const { repository, readProjectBoard } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", text: "Call printer" },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "done", text: "Draft" },
+      { parentId: 2 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", text: "Budget" },
+      { parentId: 2 },
+    );
+
+    const read = await readProjectBoard({ project: 1, search: "call" });
+
+    const card = column(read, "todo").cards[0];
+    expect(card?.rows).toEqual([]);
+    expect(card?.subtasks).toEqual({ done: 1, total: 2 });
+  });
+
   it("by status lets the status filter choose only the columns, not the cards; the done column, not offered by it, goes too", async () => {
     const { repository, readProjectBoard } = setup();
     repository.addProject({ id: 1, status: "active" });
