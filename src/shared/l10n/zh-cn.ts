@@ -650,6 +650,10 @@ const zhCN: Record<string, string> = {
   "Unplaced tasks · ${count}": "待排期任务 · ${count}",
   "No dates set, or dates outside the project's time range":
     "未设置日期或日期超出项目时间范围",
+  // The gantt chart's dependencies (#182).
+  "+${days}d": "+${days}天",
+  "Depends on tasks outside the project: ${tasks}":
+    "依赖项目外的任务：${tasks}",
 };
 
 export default zhCN;

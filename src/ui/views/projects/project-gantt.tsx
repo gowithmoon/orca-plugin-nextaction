@@ -32,6 +32,10 @@ import {
   type GanttAxis,
   type GanttScale,
 } from "./gantt-axis";
+import {
+  GanttDependencyArrows,
+  GanttOutsideDependencyMark,
+} from "./gantt-dependencies";
 import type { IdSetStore } from "./project-board-stores";
 
 /** The tree column's width in the wide tier, in pixels. */
@@ -358,6 +362,7 @@ function NarrowRow(props: {
         {row.bar.kind !== "unplaced" && (
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
+        <GanttOutsideDependencyMark row={row} axis={axis} />
         <NameBesideBar row={row} axis={axis} cards={cards} />
       </div>
     </div>
@@ -421,6 +426,7 @@ function Row(props: {
         {row.bar.kind !== "unplaced" && (
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
+        <GanttOutsideDependencyMark row={row} axis={axis} />
       </div>
     </div>
   );
@@ -466,6 +472,7 @@ export function ProjectGanttChart(props: {
           <ScaleRow axis={axis} gantt={gantt} narrow={narrow} />
           <div className="nextaction-gantt-rows">
             <Lines axis={axis} gantt={gantt} left={tree} />
+            <GanttDependencyArrows rows={rows} axis={axis} left={tree} />
             {rows.map((row) =>
               narrow ? (
                 <NarrowRow
