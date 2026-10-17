@@ -45,6 +45,12 @@ import {
   GanttDependencyArrows,
   GanttOutsideDependencyMark,
 } from "./gantt-dependencies";
+import {
+  GanttUnplacedLanding,
+  type UnplacedDrag,
+  UnplacedName,
+  useUnplacedDrag,
+} from "./gantt-unplaced-drag";
 import type { IdSetStore } from "./project-board-stores";
 
 /** The tree column's width in the wide tier, in pixels. */
@@ -686,6 +692,17 @@ export function ProjectGanttChart(props: {
     scrolledRef.current = { start: axis.range.start, scale: axis.scale };
   }, [axis, gantt.today, tree]);
   const drag = useChartBarDrag(gantt, cards.writeDates, scrollerRef);
+  // An unplaced task dragged onto the axis (#181).
+  const rowsRef = React.useRef<HTMLDivElement>(null);
+  const unplacedDrag = useUnplacedDrag({
+    gantt,
+    axis,
+    tree,
+    scrollerRef,
+    rowsRef,
+    writeDates: cards.writeDates,
+    expanded: cards.expanded,
+  });
   // A bar being dragged shows at its dragged dates in every drawing of the
   // rows: its arrows, its label, the narrow tier's name (#180).
   const chartRows = React.useMemo(
@@ -712,7 +729,7 @@ export function ProjectGanttChart(props: {
           style={{ width: tree + axis.width }}
         >
           <ScaleRow axis={axis} gantt={gantt} narrow={narrow} />
-          <div className="nextaction-gantt-rows">
+          <div ref={rowsRef} className="nextaction-gantt-rows">
             <Lines axis={axis} gantt={gantt} left={tree} />
             <GanttDependencyArrows rows={rows} axis={axis} left={tree} />
             {rows.map((row) =>
@@ -735,10 +752,16 @@ export function ProjectGanttChart(props: {
               ),
             )}
             {!narrow && <div className="nextaction-gantt-fill" />}
+            <GanttUnplacedLanding
+              landing={unplacedDrag.landing}
+              gantt={gantt}
+              axis={axis}
+              left={tree}
+            />
           </div>
         </div>
       </section>
-      <UnplacedSection gantt={gantt} cards={cards} />
+      <UnplacedSection gantt={gantt} cards={cards} drag={unplacedDrag} />
     </GanttBarDragContext.Provider>
   );
 }
@@ -791,10 +814,15 @@ function useChartBarDrag(
 /**
  * The unplaced tasks' section (GLOSSARY: 待排期任务, #177) at the bottom of
  * the chart, outside its scroller: "Unplaced tasks · N", a line saying why,
- * the tasks in note order, each opening the task panel. Collapsible, in
- * memory; none: no section. Done unplaced tasks are not in the read.
+ * the tasks in note order, each opening the task panel and dragged onto the
+ * time axis to get dates (#181). Collapsible, in memory; none: no section.
+ * Done unplaced tasks are not in the read.
  */
-function UnplacedSection(props: { gantt: ProjectGantt; cards: GanttCards }) {
+function UnplacedSection(props: {
+  gantt: ProjectGantt;
+  cards: GanttCards;
+  drag: UnplacedDrag;
+}) {
   const { gantt, cards } = props;
   const collapsed = React.useSyncExternalStore(
     cards.unplacedCollapsed.subscribe,
@@ -825,21 +853,16 @@ function UnplacedSection(props: { gantt: ProjectGantt; cards: GanttCards }) {
       {!collapsed && (
         <ul className="nextaction-gantt-unplaced-list">
           {unplaced.map((row) => {
-            const text = shownText(row.task);
             const selected = row.task.id === cards.selectedTaskId;
             return (
               <li key={row.task.id} data-selected={selected || undefined}>
                 <StatusIcon status={row.task.status} />
-                <button
-                  type="button"
-                  className="nextaction-gantt-name-text"
-                  data-empty={text.empty || undefined}
-                  aria-current={selected || undefined}
-                  title={text.text}
-                  onClick={() => cards.selectTask(row.task.id)}
-                >
-                  {text.text}
-                </button>
+                <UnplacedName
+                  row={row}
+                  drag={props.drag}
+                  selected={selected}
+                  onSelect={() => cards.selectTask(row.task.id)}
+                />
               </li>
             );
           })}
