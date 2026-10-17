@@ -41,6 +41,7 @@ import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import type { ProjectMenuItems } from "../ui/project-menu/menu-items";
 import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
+import { dragToPanCss } from "../ui/styles/drag-to-pan-style";
 import { ganttDependenciesCss } from "../ui/styles/gantt-dependencies-style";
 import { ganttShiftLaterCss } from "../ui/styles/gantt-shift-later-style";
 import { myDayCss } from "../ui/styles/my-day-style";
@@ -412,6 +413,7 @@ export function createPanelFeature(deps: {
     registry.css("projectGanttStyle", projectGanttCss);
     registry.css("ganttDependenciesStyle", ganttDependenciesCss);
     registry.css("ganttShiftLaterStyle", ganttShiftLaterCss);
+    registry.css("dragToPanStyle", dragToPanCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.
