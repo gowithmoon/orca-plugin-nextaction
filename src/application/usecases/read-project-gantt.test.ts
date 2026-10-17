@@ -353,6 +353,137 @@ describe("read project gantt, bars", () => {
   });
 });
 
+describe("read project gantt, how a row stands", () => {
+  it("marks a task overdue when it is not done and its due date has passed, a done one never", async () => {
+    const { repository, readProjectGantt } = setup();
+    // A start date to borrow, so the done task is drawn and stays (#177).
+    repository.addProject({ id: 1, status: "active", start: day(2026, 9, 1) });
+    // Due yesterday (today is 2026-10-09).
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 8) },
+      { parentId: 1 },
+    );
+    // Due today: not yet.
+    repository.addTask(
+      { id: 3, status: "doing", due: day(2026, 10, 9) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "done", due: day(2026, 10, 1) },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 1 });
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.overdue])).toEqual([
+      [2, true],
+      [3, false],
+      [4, false],
+      [5, false],
+    ]);
+  });
+});
+
+describe("read project gantt, blocked", () => {
+  it("marks a task blocked as the board does: by a dependency, not by its subtasks", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Waits for task 2.
+    repository.addTask(
+      { id: 3, status: "todo", dependencies: [2] },
+      { parentId: 1 },
+    );
+    // Held back only by its open subtask.
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 4 });
+    // Waiting: not marked, as on the board.
+    repository.addTask(
+      { id: 6, status: "waiting", dependencies: [2] },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.blocked])).toEqual([
+      [2, false],
+      [3, true],
+      [4, false],
+      [5, false],
+      [6, false],
+    ]);
+  });
+});
+
+describe("read project gantt, held back", () => {
+  it("gives the stretch an ancestor task's later start holds back: from the task's own start to the effective start", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", start: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 3,
+        status: "todo",
+        start: day(2026, 10, 5),
+        due: day(2026, 10, 20),
+      },
+      { parentId: 2 },
+    );
+    // Starts after its parent task: nothing held back.
+    repository.addTask(
+      {
+        id: 4,
+        status: "todo",
+        start: day(2026, 10, 14),
+        due: day(2026, 10, 20),
+      },
+      { parentId: 2 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.heldBack])).toEqual([
+      [2, null],
+      [3, { from: day(2026, 10, 5), until: day(2026, 10, 12) }],
+      [4, null],
+    ]);
+  });
+
+  it("gives the stretch the project's later start holds back", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 10),
+    });
+    repository.addTask(
+      {
+        id: 2,
+        status: "todo",
+        start: day(2026, 10, 1),
+        due: day(2026, 10, 15),
+      },
+      { parentId: 1 },
+    );
+    // No start of its own: nothing of its own held back.
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 15) },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.heldBack])).toEqual([
+      [2, { from: day(2026, 10, 1), until: day(2026, 10, 10) }],
+      [3, null],
+    ]);
+  });
+});
+
 describe("read project gantt, filtered and searched", () => {
   it("keeps a row when its task or any descendant task is found, in note order", async () => {
     const { repository, readProjectGantt } = setup();

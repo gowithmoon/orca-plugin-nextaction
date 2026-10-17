@@ -639,6 +639,7 @@ const zhCN: Record<string, string> = {
   "Project start": "项目开始",
   "Project due": "项目截止",
   "${start} → ${due}": "${start} → ${due}",
+  "Can start from ${date}": "${date} 起才能开始",
   // The gantt chart's borrowed ends, brackets and unplaced tasks (#177).
   "No start date: the project's start date is used":
     "没有开始日期，借用项目的开始日期",
