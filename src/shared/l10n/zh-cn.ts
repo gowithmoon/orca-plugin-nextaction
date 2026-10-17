@@ -618,7 +618,6 @@ const zhCN: Record<string, string> = {
   "Collapse ${column}": "收起${column}",
   "Earlier done ${count}": "更早的已完成 ${count}",
   // The board's cards (#167).
-  "Next action": "下一步行动",
   "Subtasks ${done}/${total}": "子任务 ${done}/${total}",
   "As root task": "作为根任务",
   "Expand subtasks": "展开子任务",

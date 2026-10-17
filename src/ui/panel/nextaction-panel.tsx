@@ -1,6 +1,7 @@
 // The plugin panel's shell (GLOSSARY: 插件面板, #35 "插件面板""档位与灵活布局"):
 // measures its own width to pick a tier, renders the view navigation, the
-// current view and, in the wide tier, the side pane. It knows nothing about
+// current view and, in the wide tier, the side pane (unless the view does
+// without it, as the board does). It knows nothing about
 // any view's content. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { NoteCursorSource } from "../../application/ports/note-cursor";
@@ -33,9 +34,12 @@ export interface NextActionPanelArgs {
 
 export interface NextActionPanelOptions {
   views: PanelViews;
-  /** The task panel in the wide tier's side pane, showing the selected task. */
+  /**
+   * The task panel in the wide tier's side pane, showing the selected task;
+   * not while the view does without it (`useWithoutSidePane`).
+   */
   sidePane: React.ComponentType<TaskPanelSidePaneProps>;
-  /** The task panel as a popup, for the selected task in the other tiers. */
+  /** The task panel as a popup, for the selected task when there is no side pane. */
   openPopup: OpenTaskPanelPopup;
   /** The refresh button beside the navigation. */
   onRefresh: () => void;
@@ -79,7 +83,8 @@ function useTier(ref: React.RefObject<HTMLElement>): PanelTier | undefined {
 
 /**
  * Shows the selected task in the popup while `inPopup`: a popup open when
- * the panel widens into the wide tier gives way to the side pane, the task
+ * the side pane comes back (the panel widens into the wide tier, the view
+ * stops doing without it) gives way to the side pane, the task
  * unchanged. Closing the popup (or the task going away) clears the
  * selection; the plugin panel closing takes its popup with it.
  */
@@ -128,16 +133,27 @@ export function createNextActionPanel(
      * block the user went to see. Selecting a task again lifts it.
      */
     const [heldFromPopup, setHeldFromPopup] = React.useState<TaskId>();
-    // Narrowing out of the wide tier hides the side pane, but does not pop
-    // the selected task up: a popup the user did not ask for covers the view
-    // they were resizing for. The task stays selected (and back in the side
-    // pane when the panel widens again); selecting a task opens the popup.
-    const [shownTier, setShownTier] = React.useState(tier);
-    if (tier !== shownTier) {
-      setShownTier(tier);
-      if (shownTier === "wide" && tier !== "wide") {
-        setHeldFromPopup(selectedTaskId);
-      }
+    /** How many parts of the view do without the side pane right now. */
+    const [withoutCount, setWithoutCount] = React.useState(0);
+    const withoutSidePane = React.useCallback(() => {
+      setWithoutCount((count) => count + 1);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        setWithoutCount((count) => count - 1);
+      };
+    }, []);
+    const sidePane = tier === "wide" && withoutCount === 0;
+    // Losing the side pane (narrowing out of the wide tier, opening the
+    // board) does not pop the selected task up: a popup the user did not ask
+    // for covers the view they were making room for. The task stays selected
+    // (and back in the side pane when it returns); selecting a task opens the
+    // popup.
+    const [shownSidePane, setShownSidePane] = React.useState(sidePane);
+    if (sidePane !== shownSidePane) {
+      setShownSidePane(sidePane);
+      if (!sidePane) setHeldFromPopup(selectedTaskId);
     }
     const selected = React.useRef(selectedTaskId);
     selected.current = selectedTaskId;
@@ -188,7 +204,7 @@ export function createNextActionPanel(
     );
     useSelectionPopup(
       openPopup,
-      tier !== undefined && tier !== "wide",
+      tier !== undefined && !sidePane,
       selectedTaskId === heldFromPopup ? undefined : selectedTaskId,
       clearSelection,
       selectTask,
@@ -204,6 +220,7 @@ export function createNextActionPanel(
           selectTask,
           openedInNotes,
           showView,
+          withoutSidePane,
         },
       [
         props.panelId,
@@ -213,6 +230,7 @@ export function createNextActionPanel(
         selectTask,
         openedInNotes,
         showView,
+        withoutSidePane,
       ],
     );
 
@@ -243,7 +261,7 @@ export function createNextActionPanel(
                   >
                     {View && <View />}
                   </div>
-                  {tier === "wide" && (
+                  {sidePane && (
                     <aside
                       className="nextaction-panel-side"
                       aria-label={t("Task panel")}

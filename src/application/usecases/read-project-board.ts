@@ -51,8 +51,6 @@ export interface BoardCard {
    * A drop on a card tells its parent task apart by it (#169).
    */
   readonly parentId: TaskId | null;
-  /** It is a next action (GLOSSARY: 下一步行动): the board's dot (#167). */
-  readonly nextAction: boolean;
   /**
    * Its direct subtasks (GLOSSARY: 子任务), deeper descendant tasks not
    * counted: how many are done, and how many in all (0: none).
@@ -83,7 +81,10 @@ export interface BoardRow {
   readonly parentId: TaskId | null;
   /** As `BoardCard.blocked`. */
   readonly blocked: boolean;
-  /** As `BoardCard.nextAction`. */
+  /**
+   * It is a next action (GLOSSARY: 下一步行动), for the collapsed card's
+   * "Next N".
+   */
   readonly nextAction: boolean;
 }
 
@@ -323,7 +324,6 @@ export function createReadProjectBoard(deps: {
         blocked: marksBlocked(graph.entry(item.task.id)),
         parentText: parentTextOf(item.parentId),
         parentId: item.parentId,
-        nextAction: nextAction(item.task.id),
         subtasks: subtaskCounts(tree.childrenOf(item.task.id)),
         descendants: descendantCounts(allRows),
         rows,

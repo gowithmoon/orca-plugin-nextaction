@@ -53,7 +53,7 @@ import {
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
-import { usePanel } from "../../panel/panel-context";
+import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
@@ -721,6 +721,10 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
       deps.layout.current,
     );
     const { selectedTaskId } = usePanel();
+    // The board needs the width: no side pane beside it, even in the wide
+    // tier; its tasks open in the popup. From the moment it opens, while it
+    // still reads, so the pane does not come and go.
+    useWithoutSidePane(open !== null && layout === "board");
     // As in the all tasks view: a new selection reads again, so a task kept
     // for the earlier one leaves at once.
     const readFor = React.useRef<TaskId | undefined>(undefined);

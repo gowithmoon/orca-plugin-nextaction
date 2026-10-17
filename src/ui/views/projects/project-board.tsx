@@ -120,11 +120,7 @@ function Row(props: { row: BoardRow; cards: BoardCards }) {
         })
       }
     >
-      <StatusButton
-        task={row.task}
-        actions={cards.actions}
-        nextAction={row.nextAction}
-      />
+      <StatusButton task={row.task} actions={cards.actions} />
       <span
         className="nextaction-board-row-text"
         data-empty={text.empty || undefined}
@@ -243,7 +239,6 @@ function Card(props: { card: BoardCard; cards: BoardCards }) {
         selected={card.task.id === cards.selectedTaskId}
         parentText={card.parentText}
         blocked={card.blocked}
-        nextAction={card.nextAction}
         footer={
           card.subtasks.total > 0 && (
             <Subtasks card={card} cards={cards} expanded={expanded} />

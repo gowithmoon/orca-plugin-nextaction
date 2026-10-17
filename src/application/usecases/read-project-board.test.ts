@@ -313,28 +313,6 @@ describe("read project board, by status", () => {
     ]);
   });
 
-  it("marks a card that is a next action", async () => {
-    const { repository, readProjectBoard } = setup();
-    repository.addProject({ id: 1, status: "active" });
-    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
-    // Held back by its open subtask: not a next action.
-    repository.addTask({ id: 3, status: "todo" }, { parentId: 1 });
-    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
-    // Never a next action.
-    repository.addTask({ id: 5, status: "inbox" }, { parentId: 1 });
-
-    const read = await readProjectBoard({ project: 1, sort: "note" });
-
-    const marks = byStatus(read).columns.flatMap((col) =>
-      col.cards.map((card) => [card.task.id, card.nextAction]),
-    );
-    expect(marks).toEqual([
-      [5, false],
-      [2, true],
-      [3, false],
-    ]);
-  });
-
   it("counts a card's direct subtasks, done and in all, not deeper descendant tasks", async () => {
     const { repository, readProjectBoard } = setup();
     repository.addProject({ id: 1, status: "active" });

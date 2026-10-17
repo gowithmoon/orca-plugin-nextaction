@@ -77,11 +77,6 @@ export interface TaskCardProps {
    */
   skippedToday?: boolean;
   /**
-   * A next action (GLOSSARY: 下一步行动), marked by a small dot at the status
-   * icon's top right; only the board marks it (#167).
-   */
-  nextAction?: boolean;
-  /**
    * What the card shows below its property row (the board's subtasks,
    * #167). Its clicks and right-clicks must stop propagating, or they also
    * open the task panel and the card's task menu.
@@ -97,14 +92,10 @@ function selectsText(): boolean {
 
 /**
  * The status icon that opens the status menu; shared with My Day's timeline
- * cards and the board's subtask rows. `nextAction`: the board's dot (#167).
+ * cards and the board's subtask rows.
  */
-export function StatusButton(props: {
-  task: Task;
-  actions: TaskActions;
-  nextAction?: boolean;
-}) {
-  const { task, actions, nextAction } = props;
+export function StatusButton(props: { task: Task; actions: TaskActions }) {
+  const { task, actions } = props;
   return (
     <ContextMenu
       menu={(close) => (
@@ -128,19 +119,9 @@ export function StatusButton(props: {
           }}
         >
           <StatusIcon status={task.status} />
-          {nextAction && <NextActionDot />}
         </button>
       )}
     </ContextMenu>
-  );
-}
-
-/** The board's next action mark (#167): a small dot, its name read aloud. */
-function NextActionDot() {
-  return (
-    <span className="nextaction-next-action-dot" title={t("Next action")}>
-      <span className="nextaction-visually-hidden">{t("Next action")}</span>
-    </span>
   );
 }
 
@@ -247,7 +228,6 @@ export function TaskCard(props: TaskCardProps) {
     buttons,
     doneToday,
     skippedToday,
-    nextAction,
     footer,
   } = props;
   const text = shownText(task);
@@ -291,11 +271,10 @@ export function TaskCard(props: TaskCardProps) {
     >
       <div className="nextaction-task-card-status">
         {actions ? (
-          <StatusButton task={task} actions={actions} nextAction={nextAction} />
+          <StatusButton task={task} actions={actions} />
         ) : (
           <span className="nextaction-task-card-status-mark">
             <StatusIcon status={task.status} />
-            {nextAction && <NextActionDot />}
           </span>
         )}
       </div>
