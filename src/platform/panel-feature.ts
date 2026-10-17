@@ -19,6 +19,7 @@ import { createReadMyDay } from "../application/usecases/read-my-day";
 import { createReadMyDayCandidates } from "../application/usecases/read-my-day-candidates";
 import { createReadNextActions } from "../application/usecases/read-next-actions";
 import { createReadProjectBoard } from "../application/usecases/read-project-board";
+import { createReadProjectGantt } from "../application/usecases/read-project-gantt";
 import { createReadProjectList } from "../application/usecases/read-project-list";
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
@@ -42,6 +43,7 @@ import { componentCss } from "../ui/styles/component-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
 import { projectBoardCss } from "../ui/styles/project-board-style";
+import { projectGanttCss } from "../ui/styles/project-gantt-style";
 import { statsDistributionCss } from "../ui/styles/stats-distribution-style";
 import { statsNowCss } from "../ui/styles/stats-now-style";
 import { statsPeriodCss } from "../ui/styles/stats-period-style";
@@ -63,6 +65,7 @@ import { createNextActionFilterStore } from "../ui/views/next-action/next-action
 import { createNextActionView } from "../ui/views/next-action/next-action-view";
 import { createOpenProjectStore } from "../ui/views/projects/open-project-store";
 import { createProjectBoardStores } from "../ui/views/projects/project-board-stores";
+import { createProjectGanttStores } from "../ui/views/projects/project-gantt-stores";
 import { createProjectGroupsStore } from "../ui/views/projects/project-groups-store";
 import {
   createProjectLayoutStore,
@@ -143,6 +146,8 @@ export function createPanelFeature(deps: {
   // from the default layout setting.
   const projectLayout = createProjectLayoutStore();
   const projectBoard = createProjectBoardStores();
+  // The gantt chart's own state (#186): in memory only, likewise.
+  const projectGantt = createProjectGanttStores();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The review's projects step's collapsed groups (#161): in memory only,
@@ -281,6 +286,13 @@ export function createPanelFeature(deps: {
       layout: projectLayout,
       board: projectBoard,
       openQuickCapture: deps.openQuickCapture,
+      readProjectGantt: createReadProjectGantt({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      gantt: projectGantt,
     }),
   );
   views.register(
@@ -358,6 +370,7 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.projectDetailsStores`, projectDetails.clear);
     registry.add(`${pluginName}.projectLayout`, projectLayout.clear);
     registry.add(`${pluginName}.projectBoardStores`, projectBoard.clear);
+    registry.add(`${pluginName}.projectGanttStores`, projectGantt.clear);
     // The default layout (#166): the layout this load starts in; a change of
     // the setting overrides the layout in memory at once. Every settings
     // change fires the subscription, the plugin's own writes included
@@ -386,6 +399,7 @@ export function createPanelFeature(deps: {
     registry.css("taskDragStyle", taskDragCss);
     registry.css("cardDragStyle", cardDragCss);
     registry.css("projectBoardStyle", projectBoardCss);
+    registry.css("projectGanttStyle", projectGanttCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.

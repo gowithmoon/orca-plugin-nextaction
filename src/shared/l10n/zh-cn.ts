@@ -632,6 +632,13 @@ const zhCN: Record<string, string> = {
   "Project root tasks without subtasks": "没有子任务的项目根任务",
   "Drop here to make it a project root task": "拖到这里，成为项目根任务",
   "Done ${count}": "已完成 ${count}",
+  // The gantt layout (#186).
+  Gantt: "甘特图",
+  Tasks: "任务",
+  Today: "今天",
+  "Project start": "项目开始",
+  "Project due": "项目截止",
+  "${start} → ${due}": "${start} → ${due}",
 };
 
 export default zhCN;
