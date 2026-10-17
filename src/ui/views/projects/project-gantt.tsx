@@ -70,6 +70,12 @@ export interface GanttCards {
   readonly selectTask: (id: TaskId) => void;
   /** The tasks whose subtasks show; collapsed by default. */
   readonly expanded: IdSetStore<TaskId>;
+  /**
+   * A filter or search is set: every row shows expanded, without a toggle,
+   * so a subtask kept by the search shows under its ancestors; `expanded`
+   * is left as it is, back once cleared (as the tree's project rows, #148).
+   */
+  readonly allExpanded: boolean;
   /** The unplaced tasks' section is collapsed (#177). */
   readonly unplacedCollapsed: MemoryStore<boolean>;
   /** A bar let go writes its task's two dates, in one undo (#180). */
@@ -694,6 +700,8 @@ export function ProjectGanttChart(props: {
   // No tree column, nothing collapsed; the stored collapsing stays for the
   // wider tiers.
   const narrow = usePanel().tier === "narrow";
+  // Nothing collapsed either while filtering or searching.
+  const allExpanded = narrow || cards.allExpanded;
   const tree = narrow ? 0 : treeWidth;
   const expanded = React.useSyncExternalStore(
     cards.expanded.subscribe,
@@ -759,7 +767,7 @@ export function ProjectGanttChart(props: {
   );
   const placed = React.useMemo(() => treeRows(chartRows), [chartRows]);
   const parents = React.useMemo(() => parentsOf(placed), [placed]);
-  const rows = narrow ? placed : shownRows(placed, expanded);
+  const rows = allExpanded ? placed : shownRows(placed, expanded);
   return (
     <GanttBarDragContext.Provider value={drag}>
       <GanttShiftNotice
@@ -800,7 +808,7 @@ export function ProjectGanttChart(props: {
                   row={row}
                   axis={axis}
                   cards={cards}
-                  collapsible={parents.has(row.task.id)}
+                  collapsible={!allExpanded && parents.has(row.task.id)}
                   expanded={expanded.has(row.task.id)}
                 />
               ),
@@ -965,12 +973,14 @@ export function GanttScaleSwitch(props: { store: MemoryStore<GanttScale> }) {
 
 /**
  * The chart's "Collapse all / Expand all", over the rows with subtasks;
- * none, or the narrow tier where nothing collapses: no button. Collapses all
- * while any is expanded.
+ * none, the narrow tier or a filter or search set, where nothing collapses:
+ * no button. Collapses all while any is expanded.
  */
 export function GanttCollapseAllButton(props: {
   gantt: ProjectGantt;
   expanded: IdSetStore<TaskId>;
+  /** A filter or search is set: every row temporarily expanded. */
+  allExpanded: boolean;
 }) {
   const { gantt, expanded } = props;
   const { Button, Tooltip } = orca.components;
@@ -980,7 +990,7 @@ export function GanttCollapseAllButton(props: {
     expanded.current,
   );
   const ids = [...parentsOf(treeRows(gantt.rows))];
-  if (narrow || ids.length === 0) return null;
+  if (narrow || props.allExpanded || ids.length === 0) return null;
   const anyExpanded = ids.some((id) => current.has(id));
   const label = anyExpanded ? t("Collapse all") : t("Expand all");
   return (

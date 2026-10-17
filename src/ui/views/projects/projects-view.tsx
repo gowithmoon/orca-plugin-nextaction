@@ -591,6 +591,7 @@ function DetailsGantt(props: {
           <GanttCollapseAllButton
             gantt={read.gantt}
             expanded={deps.gantt.expanded}
+            allExpanded={filtering}
           />
           <AllTasksFilterButton
             state={filter}
@@ -632,6 +633,7 @@ function DetailsGantt(props: {
               selectedTaskId,
               selectTask,
               expanded: deps.gantt.expanded,
+              allExpanded: filtering,
               unplacedCollapsed: deps.gantt.unplacedCollapsed,
               writeDates,
               shiftLater,
