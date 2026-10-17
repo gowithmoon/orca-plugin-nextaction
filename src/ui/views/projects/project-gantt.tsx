@@ -768,7 +768,9 @@ function useChartBarDrag(
         setDragged(dates ? { id, ...dates, settled: false } : null);
       },
       drop(id, dates, from) {
-        if (sameDates(dates, from)) {
+        // Back where it was: nothing to write, unless an end was borrowed,
+        // which becomes the task's own as the chart showed it.
+        if (sameDates(dates, from) && from.borrowed === "none") {
           setDragged(null);
           return;
         }
