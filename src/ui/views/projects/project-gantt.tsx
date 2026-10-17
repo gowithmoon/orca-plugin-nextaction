@@ -15,6 +15,7 @@ import type {
   GanttBar,
   GanttRow,
   ProjectGantt,
+  UnplacedBar,
 } from "../../../application/usecases/read-project-gantt";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import { compareDays, dayOfWeek } from "../../../domain/time/calendar-days";
@@ -42,6 +43,8 @@ export interface GanttCards {
   readonly selectTask: (id: TaskId) => void;
   /** The tasks whose subtasks show; collapsed by default. */
   readonly expanded: IdSetStore<TaskId>;
+  /** The unplaced tasks' section is collapsed (#177). */
+  readonly unplacedCollapsed: MemoryStore<boolean>;
 }
 
 /** The tasks with a row below them in the read: those that can collapse. */
@@ -49,6 +52,15 @@ function parentsOf(rows: readonly GanttRow[]): ReadonlySet<TaskId> {
   return new Set(
     rows.flatMap((row) => (row.parentId === null ? [] : [row.parentId])),
   );
+}
+
+/**
+ * The rows of the task tree: all but the unplaced tasks, which show in their
+ * own section below the chart (#177). An unplaced task's subtree is all
+ * unplaced, so the rest stay in preorder.
+ */
+function treeRows(rows: readonly GanttRow[]): GanttRow[] {
+  return rows.filter((row) => row.bar.kind !== "unplaced");
 }
 
 /**
@@ -320,14 +332,14 @@ function Lines(props: { axis: GanttAxis; gantt: ProjectGantt; left: number }) {
 }
 
 /**
- * What a row draws on the axis, by its kind; the other kinds come with
- * #177. A bar takes its status icon's colour (#178): done ones faded,
- * someday ones a light dashed frame, overdue ones outlined in red, blocked
- * ones with a lock at the left end, the stretch held back by a later
- * effective start hatched.
+ * What a row draws on the axis, by its kind: a bar, its borrowed end dashed
+ * and fading (#177), or a bracket. A bar takes its status icon's colour
+ * (#178): done ones faded, someday ones a light dashed frame, overdue ones
+ * outlined in red, blocked ones with a lock at the left end, the stretch
+ * held back by a later effective start hatched.
  */
 function BarView(props: {
-  bar: GanttBar;
+  bar: Exclude<GanttBar, UnplacedBar>;
   row: GanttRow;
   axis: GanttAxis;
   cards: GanttCards;
@@ -340,11 +352,31 @@ function BarView(props: {
     start: formatDate(bar.start, cards.today),
     due: formatDate(bar.due, cards.today),
   });
+  if (bar.kind === "bracket") {
+    // Never dragged, never opening the task panel: the name does that.
+    const note = t("No dates of its own; spans its subtasks' dates");
+    return (
+      <div
+        className="nextaction-gantt-bracket"
+        role="img"
+        style={{ left, width }}
+        title={[text, dates, note].join("\n")}
+        aria-label={[text, dates, note].join(", ")}
+      />
+    );
+  }
+  const borrowed =
+    bar.borrowed === "start"
+      ? t("No start date: the project's start date is used")
+      : bar.borrowed === "due"
+        ? t("No due date: the project's due date is used")
+        : null;
   const held = row.heldBack;
   // The hatching, within the bar: up to the effective start or its end.
   const heldLeft = held ? Math.max(axis.x(held.from) - left, 0) : 0;
   const heldRight = held ? Math.min(axis.x(held.until) - left, width) : 0;
   const notes = [
+    borrowed,
     statusLabel(row.task.status),
     row.overdue && t("Overdue"),
     row.blocked && t("Blocked"),
@@ -404,10 +436,14 @@ function NameBesideBar(props: {
       type="button"
       className="nextaction-gantt-bar-name"
       data-empty={text.empty || undefined}
-      data-beside={row.bar ? "bar" : undefined}
+      data-beside={row.bar.kind !== "unplaced" ? "bar" : undefined}
       aria-current={row.task.id === cards.selectedTaskId || undefined}
       title={text.text}
-      style={row.bar ? { left: axis.endX(row.bar.due) + 6 } : undefined}
+      style={
+        row.bar.kind !== "unplaced"
+          ? { left: axis.endX(row.bar.due) + 6 }
+          : undefined
+      }
       onClick={() => cards.selectTask(row.task.id)}
     >
       {text.text}
@@ -429,7 +465,7 @@ function NarrowRow(props: {
       data-done={row.task.status === "done" || undefined}
     >
       <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
-        {row.bar && (
+        {row.bar.kind !== "unplaced" && (
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
         <GanttOutsideDependencyMark row={row} axis={axis} />
@@ -449,10 +485,14 @@ const lockWidth = 15;
  * The wide tier's task name by its bar (#179): inside it when it fits
  * (after the lock of a blocked bar), else just after it; on the month
  * scale, where bars are short and close, not drawn when it does not fit
- * inside. Clicks go through to the bar. The narrow tier has
- * `NameBesideBar`.
+ * inside. Clicks go through to the bar. Only on a bar: a bracket is too
+ * thin, its name in the tree column. The narrow tier has `NameBesideBar`.
  */
-function BarLabel(props: { bar: GanttBar; row: GanttRow; axis: GanttAxis }) {
+function BarLabel(props: {
+  bar: Extract<GanttBar, { kind: "bar" }>;
+  row: GanttRow;
+  axis: GanttAxis;
+}) {
   const { bar, row, axis } = props;
   const text = shownText(row.task);
   if (text.empty) return null;
@@ -535,10 +575,12 @@ function Row(props: {
         </button>
       </div>
       <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
-        {row.bar && (
+        {row.bar.kind !== "unplaced" && (
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
-        {row.bar && <BarLabel bar={row.bar} row={row} axis={axis} />}
+        {row.bar.kind === "bar" && (
+          <BarLabel bar={row.bar} row={row} axis={axis} />
+        )}
         <GanttOutsideDependencyMark row={row} axis={axis} />
       </div>
     </div>
@@ -567,15 +609,15 @@ export function ProjectGanttChart(props: {
   const scrollerRef = React.useRef<HTMLElement>(null);
   // The axis's first day and its scale when last scrolled: `null` until the
   // chart first scrolls (one chart per project, keyed by its caller).
-  const placedRef = React.useRef<{
+  const scrolledRef = React.useRef<{
     start: CalendarDate;
     scale: GanttScale;
   } | null>(null);
   React.useLayoutEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    const placed = placedRef.current;
-    if (placed === null || placed.scale !== axis.scale) {
+    const last = scrolledRef.current;
+    if (last === null || last.scale !== axis.scale) {
       // Opened, or another scale: today a third of the way across the time
       // axis's visible part.
       const visible = scroller.clientWidth - tree;
@@ -583,53 +625,118 @@ export function ProjectGanttChart(props: {
     } else {
       // The range grew or shrank on the left (a date written): keep the
       // view still.
-      scroller.scrollLeft += axis.x(placed.start);
+      scroller.scrollLeft += axis.x(last.start);
     }
-    placedRef.current = { start: axis.range.start, scale: axis.scale };
+    scrolledRef.current = { start: axis.range.start, scale: axis.scale };
   }, [axis, gantt.today, tree]);
-  const parents = React.useMemo(() => parentsOf(gantt.rows), [gantt.rows]);
-  const rows = narrow ? gantt.rows : shownRows(gantt.rows, expanded);
+  const placed = React.useMemo(() => treeRows(gantt.rows), [gantt.rows]);
+  const parents = React.useMemo(() => parentsOf(placed), [placed]);
+  const rows = narrow ? placed : shownRows(placed, expanded);
   return (
-    <section
-      ref={scrollerRef}
-      className="nextaction-gantt"
-      aria-label={t("Gantt")}
-      style={
-        {
-          "--nextaction-gantt-tree": `${tree}px`,
-        } as React.CSSProperties
-      }
-    >
-      <div
-        className="nextaction-gantt-body"
-        style={{ width: tree + axis.width }}
+    <>
+      <section
+        ref={scrollerRef}
+        className="nextaction-gantt"
+        aria-label={t("Gantt")}
+        style={
+          {
+            "--nextaction-gantt-tree": `${tree}px`,
+          } as React.CSSProperties
+        }
       >
-        <ScaleRow axis={axis} gantt={gantt} narrow={narrow} />
-        <div className="nextaction-gantt-rows">
-          <Lines axis={axis} gantt={gantt} left={tree} />
-          <GanttDependencyArrows rows={rows} axis={axis} left={tree} />
-          {rows.map((row) =>
-            narrow ? (
-              <NarrowRow
-                key={row.task.id}
-                row={row}
-                axis={axis}
-                cards={cards}
-              />
-            ) : (
-              <Row
-                key={row.task.id}
-                row={row}
-                axis={axis}
-                cards={cards}
-                collapsible={parents.has(row.task.id)}
-                expanded={expanded.has(row.task.id)}
-              />
-            ),
-          )}
-          {!narrow && <div className="nextaction-gantt-fill" />}
+        <div
+          className="nextaction-gantt-body"
+          style={{ width: tree + axis.width }}
+        >
+          <ScaleRow axis={axis} gantt={gantt} narrow={narrow} />
+          <div className="nextaction-gantt-rows">
+            <Lines axis={axis} gantt={gantt} left={tree} />
+            <GanttDependencyArrows rows={rows} axis={axis} left={tree} />
+            {rows.map((row) =>
+              narrow ? (
+                <NarrowRow
+                  key={row.task.id}
+                  row={row}
+                  axis={axis}
+                  cards={cards}
+                />
+              ) : (
+                <Row
+                  key={row.task.id}
+                  row={row}
+                  axis={axis}
+                  cards={cards}
+                  collapsible={parents.has(row.task.id)}
+                  expanded={expanded.has(row.task.id)}
+                />
+              ),
+            )}
+            {!narrow && <div className="nextaction-gantt-fill" />}
+          </div>
         </div>
-      </div>
+      </section>
+      <UnplacedSection gantt={gantt} cards={cards} />
+    </>
+  );
+}
+
+/**
+ * The unplaced tasks' section (GLOSSARY: 待排期任务, #177) at the bottom of
+ * the chart, outside its scroller: "Unplaced tasks · N", a line saying why,
+ * the tasks in note order, each opening the task panel. Collapsible, in
+ * memory; none: no section. Done unplaced tasks are not in the read.
+ */
+function UnplacedSection(props: { gantt: ProjectGantt; cards: GanttCards }) {
+  const { gantt, cards } = props;
+  const collapsed = React.useSyncExternalStore(
+    cards.unplacedCollapsed.subscribe,
+    cards.unplacedCollapsed.current,
+  );
+  const unplaced = gantt.rows.filter((row) => row.bar.kind === "unplaced");
+  if (unplaced.length === 0) return null;
+  const title = t("Unplaced tasks · ${count}", {
+    count: String(unplaced.length),
+  });
+  return (
+    <section className="nextaction-gantt-unplaced" aria-label={title}>
+      <button
+        type="button"
+        className="nextaction-gantt-unplaced-head"
+        aria-expanded={!collapsed}
+        onClick={() => cards.unplacedCollapsed.set(!collapsed)}
+      >
+        <i
+          className={collapsed ? "ti ti-chevron-right" : "ti ti-chevron-down"}
+          aria-hidden="true"
+        />
+        {title}
+      </button>
+      <p className="nextaction-gantt-unplaced-hint">
+        {t("No dates set, or dates outside the project's time range")}
+      </p>
+      {!collapsed && (
+        <ul className="nextaction-gantt-unplaced-list">
+          {unplaced.map((row) => {
+            const text = shownText(row.task);
+            const selected = row.task.id === cards.selectedTaskId;
+            return (
+              <li key={row.task.id} data-selected={selected || undefined}>
+                <StatusIcon status={row.task.status} />
+                <button
+                  type="button"
+                  className="nextaction-gantt-name-text"
+                  data-empty={text.empty || undefined}
+                  aria-current={selected || undefined}
+                  title={text.text}
+                  onClick={() => cards.selectTask(row.task.id)}
+                >
+                  {text.text}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }
@@ -680,7 +787,7 @@ export function GanttCollapseAllButton(props: {
     expanded.subscribe,
     expanded.current,
   );
-  const ids = [...parentsOf(gantt.rows)];
+  const ids = [...parentsOf(treeRows(gantt.rows))];
   if (narrow || ids.length === 0) return null;
   const anyExpanded = ids.some((id) => current.has(id));
   const label = anyExpanded ? t("Collapse all") : t("Expand all");

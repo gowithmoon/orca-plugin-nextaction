@@ -616,6 +616,7 @@ function DetailsGantt(props: {
             selectedTaskId,
             selectTask,
             expanded: deps.gantt.expanded,
+            unplacedCollapsed: deps.gantt.unplacedCollapsed,
           }}
         />
       )}
