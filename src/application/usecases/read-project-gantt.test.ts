@@ -1013,3 +1013,92 @@ describe("read project gantt, date conflicts", () => {
     ]);
   });
 });
+
+/** Each row: its task and how many tasks shifting later after it moves. */
+function shiftCounts(read: ProjectGanttRead): [TaskId, number][] {
+  return gantt(read).gantt.rows.map((row) => [row.task.id, row.shiftLater]);
+}
+
+describe("read project gantt, shifting later", () => {
+  it("counts the tasks shifting later after each task would move: a fork, then on along the chain to a join counted once", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    // A fork from 2: 3 and 4 both conflict.
+    repository.addTask(
+      {
+        id: 3,
+        status: "todo",
+        start: day(2026, 10, 10),
+        due: day(2026, 10, 11),
+        dependencies: [2],
+      },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 4,
+        status: "todo",
+        start: day(2026, 10, 10),
+        due: day(2026, 10, 12),
+        dependencies: [2],
+      },
+      { parentId: 1 },
+    );
+    // Joins 3 and 4; in conflict only once they move.
+    repository.addTask(
+      {
+        id: 5,
+        status: "todo",
+        start: day(2026, 10, 13),
+        due: day(2026, 10, 13),
+        dependencies: [3, 4],
+      },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(shiftCounts(read)).toEqual([
+      [2, 3],
+      [3, 0],
+      [4, 0],
+      [5, 0],
+    ]);
+  });
+
+  it("leaves out of the count the tasks outside the project and the done ones", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 3,
+        status: "done",
+        start: day(2026, 10, 8),
+        due: day(2026, 10, 9),
+        dependencies: [2],
+      },
+      { parentId: 1 },
+    );
+    repository.addTask({
+      id: 4,
+      status: "todo",
+      start: day(2026, 10, 8),
+      dependencies: [2],
+    });
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(shiftCounts(read)).toEqual([
+      [2, 0],
+      [3, 0],
+    ]);
+  });
+});

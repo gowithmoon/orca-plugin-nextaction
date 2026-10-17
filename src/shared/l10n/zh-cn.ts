@@ -663,6 +663,12 @@ const zhCN: Record<string, string> = {
   // The gantt chart's date conflicts (#183).
   "Date conflict: starts before a task it depends on is due":
     "日期冲突：开始日期早于所依赖任务的截止日期",
+  // Shifting later the tasks after a gantt bar's task (#184).
+  "${count} tasks after it conflict with its dates":
+    "${count} 个后续任务的日期与它冲突",
+  "Shift ${count} tasks later": "顺延后续 ${count} 个任务",
+  "Shift later tasks (${count})": "顺延后续任务（${count} 个）",
+  "Shifted ${count} tasks later": "顺延了 ${count} 个任务",
   // The gantt chart's time scale (#179); Week and Month are the stats'.
   "Time scale": "刻度",
   Day: "日",

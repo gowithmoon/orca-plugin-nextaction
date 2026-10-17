@@ -24,6 +24,7 @@ import { createReadProjectList } from "../application/usecases/read-project-list
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
+import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import type { CalendarDate } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
@@ -41,6 +42,7 @@ import type { ProjectMenuItems } from "../ui/project-menu/menu-items";
 import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
 import { ganttDependenciesCss } from "../ui/styles/gantt-dependencies-style";
+import { ganttShiftLaterCss } from "../ui/styles/gantt-shift-later-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
 import { projectBoardCss } from "../ui/styles/project-board-style";
@@ -295,6 +297,12 @@ export function createPanelFeature(deps: {
       }),
       gantt: projectGantt,
       editTask: createEditTask({ repository }),
+      shiftLater: createShiftLater({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
     }),
   );
   views.register(
@@ -403,6 +411,7 @@ export function createPanelFeature(deps: {
     registry.css("projectBoardStyle", projectBoardCss);
     registry.css("projectGanttStyle", projectGanttCss);
     registry.css("ganttDependenciesStyle", ganttDependenciesCss);
+    registry.css("ganttShiftLaterStyle", ganttShiftLaterCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.

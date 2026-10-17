@@ -25,6 +25,7 @@ import type { MemoryStore } from "../../components/memory-store";
 import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
 import { useCardDrag } from "../../drag/card-drag";
+import type { ShiftTasksLater } from "../../hooks/use-shift-later";
 import type { WriteTaskDates } from "../../hooks/use-write-task-dates";
 import { usePanel } from "../../panel/panel-context";
 import { statusIcons } from "../../task-menu/status-icons";
@@ -45,6 +46,12 @@ import {
   GanttDependencyArrows,
   GanttOutsideDependencyMark,
 } from "./gantt-dependencies";
+import {
+  GanttBarMenu,
+  GanttShiftNotice,
+  type ShiftNotice,
+  useShiftNotice,
+} from "./gantt-shift-later";
 import {
   GanttUnplacedLanding,
   type UnplacedDrag,
@@ -67,6 +74,8 @@ export interface GanttCards {
   readonly unplacedCollapsed: MemoryStore<boolean>;
   /** A bar let go writes its task's two dates, in one undo (#180). */
   readonly writeDates: WriteTaskDates;
+  /** Shifts later the tasks after a task, in one undo (#184). */
+  readonly shiftLater: ShiftTasksLater;
 }
 
 /** The tasks with a row below them in the read: those that can collapse. */
@@ -365,6 +374,8 @@ function BarView(props: {
   row: GanttRow;
   axis: GanttAxis;
   cards: GanttCards;
+  /** Opens the bar's context menu (#184). */
+  onContextMenu?: (event: React.MouseEvent) => void;
 }) {
   const { bar, row, axis, cards } = props;
   // A bracket's is nothing: it never drags (#180).
@@ -430,6 +441,7 @@ function BarView(props: {
       title={[text, dates, ...notes].join("\n")}
       aria-label={[text, dates, ...notes].join(", ")}
       onClick={() => cards.selectTask(row.task.id)}
+      onContextMenu={props.onContextMenu}
     >
       {heldRight > heldLeft && (
         <i
@@ -482,6 +494,33 @@ function NameBesideBar(props: {
   );
 }
 
+/**
+ * A row's bar or bracket, the bar with its context menu (#184); nothing for
+ * an unplaced task.
+ */
+function BarWithMenu(props: {
+  row: GanttRow;
+  axis: GanttAxis;
+  cards: GanttCards;
+}) {
+  const { row, axis, cards } = props;
+  const bar = row.bar;
+  if (bar.kind === "unplaced") return null;
+  return (
+    <GanttBarMenu row={row} shiftLater={cards.shiftLater}>
+      {(onContextMenu) => (
+        <BarView
+          bar={bar}
+          row={row}
+          axis={axis}
+          cards={cards}
+          onContextMenu={onContextMenu}
+        />
+      )}
+    </GanttBarMenu>
+  );
+}
+
 /** A row in the narrow tier: its bar and, beside it, its name. */
 function NarrowRow(props: {
   row: GanttRow;
@@ -496,9 +535,7 @@ function NarrowRow(props: {
       data-done={row.task.status === "done" || undefined}
     >
       <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
-        {row.bar.kind !== "unplaced" && (
-          <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
-        )}
+        <BarWithMenu row={row} axis={axis} cards={cards} />
         <GanttOutsideDependencyMark row={row} axis={axis} />
         <GanttConflictMark row={row} axis={axis} />
         <NameBesideBar row={row} axis={axis} cards={cards} />
@@ -635,9 +672,7 @@ function Row(props: {
         <TreeName row={row} cards={cards} />
       </div>
       <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
-        {row.bar.kind !== "unplaced" && (
-          <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
-        )}
+        <BarWithMenu row={row} axis={axis} cards={cards} />
         {row.bar.kind === "bar" && (
           <BarLabel bar={row.bar} row={row} axis={axis} />
         )}
@@ -691,7 +726,20 @@ export function ProjectGanttChart(props: {
     }
     scrolledRef.current = { start: axis.range.start, scale: axis.scale };
   }, [axis, gantt.today, tree]);
-  const drag = useChartBarDrag(gantt, cards.writeDates, scrollerRef);
+  const notice = useShiftNotice();
+  const drag = useChartBarDrag(gantt, cards.writeDates, scrollerRef, notice);
+  // A placed unplaced task is a drag written too: the notice for it (#184).
+  const { writeDates } = cards;
+  const { dragStarted, written } = notice;
+  const writePlaced = React.useCallback<WriteTaskDates>(
+    async (id, dates) => {
+      dragStarted();
+      const done = await writeDates(id, dates);
+      if (done) written(id);
+      return done;
+    },
+    [writeDates, dragStarted, written],
+  );
   // An unplaced task dragged onto the axis (#181).
   const rowsRef = React.useRef<HTMLDivElement>(null);
   const unplacedDrag = useUnplacedDrag({
@@ -700,7 +748,7 @@ export function ProjectGanttChart(props: {
     tree,
     scrollerRef,
     rowsRef,
-    writeDates: cards.writeDates,
+    writeDates: writePlaced,
     expanded: cards.expanded,
   });
   // A bar being dragged shows at its dragged dates in every drawing of the
@@ -714,6 +762,12 @@ export function ProjectGanttChart(props: {
   const rows = narrow ? placed : shownRows(placed, expanded);
   return (
     <GanttBarDragContext.Provider value={drag}>
+      <GanttShiftNotice
+        gantt={gantt}
+        notice={notice}
+        dragged={drag.dragged}
+        shiftLater={cards.shiftLater}
+      />
       <section
         ref={scrollerRef}
         className="nextaction-gantt"
@@ -776,7 +830,10 @@ function useChartBarDrag(
   gantt: ProjectGantt,
   writeDates: WriteTaskDates,
   scrollerRef: React.RefObject<HTMLElement | null>,
+  /** The shift later notice: gone on a drag, shown once written (#184). */
+  notice: Pick<ShiftNotice, "dragStarted" | "written">,
 ): GanttBarDragDeps {
+  const { dragStarted, written: noticeWritten } = notice;
   const [dragged, setDragged] = React.useState<GanttDragged | null>(null);
   // Read again: what was let go shows as written.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every new read of the chart
@@ -788,6 +845,7 @@ function useChartBarDrag(
       scroller: () => scrollerRef.current,
       dragged,
       drag(id, dates) {
+        if (dates) dragStarted();
         setDragged(dates ? { id, ...dates, settled: false } : null);
       },
       drop(id, dates, from) {
@@ -799,7 +857,10 @@ function useChartBarDrag(
         }
         setDragged({ id, ...dates, settled: true });
         void writeDates(id, dates).then((written) => {
-          if (written) return;
+          if (written) {
+            noticeWritten(id);
+            return;
+          }
           // Back where it was; the failure is told.
           setDragged((current) =>
             current?.id === id && current.settled ? null : current,
@@ -807,7 +868,7 @@ function useChartBarDrag(
         });
       },
     }),
-    [dragged, writeDates, scrollerRef],
+    [dragged, writeDates, scrollerRef, dragStarted, noticeWritten],
   );
 }
 

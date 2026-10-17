@@ -31,6 +31,7 @@ import type {
   ProjectListRead,
   ReadProjectList,
 } from "../../../application/usecases/read-project-list";
+import type { ShiftLater } from "../../../application/usecases/shift-later";
 import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -48,6 +49,7 @@ import { CardDragArea } from "../../drag/card-drag";
 import { useCandidates } from "../../hooks/use-candidates";
 import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import { useMoveTask } from "../../hooks/use-move-task";
+import { useShiftLater } from "../../hooks/use-shift-later";
 import {
   type TaskActions,
   type TaskActionsDeps,
@@ -156,6 +158,8 @@ export interface ProjectsViewDeps {
   readProjectGantt: ReadProjectGantt;
   /** A gantt bar dragged writes its task's two dates, in one undo (#180). */
   editTask: EditTask;
+  /** The gantt chart's shifting later, from its notice and bar menu (#184). */
+  shiftLater: ShiftLater;
   /** The gantt chart's own state, apart from the tree's and the board's. */
   gantt: ProjectGanttStores;
 }
@@ -555,6 +559,7 @@ function DetailsGantt(props: {
     deps.taskActions.notify,
   );
   const writeDates = useWriteTaskDates(deps.editTask, deps.taskActions.notify);
+  const shiftLater = useShiftLater(deps.shiftLater, deps.taskActions.notify);
   const filterStore = deps.details.filter;
   const filter = React.useSyncExternalStore(
     filterStore.subscribe,
@@ -629,6 +634,7 @@ function DetailsGantt(props: {
               expanded: deps.gantt.expanded,
               unplacedCollapsed: deps.gantt.unplacedCollapsed,
               writeDates,
+              shiftLater,
             }}
           />
         </CardDragArea>
