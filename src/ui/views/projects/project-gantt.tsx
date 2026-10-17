@@ -5,6 +5,9 @@
 // together; the scale row sticks to the top, the tree to the left. Rows keep
 // note order; the tree collapses by task, only the project root tasks
 // showing by default. A click on a bar or a name opens the task panel.
+// The narrow tier (#185) has no tree column: each task's name is written
+// beside its bar, every row shows, none indented or collapsible, and the time
+// axis scrolls sideways over the whole width.
 // Days become pixels only in gantt-axis.ts. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -19,7 +22,14 @@ import { t } from "../../../shared/l10n/l10n";
 import { formatDate, shownText } from "../../components/format";
 import type { MemoryStore } from "../../components/memory-store";
 import { StatusIcon } from "../../components/status-icon";
+import { statusLabel } from "../../components/status-label";
+import { usePanel } from "../../panel/panel-context";
+import { statusIcons } from "../../task-menu/status-icons";
 import { createGanttAxis, type GanttAxis, type GanttScale } from "./gantt-axis";
+import {
+  GanttDependencyArrows,
+  GanttOutsideDependencyMark,
+} from "./gantt-dependencies";
 import type { IdSetStore } from "./project-board-stores";
 
 /** The tree column's width in the wide tier, in pixels. */
@@ -176,7 +186,11 @@ function spreadMarkers(spans: readonly MarkerSpan[]): number[] {
  * The scale row: the upper and lower labels of the scale (#179), then the
  * markers of today and the project's dates, moved apart when they crowd.
  */
-function ScaleRow(props: { axis: GanttAxis; gantt: ProjectGantt }) {
+function ScaleRow(props: {
+  axis: GanttAxis;
+  gantt: ProjectGantt;
+  narrow: boolean;
+}) {
   const { axis, gantt } = props;
   const units = scaleUnits[axis.scale];
   const days = axis.eachDay();
@@ -239,7 +253,9 @@ function ScaleRow(props: { axis: GanttAxis; gantt: ProjectGantt }) {
     });
   return (
     <div className="nextaction-gantt-head">
-      <div className="nextaction-gantt-corner">{t("Tasks")}</div>
+      {!props.narrow && (
+        <div className="nextaction-gantt-corner">{t("Tasks")}</div>
+      )}
       <div
         className="nextaction-gantt-scale"
         data-scale={axis.scale}
@@ -267,13 +283,13 @@ function ScaleRow(props: { axis: GanttAxis; gantt: ProjectGantt }) {
  * scale starts (every day, week or month), a light dashed line at the
  * project's start and due dates, and today's line.
  */
-function Lines(props: { axis: GanttAxis; gantt: ProjectGantt }) {
+function Lines(props: { axis: GanttAxis; gantt: ProjectGantt; left: number }) {
   const { axis, gantt } = props;
   const weeks = axis.eachDay().filter(scaleUnits[axis.scale].lower);
   return (
     <div
       className="nextaction-gantt-lines"
-      style={{ left: treeWidth, width: axis.width }}
+      style={{ left: props.left, width: axis.width }}
       aria-hidden="true"
     >
       {weeks.map((day) => (
@@ -304,8 +320,11 @@ function Lines(props: { axis: GanttAxis; gantt: ProjectGantt }) {
 }
 
 /**
- * What a row draws on the axis, by its kind. For now one neutral colour
- * (#178 colours it by status); the other kinds come with #177.
+ * What a row draws on the axis, by its kind; the other kinds come with
+ * #177. A bar takes its status icon's colour (#178): done ones faded,
+ * someday ones a light dashed frame, overdue ones outlined in red, blocked
+ * ones with a lock at the left end, the stretch held back by a later
+ * effective start hatched.
  */
 function BarView(props: {
   bar: GanttBar;
@@ -316,31 +335,122 @@ function BarView(props: {
   const { bar, row, axis, cards } = props;
   const left = axis.x(bar.start);
   const text = shownText(row.task).text;
+  const width = Math.max(axis.endX(bar.due) - left, 6);
   const dates = t("${start} → ${due}", {
     start: formatDate(bar.start, cards.today),
     due: formatDate(bar.due, cards.today),
   });
+  const held = row.heldBack;
+  // The hatching, within the bar: up to the effective start or its end.
+  const heldLeft = held ? Math.max(axis.x(held.from) - left, 0) : 0;
+  const heldRight = held ? Math.min(axis.x(held.until) - left, width) : 0;
+  const notes = [
+    statusLabel(row.task.status),
+    row.overdue && t("Overdue"),
+    row.blocked && t("Blocked"),
+    held &&
+      t("Can start from ${date}", {
+        date: formatDate(held.until, cards.today),
+      }),
+  ].filter((note): note is string => typeof note === "string");
   return (
     <button
       type="button"
       className="nextaction-gantt-bar"
       data-borrowed={bar.borrowed}
-      style={{ left, width: Math.max(axis.endX(bar.due) - left, 6) }}
-      title={`${text}\n${dates}`}
-      aria-label={`${text}, ${dates}`}
+      data-status={row.task.status}
+      data-overdue={row.overdue || undefined}
+      style={
+        {
+          left,
+          width,
+          "--nextaction-gantt-status": statusIcons[row.task.status].color,
+        } as React.CSSProperties
+      }
+      title={[text, dates, ...notes].join("\n")}
+      aria-label={[text, dates, ...notes].join(", ")}
       onClick={() => cards.selectTask(row.task.id)}
-    />
+    >
+      {heldRight > heldLeft && (
+        <i
+          className="nextaction-gantt-held"
+          style={{ left: heldLeft, width: heldRight - heldLeft }}
+          aria-hidden="true"
+        />
+      )}
+      {row.blocked && (
+        <span className="nextaction-gantt-lock" aria-hidden="true">
+          <i className="ti ti-lock" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * The narrow tier's name of a row, in its lane: just after the bar's end,
+ * or, without a bar, at the left edge of what shows. A click opens the task
+ * panel, as the bar does.
+ */
+function NameBesideBar(props: {
+  row: GanttRow;
+  axis: GanttAxis;
+  cards: GanttCards;
+}) {
+  const { row, axis, cards } = props;
+  const text = shownText(row.task);
+  return (
+    <button
+      type="button"
+      className="nextaction-gantt-bar-name"
+      data-empty={text.empty || undefined}
+      data-beside={row.bar ? "bar" : undefined}
+      aria-current={row.task.id === cards.selectedTaskId || undefined}
+      title={text.text}
+      style={row.bar ? { left: axis.endX(row.bar.due) + 6 } : undefined}
+      onClick={() => cards.selectTask(row.task.id)}
+    >
+      {text.text}
+    </button>
+  );
+}
+
+/** A row in the narrow tier: its bar and, beside it, its name. */
+function NarrowRow(props: {
+  row: GanttRow;
+  axis: GanttAxis;
+  cards: GanttCards;
+}) {
+  const { row, axis, cards } = props;
+  return (
+    <div
+      className="nextaction-gantt-row"
+      data-selected={row.task.id === cards.selectedTaskId || undefined}
+      data-done={row.task.status === "done" || undefined}
+    >
+      <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
+        {row.bar && (
+          <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
+        )}
+        <GanttOutsideDependencyMark row={row} axis={axis} />
+        <NameBesideBar row={row} axis={axis} cards={cards} />
+      </div>
+    </div>
   );
 }
 
 /** The bar label's text size and its padding either side, in pixels. */
 const barLabelSize = 12;
 const barLabelPadding = 5;
+/** The lock at a blocked bar's left end (`.nextaction-gantt-lock`). */
+const lockWidth = 15;
 
 /**
- * The task's name by its bar (#179): inside it when it fits, else just
- * after it; on the month scale, where bars are short and close, not drawn
- * when it does not fit inside. Clicks go through to the bar.
+ * The wide tier's task name by its bar (#179): inside it when it fits
+ * (after the lock of a blocked bar), else just after it; on the month
+ * scale, where bars are short and close, not drawn when it does not fit
+ * inside. Clicks go through to the bar. The narrow tier has
+ * `NameBesideBar`.
  */
 function BarLabel(props: { bar: GanttBar; row: GanttRow; axis: GanttAxis }) {
   const { bar, row, axis } = props;
@@ -348,8 +458,9 @@ function BarLabel(props: { bar: GanttBar; row: GanttRow; axis: GanttAxis }) {
   if (text.empty) return null;
   const left = axis.x(bar.start);
   const width = axis.endX(bar.due) - left;
+  const inset = barLabelPadding + (row.blocked ? lockWidth : 0);
   const fits =
-    textWidth(text.text, barLabelSize) + 2 * barLabelPadding <= width;
+    textWidth(text.text, barLabelSize) + inset + barLabelPadding <= width;
   if (!fits && axis.scale === "month") return null;
   return (
     <span
@@ -358,8 +469,8 @@ function BarLabel(props: { bar: GanttBar; row: GanttRow; axis: GanttAxis }) {
       style={
         fits
           ? {
-              left: left + barLabelPadding,
-              maxWidth: width - 2 * barLabelPadding,
+              left: left + inset,
+              maxWidth: width - inset - barLabelPadding,
             }
           : { left: left + width + barLabelPadding }
       }
@@ -428,6 +539,7 @@ function Row(props: {
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
         {row.bar && <BarLabel bar={row.bar} row={row} axis={axis} />}
+        <GanttOutsideDependencyMark row={row} axis={axis} />
       </div>
     </div>
   );
@@ -440,6 +552,10 @@ export function ProjectGanttChart(props: {
   scale: GanttScale;
 }) {
   const { gantt, cards } = props;
+  // No tree column, nothing collapsed; the stored collapsing stays for the
+  // wider tiers.
+  const narrow = usePanel().tier === "narrow";
+  const tree = narrow ? 0 : treeWidth;
   const expanded = React.useSyncExternalStore(
     cards.expanded.subscribe,
     cards.expanded.current,
@@ -462,7 +578,7 @@ export function ProjectGanttChart(props: {
     if (placed === null || placed.scale !== axis.scale) {
       // Opened, or another scale: today a third of the way across the time
       // axis's visible part.
-      const visible = scroller.clientWidth - treeWidth;
+      const visible = scroller.clientWidth - tree;
       scroller.scrollLeft = Math.max(0, axis.x(gantt.today) - visible / 3);
     } else {
       // The range grew or shrank on the left (a date written): keep the
@@ -470,9 +586,9 @@ export function ProjectGanttChart(props: {
       scroller.scrollLeft += axis.x(placed.start);
     }
     placedRef.current = { start: axis.range.start, scale: axis.scale };
-  }, [axis, gantt.today]);
+  }, [axis, gantt.today, tree]);
   const parents = React.useMemo(() => parentsOf(gantt.rows), [gantt.rows]);
-  const rows = shownRows(gantt.rows, expanded);
+  const rows = narrow ? gantt.rows : shownRows(gantt.rows, expanded);
   return (
     <section
       ref={scrollerRef}
@@ -480,28 +596,38 @@ export function ProjectGanttChart(props: {
       aria-label={t("Gantt")}
       style={
         {
-          "--nextaction-gantt-tree": `${treeWidth}px`,
+          "--nextaction-gantt-tree": `${tree}px`,
         } as React.CSSProperties
       }
     >
       <div
         className="nextaction-gantt-body"
-        style={{ width: treeWidth + axis.width }}
+        style={{ width: tree + axis.width }}
       >
-        <ScaleRow axis={axis} gantt={gantt} />
+        <ScaleRow axis={axis} gantt={gantt} narrow={narrow} />
         <div className="nextaction-gantt-rows">
-          <Lines axis={axis} gantt={gantt} />
-          {rows.map((row) => (
-            <Row
-              key={row.task.id}
-              row={row}
-              axis={axis}
-              cards={cards}
-              collapsible={parents.has(row.task.id)}
-              expanded={expanded.has(row.task.id)}
-            />
-          ))}
-          <div className="nextaction-gantt-fill" />
+          <Lines axis={axis} gantt={gantt} left={tree} />
+          <GanttDependencyArrows rows={rows} axis={axis} left={tree} />
+          {rows.map((row) =>
+            narrow ? (
+              <NarrowRow
+                key={row.task.id}
+                row={row}
+                axis={axis}
+                cards={cards}
+              />
+            ) : (
+              <Row
+                key={row.task.id}
+                row={row}
+                axis={axis}
+                cards={cards}
+                collapsible={parents.has(row.task.id)}
+                expanded={expanded.has(row.task.id)}
+              />
+            ),
+          )}
+          {!narrow && <div className="nextaction-gantt-fill" />}
         </div>
       </div>
     </section>
@@ -540,7 +666,8 @@ export function GanttScaleSwitch(props: { store: MemoryStore<GanttScale> }) {
 
 /**
  * The chart's "Collapse all / Expand all", over the rows with subtasks;
- * none: no button. Collapses all while any is expanded.
+ * none, or the narrow tier where nothing collapses: no button. Collapses all
+ * while any is expanded.
  */
 export function GanttCollapseAllButton(props: {
   gantt: ProjectGantt;
@@ -548,12 +675,13 @@ export function GanttCollapseAllButton(props: {
 }) {
   const { gantt, expanded } = props;
   const { Button, Tooltip } = orca.components;
+  const narrow = usePanel().tier === "narrow";
   const current = React.useSyncExternalStore(
     expanded.subscribe,
     expanded.current,
   );
   const ids = [...parentsOf(gantt.rows)];
-  if (ids.length === 0) return null;
+  if (narrow || ids.length === 0) return null;
   const anyExpanded = ids.some((id) => current.has(id));
   const label = anyExpanded ? t("Collapse all") : t("Expand all");
   return (

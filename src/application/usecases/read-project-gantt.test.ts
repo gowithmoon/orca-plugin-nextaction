@@ -147,6 +147,136 @@ describe("read project gantt, bars", () => {
   });
 });
 
+describe("read project gantt, how a row stands", () => {
+  it("marks a task overdue when it is not done and its due date has passed, a done one never", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // Due yesterday (today is 2026-10-09).
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 8) },
+      { parentId: 1 },
+    );
+    // Due today: not yet.
+    repository.addTask(
+      { id: 3, status: "doing", due: day(2026, 10, 9) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "done", due: day(2026, 10, 1) },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 1 });
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.overdue])).toEqual([
+      [2, true],
+      [3, false],
+      [4, false],
+      [5, false],
+    ]);
+  });
+});
+
+describe("read project gantt, blocked", () => {
+  it("marks a task blocked as the board does: by a dependency, not by its subtasks", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Waits for task 2.
+    repository.addTask(
+      { id: 3, status: "todo", dependencies: [2] },
+      { parentId: 1 },
+    );
+    // Held back only by its open subtask.
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 5, status: "todo" }, { parentId: 4 });
+    // Waiting: not marked, as on the board.
+    repository.addTask(
+      { id: 6, status: "waiting", dependencies: [2] },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.blocked])).toEqual([
+      [2, false],
+      [3, true],
+      [4, false],
+      [5, false],
+      [6, false],
+    ]);
+  });
+});
+
+describe("read project gantt, held back", () => {
+  it("gives the stretch an ancestor task's later start holds back: from the task's own start to the effective start", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", start: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 3,
+        status: "todo",
+        start: day(2026, 10, 5),
+        due: day(2026, 10, 20),
+      },
+      { parentId: 2 },
+    );
+    // Starts after its parent task: nothing held back.
+    repository.addTask(
+      {
+        id: 4,
+        status: "todo",
+        start: day(2026, 10, 14),
+        due: day(2026, 10, 20),
+      },
+      { parentId: 2 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.heldBack])).toEqual([
+      [2, null],
+      [3, { from: day(2026, 10, 5), until: day(2026, 10, 12) }],
+      [4, null],
+    ]);
+  });
+
+  it("gives the stretch the project's later start holds back", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 10),
+    });
+    repository.addTask(
+      {
+        id: 2,
+        status: "todo",
+        start: day(2026, 10, 1),
+        due: day(2026, 10, 15),
+      },
+      { parentId: 1 },
+    );
+    // No start of its own: nothing of its own held back.
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 15) },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.heldBack])).toEqual([
+      [2, { from: day(2026, 10, 1), until: day(2026, 10, 10) }],
+      [3, null],
+    ]);
+  });
+});
+
 describe("read project gantt, filtered and searched", () => {
   it("keeps a row when its task or any descendant task is found, in note order", async () => {
     const { repository, readProjectGantt } = setup();
@@ -322,5 +452,100 @@ describe("read project gantt, the range it scrolls over", () => {
       start: day(2026, 9, 25),
       end: day(2026, 10, 23),
     });
+  });
+});
+
+describe("read project gantt, dependencies", () => {
+  it("gives a row its dependencies on the project's tasks, from the task depended on to it, with its dependency delay", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask(
+      { id: 4, status: "todo", dependencies: [3, 2], dependencyDelay: 2 },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 5, status: "todo", dependencies: [4] },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(
+      read.gantt.rows.map((row) => [row.task.id, row.dependencies]),
+    ).toEqual([
+      [2, []],
+      [3, []],
+      [
+        4,
+        [
+          { from: 3, to: 4, delay: 2 },
+          { from: 2, to: 4, delay: 2 },
+        ],
+      ],
+      [5, [{ from: 4, to: 5, delay: 0 }]],
+    ]);
+  });
+
+  it("marks a dependency on a task outside the project with the task's text, not as an arrow; a stale one not at all", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addProject({ id: 5, status: "active" });
+    repository.addTask(
+      { id: 6, status: "todo", text: "Sign the lease" },
+      { parentId: 5 },
+    );
+    repository.addTask({ id: 7, status: "done", text: "Ask Wang" });
+    // Not a task any more: a stale dependency.
+    repository.addBlock(8);
+    repository.addTask(
+      { id: 2, status: "todo", dependencies: [6, 8, 9, 7] },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", dependencies: [2] },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(
+      read.gantt.rows.map((row) => [
+        row.task.id,
+        row.dependencies,
+        row.outsideDependencies,
+      ]),
+    ).toEqual([
+      [
+        2,
+        [],
+        [
+          { task: 6, text: "Sign the lease" },
+          { task: 7, text: "Ask Wang" },
+        ],
+      ],
+      [3, [{ from: 2, to: 3, delay: 0 }], []],
+    ]);
+  });
+
+  it("gives no dependency for doing subtasks one after another", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", sequential: true },
+      { parentId: 1 },
+    );
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 2 });
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(
+      read.gantt.rows.flatMap((row) => [
+        ...row.dependencies,
+        ...row.outsideDependencies,
+      ]),
+    ).toEqual([]);
   });
 });

@@ -5,8 +5,10 @@
 import {
   analyzeTaskGraph,
   type SnapshotTask,
+  type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
+import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import { addDays, compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
@@ -18,6 +20,7 @@ import { projectNode, projectNodeContext } from "./project-nodes";
 import {
   type AllTasksFilter,
   buildTaskTree,
+  marksBlocked,
   matches,
   narrowing,
   narrows,
@@ -57,6 +60,66 @@ export interface GanttRow {
   readonly parentId: TaskId | null;
   /** What it draws; `null`: nothing yet (a task without both dates, #177). */
   readonly bar: GanttBar | null;
+  /**
+   * Overdue (GLOSSARY: 截止日期): not done, its own due date passed; its bar
+   * is outlined in red. A done task never is.
+   */
+  readonly overdue: boolean;
+  /**
+   * Marked blocked as the board's cards are (`marksBlocked`): to do or in
+   * progress, blocked by anything but its subtasks. A lock at its bar's
+   * left end.
+   */
+  readonly blocked: boolean;
+  /**
+   * The stretch held back by an ancestor task's or the project's later start
+   * (GLOSSARY: 开始日期): from the task's own start to the effective start,
+   * that day not included; shaded with hatching. `null` when the task has
+   * no start of its own, or it is the effective start.
+   */
+  readonly heldBack: HeldBack | null;
+  /**
+   * Its dependencies (GLOSSARY: 依赖) on the project's tasks, in the order
+   * the notes hold them: the arrows into its bar. One whose task has no row
+   * or no bar drawn is listed all the same; the interface leaves out the
+   * arrow it cannot draw.
+   */
+  readonly dependencies: readonly GanttDependency[];
+  /**
+   * Its dependencies on tasks outside the project, in the order the notes
+   * hold them: a mark on its bar, no arrow. A stale dependency (GLOSSARY:
+   * 失效依赖) is in neither list.
+   */
+  readonly outsideDependencies: readonly GanttOutsideDependency[];
+}
+
+/** A dependency on a task outside the project: its mark names the task. */
+export interface GanttOutsideDependency {
+  readonly task: TaskId;
+  /** The task's own text, as `Task.text`. */
+  readonly text: string;
+}
+
+/**
+ * A dependency between two of the project's tasks (GLOSSARY: 依赖): an
+ * arrow from the end of `from`'s bar to the start of `to`'s.
+ */
+export interface GanttDependency {
+  /** The task depended on. */
+  readonly from: TaskId;
+  /** The task that waits for it. */
+  readonly to: TaskId;
+  /**
+   * `to`'s dependency delay (GLOSSARY: 依赖延迟) in days, the same on each of
+   * its arrows; 0 for none.
+   */
+  readonly delay: number;
+}
+
+/** Days `from` up to `until`, `until` not included. */
+export interface HeldBack {
+  readonly from: CalendarDate;
+  readonly until: CalendarDate;
 }
 
 /** The chart of a project. */
@@ -146,6 +209,28 @@ function barOf(task: Task): GanttBar | null {
   return { kind: "bar", start: task.start, due: task.due, borrowed: "none" };
 }
 
+/** A row's two lists of dependencies. */
+type RowDependencies = Pick<GanttRow, "dependencies" | "outsideDependencies">;
+
+/**
+ * The stretch of `entry`'s task held back by a later effective start;
+ * `null` for none.
+ */
+function heldBackOf(entry: TaskGraphEntry | undefined): HeldBack | null {
+  const own = entry?.task.start ?? null;
+  const effective = entry?.effectiveStart ?? null;
+  if (own === null || effective === null) return null;
+  if (compareDays(own, effective) >= 0) return null;
+  return { from: own, until: effective };
+}
+
+/**
+ * How a row's task stands, beside its place in the tree and its bar; its
+ * dependencies too (#182).
+ */
+type RowStanding = Pick<GanttRow, "overdue" | "blocked" | "heldBack"> &
+  RowDependencies;
+
 /**
  * `item` and its descendant tasks with their depth, in note order: those
  * `kept`, a task left out with its subtree.
@@ -155,6 +240,7 @@ function rowsOf(
   item: SnapshotTask,
   depth: number,
   kept: (item: SnapshotTask) => boolean,
+  standing: (item: SnapshotTask) => RowStanding,
 ): GanttRow[] {
   if (!kept(item)) return [];
   return [
@@ -163,10 +249,11 @@ function rowsOf(
       depth,
       parentId: depth === 0 ? null : item.parentId,
       bar: barOf(item.task),
+      ...standing(item),
     },
     ...tree
       .childrenOf(item.task.id)
-      .flatMap((child) => rowsOf(tree, child, depth + 1, kept)),
+      .flatMap((child) => rowsOf(tree, child, depth + 1, kept, standing)),
   ];
 }
 
@@ -205,8 +292,29 @@ export function createReadProjectGantt(deps: {
       keptById.set(item.task.id, found);
       return found;
     };
+    const dependenciesOf = (task: Task): RowDependencies => {
+      const inside: GanttDependency[] = [];
+      const outside: GanttOutsideDependency[] = [];
+      for (const id of task.dependencies) {
+        // Not a task in the graph: a stale dependency, shown nowhere.
+        const entry = graph.entry(id);
+        if (!entry) continue;
+        if (entry.project?.id === scoped.project.id) {
+          inside.push({ from: id, to: task.id, delay: task.dependencyDelay });
+        } else {
+          outside.push({ task: id, text: entry.task.text });
+        }
+      }
+      return { dependencies: inside, outsideDependencies: outside };
+    };
+    const standing = (item: SnapshotTask): RowStanding => ({
+      overdue: isOverdue(item.task, today),
+      blocked: marksBlocked(graph.entry(item.task.id)),
+      heldBack: heldBackOf(graph.entry(item.task.id)),
+      ...dependenciesOf(item.task),
+    });
     const rows = projectRootTasks(snapshot, graph, scoped.project.id).flatMap(
-      (root) => rowsOf(tree, root, 0, kept),
+      (root) => rowsOf(tree, root, 0, kept, standing),
     );
     const project = projectNode(
       projectNodeContext(snapshot, graph, { today, previewDays, boundary }),

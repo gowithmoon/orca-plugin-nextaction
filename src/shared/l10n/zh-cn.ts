@@ -639,6 +639,11 @@ const zhCN: Record<string, string> = {
   "Project start": "项目开始",
   "Project due": "项目截止",
   "${start} → ${due}": "${start} → ${due}",
+  "Can start from ${date}": "${date} 起才能开始",
+  // The gantt chart's dependencies (#182).
+  "+${days}d": "+${days}天",
+  "Depends on tasks outside the project: ${tasks}":
+    "依赖项目外的任务：${tasks}",
   // The gantt chart's time scale (#179); Week and Month are the stats'.
   "Time scale": "刻度",
   Day: "日",

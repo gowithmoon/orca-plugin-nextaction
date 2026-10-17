@@ -40,6 +40,7 @@ import { createPanelViews, type PanelViews } from "../ui/panel/panel-views";
 import type { ProjectMenuItems } from "../ui/project-menu/menu-items";
 import { cardDragCss } from "../ui/styles/card-drag-style";
 import { componentCss } from "../ui/styles/component-style";
+import { ganttDependenciesCss } from "../ui/styles/gantt-dependencies-style";
 import { myDayCss } from "../ui/styles/my-day-style";
 import { panelCss } from "../ui/styles/panel-style";
 import { projectBoardCss } from "../ui/styles/project-board-style";
@@ -400,6 +401,7 @@ export function createPanelFeature(deps: {
     registry.css("cardDragStyle", cardDragCss);
     registry.css("projectBoardStyle", projectBoardCss);
     registry.css("projectGanttStyle", projectGanttCss);
+    registry.css("ganttDependenciesStyle", ganttDependenciesCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.
