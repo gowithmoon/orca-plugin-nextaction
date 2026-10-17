@@ -9,6 +9,7 @@
 // list. Each part reads when it shows and again on every task change signal
 // (ADR 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { EditTask } from "../../../application/usecases/edit-task";
 import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
@@ -22,10 +23,15 @@ import type {
   ReadProjectBoard,
 } from "../../../application/usecases/read-project-board";
 import type {
+  ProjectGanttRead,
+  ReadProjectGantt,
+} from "../../../application/usecases/read-project-gantt";
+import type {
   ProjectGroup,
   ProjectListRead,
   ReadProjectList,
 } from "../../../application/usecases/read-project-list";
+import type { ShiftLater } from "../../../application/usecases/shift-later";
 import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -43,6 +49,7 @@ import { CardDragArea } from "../../drag/card-drag";
 import { useCandidates } from "../../hooks/use-candidates";
 import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
 import { useMoveTask } from "../../hooks/use-move-task";
+import { useShiftLater } from "../../hooks/use-shift-later";
 import {
   type TaskActions,
   type TaskActionsDeps,
@@ -53,6 +60,7 @@ import {
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
+import { useWriteTaskDates } from "../../hooks/use-write-task-dates";
 import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
@@ -81,6 +89,12 @@ import type {
   ProjectBoardStores,
 } from "./project-board-stores";
 import { BackToProjects, ProjectAttributes } from "./project-details";
+import {
+  GanttCollapseAllButton,
+  GanttScaleSwitch,
+  ProjectGanttChart,
+} from "./project-gantt";
+import type { ProjectGanttStores } from "./project-gantt-stores";
 import {
   isGroupCollapsed,
   type ProjectGroupsStore,
@@ -135,8 +149,19 @@ export interface ProjectsViewDeps {
   layout: ProjectLayoutStore;
   /** The board's own state, apart from the tree's (#166). */
   board: ProjectBoardStores;
-  /** The board's "Create task", its 所属项目 filled in with the project. */
+  /**
+   * The board's and the gantt chart's "Create task", its 所属项目 filled in
+   * with the project.
+   */
   openQuickCapture: OpenQuickCapture;
+  /** The project gantt chart's read (#186). */
+  readProjectGantt: ReadProjectGantt;
+  /** A gantt bar dragged writes its task's two dates, in one undo (#180). */
+  editTask: EditTask;
+  /** The gantt chart's shifting later, from its notice and bar menu (#184). */
+  shiftLater: ShiftLater;
+  /** The gantt chart's own state, apart from the tree's and the board's. */
+  gantt: ProjectGanttStores;
 }
 
 /**
@@ -276,7 +301,9 @@ function ProjectsContent(props: {
  * The project details in either layout: what a read needs (loading, failure,
  * no such project), then the attribute area and the layout's part.
  */
-function DetailsContent<R extends ProjectScopeRead | ProjectBoardRead>(props: {
+function DetailsContent<
+  R extends ProjectScopeRead | ProjectBoardRead | ProjectGanttRead,
+>(props: {
   query: ViewQuery<R>;
   today: CalendarDate;
   deps: ProjectsViewDeps;
@@ -354,6 +381,7 @@ function LayoutSwitch(props: { store: ProjectLayoutStore }) {
       options={[
         { value: "tree", jsx: icon("ti ti-list-tree", t("Tree")) },
         { value: "board", jsx: icon("ti ti-layout-kanban", t("Board")) },
+        { value: "gantt", jsx: icon("ti ti-timeline", t("Gantt")) },
       ]}
       onChange={(value) => props.store.set(projectLayoutFrom(value))}
     />
@@ -508,6 +536,111 @@ function DetailsBoard(props: {
         </CardDragArea>
       )}
       {confirmation}
+    </>
+  );
+}
+
+/**
+ * The gantt layout's toolbar and chart (#186): the layout switch, the
+ * tree's search box and filter on the same store (switching layout keeps
+ * them), "collapse all / expand all" over the chart's own collapsed rows,
+ * and "Create task" as the board's; then the chart. No sort: the rows keep
+ * note order.
+ */
+function DetailsGantt(props: {
+  read: Extract<ProjectGanttRead, { kind: "project" }>;
+  today: CalendarDate;
+  deps: ProjectsViewDeps;
+}) {
+  const { read, today, deps } = props;
+  const { selectedTaskId, selectTask } = usePanel();
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
+  const writeDates = useWriteTaskDates(deps.editTask, deps.taskActions.notify);
+  const shiftLater = useShiftLater(deps.shiftLater, deps.taskActions.notify);
+  const filterStore = deps.details.filter;
+  const filter = React.useSyncExternalStore(
+    filterStore.subscribe,
+    filterStore.current,
+  );
+  const filtering = isFilteringAllTasks(filter);
+  const candidates = useCandidates(
+    deps.readCandidates,
+    deps.changes,
+    deps.taskActions.notify,
+  );
+  const { Button, Tooltip } = orca.components;
+  const project = read.project.project.id;
+  const empty = read.gantt.rows.length === 0;
+  const scale = React.useSyncExternalStore(
+    deps.gantt.scale.subscribe,
+    deps.gantt.scale.current,
+  );
+  return (
+    <>
+      <div className="nextaction-toolbar">
+        <LayoutSwitch store={deps.layout} />
+        <GanttScaleSwitch store={deps.gantt.scale} />
+        <AllTasksSearchBox
+          search={filter.search}
+          onChange={(search) => filterStore.set({ ...filter, search })}
+        />
+        <div className="nextaction-toolbar-view">
+          <GanttCollapseAllButton
+            gantt={read.gantt}
+            expanded={deps.gantt.expanded}
+            allExpanded={filtering}
+          />
+          <AllTasksFilterButton
+            state={filter}
+            candidates={candidates}
+            onChange={filterStore.set}
+          />
+          <Tooltip text={t("Create task")}>
+            <Button
+              variant="plain"
+              className="nextaction-toolbar-button"
+              aria-label={t("Create task")}
+              onClick={() => deps.openQuickCapture(project)}
+            >
+              <i className="ti ti-circle-plus" aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        </div>
+      </div>
+      {filtering && empty ? (
+        <ViewNotice
+          icon="ti ti-filter-off"
+          title={t("No tasks match the filter")}
+          action={
+            <Button variant="outline" onClick={filterStore.clear}>
+              {t("Clear filter")}
+            </Button>
+          }
+        />
+      ) : (
+        // The tree's names drag into the notes only, no drop in the chart (#180).
+        <CardDragArea onNoteDrop={linkTaskInNote}>
+          <ProjectGanttChart
+            // Another project: its chart opens with today a third across.
+            key={project}
+            gantt={read.gantt}
+            scale={scale}
+            cards={{
+              today,
+              selectedTaskId,
+              selectTask,
+              expanded: deps.gantt.expanded,
+              allExpanded: filtering,
+              unplacedCollapsed: deps.gantt.unplacedCollapsed,
+              writeDates,
+              shiftLater,
+            }}
+          />
+        </CardDragArea>
+      )}
     </>
   );
 }
@@ -678,6 +811,20 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
   boardStores.sort.subscribe(() => boardQuery.reload());
   stores.filter.subscribe(() => boardQuery.reload());
   boardStores.grouping.subscribe(() => boardQuery.reload());
+  // The gantt chart's read (#186): only while the chart shows, likewise.
+  // Collapsing only renders what is read.
+  const ganttQuery = createViewQuery(async (): Promise<ProjectGanttRead> => {
+    const project = deps.openProject.current();
+    if (project === null) return { kind: "noProject" };
+    return deps.readProjectGantt({
+      project,
+      // The tree's filter and search text, shared: switching layout keeps
+      // them.
+      filter: stores.filter.current().filter,
+      search: stores.filter.current().search,
+    });
+  }, deps.changes);
+  stores.filter.subscribe(() => ganttQuery.reload());
   // Another project opened: its filter, search text, sort and "show
   // earlier" start over; the collapsed tasks stay, by task. Going back to
   // the list and into the same project keeps them. Lives as long as the
@@ -722,10 +869,11 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
       deps.layout.current,
     );
     const { selectedTaskId } = usePanel();
-    // The board needs the width: no side pane beside it, even in the wide
-    // tier; its tasks open in the popup. From the moment it opens, while it
-    // still reads, so the pane does not come and go.
-    useWithoutSidePane(open !== null && layout === "board");
+    // The board and the gantt chart need the width: no side pane beside
+    // them, even in the wide tier; their tasks open in the popup. From the
+    // moment they open, while they still read, so the pane does not come
+    // and go.
+    useWithoutSidePane(open !== null && layout !== "tree");
     // As in the all tasks view: a new selection reads again, so a task kept
     // for the earlier one leaves at once.
     const readFor = React.useRef<TaskId | undefined>(undefined);
@@ -753,7 +901,17 @@ export function createProjectsView(deps: ProjectsViewDeps): PanelView {
     return (
       <div className="nextaction-project-details" data-layout={layout}>
         <BackToProjects onBack={() => deps.openProject.set(null)} />
-        {layout === "board" ? (
+        {layout === "gantt" ? (
+          <DetailsContent
+            key="gantt"
+            query={ganttQuery}
+            today={today}
+            deps={deps}
+            render={(read) => (
+              <DetailsGantt read={read} today={today} deps={deps} />
+            )}
+          />
+        ) : layout === "board" ? (
           <DetailsContent
             key="board"
             query={boardQuery}

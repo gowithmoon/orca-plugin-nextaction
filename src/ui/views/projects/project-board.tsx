@@ -37,11 +37,13 @@ import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
+import type { IdSetStore } from "../../components/id-set-store";
 import { ContextMenu } from "../../components/popup-controls";
 import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
 import { StatusButton, TaskCard } from "../../components/task-card";
 import { useCardDrag } from "../../drag/card-drag";
+import { useDragToPan } from "../../drag/drag-to-pan";
 import type { TaskActions } from "../../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { TaskMenu } from "../../task-menu/task-menu";
@@ -55,7 +57,7 @@ import {
   boardTaskAttribute,
   createBoardDrag,
 } from "./board-drag";
-import type { ExpandedCardsStore, IdSetStore } from "./project-board-stores";
+import type { ExpandedCardsStore } from "./project-board-stores";
 
 /** The board's drag (#168, #169), for its cards and rows. */
 const BoardDragContext = React.createContext<BoardDrag | undefined>(undefined);
@@ -736,9 +738,12 @@ export function ProjectBoardColumns(props: {
       },
     })),
   );
+  // Empty space between and in the columns drags the board sideways (#187).
+  const pan = useDragToPan();
   return (
     <BoardDragContext.Provider value={drag}>
       <section
+        {...pan}
         ref={root}
         className="nextaction-board"
         aria-label={t("Board")}

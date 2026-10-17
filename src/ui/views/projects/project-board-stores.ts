@@ -7,6 +7,10 @@
 // "Done N" and its opened finished columns (#171).
 import type { BoardGrouping } from "../../../application/usecases/read-project-board";
 import type { TaskId } from "../../../domain/task/task";
+import {
+  createIdSetStore,
+  type IdSetStore,
+} from "../../components/id-set-store";
 import { createMemoryStore } from "../../components/memory-store";
 import {
   type AllTasksSortStore,
@@ -48,44 +52,8 @@ export interface BoardGroupingStore {
   subscribe(listener: () => void): () => void;
 }
 
-/** A set of IDs in memory, each on or off; a new set after every change. */
-export interface IdSetStore<Id> {
-  current(): ReadonlySet<Id>;
-  /** Turns the ID on if off, off if on. */
-  toggle(id: Id): void;
-  /** Sets every one of `ids` on or off. */
-  setAll(ids: readonly Id[], on: boolean): void;
-  subscribe(listener: () => void): () => void;
-}
-
 /** The expanded cards' tasks (#167). */
 export type ExpandedCardsStore = IdSetStore<TaskId>;
-
-function createIdSetStore<Id>(): IdSetStore<Id> & { clear(): void } {
-  const store = createMemoryStore<ReadonlySet<Id>>(new Set());
-  return {
-    current: store.current,
-    toggle(id) {
-      const next = new Set(store.current());
-      if (!next.delete(id)) next.add(id);
-      store.set(next);
-    },
-    setAll(ids, on) {
-      const current = store.current();
-      if (ids.every((id) => current.has(id) === on)) return;
-      const next = new Set(current);
-      for (const id of ids) {
-        if (on) next.add(id);
-        else next.delete(id);
-      }
-      store.set(next);
-    },
-    clear() {
-      if (store.current().size > 0) store.set(new Set());
-    },
-    subscribe: store.subscribe,
-  };
-}
 
 export function createProjectBoardStores(): ProjectBoardStores {
   const sort = createAllTasksSortStore("score");
