@@ -707,7 +707,7 @@ describe("read project board, filtered and searched (#172)", () => {
     expect(card?.subtasks).toEqual({ done: 1, total: 2 });
   });
 
-  it("by status lets the status filter choose only the columns, not the cards; the done column, not offered by it, goes too", async () => {
+  it("by status lets the status filter choose only the columns, not the cards, a chosen one shown even empty; the done column, not offered by it, stays", async () => {
     const { repository, readProjectBoard } = setup();
     repository.addProject({ id: 1, status: "active" });
     // A todo card whose subtasks are of other statuses: kept whole.
@@ -724,7 +724,8 @@ describe("read project board, filtered and searched (#172)", () => {
     const read = await readProjectBoard({
       project: 1,
       sort: "note",
-      filter: { statuses: ["todo", "doing"] },
+      // No project root task waits: 4 is a subtask.
+      filter: { statuses: ["todo", "doing", "waiting"] },
     });
 
     expect(
@@ -735,13 +736,15 @@ describe("read project board, filtered and searched (#172)", () => {
     ).toEqual([
       ["todo", [2]],
       ["doing", [6]],
+      ["waiting", []],
+      ["done", [7]],
     ]);
     expect(
       column(read, "todo").cards[0]?.rows.map((row) => row.task.id),
     ).toEqual([3, 4]);
   });
 
-  it("by status leaves out the empty columns while narrowed, the others' counts those found; searching lifts the done column's 30 days, as the done section's", async () => {
+  it("by status keeps every column while narrowed, empty ones too, the counts those found; searching lifts the done column's 30 days, as the done section's", async () => {
     const { repository, readProjectBoard } = setup();
     repository.addProject({ id: 1, status: "active" });
     repository.addTask(
@@ -771,7 +774,11 @@ describe("read project board, filtered and searched (#172)", () => {
         col.earlier.map((card) => card.task.id),
       ]),
     ).toEqual([
+      ["inbox", 0, [], []],
       ["todo", 1, [2], []],
+      ["doing", 0, [], []],
+      ["waiting", 0, [], []],
+      ["someday", 0, [], []],
       ["done", 1, [5], []],
     ]);
   });

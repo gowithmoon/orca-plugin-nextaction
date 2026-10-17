@@ -1,7 +1,7 @@
 // The project board's state (#166), in the plugin instance's memory apart
 // from the tree's: its sort (by score by default, kept apart from the
-// tree's) and its done column (collapsed to a narrow strip by default;
-// earlier done cards shown or not). Unloading clears them through `clear`
+// tree's) and its done column (open by default, collapsible to a narrow
+// strip; earlier done cards shown or not). Unloading clears them through `clear`
 // (platform/panel-feature.ts); never written with `plugins.setData`. With
 // them the board's collapsed cards (#167), and its grouping, its columns'
 // "Done N" and its opened finished columns (#171).
@@ -89,7 +89,11 @@ function createIdSetStore<Id>(): IdSetStore<Id> & { clear(): void } {
 
 export function createProjectBoardStores(): ProjectBoardStores {
   const sort = createAllTasksSortStore("score");
-  const doneColumn = createDoneSectionStore();
+  // Open by default: the board shows what was done at full width.
+  const doneColumn = createDoneSectionStore({
+    expanded: true,
+    showEarlier: false,
+  });
   const expanded = createIdSetStore<TaskId>();
   const grouping = createMemoryStore<BoardGrouping>("status");
   const doneOpen = createIdSetStore<TaskId | "other">();
