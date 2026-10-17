@@ -1,6 +1,6 @@
 import type { TaskTagNames } from "../../application/ports/task-tag-names";
 import type { TaskStatus } from "../../domain/task/task";
-import { iconSelector } from "./orca-dom";
+import { iconSelector, lineSelector } from "./orca-dom";
 import { statusIcons } from "./status-icons";
 
 const iconRule = (selector: string, status: TaskStatus) =>
@@ -28,6 +28,8 @@ export const iconFontDeclarations = `  font-family: "tabler-icons";
  * every block with the task tag; one rule per status overrides it, so an
  * empty or unknown status shows as inbox, as the plugin reads it. Without
  * status names (the property is invalidated) every task shows as inbox.
+ * A done task's own line fades as done cards do in the plugin panel, not
+ * struck through (#45, #191): its icon and its child blocks keep theirs.
  */
 export function statusIconCss(names: TaskTagNames): string {
   const base = iconSelector(names.tagName);
@@ -45,6 +47,11 @@ export function statusIconCss(names: TaskTagNames): string {
       });
       rules.push(iconRule(selector, key));
     }
+    const done = lineSelector(names.tagName, {
+      property: status.property,
+      value: status.options.done,
+    });
+    rules.push(`${done} {\n  opacity: 0.6;\n}`);
   }
   return rules.join("\n\n");
 }

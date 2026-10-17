@@ -1,7 +1,7 @@
 // Everything that depends on Orca's internal DOM (class names, structure, the
 // `data-` attributes on `.orca-tag`) lives in this file only: the selectors of
-// the status icon and project status icon style sheets, which only display
-// (official-task-menus).
+// the status icon and project status icon style sheets, and the fading of
+// done tasks (#191), which only display (official-task-menus).
 // None of it is a public API: check it by hand in Orca after every Orca
 // upgrade (status-icon-task-menu, page-task spikes).
 
@@ -52,6 +52,17 @@ export function iconSelector(
 ): string {
   return iconHostSelectors(tagName, match, without)
     .map((host) => `${host}::before`)
+    .join(",\n");
+}
+
+/**
+ * What the icon host holds (the block's own line: its text and tags, not its
+ * icon or child blocks) for every block carrying the tag with a property
+ * value, as a selector list: a done task's line fades (#191).
+ */
+export function lineSelector(tagName: string, match: TagValueMatch): string {
+  return iconHostSelectors(tagName, match)
+    .map((host) => `${host} > *`)
     .join(",\n");
 }
 
