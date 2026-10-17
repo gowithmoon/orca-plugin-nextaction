@@ -92,6 +92,7 @@ export const settingsDefinition: SettingsDefinition = {
       choices: [
         { label: t("Tree"), value: "tree" },
         { label: t("Board"), value: "board" },
+        { label: t("Gantt"), value: "gantt" },
       ],
       defaultValue: "tree",
     }),

@@ -1,14 +1,18 @@
-// The project details' layout (GLOSSARY: 布局, #166): tree or board, one
-// choice for every project. It lives in the plugin instance's memory: each
-// load starts from the "project view default layout" setting, and a change
-// of that setting overrides it at once (platform/panel-feature.ts). Never
-// written with `plugins.setData`.
+// The project details' layout (GLOSSARY: 布局, #166, #186): tree, board or
+// gantt, one choice for every project. It lives in the plugin instance's
+// memory: each load starts from the "project view default layout" setting,
+// and a change of that setting overrides it at once
+// (platform/panel-feature.ts). Never written with `plugins.setData`.
 import { createMemoryStore } from "../../components/memory-store";
 
-export type ProjectLayout = "tree" | "board";
+export type ProjectLayout = "tree" | "board" | "gantt";
 
 /** The layouts in the order offered (the toolbar, the setting). */
-export const projectLayouts: readonly ProjectLayout[] = ["tree", "board"];
+export const projectLayouts: readonly ProjectLayout[] = [
+  "tree",
+  "board",
+  "gantt",
+];
 
 /**
  * The layout a setting value names: its English key; anything else (no

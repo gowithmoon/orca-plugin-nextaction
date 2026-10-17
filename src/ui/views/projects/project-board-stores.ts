@@ -61,7 +61,7 @@ export interface IdSetStore<Id> {
 /** The expanded cards' tasks (#167). */
 export type ExpandedCardsStore = IdSetStore<TaskId>;
 
-function createIdSetStore<Id>(): IdSetStore<Id> & { clear(): void } {
+export function createIdSetStore<Id>(): IdSetStore<Id> & { clear(): void } {
   const store = createMemoryStore<ReadonlySet<Id>>(new Set());
   return {
     current: store.current,
