@@ -29,6 +29,7 @@ import {
   projectRootTasks,
   type TaskTree,
 } from "./read-all-tasks";
+import { projectShiftPlanner } from "./shift-later";
 
 /**
  * What a row draws on the time axis, told apart by `kind`: a bar, a bracket,
@@ -112,6 +113,11 @@ export interface GanttRow {
    * 失效依赖) is in neither list.
    */
   readonly outsideDependencies: readonly GanttOutsideDependency[];
+  /**
+   * How many tasks shifting later after it (GLOSSARY: 顺延) would move, as
+   * the shift later use case writes them; 0 for none, its button not shown.
+   */
+  readonly shiftLater: number;
 }
 
 /** A dependency on a task outside the project: its mark names the task. */
@@ -297,7 +303,10 @@ function heldBackOf(entry: TaskGraphEntry | undefined): HeldBack | null {
  * How a row's task stands, beside its place in the tree and its bar; its
  * dependencies too (#182).
  */
-type RowStanding = Pick<GanttRow, "overdue" | "blocked" | "heldBack"> &
+type RowStanding = Pick<
+  GanttRow,
+  "overdue" | "blocked" | "heldBack" | "shiftLater"
+> &
   RowDependencies;
 
 /**
@@ -408,11 +417,13 @@ export function createReadProjectGantt(deps: {
       }
       return { dependencies: inside, outsideDependencies: outside };
     };
+    const shiftPlan = projectShiftPlanner(snapshot, graph, scoped.project.id);
     const standing = (item: SnapshotTask): RowStanding => ({
       overdue: isOverdue(item.task, today),
       blocked: marksBlocked(graph.entry(item.task.id)),
       heldBack: heldBackOf(graph.entry(item.task.id)),
       ...dependenciesOf(item.task),
+      shiftLater: shiftPlan(item.task.id).length,
     });
     const rows = projectRootTasks(snapshot, graph, scoped.project.id).flatMap(
       (root) => rowsOf(tree, root, 0, kept, scoped.project, standing),
