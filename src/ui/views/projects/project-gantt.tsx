@@ -21,6 +21,7 @@ import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import { compareDays, dayOfWeek } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
 import { formatDate, shownText } from "../../components/format";
+import type { IdSetStore } from "../../components/id-set-store";
 import type { MemoryStore } from "../../components/memory-store";
 import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
@@ -29,7 +30,12 @@ import type { ShiftTasksLater } from "../../hooks/use-shift-later";
 import type { WriteTaskDates } from "../../hooks/use-write-task-dates";
 import { usePanel } from "../../panel/panel-context";
 import { statusIcons } from "../../task-menu/status-icons";
-import { createGanttAxis, type GanttAxis, type GanttScale } from "./gantt-axis";
+import {
+  barSpan,
+  createGanttAxis,
+  type GanttAxis,
+  type GanttScale,
+} from "./gantt-axis";
 import {
   BarEnds,
   draggedRows,
@@ -58,7 +64,6 @@ import {
   UnplacedName,
   useUnplacedDrag,
 } from "./gantt-unplaced-drag";
-import type { IdSetStore } from "./project-board-stores";
 
 /** The tree column's width in the wide tier, in pixels. */
 const treeWidth = 160;
@@ -387,9 +392,8 @@ function BarView(props: {
   // A bracket's is nothing: it never drags (#180).
   const drag = useBarDrag(row, axis);
   const dragging = useBarDragging(row.task.id);
-  const left = axis.x(bar.start);
+  const { left, width } = barSpan(axis, bar);
   const text = shownText(row.task).text;
-  const width = Math.max(axis.endX(bar.due) - left, 6);
   const dates = t("${start} → ${due}", {
     start: formatDate(bar.start, cards.today),
     due: formatDate(bar.due, cards.today),
@@ -574,8 +578,7 @@ function BarLabel(props: {
   // While dragged the dates show there instead (#180).
   const dragging = useBarDragging(row.task.id);
   if (text.empty || dragging) return null;
-  const left = axis.x(bar.start);
-  const width = axis.endX(bar.due) - left;
+  const { left, width } = barSpan(axis, bar);
   const inset = barLabelPadding + (row.blocked ? lockWidth : 0);
   const fits =
     textWidth(text.text, barLabelSize) + inset + barLabelPadding <= width;

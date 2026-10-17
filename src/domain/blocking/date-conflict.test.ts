@@ -49,7 +49,10 @@ function lookupOf(
 
 describe("earliestStart", () => {
   it("takes the latest due date in mode all", () => {
-    const lookup = lookupOf({ 1: { due: day(10, 12) }, 2: { due: day(10, 15) } });
+    const lookup = lookupOf({
+      1: { due: day(10, 12) },
+      2: { due: day(10, 15) },
+    });
 
     expect(earliestStart(waiting({ dependencies: [1, 2] }), lookup)).toEqual(
       day(10, 15),
@@ -57,7 +60,10 @@ describe("earliestStart", () => {
   });
 
   it("takes the earliest due date in mode any", () => {
-    const lookup = lookupOf({ 1: { due: day(10, 12) }, 2: { due: day(10, 15) } });
+    const lookup = lookupOf({
+      1: { due: day(10, 12) },
+      2: { due: day(10, 15) },
+    });
 
     expect(
       earliestStart(
@@ -97,13 +103,19 @@ describe("hasDateConflict", () => {
 
   it("is a start before the earliest its dependencies allow", () => {
     expect(
-      hasDateConflict(waiting({ start: day(10, 11), dependencies: [1] }), lookup),
+      hasDateConflict(
+        waiting({ start: day(10, 11), dependencies: [1] }),
+        lookup,
+      ),
     ).toBe(true);
   });
 
   it("is not a start on the due date itself", () => {
     expect(
-      hasDateConflict(waiting({ start: day(10, 12), dependencies: [1] }), lookup),
+      hasDateConflict(
+        waiting({ start: day(10, 12), dependencies: [1] }),
+        lookup,
+      ),
     ).toBe(false);
   });
 

@@ -1016,7 +1016,7 @@ describe("read project gantt, date conflicts", () => {
 
 /** Each row: its task and how many tasks shifting later after it moves. */
 function shiftCounts(read: ProjectGanttRead): [TaskId, number][] {
-  return gantt(read).gantt.rows.map((row) => [row.task.id, row.shiftLater]);
+  return gantt(read).gantt.rows.map((row) => [row.task.id, row.shiftCount]);
 }
 
 describe("read project gantt, shifting later", () => {

@@ -135,7 +135,10 @@ describe("shiftLaterPlanner", () => {
     ];
 
     expect(
-      shiftLaterPlanner(tasks, (item) => item.status !== "done" && item.id !== 3)(1),
+      shiftLaterPlanner(
+        tasks,
+        (item) => item.status !== "done" && item.id !== 3,
+      )(1),
     ).toEqual([]);
   });
 

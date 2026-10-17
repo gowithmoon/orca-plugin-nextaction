@@ -37,6 +37,7 @@ import type { ProjectId } from "../../../domain/project/project";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
+import type { IdSetStore } from "../../components/id-set-store";
 import { ContextMenu } from "../../components/popup-controls";
 import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
@@ -55,7 +56,7 @@ import {
   boardTaskAttribute,
   createBoardDrag,
 } from "./board-drag";
-import type { ExpandedCardsStore, IdSetStore } from "./project-board-stores";
+import type { ExpandedCardsStore } from "./project-board-stores";
 
 /** The board's drag (#168, #169), for its cards and rows. */
 const BoardDragContext = React.createContext<BoardDrag | undefined>(undefined);

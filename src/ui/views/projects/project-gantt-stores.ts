@@ -7,11 +7,14 @@
 // written with `plugins.setData`.
 import type { TaskId } from "../../../domain/task/task";
 import {
+  createIdSetStore,
+  type IdSetStore,
+} from "../../components/id-set-store";
+import {
   createMemoryStore,
   type MemoryStore,
 } from "../../components/memory-store";
 import type { GanttScale } from "./gantt-axis";
-import { createIdSetStore, type IdSetStore } from "./project-board-stores";
 
 export interface ProjectGanttStores {
   /** The tasks whose subtasks show in the task tree; collapsed by default. */

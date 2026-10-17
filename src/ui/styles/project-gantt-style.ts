@@ -5,6 +5,8 @@
 // ways on its own; its scale row sticks to the top, its tree column to the
 // left, so the tree and the time axis scroll up and down together.
 
+import { ganttRowHeight } from "../views/projects/gantt-axis";
+
 export const projectGanttCss = `
 .nextaction-panel-view:has(> .nextaction-project-details[data-layout="gantt"]) {
   display: flex;
@@ -25,7 +27,7 @@ export const projectGanttCss = `
 }
 
 .nextaction-gantt {
-  --nextaction-gantt-row: 30px;
+  --nextaction-gantt-row: ${ganttRowHeight}px;
   --nextaction-gantt-head: 57px;
   flex: 1 1 auto !important;
   min-height: 0;
