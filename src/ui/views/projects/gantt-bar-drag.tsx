@@ -336,7 +336,7 @@ export function BarEnds(props: { width: number }) {
 }
 
 /** A day as "10月20日", the year added when it is not this year's. */
-function dayLabel(date: CalendarDate, today: CalendarDate): string {
+export function dayLabel(date: CalendarDate, today: CalendarDate): string {
   const values = {
     year: String(date.year),
     month: String(date.month),

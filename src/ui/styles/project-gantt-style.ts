@@ -554,4 +554,32 @@ button.nextaction-gantt-caret:hover {
 .nextaction-gantt-unplaced-list .nextaction-status-icon {
   flex: none;
 }
+
+/* An unplaced task dragged onto the time axis (#181). */
+.nextaction-gantt-unplaced-list .nextaction-gantt-name-text {
+  cursor: grab;
+}
+
+.nextaction-gantt-unplaced-list .nextaction-gantt-name-text[data-landing] {
+  opacity: 0.5;
+}
+
+/* Where it would land: a week-long bar at the pointer's row. */
+.nextaction-gantt-landing {
+  position: absolute;
+  z-index: 5;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  overflow: hidden;
+  border: 1px dashed var(--orca-color-primary-5);
+  border-radius: var(--orca-radius-sm);
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 18%, var(--orca-color-bg-1));
+  color: var(--orca-color-text-1);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
 `;
