@@ -43,6 +43,7 @@ import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
 import { StatusButton, TaskCard } from "../../components/task-card";
 import { useCardDrag } from "../../drag/card-drag";
+import { useDragToPan } from "../../drag/drag-to-pan";
 import type { TaskActions } from "../../hooks/use-task-actions";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { TaskMenu } from "../../task-menu/task-menu";
@@ -737,9 +738,12 @@ export function ProjectBoardColumns(props: {
       },
     })),
   );
+  // Empty space between and in the columns drags the board sideways (#187).
+  const pan = useDragToPan();
   return (
     <BoardDragContext.Provider value={drag}>
       <section
+        {...pan}
         ref={root}
         className="nextaction-board"
         aria-label={t("Board")}

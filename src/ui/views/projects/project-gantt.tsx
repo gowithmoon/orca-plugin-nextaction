@@ -26,6 +26,7 @@ import type { MemoryStore } from "../../components/memory-store";
 import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
 import { useCardDrag } from "../../drag/card-drag";
+import { useDragToPan } from "../../drag/drag-to-pan";
 import type { ShiftTasksLater } from "../../hooks/use-shift-later";
 import type { WriteTaskDates } from "../../hooks/use-write-task-dates";
 import { usePanel } from "../../panel/panel-context";
@@ -693,6 +694,10 @@ function Row(props: {
   );
 }
 
+/** The tree column's parts, which are not the time axis's empty space (#187). */
+const treeColumn =
+  ".nextaction-gantt-name, .nextaction-gantt-corner, .nextaction-gantt-fill";
+
 export function ProjectGanttChart(props: {
   gantt: ProjectGantt;
   cards: GanttCards;
@@ -771,6 +776,9 @@ export function ProjectGanttChart(props: {
   const placed = React.useMemo(() => treeRows(chartRows), [chartRows]);
   const parents = React.useMemo(() => parentsOf(placed), [placed]);
   const rows = allExpanded ? placed : shownRows(placed, expanded);
+  // Empty space on the time axis drags it sideways (#187); the tree column
+  // is not the axis.
+  const pan = useDragToPan({ ignore: treeColumn });
   return (
     <GanttBarDragContext.Provider value={drag}>
       <GanttShiftNotice
@@ -780,6 +788,7 @@ export function ProjectGanttChart(props: {
         shiftLater={cards.shiftLater}
       />
       <section
+        {...pan}
         ref={scrollerRef}
         className="nextaction-gantt"
         aria-label={t("Gantt")}
