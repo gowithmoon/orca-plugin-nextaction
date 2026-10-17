@@ -95,6 +95,17 @@ export const projectGanttCss = `
   top: 20px;
 }
 
+/* The day scale (#179): one narrow label per day, its number centred. */
+.nextaction-gantt-scale[data-scale="day"] .nextaction-gantt-label[data-row="bottom"] {
+  padding-left: 0;
+  text-align: center;
+}
+
+.nextaction-gantt-label[data-today] {
+  color: var(--orca-color-primary-5);
+  font-weight: 600;
+}
+
 .nextaction-gantt-marker {
   position: absolute;
   top: 40px;
@@ -263,6 +274,53 @@ button.nextaction-gantt-caret:hover {
   border-color: var(--orca-color-text-1);
 }
 
+/* The task's name by its bar (#179): inside when it fits, else after it. */
+.nextaction-gantt-bar-label {
+  position: absolute;
+  top: 6px;
+  z-index: 3;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--orca-color-text-2);
+  font-size: 12px;
+}
+
+.nextaction-gantt-bar-label[data-inside] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--orca-color-text-1);
+}
+
+/* A borrowed end (#177, scheme A): dashed on that side, fading toward it. */
+.nextaction-gantt-bar[data-borrowed="start"],
+.nextaction-gantt-bar[data-borrowed="due"] {
+  --nextaction-gantt-faded: color-mix(in srgb, var(--nextaction-gantt-status, var(--orca-color-text-2)) 3%, var(--orca-color-bg-1));
+  border-style: dashed;
+}
+
+.nextaction-gantt-bar[data-borrowed="start"] {
+  border-right-style: solid;
+  background: linear-gradient(to right, var(--nextaction-gantt-faded), var(--nextaction-gantt-fill) 75%);
+}
+
+.nextaction-gantt-bar[data-borrowed="due"] {
+  border-left-style: solid;
+  background: linear-gradient(to left, var(--nextaction-gantt-faded), var(--nextaction-gantt-fill) 75%);
+}
+
+/* A bracket over the subtasks' dates (#177): thin, never dragged. */
+.nextaction-gantt-bracket {
+  position: absolute;
+  top: 11px;
+  height: 7px;
+  z-index: 2;
+  border: 2px solid var(--orca-color-text-3);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  cursor: default;
+}
+
 /* Done: faded; every one shows. */
 .nextaction-gantt-bar[data-status="done"] {
   opacity: 0.45;
@@ -371,5 +429,65 @@ button.nextaction-gantt-caret:hover {
   border-right: 1px solid var(--orca-color-border);
   background-color: var(--orca-color-bg-1);
   z-index: 4;
+}
+
+/* The unplaced tasks' section (#177), below the chart's scroller. */
+.nextaction-gantt-unplaced {
+  display: flex;
+  flex-direction: column;
+  max-height: 170px;
+  margin: 0 calc(-1 * var(--orca-spacing-lg));
+  border-top: 1px solid var(--orca-color-border);
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-gantt-unplaced-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 0;
+  border: 0;
+  background: none;
+  color: var(--orca-color-text-1);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-gantt-unplaced-head > i {
+  color: var(--orca-color-text-3);
+  font-size: 12px;
+}
+
+.nextaction-gantt-unplaced-hint {
+  margin: 0 14px 4px 32px;
+  color: var(--orca-color-text-3);
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-gantt-unplaced-list {
+  margin: 0;
+  padding: 0 10px 8px 26px;
+  overflow: auto;
+  list-style: none;
+}
+
+.nextaction-gantt-unplaced-list > li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: var(--orca-radius-sm);
+}
+
+.nextaction-gantt-unplaced-list > li:hover,
+.nextaction-gantt-unplaced-list > li[data-selected] {
+  background-color: var(--orca-color-bg-3);
+}
+
+.nextaction-gantt-unplaced-list .nextaction-status-icon {
+  flex: none;
 }
 `;

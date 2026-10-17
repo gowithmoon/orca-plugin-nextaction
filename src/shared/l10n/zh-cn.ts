@@ -640,6 +640,16 @@ const zhCN: Record<string, string> = {
   "Project due": "项目截止",
   "${start} → ${due}": "${start} → ${due}",
   "Can start from ${date}": "${date} 起才能开始",
+  // The gantt chart's borrowed ends, brackets and unplaced tasks (#177).
+  "No start date: the project's start date is used":
+    "没有开始日期，借用项目的开始日期",
+  "No due date: the project's due date is used":
+    "没有截止日期，借用项目的截止日期",
+  "No dates of its own; spans its subtasks' dates":
+    "自己没有日期，括号盖住子任务的时间范围",
+  "Unplaced tasks · ${count}": "待排期任务 · ${count}",
+  "No dates set, or dates outside the project's time range":
+    "未设置日期或日期超出项目时间范围",
   // The gantt chart's dependencies (#182).
   "+${days}d": "+${days}天",
   "Depends on tasks outside the project: ${tasks}":
@@ -647,6 +657,9 @@ const zhCN: Record<string, string> = {
   // The gantt chart's date conflicts (#183).
   "Date conflict: starts before a task it depends on is due":
     "日期冲突：开始日期早于所依赖任务的截止日期",
+  // The gantt chart's time scale (#179); Week and Month are the stats'.
+  "Time scale": "刻度",
+  Day: "日",
 };
 
 export default zhCN;
