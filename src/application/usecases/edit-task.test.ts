@@ -61,6 +61,30 @@ describe("edit task", () => {
     expect(repository.writeCount()).toBe(2);
   });
 
+  it("writes the start and due dates together in one write (the gantt chart's drag, #180)", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 46,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 20 },
+      note: "keep",
+    });
+    const editTask = createEditTask({ repository });
+
+    await editTask(46, {
+      start: { year: 2026, month: 10, day: 13 },
+      due: { year: 2026, month: 10, day: 27 },
+    });
+
+    expect(await repository.getTask(46)).toMatchObject({
+      status: "todo",
+      start: { year: 2026, month: 10, day: 13 },
+      due: { year: 2026, month: 10, day: 27 },
+      note: "keep",
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
   it("clears the start and due dates", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({

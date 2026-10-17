@@ -294,6 +294,7 @@ export function createPanelFeature(deps: {
         startPreviewDays: deps.startPreviewDays,
       }),
       gantt: projectGantt,
+      editTask: createEditTask({ repository }),
     }),
   );
   views.register(
