@@ -2,6 +2,7 @@
 // the project details' gantt layout: the whole chart as the layout shows
 // it, the interface only drawing it. The rows are the project's tasks in
 // note order; collapsing them is the interface's.
+import { dependencyConflicts } from "../../domain/blocking/date-conflict";
 import {
   analyzeTaskGraph,
   type SnapshotTask,
@@ -10,7 +11,7 @@ import {
 import type { ProjectId } from "../../domain/project/project";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
-import { compareDays } from "../../domain/time/calendar-days";
+import { addDays, compareDays } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -134,6 +135,12 @@ export interface GanttDependency {
    * its arrows; 0 for none.
    */
   readonly delay: number;
+  /**
+   * Whether `to`'s date conflict (GLOSSARY: 日期冲突) comes from this
+   * dependency: its arrow is red, a red triangle at the head of `to`'s bar.
+   * By the dates the tasks wrote, never borrowed ones.
+   */
+  readonly conflict: boolean;
 }
 
 /** Days `from` up to `until`, `until` not included. */
@@ -155,6 +162,44 @@ export interface ProjectGantt {
   readonly projectDue: CalendarDate | null;
   /** The logical day of the read, for the today line. */
   readonly today: CalendarDate;
+  /**
+   * The days the chart scrolls over, both included (#179): the project's
+   * dates, every row's bar and today, two weeks before and after.
+   */
+  readonly range: GanttRange;
+}
+
+/** A run of days, both included. */
+export interface GanttRange {
+  readonly start: CalendarDate;
+  readonly end: CalendarDate;
+}
+
+/** Days before and after the dates drawn (#176). */
+const rangeMargin = 14;
+
+/** The range the chart scrolls over (`ProjectGantt.range`). */
+function rangeOf(
+  rows: readonly GanttRow[],
+  today: CalendarDate,
+  projectDates: readonly (CalendarDate | null)[],
+): GanttRange {
+  const all = [
+    today,
+    ...projectDates.filter((date): date is CalendarDate => date !== null),
+  ];
+  for (const row of rows) {
+    // A bracket spans its subtasks' bars, already counted; an unplaced task
+    // draws nothing.
+    if (row.bar.kind !== "unplaced") all.push(row.bar.start, row.bar.due);
+  }
+  const sorted = all.sort(compareDays);
+  const first = sorted[0] ?? today;
+  const last = sorted[sorted.length - 1] ?? today;
+  return {
+    start: addDays(first, -rangeMargin),
+    end: addDays(last, rangeMargin),
+  };
 }
 
 /**
@@ -342,6 +387,7 @@ export function createReadProjectGantt(deps: {
       keptById.set(item.task.id, found);
       return found;
     };
+    const lookup = (id: TaskId) => graph.entry(id)?.task;
     const dependenciesOf = (task: Task): RowDependencies => {
       const inside: GanttDependency[] = [];
       const outside: GanttOutsideDependency[] = [];
@@ -350,7 +396,12 @@ export function createReadProjectGantt(deps: {
         const entry = graph.entry(id);
         if (!entry) continue;
         if (entry.project?.id === scoped.project.id) {
-          inside.push({ from: id, to: task.id, delay: task.dependencyDelay });
+          inside.push({
+            from: id,
+            to: task.id,
+            delay: task.dependencyDelay,
+            conflict: dependencyConflicts(task, id, lookup),
+          });
         } else {
           outside.push({ task: id, text: entry.task.text });
         }
@@ -379,6 +430,7 @@ export function createReadProjectGantt(deps: {
         projectStart: scoped.project.start,
         projectDue: scoped.project.due,
         today,
+        range: rangeOf(rows, today, [scoped.project.start, scoped.project.due]),
       },
     };
   };

@@ -85,7 +85,11 @@ import type {
   ProjectBoardStores,
 } from "./project-board-stores";
 import { BackToProjects, ProjectAttributes } from "./project-details";
-import { GanttCollapseAllButton, ProjectGanttChart } from "./project-gantt";
+import {
+  GanttCollapseAllButton,
+  GanttScaleSwitch,
+  ProjectGanttChart,
+} from "./project-gantt";
 import type { ProjectGanttStores } from "./project-gantt-stores";
 import {
   isGroupCollapsed,
@@ -556,10 +560,15 @@ function DetailsGantt(props: {
   const { Button, Tooltip } = orca.components;
   const project = read.project.project.id;
   const empty = read.gantt.rows.length === 0;
+  const scale = React.useSyncExternalStore(
+    deps.gantt.scale.subscribe,
+    deps.gantt.scale.current,
+  );
   return (
     <>
       <div className="nextaction-toolbar">
         <LayoutSwitch store={deps.layout} />
+        <GanttScaleSwitch store={deps.gantt.scale} />
         <AllTasksSearchBox
           search={filter.search}
           onChange={(search) => filterStore.set({ ...filter, search })}
@@ -598,8 +607,10 @@ function DetailsGantt(props: {
         />
       ) : (
         <ProjectGanttChart
+          // Another project: its chart opens with today a third across.
+          key={project}
           gantt={read.gantt}
-          scale="week"
+          scale={scale}
           cards={{
             today,
             selectedTaskId,
