@@ -285,6 +285,20 @@ export interface TaskRepository {
   ): Promise<TaskId>;
 
   /**
+   * Creates an inbox task with `text`, as plain text, as the last child
+   * block of task `parentId` (#190), with the `initial` properties given but
+   * no 所属项目: the parent task decides it (GLOSSARY: 所属项目). A mirror
+   * block's ID stands for its source block. The user undoes it, properties
+   * included, with one undo; a failed write leaves no task. Fails, writing
+   * nothing, when the parent is not a task. Returns the new task's ID.
+   */
+  appendSubtask(
+    parentId: TaskId,
+    text: string,
+    initial?: Omit<InitialProperties, "project">,
+  ): Promise<TaskId>;
+
+  /**
    * Moves the task's block, with every block below it, to `placement`
    * relative to the target task's block: its last child block, or just before
    * or after it (#63). The user undoes it with one undo. A mirror block's ID,

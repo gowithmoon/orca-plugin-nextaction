@@ -1462,6 +1462,51 @@ export function createOrcaTaskRepository(
       return id;
     },
 
+    async appendSubtask(
+      parentId: TaskId,
+      text: string,
+      initial: Omit<InitialProperties, "project"> = {},
+    ): Promise<TaskId> {
+      const state = readyTag();
+      // As appendTaskToJournal: encoded first, only the properties given.
+      const items = encodeTaskChanges(initial, {
+        language: state.language,
+        invalidated: state.invalidated,
+      });
+      // The source block for a mirror's ID (block-properties-json M3).
+      const parent = await taskBlockToWrite(parentId, currentTag());
+      let id: unknown;
+      try {
+        // insertBlock and insertTag in one group are one undo, as in
+        // appendTaskToJournal (J4, J6). The parent goes in through the
+        // cache, as blocks placed next to a block want it (move-blocks).
+        await invokeGroup(async () => {
+          id = await invokeEditorCommand(
+            "core.editor.insertBlock",
+            await cachedBlock(parent.id),
+            "lastChild",
+            // Plain text: tags and formatting in it are not parsed.
+            [{ t: "t", v: text }],
+          );
+          if (typeof id !== "number") {
+            throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+          }
+          await invokeEditorCommand(
+            "core.editor.insertTag",
+            id,
+            state.tagName,
+            ...(items.length > 0 ? [items] : []),
+          );
+        });
+      } finally {
+        if (typeof id === "number") onWritten(id);
+      }
+      if (typeof id !== "number") {
+        throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+      }
+      return id;
+    },
+
     async moveTask(
       id: TaskId,
       target: TaskId,

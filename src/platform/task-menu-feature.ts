@@ -14,7 +14,7 @@ import {
   createCanSkipOccurrence,
   createSkipOccurrence,
 } from "../application/usecases/skip-occurrence";
-import type { TaskId } from "../domain/task/task";
+import type { Task, TaskId } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
 import { registerMarkReviewedMenuItem } from "../ui/task-menu/mark-reviewed-menu-item";
@@ -24,6 +24,7 @@ import {
 } from "../ui/task-menu/menu-items";
 import { registerMyDayMenuItem } from "../ui/task-menu/my-day-menu-item";
 import { registerSkipMenuItem } from "../ui/task-menu/skip-menu-item";
+import { registerSubtaskMenuItem } from "../ui/task-menu/subtask-menu-item";
 import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
@@ -44,6 +45,8 @@ export function createTaskMenuFeature(deps: {
   dayBoundary: DayBoundarySetting;
   /** "Open task panel" (#40): opens the popup; from Orca's menus, always. */
   openTaskPanel: (taskId: TaskId) => void;
+  /** "Create subtask" (#190): opens the capture window for the task. */
+  openCreateSubtask: (parent: Task) => void;
 }): { feature: FeatureModule; items: () => TaskMenuItems | undefined } {
   const { repository } = deps;
   let current: TaskMenuItems | undefined;
@@ -80,6 +83,7 @@ export function createTaskMenuFeature(deps: {
       markReviewed: createMarkReviewed(myDayDeps),
       pluginName,
     });
+    registerSubtaskMenuItem(items, deps.openCreateSubtask);
     registerTaskPanelMenuItem(items, deps.openTaskPanel);
 
     const menuDeps = {

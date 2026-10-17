@@ -22,6 +22,8 @@ export const taskMenuGroups = {
   /** "Mark reviewed" (#103). */
   review: 25,
   myDay: 30,
+  /** "Create subtask" (#190). */
+  subtask: 40,
   taskPanel: 50,
   drop: 100,
 } as const;

@@ -4,9 +4,16 @@
 // task panel's candidates. Nothing is written before the capture, and every
 // opening starts empty: nothing is kept from the last one. Only the review's
 // projects step opens it with its 所属项目 filled in (#162), for that opening.
-// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// The task menu's "Create subtask" (#190) opens the same window for a parent
+// task: titled so, the parent named under the title, and 所属项目 read only, as
+// the parent decides it (GLOSSARY: 所属项目). Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
+import type {
+  CreateSubtask,
+  ReadSubtaskProject,
+} from "../../application/usecases/create-subtask";
 import type { QuickCapture } from "../../application/usecases/quick-capture";
 import {
   matchingProjectCandidates,
@@ -17,6 +24,7 @@ import {
   type CalendarDate,
   defaultRating,
   type Rating,
+  type Task,
 } from "../../domain/task/task";
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
@@ -34,6 +42,7 @@ import {
 import { Select } from "../components/popup-controls";
 import { useProjectCandidates } from "../hooks/use-project-candidates";
 import { useQuickCapture } from "../hooks/use-quick-capture";
+import { useSubtaskProject } from "../hooks/use-subtask-project";
 import { createNotify } from "../notify";
 import { projectStatusIcons } from "../project-menu/project-status-icons";
 import { DateField, Field, RatingField } from "../task-panel/task-panel-fields";
@@ -132,27 +141,95 @@ function ProjectChoice(props: {
   );
 }
 
+/**
+ * A new subtask's 所属项目, read only: the parent task's (#190). Nothing
+ * shows when there is none.
+ */
+function SubtaskProject(props: {
+  labelId: string;
+  parentId: Task["id"];
+  readSubtaskProject: ReadSubtaskProject;
+  pluginName: string;
+}) {
+  const notify = React.useMemo(
+    () => createNotify(props.pluginName),
+    [props.pluginName],
+  );
+  const project = useSubtaskProject(
+    props.readSubtaskProject,
+    props.parentId,
+    notify,
+  );
+  if (!project) return null;
+  const icon = projectStatusIcons[project.status];
+  const text = shownText(project);
+  return (
+    <Field label={t("Project")} labelId={props.labelId}>
+      <span className="nextaction-capture-project">
+        <i
+          className={icon.className}
+          style={{ color: icon.color }}
+          aria-hidden="true"
+        />
+        <span data-empty={text.empty || undefined}>{text.text}</span>
+        <span className="nextaction-capture-project-source">
+          {t("· From parent task")}
+        </span>
+      </span>
+    </Field>
+  );
+}
+
+/** What the window creates: a task in today's journal, or a subtask. */
+type CaptureKind =
+  | {
+      kind: "capture";
+      quickCapture: QuickCapture;
+      /** The 所属项目 filled in on opening; it can be changed or cleared. */
+      project: ProjectId | null;
+    }
+  | {
+      kind: "subtask";
+      createSubtask: CreateSubtask;
+      readSubtaskProject: ReadSubtaskProject;
+      parent: Task;
+    };
+
 function QuickCapturePopup(props: {
-  quickCapture: QuickCapture;
+  what: CaptureKind;
   readProjectCandidates: ReadProjectCandidates;
   pluginName: string;
   today: () => CalendarDate;
-  /** The 所属项目 filled in on opening; it can be changed or cleared. */
-  project: ProjectId | null;
   /** Closes the popup by unmounting it. */
   onClose: () => void;
 }) {
+  const { what } = props;
   const { Button, CompositionInput } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
   const [text, setText] = React.useState("");
   const [draft, setDraft] = React.useState<Draft>(() => ({
     ...emptyDraft,
-    project: props.project,
+    project: what.kind === "capture" ? what.project : null,
   }));
   // Into the text on opening, back where it was (e.g. the editor) on closing.
   const input = React.useRef<HTMLInputElement>(null);
-  const capture = useQuickCapture(props.quickCapture, props.pluginName);
+  const run = React.useCallback(
+    (text: string, initial: InitialProperties) => {
+      if (what.kind === "capture") return what.quickCapture(text, initial);
+      // The parent decides a subtask's project: none is passed.
+      const { project: _none, ...rest } = initial;
+      return what.createSubtask(what.parent.id, text, rest);
+    },
+    [what],
+  );
+  const capture = useQuickCapture(
+    run,
+    props.pluginName,
+    what.kind === "capture"
+      ? t("Task created and added to today's journal")
+      : t("Subtask created"),
+  );
   const today = props.today();
   const blank = text.trim() === "";
 
@@ -187,8 +264,10 @@ function QuickCapturePopup(props: {
       focus={input}
     >
       <WindowHeader
-        title={t("Create task")}
+        title={what.kind === "capture" ? t("Create task") : t("Create subtask")}
         titleId={id("title")}
+        // A subtask's parent under the title, as a task's window names its task.
+        {...(what.kind === "subtask" && { task: what.parent })}
         onClose={props.onClose}
       />
       <div className="nextaction-capture-body">
@@ -247,22 +326,33 @@ function QuickCapturePopup(props: {
                 onChange={set("due")}
               />
             </Field>
-            <Field label={t("Project")} labelId={id("project")}>
-              <ProjectChoice
-                value={draft.project}
-                filledIn={props.project}
-                readProjectCandidates={props.readProjectCandidates}
+            {what.kind === "capture" ? (
+              <Field label={t("Project")} labelId={id("project")}>
+                <ProjectChoice
+                  value={draft.project}
+                  filledIn={what.project}
+                  readProjectCandidates={props.readProjectCandidates}
+                  pluginName={props.pluginName}
+                  onChange={set("project")}
+                />
+              </Field>
+            ) : (
+              <SubtaskProject
+                labelId={id("project")}
+                parentId={what.parent.id}
+                readSubtaskProject={what.readSubtaskProject}
                 pluginName={props.pluginName}
-                onChange={set("project")}
               />
-            </Field>
+            )}
           </div>
         </div>
       </div>
       <WindowFooter>
         <span className="nextaction-capture-hint">
           <i className="ti ti-inbox" aria-hidden="true" />
-          {t("Goes to today's journal, into the inbox")}
+          {what.kind === "capture"
+            ? t("Goes to today's journal, into the inbox")
+            : t("Goes below the parent task, into the inbox")}
         </span>
         <Button variant="plain" onClick={props.onClose}>
           {t("Cancel")}
@@ -285,34 +375,61 @@ function QuickCapturePopup(props: {
 export type OpenQuickCapture = (project?: ProjectId) => void;
 
 /**
- * The opener of the quick capture popup; the command ("Create task") calls
- * it without a project.
+ * Opens the same window as "Create subtask" of task `parent` (#190), in the
+ * same root: at most one of the two is open at a time.
+ */
+export type OpenCreateSubtask = (parent: Task) => void;
+
+/**
+ * The openers of the capture window; the command ("Create task") calls
+ * `openQuickCapture` without a project.
  */
 export function createQuickCaptureCommand(
-  quickCapture: QuickCapture,
-  /** The projects offered as 所属项目, as in the task panel. */
-  readProjectCandidates: ReadProjectCandidates,
-  pluginName: string,
-  /** The current logical day, for the dates. */
-  today: () => CalendarDate,
+  deps: {
+    quickCapture: QuickCapture;
+    createSubtask: CreateSubtask;
+    readSubtaskProject: ReadSubtaskProject;
+    /** The projects offered as 所属项目, as in the task panel. */
+    readProjectCandidates: ReadProjectCandidates;
+    pluginName: string;
+    /** The current logical day, for the dates. */
+    today: () => CalendarDate;
+  },
   render: (node: React.ReactNode) => void,
-): OpenQuickCapture {
+): {
+  openQuickCapture: OpenQuickCapture;
+  openCreateSubtask: OpenCreateSubtask;
+} {
   let open = false;
-  return (project) => {
+  const show = (what: CaptureKind) => {
     if (open) return;
     open = true;
     render(
       <QuickCapturePopup
-        quickCapture={quickCapture}
-        readProjectCandidates={readProjectCandidates}
-        pluginName={pluginName}
-        today={today}
-        project={project ?? null}
+        what={what}
+        readProjectCandidates={deps.readProjectCandidates}
+        pluginName={deps.pluginName}
+        today={deps.today}
         onClose={() => {
           open = false;
           render(null);
         }}
       />,
     );
+  };
+  return {
+    openQuickCapture: (project) =>
+      show({
+        kind: "capture",
+        quickCapture: deps.quickCapture,
+        project: project ?? null,
+      }),
+    openCreateSubtask: (parent) =>
+      show({
+        kind: "subtask",
+        createSubtask: deps.createSubtask,
+        readSubtaskProject: deps.readSubtaskProject,
+        parent,
+      }),
   };
 }

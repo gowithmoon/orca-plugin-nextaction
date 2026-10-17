@@ -70,6 +70,10 @@ const zhCN: Record<string, string> = {
   "Task features are paused, so the task was not created. See the plugin's earlier notice or its task tag setting.":
     "任务功能已暂停，任务没有创建。请查看插件之前的通知或任务标签设置。",
   "Could not create the task: ${reason}": "无法创建任务：${reason}",
+  "New subtask": "新建子任务",
+  "Create subtask": "创建子任务",
+  "Goes below the parent task, into the inbox": "建在父任务下，进入收集箱",
+  "Subtask created": "已创建子任务",
   "Could not convert to a task: ${reason}": "无法转为任务：${reason}",
   Inbox: "收集箱",
   Todo: "待开始",
