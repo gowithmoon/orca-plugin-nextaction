@@ -435,12 +435,13 @@ function DetailsBoard(props: {
   const { Button, Tooltip } = orca.components;
   const project = read.project.project.id;
   const board = read.board;
-  // Narrowed, the read leaves out every empty column; "Other" too.
+  // By status the columns stay, empty ones too: the board shows. By project
+  // root task the read leaves out every column nothing passes in, "Other"
+  // too.
   const empty =
-    board.grouping === "status"
-      ? board.columns.length === 0
-      : board.columns.length === 0 &&
-        board.other.cards.length + board.other.done.length === 0;
+    board.grouping === "root" &&
+    board.columns.length === 0 &&
+    board.other.cards.length + board.other.done.length === 0;
   return (
     <>
       <div className="nextaction-toolbar">
@@ -489,7 +490,7 @@ function DetailsBoard(props: {
           <ProjectBoardColumns
             board={read.board}
             project={project}
-            // Narrowed: no "As root task", no empty "Other" (#170, #172).
+            // Narrowed: no empty "Other" (#172).
             filtering={filtering}
             doneColumn={stores.doneColumn}
             rootColumns={stores}

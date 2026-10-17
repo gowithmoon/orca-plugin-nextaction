@@ -200,9 +200,11 @@ export interface ReadProjectBoardOptions {
    * The project details' filter, shared with the tree (#172), by the tree's
    * rules (`matches`). A card shows when it or any descendant task passes;
    * its rows are those that pass and the tasks above them. By status the
-   * status filter only chooses the columns; by project root task it
-   * narrows the cards as the tree's does. Narrowed, empty columns are left
-   * out.
+   * status filter only chooses the open statuses' columns, a chosen one
+   * shown even empty; the done column, not offered by it, always shows, and
+   * the rest of the filter keeps every column, empty ones too (still drop
+   * targets); by project root task it narrows the cards as the tree's does,
+   * a column left out when nothing in it passes.
    */
   readonly filter?: AllTasksFilter;
   /** As `ReadAllTasksOptions.search`, shared with the tree likewise. */
@@ -391,17 +393,16 @@ export function createReadProjectBoard(deps: {
         },
       };
     }
-    // The status filter offers only open statuses: choosing any leaves the
-    // done column out, as every column not chosen.
+    // The status filter offers only open statuses: it chooses among their
+    // columns, the done column always shown.
     const chosen = options.filter?.statuses ?? [];
     const shownColumns = columnOrder.filter(
       (status) =>
-        chosen.length === 0 || (status !== "done" && chosen.includes(status)),
+        chosen.length === 0 || status === "done" || chosen.includes(status),
     );
     const columns = shownColumns.flatMap((status): StatusColumn[] => {
+      // Narrowed or not, every column shown stays, empty or not.
       const items = roots.filter((item) => item.task.status === status);
-      // Narrowed, an empty column goes.
-      if (narrowed && items.length === 0) return [];
       if (status === "done") {
         // Done cards go by completion, not by the sort; searching lifts the
         // range, as the done section's.

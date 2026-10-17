@@ -288,7 +288,7 @@ function Column(props: { column: StatusColumn; cards: BoardCards }) {
   );
 }
 
-/** The done column: a narrow strip until opened, earlier cards apart. */
+/** The done column: open by default, collapsible to a narrow strip, earlier cards apart. */
 function DoneColumn(props: {
   column: StatusColumn;
   cards: BoardCards;
@@ -680,7 +680,7 @@ export function ProjectBoardColumns(props: {
   board: ProjectBoard;
   /** The project shown, for "As root task" (#170). */
   project: ProjectId;
-  /** A filter or search is set: no "As root task" (#170). */
+  /** A filter or search is set: no empty "Other" (#172). */
   filtering: boolean;
   cards: BoardCards;
   doneColumn: DoneSectionStore;
@@ -703,13 +703,11 @@ export function ProjectBoardColumns(props: {
   const projectEnd = React.useRef({
     roots: projectRootsNow,
     project: props.project,
-    filtering: props.filtering,
     grouping: board.grouping,
   });
   projectEnd.current = {
     roots: projectRootsNow,
     project: props.project,
-    filtering: props.filtering,
     grouping: board.grouping,
   };
   const onMove = React.useRef(props.onMove);
@@ -726,7 +724,6 @@ export function ProjectBoardColumns(props: {
       // root task already; by project root task "Other" takes its place.
       takesProjectEnd: (id) =>
         projectEnd.current.grouping === "status" &&
-        !projectEnd.current.filtering &&
         !projectEnd.current.roots.has(id),
       projectRoot: (id) => projectEnd.current.roots.has(id),
       project: projectEnd.current.project,
@@ -768,7 +765,7 @@ export function ProjectBoardColumns(props: {
                 <Column key={column.status} column={column} cards={cards} />
               ),
             )}
-            {!props.filtering && <ProjectEndDrop />}
+            <ProjectEndDrop />
           </>
         )}
       </section>
