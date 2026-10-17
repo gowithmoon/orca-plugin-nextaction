@@ -156,6 +156,8 @@ export function createNextActionPlugin(): Plugin {
     openTaskPanel: (taskId) => {
       taskPanel.open(taskId);
     },
+    openCreateSubtask: taskTag.openCreateSubtask,
+    names: taskTag.names,
   });
   const projectMenu = createProjectMenuFeature({
     repository,

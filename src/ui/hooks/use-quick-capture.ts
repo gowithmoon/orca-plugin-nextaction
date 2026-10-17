@@ -1,8 +1,8 @@
-// Runs the quick capture use case for the window and tells the user what
-// happened. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// Runs the capture window's use case, quick capture or a new subtask (#190),
+// and tells the user what happened. Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
-import type { QuickCapture } from "../../application/usecases/quick-capture";
 import { t } from "../../shared/l10n/l10n";
 import { createNotify, notifyFailure } from "../notify";
 
@@ -14,8 +14,14 @@ import { createNotify, notifyFailure } from "../notify";
 export type CaptureOutcome = "captured" | "empty" | "failed" | "busy";
 
 export function useQuickCapture(
-  quickCapture: QuickCapture,
+  /** The use case; `empty` when the text was blank and nothing was written. */
+  capture: (
+    text: string,
+    initial: InitialProperties,
+  ) => Promise<{ kind: string }>,
   pluginName: string,
+  /** Told on success. */
+  created: string,
 ): (text: string, initial: InitialProperties) => Promise<CaptureOutcome> {
   // Two quick Enters must not capture twice.
   const running = React.useRef(false);
@@ -29,9 +35,9 @@ export function useQuickCapture(
       running.current = true;
       const notify = createNotify(pluginName);
       try {
-        const result = await quickCapture(text, initial);
+        const result = await capture(text, initial);
         if (result.kind === "empty") return "empty";
-        notify("success", t("Task created and added to today's journal"));
+        notify("success", created);
         return "captured";
       } catch (error) {
         notifyFailure(notify, error, {
@@ -46,6 +52,6 @@ export function useQuickCapture(
         running.current = false;
       }
     },
-    [quickCapture, pluginName],
+    [capture, pluginName, created],
   );
 }

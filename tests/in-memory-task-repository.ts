@@ -851,6 +851,37 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async appendSubtask(parentId, text, initial = {}) {
+      taskToWrite(parentId);
+      // After the parent's last block below it, as Orca's lastChild puts it.
+      const below = [...blocks.entries()].filter(
+        ([id]) => id === parentId || isBelow(id, parentId),
+      );
+      const last = Math.max(...below.map(([, block]) => block.position));
+      const id = nextId++;
+      write(() => {
+        for (const block of blocks.values()) {
+          if (block.position > last) block.position += 1;
+        }
+        const created = new Date();
+        store(id, {
+          text,
+          created,
+          parentId,
+          position: last + 1,
+          notConvertible: undefined,
+          // Properties not given keep the defaults, as Orca fills them.
+          task: { ...freshTask(id, text, created), ...initial },
+          completionHistory: undefined,
+          myDay: undefined,
+          page: false,
+          tags: [],
+          project: undefined,
+        });
+      });
+      return id;
+    },
+
     async appendTaskToJournal(text, now, initial = {}) {
       const { project, ...properties } = initial;
       const id = nextId++;

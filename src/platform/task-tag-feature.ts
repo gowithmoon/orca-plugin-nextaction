@@ -2,6 +2,10 @@ import type { ProjectTagNamesSource } from "../application/ports/project-tag-nam
 import type { TaskRepository } from "../application/ports/task-repository";
 import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createConvertToTask } from "../application/usecases/convert-to-task";
+import {
+  createCreateSubtask,
+  createReadSubtaskProject,
+} from "../application/usecases/create-subtask";
 import { createQuickCapture } from "../application/usecases/quick-capture";
 import { createReadProjectCandidates } from "../application/usecases/read-project-candidates";
 import type { CalendarDate } from "../domain/task/task";
@@ -15,6 +19,7 @@ import { systemClock } from "../infra/system-clock";
 import { t } from "../shared/l10n/l10n";
 import {
   createQuickCaptureCommand,
+  type OpenCreateSubtask,
   type OpenQuickCapture,
 } from "../ui/capture/quick-capture-popup";
 import { createConvertToTaskCommand } from "../ui/commands/convert-to-task-command";
@@ -120,6 +125,11 @@ export function createTaskTagFeature(
    * does nothing outside a load.
    */
   openQuickCapture: OpenQuickCapture;
+  /**
+   * Opens the same window as "Create subtask" (#190, the task menu); does
+   * nothing outside a load.
+   */
+  openCreateSubtask: OpenCreateSubtask;
 } {
   // Independent of the task tag (#140): one paused leaves the other working.
   const projectTag = createTagLifecycle({
@@ -157,12 +167,13 @@ export function createTaskTagFeature(
     onWritten,
     projectTag.state,
   );
-  // The quick capture popup's opener exists only while loaded.
+  // The capture window's openers exist only while loaded.
   let openCapture: OpenQuickCapture = () => {};
+  let openSubtask: OpenCreateSubtask = () => {};
 
   const feature: FeatureModule = async (context) => {
     // No shortcut is assigned: the user binds one in Orca's settings.
-    context.registry.editorCommand(
+    const convertToTaskId = context.registry.editorCommand(
       "convertToTask",
       createConvertToTaskCommand(
         createConvertToTask({ repository }),
@@ -177,11 +188,15 @@ export function createTaskTagFeature(
     // opens it; unload unmounts it.
     context.registry.css("quickCaptureStyle", quickCaptureCss);
     const captureRoot = context.registry.reactRoot("quickCapturePopup", null);
-    const openQuickCapture = createQuickCaptureCommand(
-      createQuickCapture({ repository, clock: systemClock }),
-      createReadProjectCandidates({ repository }),
-      context.pluginName,
-      today,
+    const { openQuickCapture, openCreateSubtask } = createQuickCaptureCommand(
+      {
+        quickCapture: createQuickCapture({ repository, clock: systemClock }),
+        createSubtask: createCreateSubtask({ repository }),
+        readSubtaskProject: createReadSubtaskProject({ repository }),
+        readProjectCandidates: createReadProjectCandidates({ repository }),
+        pluginName: context.pluginName,
+        today,
+      },
       captureRoot.render,
     );
     // The command never fills in a project, whatever it is called with.
@@ -190,11 +205,39 @@ export function createTaskTagFeature(
       () => openQuickCapture(),
       t("Create task"),
     );
+    // The `/` menu calls editor commands only (slash-commands): this one only
+    // opens the window, writing nothing, so there is nothing to undo.
+    const quickCaptureEditorId = context.registry.editorCommand(
+      "quickCaptureFromEditor",
+      async () => {
+        openQuickCapture();
+        return null;
+      },
+      () => undefined,
+      { label: t("Create task") },
+    );
+    // Released before the commands they call (#194); the typed "/…" does not
+    // stay in the block (slash-commands).
+    const slashGroup = t("NextAction");
+    context.registry.slashCommand("convertToTaskSlash", {
+      icon: "ti ti-inbox",
+      group: slashGroup,
+      title: t("Convert to task"),
+      command: convertToTaskId,
+    });
+    context.registry.slashCommand("quickCaptureSlash", {
+      icon: "ti ti-plus",
+      group: slashGroup,
+      title: t("Create task"),
+      command: quickCaptureEditorId,
+    });
     // Recorded after the root, so it is released first: nothing opens the
     // popup into a root that is going away.
     openCapture = openQuickCapture;
+    openSubtask = openCreateSubtask;
     context.registry.add(`${context.pluginName}.quickCaptureOpen`, () => {
       openCapture = () => {};
+      openSubtask = () => {};
     });
     const uiLanguage = noteLanguageFor(orca.state.locale);
     // The project tag first: the task tag's 所属项目 is scoped to its name
@@ -229,5 +272,6 @@ export function createTaskTagFeature(
     projectNames,
     projectTagBlockId,
     openQuickCapture: (project) => openCapture(project),
+    openCreateSubtask: (parent) => openSubtask(parent),
   };
 }

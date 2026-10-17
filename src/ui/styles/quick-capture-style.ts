@@ -51,4 +51,21 @@ export const quickCaptureCss = `
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-xs);
 }
+
+/* "Create subtask" (#190): the 所属项目, read only, the parent task's. */
+.nextaction-capture-project {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nextaction-capture-project [data-empty] {
+  color: var(--orca-color-text-3);
+}
+
+.nextaction-capture-project-source {
+  color: var(--orca-color-text-2);
+}
 `;
