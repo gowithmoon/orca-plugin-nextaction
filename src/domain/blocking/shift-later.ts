@@ -40,12 +40,15 @@ export type ShiftLaterPlan = (from: TaskId) => readonly ShiftedDates[];
 /**
  * Plans shifting later among `tasks`; only those `movable` move (the
  * project's tasks not done). From a task, follows the dependencies to the
- * tasks waiting for it: each in conflict moves its start to the earliest its
- * dependencies allow (`earliestStart`), its due date by as many days; then
- * the tasks waiting for it are judged by its new dates, until none
- * conflicts. A task reached along several paths is judged once, after all of
- * them, so it takes the latest date. A cycle in the notes is cut where it
- * closes; the task shifted from never moves.
+ * tasks waiting for it, in dependency order: a task waiting for the task
+ * shifted from, or for one this plan moved, is judged; in conflict, it moves
+ * its start to the earliest its dependencies allow (`earliestStart`), its
+ * due date by as many days, and the tasks waiting for it are judged in turn
+ * by its new dates. One not in conflict stays and pushes nothing on: a
+ * conflict already after it is left as it is. A task reached along several
+ * paths is judged once, after all of them, so it takes the latest date. A
+ * cycle in the notes is cut where it closes; the task shifted from never
+ * moves.
  */
 export function shiftLaterPlanner(
   tasks: readonly ShiftTask[],
@@ -90,6 +93,12 @@ export function shiftLaterPlanner(
     };
     const plan: ShiftedDates[] = [];
     for (const task of postorder.reverse()) {
+      // Judged only after `from` or a task this plan moved: one left where
+      // it is pushes nothing on, its own later conflicts stay as they are.
+      const pushed = task.dependencies.some(
+        (id) => id === from || moved.has(id),
+      );
+      if (!pushed) continue;
       if (task.start === null || !hasDateConflict(task, lookup)) continue;
       // In conflict: some dependency takes part, its date after the start.
       const start = earliestStart(task, lookup);
