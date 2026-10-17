@@ -639,6 +639,9 @@ const zhCN: Record<string, string> = {
   "Project start": "项目开始",
   "Project due": "项目截止",
   "${start} → ${due}": "${start} → ${due}",
+  // The gantt chart's time scale (#179); Week and Month are the stats'.
+  "Time scale": "刻度",
+  Day: "日",
 };
 
 export default zhCN;

@@ -95,6 +95,17 @@ export const projectGanttCss = `
   top: 20px;
 }
 
+/* The day scale (#179): one narrow label per day, its number centred. */
+.nextaction-gantt-scale[data-scale="day"] .nextaction-gantt-label[data-row="bottom"] {
+  padding-left: 0;
+  text-align: center;
+}
+
+.nextaction-gantt-label[data-today] {
+  color: var(--orca-color-primary-5);
+  font-weight: 600;
+}
+
 .nextaction-gantt-marker {
   position: absolute;
   top: 40px;
@@ -258,6 +269,24 @@ button.nextaction-gantt-caret:hover {
 
 .nextaction-gantt-bar:hover {
   border-color: var(--orca-color-text-1);
+}
+
+/* The task's name by its bar (#179): inside when it fits, else after it. */
+.nextaction-gantt-bar-label {
+  position: absolute;
+  top: 6px;
+  z-index: 3;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--orca-color-text-2);
+  font-size: 12px;
+}
+
+.nextaction-gantt-bar-label[data-inside] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--orca-color-text-1);
 }
 
 /* Below the last row: the tree column carries on down, the lanes stay clear. */
