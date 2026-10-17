@@ -247,7 +247,7 @@ export function UnplacedName(props: {
       data-empty={text.empty || undefined}
       data-landing={drag.landing?.id === id || undefined}
       aria-current={selected || undefined}
-      title={[text.text, t("Drag onto the time axis to schedule it")].join(
+      title={[text.text, t("Drag onto the chart to set its dates")].join(
         "\n",
       )}
       onClick={onSelect}

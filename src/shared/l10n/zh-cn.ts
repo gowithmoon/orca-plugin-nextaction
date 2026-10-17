@@ -643,9 +643,9 @@ const zhCN: Record<string, string> = {
   // Dragging a gantt bar to change its dates (#180).
   "Drag to move, drag an end to change that date":
     "拖中间整条挪动，拖两端改那一头的日期",
-  // Dragging an unplaced task onto the gantt chart's time axis (#181).
-  "Drag onto the time axis to schedule it":
-    "拖到时间轴上排日期：落点为开始日期，默认长一周",
+  // Dragging an unplaced task onto the gantt chart (#181).
+  "Drag onto the chart to set its dates":
+    "拖到图上设日期：落点为开始日期，默认长一周",
   // The gantt chart's borrowed ends, brackets and unplaced tasks (#177).
   "No start date: the project's start date is used":
     "没有开始日期，借用项目的开始日期",
