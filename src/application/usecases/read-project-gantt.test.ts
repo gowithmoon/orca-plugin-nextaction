@@ -584,6 +584,106 @@ describe("read project gantt, no project", () => {
   });
 });
 
+describe("read project gantt, the range it scrolls over", () => {
+  it("covers the earliest and the latest bar, two weeks before and after", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    repository.addTask(
+      {
+        id: 2,
+        status: "todo",
+        start: day(2026, 9, 20),
+        due: day(2026, 10, 12),
+      },
+      { parentId: 1 },
+    );
+    // A subtask: in the range though the tree shows it collapsed.
+    repository.addTask(
+      {
+        id: 3,
+        status: "todo",
+        start: day(2026, 10, 15),
+        due: day(2026, 11, 8),
+      },
+      { parentId: 2 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.range).toEqual({
+      start: day(2026, 9, 6),
+      end: day(2026, 11, 22),
+    });
+  });
+
+  it("covers the project's dates and today when no bar reaches them", async () => {
+    const { repository, readProjectGantt } = setup();
+    // Today (2026-10-09) is before the project's start.
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 20),
+      due: day(2026, 12, 31),
+    });
+    repository.addTask(
+      {
+        id: 2,
+        status: "todo",
+        start: day(2026, 11, 2),
+        due: day(2026, 11, 6),
+      },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.range).toEqual({
+      start: day(2026, 9, 25),
+      end: day(2027, 1, 14),
+    });
+  });
+
+  it("leaves out an unplaced task's own date", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    // Only a start date, after the project's due date: unplaced.
+    repository.addTask(
+      { id: 2, status: "todo", start: day(2026, 12, 20) },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.range).toEqual({
+      start: day(2026, 9, 17),
+      end: day(2026, 11, 14),
+    });
+  });
+
+  it("is two weeks either side of today for a project without dates or bars", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.range).toEqual({
+      start: day(2026, 9, 25),
+      end: day(2026, 10, 23),
+    });
+  });
+});
+
 describe("read project gantt, dependencies", () => {
   it("gives a row its dependencies on the project's tasks, from the task depended on to it, with its dependency delay", async () => {
     const { repository, readProjectGantt } = setup();
