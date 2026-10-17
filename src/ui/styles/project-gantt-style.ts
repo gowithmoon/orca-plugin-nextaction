@@ -243,21 +243,74 @@ button.nextaction-gantt-caret:hover {
   flex: none;
 }
 
-/* One neutral colour for now; #178 colours bars by status. */
+/* Coloured by status, as the status icons (#178). */
 .nextaction-gantt-bar {
   position: absolute;
   top: 6px;
   height: 18px;
   z-index: 2;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--orca-color-text-2) 70%, transparent);
+  /* The status icon's colour, set on the bar (#178). */
+  --nextaction-gantt-fill: color-mix(in srgb, var(--nextaction-gantt-status, var(--orca-color-text-2)) 28%, var(--orca-color-bg-1));
+  --nextaction-gantt-edge: color-mix(in srgb, var(--nextaction-gantt-status, var(--orca-color-text-2)) 85%, transparent);
+  border: 1px solid var(--nextaction-gantt-edge);
   border-radius: var(--orca-radius-sm);
-  background-color: color-mix(in srgb, var(--orca-color-text-2) 22%, var(--orca-color-bg-1));
+  background-color: var(--nextaction-gantt-fill);
   cursor: pointer;
 }
 
 .nextaction-gantt-bar:hover {
   border-color: var(--orca-color-text-1);
+}
+
+/* Done: faded; every one shows. */
+.nextaction-gantt-bar[data-status="done"] {
+  opacity: 0.45;
+}
+
+/* Someday: a light dashed frame. */
+.nextaction-gantt-bar[data-status="someday"] {
+  --nextaction-gantt-fill: color-mix(in srgb, var(--nextaction-gantt-status, var(--orca-color-text-2)) 10%, var(--orca-color-bg-1));
+  border-style: dashed;
+}
+
+/* Overdue: the whole bar outlined in red. */
+.nextaction-gantt-bar[data-overdue],
+.nextaction-gantt-bar[data-overdue]:hover {
+  border-color: var(--orca-color-dangerous-5);
+  box-shadow: 0 0 0 1.5px var(--orca-color-dangerous-5);
+}
+
+/* Held back by an ancestor task's or the project's later start: hatched. */
+.nextaction-gantt-held {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  margin-left: -1px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--orca-color-text-2) 60%, transparent) 0 1.4px, transparent 1.4px 5px),
+    color-mix(in srgb, var(--orca-color-bg-1) 55%, transparent);
+  pointer-events: none;
+}
+
+/* Blocked: a lock at the left end. */
+.nextaction-gantt-lock {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--orca-color-bg-1);
+  box-shadow: 0 0 0 1px var(--orca-color-border);
+  color: var(--orca-color-text-2);
+  font-size: 10px;
+  pointer-events: none;
 }
 
 /* Below the last row: the tree column carries on down, the lanes stay clear. */
