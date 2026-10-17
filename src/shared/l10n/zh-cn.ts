@@ -644,6 +644,9 @@ const zhCN: Record<string, string> = {
   "+${days}d": "+${days}天",
   "Depends on tasks outside the project: ${tasks}":
     "依赖项目外的任务：${tasks}",
+  // The gantt chart's date conflicts (#183).
+  "Date conflict: starts before a task it depends on is due":
+    "日期冲突：开始日期早于所依赖任务的截止日期",
 };
 
 export default zhCN;

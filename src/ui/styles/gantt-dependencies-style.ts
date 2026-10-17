@@ -37,6 +37,35 @@ export const ganttDependenciesCss = `
   stroke-linejoin: round;
 }
 
+/* A date conflict (#183): red arrows, a red triangle at the bar's head. */
+.nextaction-gantt-arrow[data-conflict] > path {
+  stroke: var(--orca-color-dangerous-5);
+  stroke-width: 1.6;
+}
+
+.nextaction-gantt-arrow[data-conflict] > path.nextaction-gantt-arrow-head {
+  fill: var(--orca-color-dangerous-5);
+}
+
+.nextaction-gantt-arrow[data-conflict] > text {
+  fill: var(--orca-color-dangerous-5);
+  font-weight: 650;
+}
+
+.nextaction-gantt-conflict {
+  position: absolute;
+  top: 1px;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  margin-left: -4px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--orca-color-dangerous-5);
+  filter: drop-shadow(0 0 1px var(--orca-color-bg-1));
+  cursor: help;
+}
+
 .nextaction-gantt-outside {
   position: absolute;
   top: 8px;
