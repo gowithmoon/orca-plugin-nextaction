@@ -5,6 +5,9 @@
 // together; the scale row sticks to the top, the tree to the left. Rows keep
 // note order; the tree collapses by task, only the project root tasks
 // showing by default. A click on a bar or a name opens the task panel.
+// The narrow tier (#185) has no tree column: each task's name is written
+// beside its bar, every row shows, none indented or collapsible, and the time
+// axis scrolls sideways over the whole width.
 // Days become pixels only in gantt-axis.ts. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -18,6 +21,7 @@ import { dayOfWeek } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
 import { formatDate, shownText } from "../../components/format";
 import { StatusIcon } from "../../components/status-icon";
+import { usePanel } from "../../panel/panel-context";
 import {
   chartRange,
   createGanttAxis,
@@ -85,7 +89,11 @@ function weekLabel(date: CalendarDate): string {
  * The scale row: the months above, the weeks below (#179 adds the day and
  * month scales), then the markers of today and the project's dates.
  */
-function ScaleRow(props: { axis: GanttAxis; gantt: ProjectGantt }) {
+function ScaleRow(props: {
+  axis: GanttAxis;
+  gantt: ProjectGantt;
+  narrow: boolean;
+}) {
   const { axis, gantt } = props;
   const days = axis.eachDay();
   const months = days.filter((day, index) => index === 0 || day.day === 1);
@@ -115,7 +123,9 @@ function ScaleRow(props: { axis: GanttAxis; gantt: ProjectGantt }) {
   }
   return (
     <div className="nextaction-gantt-head">
-      <div className="nextaction-gantt-corner">{t("Tasks")}</div>
+      {!props.narrow && (
+        <div className="nextaction-gantt-corner">{t("Tasks")}</div>
+      )}
       <div className="nextaction-gantt-scale" style={{ width: axis.width }}>
         {months.map((day, index) => {
           const next = months[index + 1];
@@ -160,13 +170,13 @@ function ScaleRow(props: { axis: GanttAxis; gantt: ProjectGantt }) {
  * The lines under the rows: a grid line every week, a light dashed line at
  * the project's start and due dates, and today's line.
  */
-function Lines(props: { axis: GanttAxis; gantt: ProjectGantt }) {
+function Lines(props: { axis: GanttAxis; gantt: ProjectGantt; left: number }) {
   const { axis, gantt } = props;
   const weeks = axis.eachDay().filter((day) => dayOfWeek(day) === 1);
   return (
     <div
       className="nextaction-gantt-lines"
-      style={{ left: treeWidth, width: axis.width }}
+      style={{ left: props.left, width: axis.width }}
       aria-hidden="true"
     >
       {weeks.map((day) => (
@@ -223,6 +233,57 @@ function BarView(props: {
       aria-label={`${text}, ${dates}`}
       onClick={() => cards.selectTask(row.task.id)}
     />
+  );
+}
+
+/**
+ * The narrow tier's name of a row, in its lane: just after the bar's end,
+ * or, without a bar, at the left edge of what shows. A click opens the task
+ * panel, as the bar does.
+ */
+function NameBesideBar(props: {
+  row: GanttRow;
+  axis: GanttAxis;
+  cards: GanttCards;
+}) {
+  const { row, axis, cards } = props;
+  const text = shownText(row.task);
+  return (
+    <button
+      type="button"
+      className="nextaction-gantt-bar-name"
+      data-empty={text.empty || undefined}
+      data-beside={row.bar ? "bar" : undefined}
+      aria-current={row.task.id === cards.selectedTaskId || undefined}
+      title={text.text}
+      style={row.bar ? { left: axis.endX(row.bar.due) + 6 } : undefined}
+      onClick={() => cards.selectTask(row.task.id)}
+    >
+      {text.text}
+    </button>
+  );
+}
+
+/** A row in the narrow tier: its bar and, beside it, its name. */
+function NarrowRow(props: {
+  row: GanttRow;
+  axis: GanttAxis;
+  cards: GanttCards;
+}) {
+  const { row, axis, cards } = props;
+  return (
+    <div
+      className="nextaction-gantt-row"
+      data-selected={row.task.id === cards.selectedTaskId || undefined}
+      data-done={row.task.status === "done" || undefined}
+    >
+      <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
+        {row.bar && (
+          <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
+        )}
+        <NameBesideBar row={row} axis={axis} cards={cards} />
+      </div>
+    </div>
   );
 }
 
@@ -295,6 +356,10 @@ export function ProjectGanttChart(props: {
   scale: GanttScale;
 }) {
   const { gantt, cards } = props;
+  // No tree column, nothing collapsed; the stored collapsing stays for the
+  // wider tiers.
+  const narrow = usePanel().tier === "narrow";
+  const tree = narrow ? 0 : treeWidth;
   const expanded = React.useSyncExternalStore(
     cards.expanded.subscribe,
     cards.expanded.current,
@@ -304,35 +369,44 @@ export function ProjectGanttChart(props: {
     [props.scale, gantt],
   );
   const parents = React.useMemo(() => parentsOf(gantt.rows), [gantt.rows]);
-  const rows = shownRows(gantt.rows, expanded);
+  const rows = narrow ? gantt.rows : shownRows(gantt.rows, expanded);
   return (
     <section
       className="nextaction-gantt"
       aria-label={t("Gantt")}
       style={
         {
-          "--nextaction-gantt-tree": `${treeWidth}px`,
+          "--nextaction-gantt-tree": `${tree}px`,
         } as React.CSSProperties
       }
     >
       <div
         className="nextaction-gantt-body"
-        style={{ width: treeWidth + axis.width }}
+        style={{ width: tree + axis.width }}
       >
-        <ScaleRow axis={axis} gantt={gantt} />
+        <ScaleRow axis={axis} gantt={gantt} narrow={narrow} />
         <div className="nextaction-gantt-rows">
-          <Lines axis={axis} gantt={gantt} />
-          {rows.map((row) => (
-            <Row
-              key={row.task.id}
-              row={row}
-              axis={axis}
-              cards={cards}
-              collapsible={parents.has(row.task.id)}
-              expanded={expanded.has(row.task.id)}
-            />
-          ))}
-          <div className="nextaction-gantt-fill" />
+          <Lines axis={axis} gantt={gantt} left={tree} />
+          {rows.map((row) =>
+            narrow ? (
+              <NarrowRow
+                key={row.task.id}
+                row={row}
+                axis={axis}
+                cards={cards}
+              />
+            ) : (
+              <Row
+                key={row.task.id}
+                row={row}
+                axis={axis}
+                cards={cards}
+                collapsible={parents.has(row.task.id)}
+                expanded={expanded.has(row.task.id)}
+              />
+            ),
+          )}
+          {!narrow && <div className="nextaction-gantt-fill" />}
         </div>
       </div>
     </section>
@@ -341,7 +415,8 @@ export function ProjectGanttChart(props: {
 
 /**
  * The chart's "Collapse all / Expand all", over the rows with subtasks;
- * none: no button. Collapses all while any is expanded.
+ * none, or the narrow tier where nothing collapses: no button. Collapses all
+ * while any is expanded.
  */
 export function GanttCollapseAllButton(props: {
   gantt: ProjectGantt;
@@ -349,12 +424,13 @@ export function GanttCollapseAllButton(props: {
 }) {
   const { gantt, expanded } = props;
   const { Button, Tooltip } = orca.components;
+  const narrow = usePanel().tier === "narrow";
   const current = React.useSyncExternalStore(
     expanded.subscribe,
     expanded.current,
   );
   const ids = [...parentsOf(gantt.rows)];
-  if (ids.length === 0) return null;
+  if (narrow || ids.length === 0) return null;
   const anyExpanded = ids.some((id) => current.has(id));
   const label = anyExpanded ? t("Collapse all") : t("Expand all");
   return (
