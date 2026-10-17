@@ -1,5 +1,6 @@
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import type { TaskTagNamesSource } from "../application/ports/task-tag-names";
 import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createChangeStatus } from "../application/usecases/change-status";
 import { createDropTask } from "../application/usecases/drop-task";
@@ -23,6 +24,8 @@ import {
   type TaskMenuItems,
 } from "../ui/task-menu/menu-items";
 import { registerMyDayMenuItem } from "../ui/task-menu/my-day-menu-item";
+import { createNoteStatusMenu } from "../ui/task-menu/note-status-menu";
+import { statusIconAt } from "../ui/task-menu/orca-dom";
 import { registerSkipMenuItem } from "../ui/task-menu/skip-menu-item";
 import { registerSubtaskMenuItem } from "../ui/task-menu/subtask-menu-item";
 import {
@@ -34,10 +37,11 @@ import type { FeatureModule } from "./bootstrap";
 
 /**
  * Puts the task menu (#31) into Orca's own menus: the tag menu of the task
- * tag and the block handle's menu (official-task-menus). The status icon only
- * displays; nothing listens to Orca's mouse events. `items` is this load's
- * registration, also rendered by the plugin panel's right-click menu (#39);
- * `undefined` outside a load.
+ * tag and the block handle's menu (official-task-menus). `items` is this
+ * load's registration, also rendered by the plugin panel's right-click menu
+ * (#39); `undefined` outside a load. A click on a status icon in the notes
+ * opens the status menu there (#193, status-icon-click): the one place the
+ * plugin listens to Orca's mouse events.
  */
 export function createTaskMenuFeature(deps: {
   repository: TaskRepository;
@@ -47,18 +51,21 @@ export function createTaskMenuFeature(deps: {
   openTaskPanel: (taskId: TaskId) => void;
   /** "Create subtask" (#190): opens the capture window for the task. */
   openCreateSubtask: (parent: Task) => void;
+  /** The task tag's name, for finding status icons; none while paused. */
+  names: TaskTagNamesSource;
 }): { feature: FeatureModule; items: () => TaskMenuItems | undefined } {
   const { repository } = deps;
   let current: TaskMenuItems | undefined;
   const feature: FeatureModule = (context) => {
     const { pluginName, registry } = context;
     const items = createTaskMenuItems();
+    const changeStatus = createChangeStatus({
+      repository,
+      clock: systemClock,
+      dayBoundary: deps.dayBoundary,
+    });
     registerBuiltinTaskMenuItems(items, {
-      changeStatus: createChangeStatus({
-        repository,
-        clock: systemClock,
-        dayBoundary: deps.dayBoundary,
-      }),
+      changeStatus,
       dropTask: createDropTask({ repository }),
       pluginName,
     });
@@ -103,6 +110,47 @@ export function createTaskMenuFeature(deps: {
       "taskMenu.block",
       createTaskBlockMenuCommand(menuDeps),
     );
+
+    // The status menu at a clicked status icon. Its layer wears the plugin
+    // panel's popup layer style (panel-style.ts, injected by the panel
+    // feature). The root comes first, so it is released after the listeners.
+    const statusMenuRoot = registry.reactRoot("noteStatusMenu", null);
+    const openStatusMenu = createNoteStatusMenu({
+      readTask: menuDeps.readTask,
+      changeStatus,
+      pluginName,
+      render: statusMenuRoot.render,
+    });
+    const hitOf = (event: Event) => {
+      const tagName = deps.names.current()?.tagName;
+      if (!tagName || !(event instanceof MouseEvent) || event.button !== 0) {
+        return undefined;
+      }
+      return statusIconAt(event, tagName);
+    };
+    // In the capture phase on window, every step of a press on the icon is
+    // kept from Orca, so the caret stays where it was; the click opens the
+    // menu (status-icon-click). Elsewhere nothing is touched.
+    for (const type of [
+      "pointerdown",
+      "mousedown",
+      "pointerup",
+      "mouseup",
+      "click",
+    ]) {
+      registry.listener(
+        window,
+        type,
+        (event) => {
+          const hit = hitOf(event);
+          if (!hit) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (type === "click") void openStatusMenu(hit);
+        },
+        true,
+      );
+    }
   };
   return { feature, items: () => current };
 }
