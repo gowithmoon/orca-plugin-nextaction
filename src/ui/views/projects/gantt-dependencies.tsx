@@ -2,6 +2,8 @@
 // end of the depended-on task's bar to the start of the waiting task's,
 // "+N天" on it for a dependency delay; a dependency on a task outside the
 // project is only a mark at the head of the bar, naming the task on hover.
+// A date conflict (GLOSSARY: 日期冲突, #183) turns its arrows red and puts a
+// red triangle at the head of the waiting task's bar, wherever it was made.
 // An arrow one of whose ends draws no bar (an unplaced task, a row hidden
 // below a collapsed one) is left out. Doing subtasks one after another
 // (GLOSSARY: 顺序执行) draws none: the rows' order tells. Verified by hand in
@@ -68,7 +70,10 @@ function Arrow(props: {
   const { dependency, from, to } = props;
   const x = to.left - 1;
   return (
-    <g className="nextaction-gantt-arrow">
+    <g
+      className="nextaction-gantt-arrow"
+      data-conflict={dependency.conflict || undefined}
+    >
       <path d={arrowPath(from, to)} />
       <path
         className="nextaction-gantt-arrow-head"
@@ -100,6 +105,10 @@ export function GanttDependencyArrows(props: {
       const to = places.get(dependency.to);
       return from && to ? [{ dependency, from, to }] : [];
     }),
+  );
+  // The red ones last, so that no grey line covers them.
+  arrows.sort(
+    (a, b) => Number(a.dependency.conflict) - Number(b.dependency.conflict),
   );
   if (arrows.length === 0) return null;
   return (
@@ -149,5 +158,29 @@ export function GanttOutsideDependencyMark(props: {
     >
       <i className="ti ti-link" aria-hidden="true" />
     </span>
+  );
+}
+
+/**
+ * The red triangle at the head of a row's bar when its task has a date
+ * conflict (#183); none: nothing.
+ */
+export function GanttConflictMark(props: { row: GanttRow; axis: GanttAxis }) {
+  const { row, axis } = props;
+  if (
+    row.bar?.kind !== "bar" ||
+    !row.dependencies.some((dependency) => dependency.conflict)
+  ) {
+    return null;
+  }
+  const label = t("Date conflict: starts before a task it depends on is due");
+  return (
+    <span
+      className="nextaction-gantt-conflict"
+      role="img"
+      style={{ left: axis.x(row.bar.start) }}
+      title={label}
+      aria-label={label}
+    />
   );
 }

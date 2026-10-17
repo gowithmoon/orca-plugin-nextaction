@@ -2,6 +2,7 @@
 // the project details' gantt layout: the whole chart as the layout shows
 // it, the interface only drawing it. The rows are the project's tasks in
 // note order; collapsing them is the interface's.
+import { dependencyConflicts } from "../../domain/blocking/date-conflict";
 import {
   analyzeTaskGraph,
   type SnapshotTask,
@@ -134,6 +135,12 @@ export interface GanttDependency {
    * its arrows; 0 for none.
    */
   readonly delay: number;
+  /**
+   * Whether `to`'s date conflict (GLOSSARY: 日期冲突) comes from this
+   * dependency: its arrow is red, a red triangle at the head of `to`'s bar.
+   * By the dates the tasks wrote, never borrowed ones.
+   */
+  readonly conflict: boolean;
 }
 
 /** Days `from` up to `until`, `until` not included. */
@@ -380,6 +387,7 @@ export function createReadProjectGantt(deps: {
       keptById.set(item.task.id, found);
       return found;
     };
+    const lookup = (id: TaskId) => graph.entry(id)?.task;
     const dependenciesOf = (task: Task): RowDependencies => {
       const inside: GanttDependency[] = [];
       const outside: GanttOutsideDependency[] = [];
@@ -388,7 +396,12 @@ export function createReadProjectGantt(deps: {
         const entry = graph.entry(id);
         if (!entry) continue;
         if (entry.project?.id === scoped.project.id) {
-          inside.push({ from: id, to: task.id, delay: task.dependencyDelay });
+          inside.push({
+            from: id,
+            to: task.id,
+            delay: task.dependencyDelay,
+            conflict: dependencyConflicts(task, id, lookup),
+          });
         } else {
           outside.push({ task: id, text: entry.task.text });
         }

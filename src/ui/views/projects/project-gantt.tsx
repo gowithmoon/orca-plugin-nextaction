@@ -28,6 +28,7 @@ import { usePanel } from "../../panel/panel-context";
 import { statusIcons } from "../../task-menu/status-icons";
 import { createGanttAxis, type GanttAxis, type GanttScale } from "./gantt-axis";
 import {
+  GanttConflictMark,
   GanttDependencyArrows,
   GanttOutsideDependencyMark,
 } from "./gantt-dependencies";
@@ -469,6 +470,7 @@ function NarrowRow(props: {
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
         <GanttOutsideDependencyMark row={row} axis={axis} />
+        <GanttConflictMark row={row} axis={axis} />
         <NameBesideBar row={row} axis={axis} cards={cards} />
       </div>
     </div>
@@ -582,6 +584,7 @@ function Row(props: {
           <BarLabel bar={row.bar} row={row} axis={axis} />
         )}
         <GanttOutsideDependencyMark row={row} axis={axis} />
+        <GanttConflictMark row={row} axis={axis} />
       </div>
     </div>
   );

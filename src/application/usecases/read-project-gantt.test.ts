@@ -718,11 +718,11 @@ describe("read project gantt, dependencies", () => {
       [
         4,
         [
-          { from: 3, to: 4, delay: 2 },
-          { from: 2, to: 4, delay: 2 },
+          { from: 3, to: 4, delay: 2, conflict: false },
+          { from: 2, to: 4, delay: 2, conflict: false },
         ],
       ],
-      [5, [{ from: 4, to: 5, delay: 0 }]],
+      [5, [{ from: 4, to: 5, delay: 0, conflict: false }]],
     ]);
   });
 
@@ -763,7 +763,7 @@ describe("read project gantt, dependencies", () => {
           { task: 7, text: "Ask Wang" },
         ],
       ],
-      [3, [{ from: 2, to: 3, delay: 0 }], []],
+      [3, [{ from: 2, to: 3, delay: 0, conflict: false }], []],
     ]);
   });
 
@@ -785,5 +785,231 @@ describe("read project gantt, dependencies", () => {
         ...row.outsideDependencies,
       ]),
     ).toEqual([]);
+  });
+});
+
+/** Each project dependency of each row: `from>to` and whether it conflicts. */
+function conflicts(read: ProjectGanttRead): [string, boolean][] {
+  return gantt(read).gantt.rows.flatMap((row) =>
+    row.dependencies.map((dependency): [string, boolean] => [
+      `${dependency.from}>${dependency.to}`,
+      dependency.conflict,
+    ]),
+  );
+}
+
+describe("read project gantt, date conflicts", () => {
+  it("in mode all, takes the latest due date: a start before it conflicts, on the arrows from the tasks due after the start", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", start: day(2026, 10, 15), dependencies: [2, 3] },
+      { parentId: 1 },
+    );
+    // Starts on the latest due day itself: no conflict.
+    repository.addTask(
+      { id: 5, status: "todo", start: day(2026, 10, 20), dependencies: [2, 3] },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([
+      ["2>4", false],
+      ["3>4", true],
+      ["2>5", false],
+      ["3>5", false],
+    ]);
+  });
+
+  it("in mode any, takes the earliest due date", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 4,
+        status: "todo",
+        start: day(2026, 10, 11),
+        dependencies: [2, 3],
+        dependencyMode: "any",
+      },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 5,
+        status: "todo",
+        start: day(2026, 10, 15),
+        dependencies: [2, 3],
+        dependencyMode: "any",
+      },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([
+      ["2>4", true],
+      ["3>4", true],
+      ["2>5", false],
+      ["3>5", false],
+    ]);
+  });
+
+  it("adds the dependency delay to the due date", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 3,
+        status: "todo",
+        start: day(2026, 10, 13),
+        dependencies: [2],
+        dependencyDelay: 2,
+      },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 4,
+        status: "todo",
+        start: day(2026, 10, 14),
+        dependencies: [2],
+        dependencyDelay: 2,
+      },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([
+      ["2>3", true],
+      ["2>4", false],
+    ]);
+  });
+
+  it("leaves out a task depended on that is done: in mode all the latest due date of the rest counts", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "done", due: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", start: day(2026, 10, 15), dependencies: [2, 3] },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([
+      ["2>4", false],
+      ["3>4", false],
+    ]);
+  });
+
+  it("leaves out a stale dependency and a task depended on without a due date of its own", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    // Not a task any more: a stale dependency.
+    repository.addBlock(8);
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      {
+        id: 4,
+        status: "todo",
+        start: day(2026, 10, 15),
+        dependencies: [8, 2, 3],
+        dependencyMode: "any",
+      },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([
+      ["2>4", false],
+      ["3>4", true],
+    ]);
+  });
+
+  it("never marks a task without a start date of its own", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", due: day(2026, 10, 15), dependencies: [2] },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([["2>3", false]]);
+  });
+
+  it("judges by the dates the tasks wrote, never the ones borrowed from the project", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    // Its bar borrows the project's due date, 10-31.
+    repository.addTask(
+      { id: 2, status: "todo", start: day(2026, 10, 5) },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 3, status: "todo", start: day(2026, 10, 10), dependencies: [2] },
+      { parentId: 1 },
+    );
+    repository.addTask(
+      { id: 4, status: "todo", due: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+    // Its bar borrows the project's start date, 10-01.
+    repository.addTask(
+      { id: 5, status: "todo", due: day(2026, 10, 25), dependencies: [4] },
+      { parentId: 1 },
+    );
+
+    const read = await readProjectGantt({ project: 1 });
+
+    expect(conflicts(read)).toEqual([
+      ["2>3", false],
+      ["4>5", false],
+    ]);
   });
 });
