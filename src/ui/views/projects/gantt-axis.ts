@@ -1,8 +1,8 @@
 // The gantt chart's time axis (#186): the one place days turn into pixels
 // and back. A scale is a parameter, not written into the drawing: each has
 // its day width and how it rounds the range out (#179). The range itself is
-// the read's (`ProjectGantt.range`); dragging (dates from pixels) comes
-// with #180. Display only.
+// the read's (`ProjectGantt.range`). Dragging turns pixels back into days
+// here too (`dayAt`, `daysAcross`, #180), on whatever scale is shown.
 import type { GanttRange } from "../../../application/usecases/read-project-gantt";
 import type { CalendarDate } from "../../../domain/task/task";
 import {
@@ -35,6 +35,16 @@ export interface GanttAxis {
   endX(date: CalendarDate): number;
   /** Every day of the axis, in order. */
   eachDay(): CalendarDate[];
+  /**
+   * The day under `x` pixels from the axis's left edge, kept within the
+   * axis: where something dropped on the axis lands (#181).
+   */
+  dayAt(x: number): CalendarDate;
+  /**
+   * How many days `dx` pixels across the axis make, to the nearest whole
+   * day: a drag snapping by day (#180).
+   */
+  daysAcross(dx: number): number;
 }
 
 /**
@@ -79,5 +89,12 @@ export function createGanttAxis(
     endX: (date) => x(date) + dayWidth,
     eachDay: () =>
       Array.from({ length: days }, (_, index) => addDays(rounded.start, index)),
+    dayAt: (at) =>
+      addDays(
+        rounded.start,
+        Math.min(Math.max(Math.floor(at / dayWidth), 0), days - 1),
+      ),
+    // `|| 0`: no -0 days.
+    daysAcross: (dx) => Math.round(dx / dayWidth) || 0,
   };
 }

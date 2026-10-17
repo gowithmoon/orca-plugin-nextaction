@@ -9,6 +9,7 @@
 // list. Each part reads when it shows and again on every task change signal
 // (ADR 0007). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { EditTask } from "../../../application/usecases/edit-task";
 import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
@@ -57,6 +58,7 @@ import {
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
+import { useWriteTaskDates } from "../../hooks/use-write-task-dates";
 import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
@@ -152,6 +154,8 @@ export interface ProjectsViewDeps {
   openQuickCapture: OpenQuickCapture;
   /** The project gantt chart's read (#186). */
   readProjectGantt: ReadProjectGantt;
+  /** A gantt bar dragged writes its task's two dates, in one undo (#180). */
+  editTask: EditTask;
   /** The gantt chart's own state, apart from the tree's and the board's. */
   gantt: ProjectGanttStores;
 }
@@ -546,6 +550,11 @@ function DetailsGantt(props: {
 }) {
   const { read, today, deps } = props;
   const { selectedTaskId, selectTask } = usePanel();
+  const linkTaskInNote = useLinkTaskInNote(
+    deps.linkTaskInNote,
+    deps.taskActions.notify,
+  );
+  const writeDates = useWriteTaskDates(deps.editTask, deps.taskActions.notify);
   const filterStore = deps.details.filter;
   const filter = React.useSyncExternalStore(
     filterStore.subscribe,
@@ -606,19 +615,23 @@ function DetailsGantt(props: {
           }
         />
       ) : (
-        <ProjectGanttChart
-          // Another project: its chart opens with today a third across.
-          key={project}
-          gantt={read.gantt}
-          scale={scale}
-          cards={{
-            today,
-            selectedTaskId,
-            selectTask,
-            expanded: deps.gantt.expanded,
-            unplacedCollapsed: deps.gantt.unplacedCollapsed,
-          }}
-        />
+        // The tree's names drag into the notes only, no drop in the chart (#180).
+        <CardDragArea onNoteDrop={linkTaskInNote}>
+          <ProjectGanttChart
+            // Another project: its chart opens with today a third across.
+            key={project}
+            gantt={read.gantt}
+            scale={scale}
+            cards={{
+              today,
+              selectedTaskId,
+              selectTask,
+              expanded: deps.gantt.expanded,
+              unplacedCollapsed: deps.gantt.unplacedCollapsed,
+              writeDates,
+            }}
+          />
+        </CardDragArea>
       )}
     </>
   );

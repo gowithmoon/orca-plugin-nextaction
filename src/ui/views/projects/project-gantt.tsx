@@ -24,9 +24,22 @@ import { formatDate, shownText } from "../../components/format";
 import type { MemoryStore } from "../../components/memory-store";
 import { StatusIcon } from "../../components/status-icon";
 import { statusLabel } from "../../components/status-label";
+import { useCardDrag } from "../../drag/card-drag";
+import type { WriteTaskDates } from "../../hooks/use-write-task-dates";
 import { usePanel } from "../../panel/panel-context";
 import { statusIcons } from "../../task-menu/status-icons";
 import { createGanttAxis, type GanttAxis, type GanttScale } from "./gantt-axis";
+import {
+  BarEnds,
+  draggedRows,
+  GanttBarDragContext,
+  type GanttBarDragDeps,
+  GanttDragDates,
+  type GanttDragged,
+  sameDates,
+  useBarDrag,
+  useBarDragging,
+} from "./gantt-bar-drag";
 import {
   GanttConflictMark,
   GanttDependencyArrows,
@@ -46,6 +59,8 @@ export interface GanttCards {
   readonly expanded: IdSetStore<TaskId>;
   /** The unplaced tasks' section is collapsed (#177). */
   readonly unplacedCollapsed: MemoryStore<boolean>;
+  /** A bar let go writes its task's two dates, in one undo (#180). */
+  readonly writeDates: WriteTaskDates;
 }
 
 /** The tasks with a row below them in the read: those that can collapse. */
@@ -346,6 +361,9 @@ function BarView(props: {
   cards: GanttCards;
 }) {
   const { bar, row, axis, cards } = props;
+  // A bracket's is nothing: it never drags (#180).
+  const drag = useBarDrag(row, axis);
+  const dragging = useBarDragging(row.task.id);
   const left = axis.x(bar.start);
   const text = shownText(row.task).text;
   const width = Math.max(axis.endX(bar.due) - left, 6);
@@ -385,14 +403,17 @@ function BarView(props: {
       t("Can start from ${date}", {
         date: formatDate(held.until, cards.today),
       }),
+    t("Drag to move, drag an end to change that date"),
   ].filter((note): note is string => typeof note === "string");
   return (
     <button
+      {...drag}
       type="button"
       className="nextaction-gantt-bar"
       data-borrowed={bar.borrowed}
       data-status={row.task.status}
       data-overdue={row.overdue || undefined}
+      data-dragging={dragging || undefined}
       style={
         {
           left,
@@ -416,6 +437,7 @@ function BarView(props: {
           <i className="ti ti-lock" />
         </span>
       )}
+      <BarEnds width={width} />
     </button>
   );
 }
@@ -432,6 +454,8 @@ function NameBesideBar(props: {
 }) {
   const { row, axis, cards } = props;
   const text = shownText(row.task);
+  // While dragged the dates show there instead (#180).
+  if (useBarDragging(row.task.id)) return null;
   return (
     <button
       type="button"
@@ -472,6 +496,7 @@ function NarrowRow(props: {
         <GanttOutsideDependencyMark row={row} axis={axis} />
         <GanttConflictMark row={row} axis={axis} />
         <NameBesideBar row={row} axis={axis} cards={cards} />
+        <GanttDragDates row={row} axis={axis} today={cards.today} />
       </div>
     </div>
   );
@@ -497,7 +522,9 @@ function BarLabel(props: {
 }) {
   const { bar, row, axis } = props;
   const text = shownText(row.task);
-  if (text.empty) return null;
+  // While dragged the dates show there instead (#180).
+  const dragging = useBarDragging(row.task.id);
+  if (text.empty || dragging) return null;
   const left = axis.x(bar.start);
   const width = axis.endX(bar.due) - left;
   const inset = barLabelPadding + (row.blocked ? lockWidth : 0);
@@ -523,6 +550,41 @@ function BarLabel(props: {
   );
 }
 
+/**
+ * A row's name in the tree column: a click (or Enter) opens the task panel;
+ * pressed and moved a few pixels, it drags into the notes as every task card
+ * does (#122), writing a reference or a mirror there. Dropped in the chart
+ * it does nothing: no tree moves in the gantt chart (#180). Not a button:
+ * the card drag leaves presses on buttons alone.
+ */
+function TreeName(props: { row: GanttRow; cards: GanttCards }) {
+  const { row, cards } = props;
+  const text = shownText(row.task);
+  const selected = row.task.id === cards.selectedTaskId;
+  const drag = useCardDrag(row.task);
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a button would never drag (the card drag leaves presses on buttons alone)
+    <span
+      {...drag}
+      role="button"
+      tabIndex={0}
+      className="nextaction-gantt-name-text"
+      data-empty={text.empty || undefined}
+      aria-current={selected || undefined}
+      title={text.text}
+      onClick={() => cards.selectTask(row.task.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          cards.selectTask(row.task.id);
+        }
+      }}
+    >
+      {text.text}
+    </span>
+  );
+}
+
 /** A row: its name in the tree column, its bar in the lane. */
 function Row(props: {
   row: GanttRow;
@@ -532,7 +594,6 @@ function Row(props: {
   expanded: boolean;
 }) {
   const { row, axis, cards } = props;
-  const text = shownText(row.task);
   const selected = row.task.id === cards.selectedTaskId;
   return (
     <div
@@ -565,16 +626,7 @@ function Row(props: {
           <span className="nextaction-gantt-caret" />
         )}
         <StatusIcon status={row.task.status} />
-        <button
-          type="button"
-          className="nextaction-gantt-name-text"
-          data-empty={text.empty || undefined}
-          aria-current={selected || undefined}
-          title={text.text}
-          onClick={() => cards.selectTask(row.task.id)}
-        >
-          {text.text}
-        </button>
+        <TreeName row={row} cards={cards} />
       </div>
       <div className="nextaction-gantt-lane" style={{ width: axis.width }}>
         {row.bar.kind !== "unplaced" && (
@@ -585,6 +637,7 @@ function Row(props: {
         )}
         <GanttOutsideDependencyMark row={row} axis={axis} />
         <GanttConflictMark row={row} axis={axis} />
+        <GanttDragDates row={row} axis={axis} today={cards.today} />
       </div>
     </div>
   );
@@ -632,11 +685,18 @@ export function ProjectGanttChart(props: {
     }
     scrolledRef.current = { start: axis.range.start, scale: axis.scale };
   }, [axis, gantt.today, tree]);
-  const placed = React.useMemo(() => treeRows(gantt.rows), [gantt.rows]);
+  const drag = useChartBarDrag(gantt, cards.writeDates, scrollerRef);
+  // A bar being dragged shows at its dragged dates in every drawing of the
+  // rows: its arrows, its label, the narrow tier's name (#180).
+  const chartRows = React.useMemo(
+    () => draggedRows(gantt.rows, drag.dragged),
+    [gantt.rows, drag.dragged],
+  );
+  const placed = React.useMemo(() => treeRows(chartRows), [chartRows]);
   const parents = React.useMemo(() => parentsOf(placed), [placed]);
   const rows = narrow ? placed : shownRows(placed, expanded);
   return (
-    <>
+    <GanttBarDragContext.Provider value={drag}>
       <section
         ref={scrollerRef}
         className="nextaction-gantt"
@@ -679,7 +739,50 @@ export function ProjectGanttChart(props: {
         </div>
       </section>
       <UnplacedSection gantt={gantt} cards={cards} />
-    </>
+    </GanttBarDragContext.Provider>
+  );
+}
+
+/**
+ * The chart's bar drags (#180): the bar dragged and its dates. Let go, it
+ * stays at its new dates while they are written, until the chart is read
+ * again (the task changes signal) or the write fails; let go where it was
+ * pressed, nothing is written.
+ */
+function useChartBarDrag(
+  gantt: ProjectGantt,
+  writeDates: WriteTaskDates,
+  scrollerRef: React.RefObject<HTMLElement | null>,
+): GanttBarDragDeps {
+  const [dragged, setDragged] = React.useState<GanttDragged | null>(null);
+  // Read again: what was let go shows as written.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every new read of the chart
+  React.useEffect(() => {
+    setDragged((current) => (current?.settled ? null : current));
+  }, [gantt]);
+  return React.useMemo(
+    () => ({
+      scroller: () => scrollerRef.current,
+      dragged,
+      drag(id, dates) {
+        setDragged(dates ? { id, ...dates, settled: false } : null);
+      },
+      drop(id, dates, from) {
+        if (sameDates(dates, from)) {
+          setDragged(null);
+          return;
+        }
+        setDragged({ id, ...dates, settled: true });
+        void writeDates(id, dates).then((written) => {
+          if (written) return;
+          // Back where it was; the failure is told.
+          setDragged((current) =>
+            current?.id === id && current.settled ? null : current,
+          );
+        });
+      },
+    }),
+    [dragged, writeDates, scrollerRef],
   );
 }
 

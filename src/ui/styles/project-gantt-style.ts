@@ -274,6 +274,70 @@ button.nextaction-gantt-caret:hover {
   border-color: var(--orca-color-text-1);
 }
 
+/* Dragged to change its dates (#180): the middle moves it, an end resizes. */
+.nextaction-gantt-bar {
+  cursor: grab;
+  touch-action: none;
+}
+
+.nextaction-gantt-bar[data-dragging] {
+  z-index: 5;
+}
+
+.nextaction-gantt-bar-end {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  z-index: 4;
+  cursor: ew-resize;
+}
+
+.nextaction-gantt-bar-end[data-side="start"] {
+  left: -2px;
+}
+
+.nextaction-gantt-bar-end[data-side="due"] {
+  right: -2px;
+}
+
+.nextaction-gantt-bar:hover .nextaction-gantt-bar-end::after,
+.nextaction-gantt-bar[data-dragging] .nextaction-gantt-bar-end::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 50%;
+  border-left: 2px solid var(--nextaction-gantt-edge);
+  border-radius: 1px;
+}
+
+:root[data-nextaction-gantt-dragging],
+:root[data-nextaction-gantt-dragging] * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+:root[data-nextaction-gantt-dragging="resize"],
+:root[data-nextaction-gantt-dragging="resize"] * {
+  cursor: ew-resize !important;
+}
+
+/* The dates a drag would write, just after the bar (#180). */
+.nextaction-gantt-drag-dates {
+  position: absolute;
+  top: 5px;
+  z-index: 6;
+  padding: 0 7px;
+  line-height: 20px;
+  white-space: nowrap;
+  border-radius: var(--orca-radius-sm);
+  background-color: var(--orca-color-text-1);
+  color: var(--orca-color-bg-1);
+  font-size: var(--orca-fontsize-xs);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 /* The task's name by its bar (#179): inside when it fits, else after it. */
 .nextaction-gantt-bar-label {
   position: absolute;
