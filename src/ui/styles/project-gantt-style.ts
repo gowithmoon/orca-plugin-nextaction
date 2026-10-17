@@ -313,6 +313,54 @@ button.nextaction-gantt-caret:hover {
   pointer-events: none;
 }
 
+/*
+ * The narrow tier's name, in the lane (#185): just after the bar, or, for a
+ * row without one, held at the left edge of what shows.
+ */
+.nextaction-gantt-lane:has(> .nextaction-gantt-bar-name:not([data-beside])) {
+  display: flex;
+  align-items: center;
+}
+
+.nextaction-gantt-bar-name {
+  max-width: 240px;
+  height: var(--nextaction-gantt-row);
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-gantt-bar-name[data-beside] {
+  position: absolute;
+  top: 0;
+  z-index: 3;
+  padding: 0 2px;
+}
+
+.nextaction-gantt-bar-name:not([data-beside]) {
+  position: sticky;
+  left: 0;
+}
+
+.nextaction-gantt-bar-name:hover {
+  color: var(--orca-color-text-1);
+  text-decoration: underline;
+  text-decoration-color: var(--orca-color-text-3);
+}
+
+.nextaction-gantt-bar-name[data-empty],
+.nextaction-gantt-row[data-done] .nextaction-gantt-bar-name {
+  color: var(--orca-color-text-3);
+}
+
 /* Below the last row: the tree column carries on down, the lanes stay clear. */
 .nextaction-gantt-fill {
   flex: 1 1 auto;
