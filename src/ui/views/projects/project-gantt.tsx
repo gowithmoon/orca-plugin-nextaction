@@ -21,7 +21,9 @@ import { dayOfWeek } from "../../../domain/time/calendar-days";
 import { t } from "../../../shared/l10n/l10n";
 import { formatDate, shownText } from "../../components/format";
 import { StatusIcon } from "../../components/status-icon";
+import { statusLabel } from "../../components/status-label";
 import { usePanel } from "../../panel/panel-context";
+import { statusIcons } from "../../task-menu/status-icons";
 import {
   chartRange,
   createGanttAxis,
@@ -207,8 +209,11 @@ function Lines(props: { axis: GanttAxis; gantt: ProjectGantt; left: number }) {
 }
 
 /**
- * What a row draws on the axis, by its kind. For now one neutral colour
- * (#178 colours it by status); the other kinds come with #177.
+ * What a row draws on the axis, by its kind; the other kinds come with
+ * #177. A bar takes its status icon's colour (#178): done ones faded,
+ * someday ones a light dashed frame, overdue ones outlined in red, blocked
+ * ones with a lock at the left end, the stretch held back by a later
+ * effective start hatched.
  */
 function BarView(props: {
   bar: GanttBar;
@@ -219,20 +224,55 @@ function BarView(props: {
   const { bar, row, axis, cards } = props;
   const left = axis.x(bar.start);
   const text = shownText(row.task).text;
+  const width = Math.max(axis.endX(bar.due) - left, 6);
   const dates = t("${start} → ${due}", {
     start: formatDate(bar.start, cards.today),
     due: formatDate(bar.due, cards.today),
   });
+  const held = row.heldBack;
+  // The hatching, within the bar: up to the effective start or its end.
+  const heldLeft = held ? Math.max(axis.x(held.from) - left, 0) : 0;
+  const heldRight = held ? Math.min(axis.x(held.until) - left, width) : 0;
+  const notes = [
+    statusLabel(row.task.status),
+    row.overdue && t("Overdue"),
+    row.blocked && t("Blocked"),
+    held &&
+      t("Can start from ${date}", {
+        date: formatDate(held.until, cards.today),
+      }),
+  ].filter((note): note is string => typeof note === "string");
   return (
     <button
       type="button"
       className="nextaction-gantt-bar"
       data-borrowed={bar.borrowed}
-      style={{ left, width: Math.max(axis.endX(bar.due) - left, 6) }}
-      title={`${text}\n${dates}`}
-      aria-label={`${text}, ${dates}`}
+      data-status={row.task.status}
+      data-overdue={row.overdue || undefined}
+      style={
+        {
+          left,
+          width,
+          "--nextaction-gantt-status": statusIcons[row.task.status].color,
+        } as React.CSSProperties
+      }
+      title={[text, dates, ...notes].join("\n")}
+      aria-label={[text, dates, ...notes].join(", ")}
       onClick={() => cards.selectTask(row.task.id)}
-    />
+    >
+      {heldRight > heldLeft && (
+        <i
+          className="nextaction-gantt-held"
+          style={{ left: heldLeft, width: heldRight - heldLeft }}
+          aria-hidden="true"
+        />
+      )}
+      {row.blocked && (
+        <span className="nextaction-gantt-lock" aria-hidden="true">
+          <i className="ti ti-lock" />
+        </span>
+      )}
+    </button>
   );
 }
 
