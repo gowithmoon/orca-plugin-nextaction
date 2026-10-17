@@ -130,6 +130,212 @@ describe("read project gantt, bars", () => {
     ]);
   });
 
+  it("draws a task with only a due date from the project's start date, the start borrowed", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    repository.addTask(
+      { id: 2, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.bar])).toEqual([
+      [
+        2,
+        {
+          kind: "bar",
+          start: day(2026, 10, 1),
+          due: day(2026, 10, 12),
+          borrowed: "start",
+        },
+      ],
+    ]);
+  });
+
+  it("draws a task with only a start date to the project's due date, the due date borrowed", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    repository.addTask(
+      { id: 2, status: "todo", start: day(2026, 10, 20) },
+      { parentId: 1 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.bar])).toEqual([
+      [
+        2,
+        {
+          kind: "bar",
+          start: day(2026, 10, 20),
+          due: day(2026, 10, 31),
+          borrowed: "due",
+        },
+      ],
+    ]);
+  });
+
+  it("makes a task that cannot be drawn an unplaced task: no dates, no project date to borrow, or a borrowed date the wrong side of its own", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    // No dates.
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    // Starting after the project's due date.
+    repository.addTask(
+      { id: 3, status: "todo", start: day(2026, 11, 2) },
+      { parentId: 1 },
+    );
+    // Due before the project's start date.
+    repository.addTask(
+      { id: 4, status: "todo", due: day(2026, 9, 28) },
+      { parentId: 1 },
+    );
+    repository.addProject({ id: 5, status: "active" });
+    // The project has no dates to borrow.
+    repository.addTask(
+      { id: 6, status: "todo", start: day(2026, 10, 5) },
+      { parentId: 5 },
+    );
+    repository.addTask(
+      { id: 7, status: "todo", due: day(2026, 10, 5) },
+      { parentId: 5 },
+    );
+
+    const first = gantt(await readProjectGantt({ project: 1 }));
+    const second = gantt(await readProjectGantt({ project: 5 }));
+
+    expect(first.gantt.rows.map((row) => [row.task.id, row.bar])).toEqual([
+      [2, { kind: "unplaced" }],
+      [3, { kind: "unplaced" }],
+      [4, { kind: "unplaced" }],
+    ]);
+    expect(second.gantt.rows.map((row) => [row.task.id, row.bar])).toEqual([
+      [6, { kind: "unplaced" }],
+      [7, { kind: "unplaced" }],
+    ]);
+  });
+
+  it("draws a bracket over a task that cannot be drawn but has descendant tasks on the chart, from the earliest to the latest of their bars", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({
+      id: 1,
+      status: "active",
+      start: day(2026, 10, 1),
+      due: day(2026, 10, 31),
+    });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask(
+      {
+        id: 3,
+        status: "todo",
+        start: day(2026, 10, 8),
+        due: day(2026, 10, 12),
+      },
+      { parentId: 2 },
+    );
+    // A bracket itself, its range from its own descendant task.
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 2 });
+    repository.addTask(
+      { id: 5, status: "todo", start: day(2026, 10, 20) },
+      { parentId: 4 },
+    );
+    // Starting after the project's due date: unplaced, not in the range.
+    repository.addTask(
+      { id: 6, status: "todo", start: day(2026, 11, 3) },
+      { parentId: 2 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.bar])).toEqual([
+      [2, { kind: "bracket", start: day(2026, 10, 8), due: day(2026, 10, 31) }],
+      [
+        3,
+        {
+          kind: "bar",
+          start: day(2026, 10, 8),
+          due: day(2026, 10, 12),
+          borrowed: "none",
+        },
+      ],
+      [
+        4,
+        { kind: "bracket", start: day(2026, 10, 20), due: day(2026, 10, 31) },
+      ],
+      [
+        5,
+        {
+          kind: "bar",
+          start: day(2026, 10, 20),
+          due: day(2026, 10, 31),
+          borrowed: "due",
+        },
+      ],
+      [6, { kind: "unplaced" }],
+    ]);
+  });
+
+  it("makes a task an unplaced task when neither it nor any descendant task can be drawn", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "todo" }, { parentId: 2 });
+    repository.addTask(
+      { id: 4, status: "todo", due: day(2026, 10, 12) },
+      { parentId: 3 },
+    );
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.bar])).toEqual([
+      [2, { kind: "unplaced" }],
+      [3, { kind: "unplaced" }],
+      [4, { kind: "unplaced" }],
+    ]);
+  });
+
+  it("leaves out a done unplaced task, keeping a done task drawn as a bar or a bracket", async () => {
+    const { repository, readProjectGantt } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 1 });
+    repository.addTask(
+      {
+        id: 4,
+        status: "done",
+        start: day(2026, 10, 1),
+        due: day(2026, 10, 3),
+      },
+      { parentId: 3 },
+    );
+    repository.addTask({ id: 5, status: "done" }, { parentId: 3 });
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 1 });
+
+    const read = gantt(await readProjectGantt({ project: 1 }));
+
+    expect(read.gantt.rows.map((row) => [row.task.id, row.bar.kind])).toEqual([
+      [3, "bracket"],
+      [4, "bar"],
+      [6, "unplaced"],
+    ]);
+  });
+
   it("gives the project's start and due dates and today", async () => {
     const { repository, readProjectGantt } = setup();
     repository.addProject({
