@@ -639,6 +639,16 @@ const zhCN: Record<string, string> = {
   "Project start": "项目开始",
   "Project due": "项目截止",
   "${start} → ${due}": "${start} → ${due}",
+  // The gantt chart's borrowed ends, brackets and unplaced tasks (#177).
+  "No start date: the project's start date is used":
+    "没有开始日期，借用项目的开始日期",
+  "No due date: the project's due date is used":
+    "没有截止日期，借用项目的截止日期",
+  "No dates of its own; spans its subtasks' dates":
+    "自己没有日期，括号盖住子任务的时间范围",
+  "Unplaced tasks · ${count}": "待排期任务 · ${count}",
+  "No dates set, or dates outside the project's time range":
+    "未设置日期或日期超出项目时间范围",
 };
 
 export default zhCN;

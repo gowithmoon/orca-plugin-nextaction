@@ -54,7 +54,7 @@ export function chartRange(gantt: ProjectGantt): GanttRange {
   if (gantt.projectStart) dates.push(gantt.projectStart);
   if (gantt.projectDue) dates.push(gantt.projectDue);
   for (const row of gantt.rows) {
-    if (row.bar) dates.push(row.bar.start, row.bar.due);
+    if (row.bar.kind !== "unplaced") dates.push(row.bar.start, row.bar.due);
   }
   const sorted = [...dates].sort(compareDays);
   const first = sorted[0] ?? gantt.today;
