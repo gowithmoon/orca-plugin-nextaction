@@ -13,7 +13,7 @@ import {
  * Absent in Orca's own menus.
  */
 export interface TaskMenuPlace {
-  /** Selects the task there: the side pane or the popup shows it, by tier. */
+  /** Selects the task there: the side pane or the popup shows it (`PanelContextValue.selectedTaskId`). */
   readonly selectTask: (taskId: TaskId) => void;
 }
 

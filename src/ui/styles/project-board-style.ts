@@ -287,24 +287,6 @@ export const projectBoardCss = `
   text-overflow: ellipsis;
 }
 
-/* A next action (#167): a small dot at the status icon's top right. */
-.nextaction-task-card-status-button,
-.nextaction-task-card-status-mark {
-  position: relative;
-}
-
-.nextaction-next-action-dot {
-  position: absolute;
-  top: 1px;
-  right: -3px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background-color: var(--orca-color-primary-5);
-  box-shadow: 0 0 0 1.5px var(--orca-color-bg-1);
-  pointer-events: none;
-}
-
 /* A card's subtasks (#167): the count and its toggle, then the rows. */
 .nextaction-board-subtasks {
   display: flex;

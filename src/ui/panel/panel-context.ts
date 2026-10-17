@@ -14,7 +14,9 @@ export interface PanelContextValue {
   readonly tier: PanelTier;
   /**
    * The task open in the task panel (#42): in the side pane in the wide tier,
-   * in the popup otherwise. Kept for this opening of the plugin panel only.
+   * in the popup otherwise or while a part of the view does without the side
+   * pane (`useWithoutSidePane`). Kept for this opening of the plugin panel
+   * only.
    */
   readonly selectedTaskId: TaskId | undefined;
   /** Opens task `taskId` in the task panel, replacing the one selected. */
@@ -32,11 +34,30 @@ export interface PanelContextValue {
    * the target view's store first (`showOnlyStatus`, `openFullReviewStep`).
    */
   readonly showView: (viewId: string) => void;
+  /**
+   * Hides the side pane, even in the wide tier, until the returned function
+   * is called: the selected task shows in the popup instead. Each call counts;
+   * the pane comes back once all are released.
+   */
+  readonly withoutSidePane: () => () => void;
 }
 
 export const PanelContext = React.createContext<PanelContextValue | undefined>(
   undefined,
 );
+
+/**
+ * While `active`, the plugin panel shows no side pane: for layouts that need
+ * the width (the board, later the Gantt chart), whose tasks open in the
+ * popup. Released before paint, so the pane never flashes in.
+ */
+export function useWithoutSidePane(active: boolean): void {
+  const { withoutSidePane } = usePanel();
+  React.useLayoutEffect(
+    () => (active ? withoutSidePane() : undefined),
+    [active, withoutSidePane],
+  );
+}
 
 /** The enclosing plugin panel. Throws outside one. */
 export function usePanel(): PanelContextValue {
