@@ -24,6 +24,10 @@ import {
   type GanttAxis,
   type GanttScale,
 } from "./gantt-axis";
+import {
+  GanttDependencyArrows,
+  GanttOutsideDependencyMark,
+} from "./gantt-dependencies";
 import type { IdSetStore } from "./project-board-stores";
 
 /** The tree column's width in the wide tier, in pixels. */
@@ -283,6 +287,7 @@ function Row(props: {
         {row.bar && (
           <BarView bar={row.bar} row={row} axis={axis} cards={cards} />
         )}
+        <GanttOutsideDependencyMark row={row} axis={axis} />
       </div>
     </div>
   );
@@ -322,6 +327,7 @@ export function ProjectGanttChart(props: {
         <ScaleRow axis={axis} gantt={gantt} />
         <div className="nextaction-gantt-rows">
           <Lines axis={axis} gantt={gantt} />
+          <GanttDependencyArrows rows={rows} axis={axis} left={treeWidth} />
           {rows.map((row) => (
             <Row
               key={row.task.id}

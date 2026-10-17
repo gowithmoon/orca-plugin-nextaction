@@ -639,6 +639,10 @@ const zhCN: Record<string, string> = {
   "Project start": "项目开始",
   "Project due": "项目截止",
   "${start} → ${due}": "${start} → ${due}",
+  // The gantt chart's dependencies (#182).
+  "+${days}d": "+${days}天",
+  "Depends on tasks outside the project: ${tasks}":
+    "依赖项目外的任务：${tasks}",
 };
 
 export default zhCN;

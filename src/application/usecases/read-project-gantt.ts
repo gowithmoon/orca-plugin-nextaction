@@ -56,6 +56,42 @@ export interface GanttRow {
   readonly parentId: TaskId | null;
   /** What it draws; `null`: nothing yet (a task without both dates, #177). */
   readonly bar: GanttBar | null;
+  /**
+   * Its dependencies (GLOSSARY: 依赖) on the project's tasks, in the order
+   * the notes hold them: the arrows into its bar. One whose task has no row
+   * or no bar drawn is listed all the same; the interface leaves out the
+   * arrow it cannot draw.
+   */
+  readonly dependencies: readonly GanttDependency[];
+  /**
+   * Its dependencies on tasks outside the project, in the order the notes
+   * hold them: a mark on its bar, no arrow. A stale dependency (GLOSSARY:
+   * 失效依赖) is in neither list.
+   */
+  readonly outsideDependencies: readonly GanttOutsideDependency[];
+}
+
+/** A dependency on a task outside the project: its mark names the task. */
+export interface GanttOutsideDependency {
+  readonly task: TaskId;
+  /** The task's own text, as `Task.text`. */
+  readonly text: string;
+}
+
+/**
+ * A dependency between two of the project's tasks (GLOSSARY: 依赖): an
+ * arrow from the end of `from`'s bar to the start of `to`'s.
+ */
+export interface GanttDependency {
+  /** The task depended on. */
+  readonly from: TaskId;
+  /** The task that waits for it. */
+  readonly to: TaskId;
+  /**
+   * `to`'s dependency delay (GLOSSARY: 依赖延迟) in days, the same on each of
+   * its arrows; 0 for none.
+   */
+  readonly delay: number;
 }
 
 /** The chart of a project. */
@@ -109,6 +145,9 @@ function barOf(task: Task): GanttBar | null {
   return { kind: "bar", start: task.start, due: task.due, borrowed: "none" };
 }
 
+/** A row's two lists of dependencies. */
+type RowDependencies = Pick<GanttRow, "dependencies" | "outsideDependencies">;
+
 /**
  * `item` and its descendant tasks with their depth, in note order: those
  * `kept`, a task left out with its subtree.
@@ -118,6 +157,7 @@ function rowsOf(
   item: SnapshotTask,
   depth: number,
   kept: (item: SnapshotTask) => boolean,
+  dependenciesOf: (task: Task) => RowDependencies,
 ): GanttRow[] {
   if (!kept(item)) return [];
   return [
@@ -126,10 +166,11 @@ function rowsOf(
       depth,
       parentId: depth === 0 ? null : item.parentId,
       bar: barOf(item.task),
+      ...dependenciesOf(item.task),
     },
     ...tree
       .childrenOf(item.task.id)
-      .flatMap((child) => rowsOf(tree, child, depth + 1, kept)),
+      .flatMap((child) => rowsOf(tree, child, depth + 1, kept, dependenciesOf)),
   ];
 }
 
@@ -168,8 +209,23 @@ export function createReadProjectGantt(deps: {
       keptById.set(item.task.id, found);
       return found;
     };
+    const dependenciesOf = (task: Task): RowDependencies => {
+      const inside: GanttDependency[] = [];
+      const outside: GanttOutsideDependency[] = [];
+      for (const id of task.dependencies) {
+        // Not a task in the graph: a stale dependency, shown nowhere.
+        const entry = graph.entry(id);
+        if (!entry) continue;
+        if (entry.project?.id === scoped.project.id) {
+          inside.push({ from: id, to: task.id, delay: task.dependencyDelay });
+        } else {
+          outside.push({ task: id, text: entry.task.text });
+        }
+      }
+      return { dependencies: inside, outsideDependencies: outside };
+    };
     const rows = projectRootTasks(snapshot, graph, scoped.project.id).flatMap(
-      (root) => rowsOf(tree, root, 0, kept),
+      (root) => rowsOf(tree, root, 0, kept, dependenciesOf),
     );
     const project = projectNode(
       projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
