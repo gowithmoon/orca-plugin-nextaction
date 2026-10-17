@@ -173,7 +173,7 @@ export function createTaskTagFeature(
 
   const feature: FeatureModule = async (context) => {
     // No shortcut is assigned: the user binds one in Orca's settings.
-    context.registry.editorCommand(
+    const convertToTaskId = context.registry.editorCommand(
       "convertToTask",
       createConvertToTaskCommand(
         createConvertToTask({ repository }),
@@ -205,6 +205,32 @@ export function createTaskTagFeature(
       () => openQuickCapture(),
       t("Create task"),
     );
+    // The `/` menu calls editor commands only (slash-commands): this one only
+    // opens the window, writing nothing, so there is nothing to undo.
+    const quickCaptureEditorId = context.registry.editorCommand(
+      "quickCaptureFromEditor",
+      async () => {
+        openQuickCapture();
+        return null;
+      },
+      () => undefined,
+      { label: t("Create task") },
+    );
+    // Released before the commands they call (#194); the typed "/…" does not
+    // stay in the block (slash-commands).
+    const slashGroup = t("NextAction");
+    context.registry.slashCommand("convertToTaskSlash", {
+      icon: "ti ti-inbox",
+      group: slashGroup,
+      title: t("Convert to task"),
+      command: convertToTaskId,
+    });
+    context.registry.slashCommand("quickCaptureSlash", {
+      icon: "ti ti-plus",
+      group: slashGroup,
+      title: t("Create task"),
+      command: quickCaptureEditorId,
+    });
     // Recorded after the root, so it is released first: nothing opens the
     // popup into a root that is going away.
     openCapture = openQuickCapture;

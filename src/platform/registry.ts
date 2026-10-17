@@ -7,6 +7,7 @@ import type {
   EditorCommandFn,
   EditorSidetool,
   PanelProps,
+  SlashCommand,
   TagMenuCommand,
 } from "../orca.d.ts";
 import { describeError } from "../shared/describe-error";
@@ -29,6 +30,11 @@ export interface Registry {
   tagMenuCommand(name: string, command: TagMenuCommand): string;
   /** Adds entries to the block handle's menu (official-task-menus). */
   blockMenuCommand(name: string, command: BlockMenuCommand): string;
+  /**
+   * Adds an entry to the `/` menu; its `command` must be an editor command
+   * (slash-commands).
+   */
+  slashCommand(name: string, command: SlashCommand): string;
   broadcastHandler(name: string, handler: CommandFn): string;
   /** Injects a style sheet; the prefixed identifier is its role. */
   css(name: string, css: string): string;
@@ -161,6 +167,12 @@ export function createRegistry(pluginName: string): Registry {
         name,
         (id) => orca.blockMenuCommands.registerBlockMenuCommand(id, command),
         (id) => orca.blockMenuCommands.unregisterBlockMenuCommand(id),
+      ),
+    slashCommand: (name, command) =>
+      owned(
+        name,
+        (id) => orca.slashCommands.registerSlashCommand(id, command),
+        (id) => orca.slashCommands.unregisterSlashCommand(id),
       ),
     broadcastHandler: (name, handler) =>
       owned(
