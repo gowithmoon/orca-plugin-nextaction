@@ -15,10 +15,7 @@ import type {
 import type { TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
-import type { GanttAxis } from "./gantt-axis";
-
-/** A row's height in pixels: `--nextaction-gantt-row`. */
-const rowHeight = 30;
+import { barSpan, type GanttAxis, ganttRowHeight } from "./gantt-axis";
 
 /** Where a bar sits in the rows' box, in pixels. */
 interface BarPlace {
@@ -36,11 +33,11 @@ function barPlaces(
   const places = new Map<TaskId, BarPlace>();
   rows.forEach((row, index) => {
     if (row.bar?.kind !== "bar") return;
-    const left = axis.x(row.bar.start);
+    const { left, width } = barSpan(axis, row.bar);
     places.set(row.task.id, {
       left,
-      right: left + Math.max(axis.endX(row.bar.due) - left, 6),
-      y: index * rowHeight + rowHeight / 2,
+      right: left + width,
+      y: index * ganttRowHeight + ganttRowHeight / 2,
     });
   });
   return places;
@@ -57,7 +54,7 @@ function arrowPath(from: BarPlace, to: BarPlace): string {
   if (x2 - x1 >= 14) {
     return `M${x1} ${from.y}H${x1 + 7}V${to.y}H${x2 - 1}`;
   }
-  const between = to.y + (to.y > from.y ? -1 : 1) * (rowHeight / 2);
+  const between = to.y + (to.y > from.y ? -1 : 1) * (ganttRowHeight / 2);
   return `M${x1} ${from.y}H${x1 + 7}V${between}H${x2 - 9}V${to.y}H${x2 - 1}`;
 }
 
@@ -116,7 +113,7 @@ export function GanttDependencyArrows(props: {
       className="nextaction-gantt-arrows"
       style={{ left: props.left }}
       width={axis.width}
-      height={rows.length * rowHeight}
+      height={rows.length * ganttRowHeight}
       aria-hidden="true"
     >
       {arrows.map(({ dependency, from, to }) => (

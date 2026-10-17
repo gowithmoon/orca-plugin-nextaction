@@ -117,7 +117,7 @@ export interface GanttRow {
    * How many tasks shifting later after it (GLOSSARY: 顺延) would move, as
    * the shift later use case writes them; 0 for none, its button not shown.
    */
-  readonly shiftLater: number;
+  readonly shiftCount: number;
 }
 
 /** A dependency on a task outside the project: its mark names the task. */
@@ -305,7 +305,7 @@ function heldBackOf(entry: TaskGraphEntry | undefined): HeldBack | null {
  */
 type RowStanding = Pick<
   GanttRow,
-  "overdue" | "blocked" | "heldBack" | "shiftLater"
+  "overdue" | "blocked" | "heldBack" | "shiftCount"
 > &
   RowDependencies;
 
@@ -423,7 +423,7 @@ export function createReadProjectGantt(deps: {
       blocked: marksBlocked(graph.entry(item.task.id)),
       heldBack: heldBackOf(graph.entry(item.task.id)),
       ...dependenciesOf(item.task),
-      shiftLater: shiftPlan(item.task.id).length,
+      shiftCount: shiftPlan(item.task.id).length,
     });
     const rows = projectRootTasks(snapshot, graph, scoped.project.id).flatMap(
       (root) => rowsOf(tree, root, 0, kept, scoped.project, standing),

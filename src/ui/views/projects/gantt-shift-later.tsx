@@ -2,7 +2,7 @@
 // the chart after a drag left tasks after the dragged one in conflict, and
 // a bar's context menu, both shifting them later on the user's click. The
 // plugin never shifts on its own. The counts are the read's
-// (`GanttRow.shiftLater`). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// (`GanttRow.shiftCount`). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   GanttRow,
@@ -59,7 +59,7 @@ export function GanttShiftNotice(props: {
   const id = notice.task;
   if (id === null) return null;
   if (dragged?.id === id && dragged.settled) return null;
-  const count = gantt.rows.find((row) => row.task.id === id)?.shiftLater ?? 0;
+  const count = gantt.rows.find((row) => row.task.id === id)?.shiftCount ?? 0;
   if (count === 0) return null;
   return (
     <div className="nextaction-gantt-shift-notice" role="status">
@@ -98,7 +98,7 @@ export function GanttBarMenu(props: {
   // A bracket never shifts from its own dates: it has none.
   if (row.bar.kind !== "bar") return <>{children(undefined)}</>;
   const { MenuText } = orca.components;
-  const count = row.shiftLater;
+  const count = row.shiftCount;
   return (
     <ContextMenu
       menu={(close) => (

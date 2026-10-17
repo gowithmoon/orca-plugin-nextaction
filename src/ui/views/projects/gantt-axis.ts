@@ -17,6 +17,33 @@ export type { GanttRange };
 /** The time scale: day, week (the default) or month (#179). */
 export type GanttScale = "day" | "week" | "month";
 
+/**
+ * A row's height in pixels: the style's `--nextaction-gantt-row` is made
+ * from it, and the arrows and drops place rows by it.
+ */
+export const ganttRowHeight = 30;
+
+/** The narrowest a bar is drawn, in pixels: a day on the month scale. */
+const barMinWidth = 6;
+
+/** Where a bar sits along the axis, in pixels. */
+export interface BarSpan {
+  readonly left: number;
+  readonly width: number;
+}
+
+/**
+ * A bar's place from its start's day to its due day: the one place a bar's
+ * left and width are worked out, for the bar, its label and its arrows.
+ */
+export function barSpan(
+  axis: GanttAxis,
+  bar: { readonly start: CalendarDate; readonly due: CalendarDate },
+): BarSpan {
+  const left = axis.x(bar.start);
+  return { left, width: Math.max(axis.endX(bar.due) - left, barMinWidth) };
+}
+
 /** How wide a day is on each scale, in pixels. */
 const dayWidths: Record<GanttScale, number> = { day: 30, week: 14, month: 4 };
 

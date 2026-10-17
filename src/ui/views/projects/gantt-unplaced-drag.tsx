@@ -21,14 +21,11 @@ import { unplacedTaskDates } from "../../../domain/project/unplaced-schedule";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
+import type { IdSetStore } from "../../components/id-set-store";
 import { type PanelDropTarget, useCardDrag } from "../../drag/card-drag";
 import type { WriteTaskDates } from "../../hooks/use-write-task-dates";
-import type { GanttAxis } from "./gantt-axis";
+import { type GanttAxis, ganttRowHeight } from "./gantt-axis";
 import { type BarDates, dayLabel, sameDates } from "./gantt-bar-drag";
-import type { IdSetStore } from "./project-board-stores";
-
-/** A row's height, as `--nextaction-gantt-row`. */
-const rowHeight = 30;
 
 /**
  * Where an unplaced task would land: the dates a drop writes, and the row
@@ -114,9 +111,12 @@ export function useUnplacedDrag(props: {
         return null;
       }
       const rowsBox = rows.getBoundingClientRect();
-      const last = Math.max(Math.floor(rows.offsetHeight / rowHeight) - 1, 0);
+      const last = Math.max(
+        Math.floor(rows.offsetHeight / ganttRowHeight) - 1,
+        0,
+      );
       const row = Math.min(
-        Math.max(Math.floor((y - rowsBox.top) / rowHeight), 0),
+        Math.max(Math.floor((y - rowsBox.top) / ganttRowHeight), 0),
         last,
       );
       const day: CalendarDate = axis.dayAt(
@@ -195,7 +195,7 @@ export function GanttUnplacedLanding(props: {
   const task = gantt.rows.find((row) => row.task.id === landing.id)?.task;
   const start = props.left + axis.x(landing.start);
   const end = props.left + axis.endX(landing.due);
-  const top = landing.row * rowHeight;
+  const top = landing.row * ganttRowHeight;
   return (
     <>
       <div
@@ -247,9 +247,7 @@ export function UnplacedName(props: {
       data-empty={text.empty || undefined}
       data-landing={drag.landing?.id === id || undefined}
       aria-current={selected || undefined}
-      title={[text.text, t("Drag onto the time axis to schedule it")].join(
-        "\n",
-      )}
+      title={[text.text, t("Drag onto the chart to set its dates")].join("\n")}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
