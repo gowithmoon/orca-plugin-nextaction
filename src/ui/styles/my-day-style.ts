@@ -57,7 +57,7 @@ export const myDayCss = `
   overflow-y: auto;
 }
 
-/* The title, and beside it (the unscheduled area) the search box. */
+/* An area's title. */
 .nextaction-my-day-section-header {
   display: flex;
   align-items: center;
@@ -77,9 +77,25 @@ export const myDayCss = `
   line-height: var(--orca-lineheight-sm);
 }
 
+/* The header's search box (#197), after the layout switch, in every layout. */
 .nextaction-my-day-search {
-  flex: 0 1 14em;
+  flex: 1 1 10em;
   min-width: 8em;
+  max-width: 22em;
+}
+
+/* The header's row stays its height; the layout below takes the rest. */
+.nextaction-my-day-toolbar {
+  flex: 0 0 auto;
+}
+
+/* The list layout (#197): one column filling the view's height, scrolling by itself. */
+.nextaction-my-day-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .nextaction-my-day-search > * {

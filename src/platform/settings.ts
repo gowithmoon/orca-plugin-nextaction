@@ -97,6 +97,24 @@ export const settingsDefinition: SettingsDefinition = {
       defaultValue: "tree",
     }),
   },
+  // The layout the My Day view opens in (#197), beside the project view's:
+  // holds the choice's value, an English key; anything else reads as the
+  // timeline layout (ui/views/my-day/my-day-layout-store.ts). Each load
+  // starts from it, and a change overrides the layout in memory at once.
+  myDayDefaultLayout: {
+    schema: () => ({
+      label: t("My Day default layout"),
+      description: t(
+        "The layout the My Day view shows today's tasks in. Changing it switches the layout at once.",
+      ),
+      type: "singleChoice",
+      choices: [
+        { label: t("Timeline layout"), value: "timeline" },
+        { label: t("List"), value: "list" },
+      ],
+      defaultValue: "timeline",
+    }),
+  },
   // Read through startPreviewDaysFrom: anything but a whole number from 0 to
   // 14 counts as 0 (infra/settings-start-preview-days.ts).
   startPreviewDays: {

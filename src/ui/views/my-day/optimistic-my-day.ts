@@ -72,7 +72,8 @@ function withDrops(
       a.unscheduledOrder - b.unscheduledOrder,
   );
   unscheduled.sort((a, b) => a.unscheduledOrder - b.unscheduledOrder);
-  return { range: read.range, scheduled, unscheduled };
+  // A drop changes no task's place among all of today's (the list's order).
+  return { range: read.range, scheduled, unscheduled, all: read.all };
 }
 
 /**

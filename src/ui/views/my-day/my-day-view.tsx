@@ -1,10 +1,13 @@
 // The My Day view (GLOSSARY: 我的一天视图, #83): the tasks in today's My Day,
-// the unscheduled ones in the unscheduled area, with a search box beside its
-// title to add more, the scheduled ones on the timeline (GLOSSARY: 时间轴,
-// #84). The layout shell holds the two side by side or one above the other,
-// by the view's own width (not the plugin panel's tier), and fills the view's
-// height: each area scrolls by itself. Every card has a button for
-// the schedule popup (#84). Between the next actions and all tasks in the
+// in one of its layouts (GLOSSARY: 布局, #197), switched in the header, where
+// a search box adds more in every layout. The timeline layout: the
+// unscheduled ones in the unscheduled area, the scheduled ones on the
+// timeline (GLOSSARY: 时间轴, #84); its shell holds the two side by side or
+// one above the other, by the view's own width (not the plugin panel's
+// tier), and fills the view's height: each area scrolls by itself. Every
+// card there has a button for the schedule popup (#84). The list: all of
+// today's tasks in one column by score, done and skipped ones last, with no
+// schedules; the task panel beside the view when wide enough. Between the next actions and all tasks in the
 // navigation, with no count there. It reads when the plugin panel opens and
 // again on every task change signal (ADR 0007); open across the day boundary,
 // it moves on to the new day. An unscheduled card, or a timeline card by its
@@ -60,6 +63,12 @@ import {
   type MyDayDragSetup,
   useMyDayDrag,
 } from "./my-day-drag";
+import {
+  type MyDayLayout,
+  type MyDayLayoutStore,
+  myDayLayoutFrom,
+  myDayLayouts,
+} from "./my-day-layout-store";
 import type { MyDayScheduleActions } from "./my-day-schedule-actions";
 import { useOptimisticMyDay } from "./optimistic-my-day";
 import type { OpenSchedulePopup } from "./schedule-popup";
@@ -90,6 +99,8 @@ export interface MyDayViewDeps {
   openSchedulePopup: OpenSchedulePopup;
   /** The writes a drop makes (#85), reporting their failures. */
   scheduleActions: MyDayScheduleActions;
+  /** The layout shown (#197), in memory, from the default layout setting. */
+  layout: MyDayLayoutStore;
 }
 
 /** A card's task and, on the timeline, its schedule: what the popup opens on. */
@@ -109,9 +120,9 @@ function candidateOptions(
 }
 
 /**
- * The search box beside the unscheduled area's title: words of a task's text
- * or search text find it (#112), choosing it adds it to today's My Day,
- * unscheduled.
+ * The search box in the header, shared by every layout (#197): words of a
+ * task's text or search text find it (#112), choosing it adds it to today's
+ * My Day, unscheduled.
  */
 function AddSearch(props: { deps: MyDayViewDeps }) {
   const { deps } = props;
@@ -146,6 +157,20 @@ function AddSearch(props: { deps: MyDayViewDeps }) {
   );
 }
 
+/** Nothing in today's My Day: the same notice in every layout. */
+function NothingInMyDay() {
+  return (
+    <div className="nextaction-my-day-unscheduled-empty" role="status">
+      <span className="nextaction-my-day-unscheduled-empty-title">
+        {t("Nothing in My Day yet")}
+      </span>{" "}
+      {t(
+        "Search above to add a task, or choose “Add to My Day” in a task's menu.",
+      )}
+    </div>
+  );
+}
+
 function UnscheduledList(props: {
   read: TodaysMyDay;
   today: CalendarDate;
@@ -160,16 +185,7 @@ function UnscheduledList(props: {
   const items = read.unscheduled;
   // Empty, one line: the timeline below keeps the room.
   if (items.length === 0 && read.scheduled.length === 0) {
-    return (
-      <div className="nextaction-my-day-unscheduled-empty" role="status">
-        <span className="nextaction-my-day-unscheduled-empty-title">
-          {t("Nothing in My Day yet")}
-        </span>{" "}
-        {t(
-          "Search beside the title to add a task, or choose “Add to My Day” in a task's menu.",
-        )}
-      </div>
-    );
+    return <NothingInMyDay />;
   }
   if (items.length === 0) {
     return (
@@ -222,6 +238,51 @@ function UnscheduledItem(props: {
   );
 }
 
+/**
+ * The list layout (#197): all of today's tasks, highest score first, done
+ * and skipped ones last and faded, as the unscheduled area shows them; no
+ * schedules and no schedule button.
+ */
+function MyDayList(props: {
+  read: TodaysMyDay;
+  today: CalendarDate;
+  deps: MyDayViewDeps;
+}) {
+  const { read, today, deps } = props;
+  const actions = useTaskActions(deps.taskActions);
+  const menuItems = deps.menuItems();
+  const { selectedTaskId, selectTask } = usePanel();
+  const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  if (read.all.length === 0) return <NothingInMyDay />;
+  return (
+    <ul className="nextaction-task-list">
+      {read.all.map((item) => (
+        <MyDayListItem key={item.task.id} item={item}>
+          <TaskCard
+            task={item.task}
+            today={today}
+            actions={actions}
+            menuItems={menuItems}
+            menuPlace={menuPlace}
+            onOpen={(open) => selectTask(open.id)}
+            selected={item.task.id === selectedTaskId}
+            // Completed today but advanced to todo (#95).
+            doneToday={item.done && item.task.status !== "done"}
+            // Skipped today and advanced to todo (#91).
+            skippedToday={item.skipped}
+            project={item.project}
+          />
+        </MyDayListItem>
+      ))}
+    </ul>
+  );
+}
+
+/** A list card, dragged by a press anywhere on it onto a note (#127). */
+function MyDayListItem(props: { item: MyDayItem; children: React.ReactNode }) {
+  return <li {...useCardDrag(props.item.task)}>{props.children}</li>;
+}
+
 function TimelineArea(props: {
   read: TodaysMyDay;
   deps: MyDayViewDeps;
@@ -253,9 +314,54 @@ function TimelineArea(props: {
   );
 }
 
+/** Each layout's icon and name in the header's switch. */
+const layoutChoices: Record<
+  MyDayLayout,
+  { readonly icon: string; readonly label: () => string }
+> = {
+  timeline: { icon: "ti ti-clock", label: () => t("Timeline layout") },
+  list: { icon: "ti ti-list", label: () => t("List") },
+};
+
+/** The header's layout switch (#197), as the project details' (#166). */
+function LayoutSwitch(props: { store: MyDayLayoutStore }) {
+  const { Segmented } = orca.components;
+  const layout = React.useSyncExternalStore(
+    props.store.subscribe,
+    props.store.current,
+  );
+  return (
+    <Segmented
+      role="group"
+      aria-label={t("Layout")}
+      className="nextaction-layout-switch"
+      selected={layout}
+      options={myDayLayouts.map((value) => {
+        const label = layoutChoices[value].label();
+        return {
+          value,
+          jsx: (
+            <span
+              className="nextaction-layout-icon"
+              role="img"
+              aria-label={label}
+              title={label}
+            >
+              <i className={layoutChoices[value].icon} aria-hidden="true" />
+            </span>
+          ),
+        };
+      })}
+      onChange={(value) => props.store.set(myDayLayoutFrom(value))}
+    />
+  );
+}
+
 /**
- * Both areas from one read. Loading, paused and failed show once, in the
- * unscheduled area; the timeline shows once there is a read.
+ * The header's controls and the layout shown, from one read. Loading,
+ * paused and failed show once: in the unscheduled area in the timeline
+ * layout, in place of the list in the list; the timeline shows once there
+ * is a read.
  */
 function MyDayAreas(props: {
   query: ViewQuery<TodaysMyDay>;
@@ -263,6 +369,10 @@ function MyDayAreas(props: {
   deps: MyDayViewDeps;
 }) {
   const { query, today, deps } = props;
+  const layout = React.useSyncExternalStore(
+    deps.layout.subscribe,
+    deps.layout.current,
+  );
   // What a drop wrote shows at once, until a read after it arrives (#85).
   const { shown: state, commit } = useOptimisticMyDay(
     query,
@@ -302,11 +412,11 @@ function MyDayAreas(props: {
   );
 
   let search: React.ReactNode;
-  let unscheduled: React.ReactNode;
-  if (state.kind === "loading") unscheduled = <TaskListPlaceholder />;
-  else if (state.kind === "paused") unscheduled = <PausedNotice />;
+  let notice: React.ReactNode;
+  if (state.kind === "loading") notice = <TaskListPlaceholder />;
+  else if (state.kind === "paused") notice = <PausedNotice />;
   else if (state.kind === "failed") {
-    unscheduled = (
+    notice = (
       <FailedNotice
         error={state.error}
         message={(reason) => t("Could not read My Day: ${reason}", { reason })}
@@ -315,14 +425,6 @@ function MyDayAreas(props: {
     );
   } else {
     search = <AddSearch deps={deps} />;
-    unscheduled = (
-      <UnscheduledList
-        read={state.data}
-        today={today}
-        deps={deps}
-        onSchedule={onSchedule}
-      />
-    );
   }
 
   return (
@@ -330,26 +432,52 @@ function MyDayAreas(props: {
     // block in a note panel a link (#127). The add search's results are no
     // cards and are not dragged.
     <CardDragArea onNoteDrop={linkTaskInNote}>
-      <MyDayDragProvider value={drag.current}>
-        <div className="nextaction-my-day-layout" ref={root}>
-          <MyDaySections
-            search={search}
-            unscheduled={unscheduled}
-            timeline={
-              read && (
-                <TimelineArea read={read} deps={deps} onSchedule={onSchedule} />
-              )
-            }
-          />
+      <div className="nextaction-toolbar nextaction-my-day-toolbar">
+        <LayoutSwitch store={deps.layout} />
+        {search}
+      </div>
+      {layout === "list" ? (
+        <div className="nextaction-my-day-list">
+          {read ? <MyDayList read={read} today={today} deps={deps} /> : notice}
         </div>
-      </MyDayDragProvider>
+      ) : (
+        <MyDayDragProvider value={drag.current}>
+          <div className="nextaction-my-day-layout" ref={root}>
+            <MyDaySections
+              unscheduled={
+                read ? (
+                  <UnscheduledList
+                    read={read}
+                    today={today}
+                    deps={deps}
+                    onSchedule={onSchedule}
+                  />
+                ) : (
+                  notice
+                )
+              }
+              timeline={
+                read && (
+                  <TimelineArea
+                    read={read}
+                    deps={deps}
+                    onSchedule={onSchedule}
+                  />
+                )
+              }
+            />
+          </div>
+        </MyDayDragProvider>
+      )}
     </CardDragArea>
   );
 }
 
-/** The two areas, side by side or one above the other (my-day-style.ts). */
+/**
+ * The timeline layout's two areas, side by side or one above the other
+ * (my-day-style.ts).
+ */
 function MyDaySections(props: {
-  search: React.ReactNode;
   unscheduled: React.ReactNode;
   timeline: React.ReactNode;
 }) {
@@ -365,7 +493,6 @@ function MyDaySections(props: {
           <h3 className="nextaction-my-day-section-title">
             {t("Unscheduled")}
           </h3>
-          {props.search}
         </div>
         <div className="nextaction-my-day-section-body">
           {props.unscheduled}

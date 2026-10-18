@@ -335,3 +335,82 @@ describe("read today's My Day: the project on a card", () => {
     ]);
   });
 });
+
+describe("read today's My Day: all of today's tasks, for the list (#197)", () => {
+  it("lists all of today's tasks, scheduled ones too, highest score first, done and skipped ones last", async () => {
+    const { repository, readMyDay } = setup();
+    const schedule = { start: at("09T14:00:00"), end: at("09T15:00:00") };
+    const weekly = {
+      kind: "rule",
+      rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+    } as const;
+    repository.addTask(
+      { id: 1, status: "todo", importance: 2 },
+      myDay({ day: oct9 }),
+    );
+    repository.addTask(
+      { id: 2, status: "todo", importance: 7 },
+      myDay({ day: oct9, schedule }),
+    );
+    repository.addTask(
+      { id: 3, status: "done", importance: 7 },
+      myDay({ day: oct9, schedule }),
+    );
+    repository.addTask(
+      { id: 4, status: "todo", importance: 6, recurrence: weekly },
+      {
+        ...myDay({ day: oct9 }),
+        completionHistory: {
+          kind: "readable",
+          history: [{ at: at("09T08:00:00"), day: oct9, kind: "skip" }],
+        },
+      },
+    );
+    repository.addTask({ id: 5, status: "todo" }, myDay({ day: oct8 }));
+
+    const read = await readMyDay();
+
+    expect(
+      read.all.map((item) => [item.task.id, item.done, item.skipped]),
+    ).toEqual([
+      [2, false, false],
+      [1, false, false],
+      [3, true, false],
+      [4, false, true],
+    ]);
+  });
+
+  it("shows a recurring task completed today as done in the list, after the others", async () => {
+    const { repository, readMyDay } = setup();
+    const weekly = {
+      kind: "rule",
+      rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+    } as const;
+    repository.addTask(
+      { id: 1, status: "todo", importance: 7, recurrence: weekly },
+      {
+        ...myDay({
+          day: oct9,
+          schedule: { start: at("09T14:00:00"), end: at("09T15:00:00") },
+        }),
+        completionHistory: {
+          kind: "readable",
+          history: [{ at: at("09T08:00:00"), day: oct9 }],
+        },
+      },
+    );
+    repository.addTask(
+      { id: 2, status: "todo", importance: 2 },
+      myDay({ day: oct9 }),
+    );
+
+    const read = await readMyDay();
+
+    expect(
+      read.all.map((item) => [item.task.id, item.task.status, item.done]),
+    ).toEqual([
+      [2, "todo", false],
+      [1, "todo", true],
+    ]);
+  });
+});

@@ -186,8 +186,14 @@ const zhCN: Record<string, string> = {
   "Could not read the tasks to add: ${reason}":
     "无法读取可加入的任务：${reason}",
   "Nothing in My Day yet": "我的一天还是空的",
-  "Search beside the title to add a task, or choose “Add to My Day” in a task's menu.":
-    "在标题旁搜索并加入任务，或在任务操作菜单中选择“加入我的一天”。",
+  "Search above to add a task, or choose “Add to My Day” in a task's menu.":
+    "在上方搜索并加入任务，或在任务操作菜单中选择“加入我的一天”。",
+  // The My Day view's layouts (#197).
+  "My Day default layout": "我的一天默认布局",
+  "The layout the My Day view shows today's tasks in. Changing it switches the layout at once.":
+    "我的一天视图用哪种布局呈现今天的任务。修改后立即切换。",
+  "Timeline layout": "时间轴布局",
+  List: "列表",
   "Task panel": "任务属性面板",
   Close: "关闭",
   Status: "状态",

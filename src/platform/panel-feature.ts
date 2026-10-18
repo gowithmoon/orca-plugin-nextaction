@@ -62,6 +62,10 @@ import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createTaskTreeStores } from "../ui/views/all-tasks/task-tree-stores";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
+import {
+  createMyDayLayoutStore,
+  myDayLayoutFrom,
+} from "../ui/views/my-day/my-day-layout-store";
 import { createMyDayScheduleActions } from "../ui/views/my-day/my-day-schedule-actions";
 import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
@@ -152,6 +156,9 @@ export function createPanelFeature(deps: {
   const projectBoard = createProjectBoardStores();
   // The gantt chart's own state (#186): in memory only, likewise.
   const projectGantt = createProjectGanttStores();
+  // The My Day view's layout (#197): in memory only, likewise. Each load
+  // starts it from its default layout setting.
+  const myDayLayout = createMyDayLayoutStore();
   // The review view's page (#98): in memory only, likewise.
   const reviewPage = createReviewPageStore();
   // The review's projects step's collapsed groups (#161): in memory only,
@@ -217,6 +224,7 @@ export function createPanelFeature(deps: {
       }),
       // Dragging on the timeline (#85) writes as the popup does.
       scheduleActions: createMyDayScheduleActions(scheduleDeps),
+      layout: myDayLayout,
     }),
   );
   views.register(
@@ -390,13 +398,25 @@ export function createPanelFeature(deps: {
       projectLayoutFrom(settings().projectDefaultLayout);
     let lastDefaultLayout = defaultLayout();
     projectLayout.set(lastDefaultLayout);
+    // My Day's default layout (#197), the same way.
+    registry.add(`${pluginName}.myDayLayout`, myDayLayout.clear);
+    const myDayDefaultLayout = () =>
+      myDayLayoutFrom(settings().myDayDefaultLayout);
+    let lastMyDayDefaultLayout = myDayDefaultLayout();
+    myDayLayout.set(lastMyDayDefaultLayout);
     const pluginState = orca.state.plugins[pluginName];
     if (pluginState) {
       registry.subscribe(pluginState, () => {
         const next = defaultLayout();
-        if (next === lastDefaultLayout) return;
-        lastDefaultLayout = next;
-        projectLayout.set(next);
+        if (next !== lastDefaultLayout) {
+          lastDefaultLayout = next;
+          projectLayout.set(next);
+        }
+        const nextMyDay = myDayDefaultLayout();
+        if (nextMyDay !== lastMyDayDefaultLayout) {
+          lastMyDayDefaultLayout = nextMyDay;
+          myDayLayout.set(nextMyDay);
+        }
       });
     }
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
