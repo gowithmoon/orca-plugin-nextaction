@@ -168,6 +168,20 @@ async function fetchBlock(id: number): Promise<Block> {
 }
 
 /**
+ * The journal of `now`'s local date, created when missing, with
+ * `get-journal-block` (journal-capture J2, J3).
+ */
+async function journalBlock(now: Date): Promise<Block> {
+  const journal = await invokeBackend("get-journal-block", now);
+  if (typeof journal !== "object" || journal === null || !("id" in journal)) {
+    throw new OrcaError(
+      `get-journal-block returned ${JSON.stringify(journal)}`,
+    );
+  }
+  return journal as Block;
+}
+
+/**
  * The children of block `id` as the backend holds them now, for finding the
  * block `batchInsertReprs` added, which it does not return (drag-to-note
  * 写入, as the spike did with `get-block`).
@@ -1417,16 +1431,7 @@ export function createOrcaTaskRepository(
       // journal is created (journal-capture J2, J3). This runs outside the
       // group below, so a journal it creates is not removed by the one undo;
       // accepted (journal-capture).
-      const journal = await invokeBackend("get-journal-block", now);
-      if (
-        typeof journal !== "object" ||
-        journal === null ||
-        !("id" in journal)
-      ) {
-        throw new OrcaError(
-          `get-journal-block returned ${JSON.stringify(journal)}`,
-        );
-      }
+      const journal = await journalBlock(now);
       let id: unknown;
       try {
         // insertBlock and insertTag in one group are one undo (J4, J6); a
@@ -1483,16 +1488,7 @@ export function createOrcaTaskRepository(
       // As appendTaskToJournal: the journal by local date, created when
       // missing, before the write below, so a journal it creates is not
       // removed by the one undo (journal-capture J2, J3).
-      const journal = await invokeBackend("get-journal-block", now);
-      if (
-        typeof journal !== "object" ||
-        journal === null ||
-        !("id" in journal)
-      ) {
-        throw new OrcaError(
-          `get-journal-block returned ${JSON.stringify(journal)}`,
-        );
-      }
+      const journal = await journalBlock(now);
       // One batchInsertText, as measured (orca-ai F2): the first line is one
       // top-level block, the lines below it its children, one undo, no tag
       // created. The title is kept to one line. A Markdown heading in the
@@ -1631,17 +1627,7 @@ export function createOrcaTaskRepository(
       // undo, as in appendTaskToJournal.
       let anchorId: number;
       if (placement.kind === "journal") {
-        const journal = await invokeBackend("get-journal-block", placement.now);
-        if (
-          typeof journal !== "object" ||
-          journal === null ||
-          !("id" in journal)
-        ) {
-          throw new OrcaError(
-            `get-journal-block returned ${JSON.stringify(journal)}`,
-          );
-        }
-        anchorId = (journal as Block).id;
+        anchorId = (await journalBlock(placement.now)).id;
       } else {
         const anchor = await sourceBlock(placement.blockId);
         if (!anchor) throw new OrcaError(`block ${placement.blockId} is gone`);
