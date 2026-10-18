@@ -400,6 +400,31 @@ describe("read review", () => {
       );
     });
 
+    it("gives every completion and skip the project its task belongs to, or none", async () => {
+      const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
+      repository.addProject({ id: 1, text: "Move house", status: "active" });
+      repository.addTask(
+        { id: 2, status: "done" },
+        { parentId: 1, ...history(recorded("2026-10-12T10:00:00")) },
+      );
+      repository.addTask(
+        { id: 3, status: "todo" },
+        history(recorded("2026-10-11T10:00:00", "skip")),
+      );
+
+      const { lookBack } = (await readReview()).steps;
+
+      expect(
+        lookBack.entries.map((item) => [
+          item.task.id,
+          item.project?.text ?? null,
+        ]),
+      ).toEqual([
+        [2, "Move house"],
+        [3, null],
+      ]);
+    });
+
     it("lists the tasks planned but not done since the last full review", async () => {
       const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
       repository.addTask({ id: 1, status: "todo" }, myDay(10));
@@ -429,6 +454,31 @@ describe("read review", () => {
 
       expect(lookBack.entries.map((item) => item.task.id)).toEqual([2]);
       expect(lookBack.since).toEqual(new Date("2026-10-07T05:00:00+08:00"));
+    });
+
+    it("lists the tasks created since the last full review, the earliest first, whatever their status", async () => {
+      const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
+      const created = (at: string) => ({ created: new Date(`${at}+08:00`) });
+      repository.addTask({
+        id: 1,
+        status: "todo",
+        ...created("2026-10-12T08:00:00"),
+      });
+      // Before the last full review.
+      repository.addTask({
+        id: 2,
+        status: "inbox",
+        ...created("2026-10-09T19:00:00"),
+      });
+      repository.addTask({
+        id: 3,
+        status: "done",
+        ...created("2026-10-10T08:00:00"),
+      });
+
+      const { lookBack } = (await readReview()).steps;
+
+      expect(lookBack.created.map((item) => item.task.id)).toEqual([3, 1]);
     });
 
     it("skips a completion history it cannot read", async () => {

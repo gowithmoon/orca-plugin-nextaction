@@ -128,9 +128,18 @@ export interface LookBackStepRead extends ReviewStepRead {
   readonly since: Date;
   /**
    * Every completion and skip since the start, one each, the latest first.
-   * A history that cannot be read lists none.
+   * A history that cannot be read lists none. Each with the project its
+   * task belongs to (GLOSSARY: 所属项目), `null` for none.
    */
-  readonly entries: readonly LookBackEntry<Task>[];
+  readonly entries: readonly (LookBackEntry<Task> & {
+    readonly project: Project | null;
+  })[];
+  /**
+   * Every task created since the start (by its `created`), whatever its
+   * status now: done ones are listed too, not only unfinished ones, as #201
+   * asks. The earliest created first; for the AI summary (#205).
+   */
+  readonly created: readonly ReviewItem[];
 }
 
 /** A task in the list of tasks due for review. */
@@ -419,7 +428,15 @@ export function createReadReview(deps: {
         someday: byScore("someday", (entry) => entry.task.status === "someday"),
         lookBack: {
           since,
-          entries: looked.entries,
+          entries: looked.entries.map((entry) => ({
+            ...entry,
+            project: projectOf(entry.task),
+          })),
+          created: tasks
+            .map((item) => item.task)
+            .filter((task) => task.created.getTime() > since.getTime())
+            .sort(byCapture)
+            .map((task) => ({ task, kept: false, project: projectOf(task) })),
           items: plannedNotDone,
           total: notDone.size,
         },

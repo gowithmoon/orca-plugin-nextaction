@@ -8,8 +8,10 @@ import type {
   ChoiceProperty,
   CompletionHistoryRead,
   ConvertToTaskResult,
+  JournalSummaryPart,
   NotConvertibleReason,
   NoteTarget,
+  OutlineBlock,
   TaskFilter,
   TaskRepository,
   TaskWrite,
@@ -123,9 +125,18 @@ export interface InMemoryTaskRepository extends TaskRepository {
   writeCount(): number;
   /**
    * The day of the journal a block was appended to with
-   * `appendTaskToJournal`, or `undefined` when it was not.
+   * `appendTaskToJournal` or `createTasks`, or `undefined` when it was not.
    */
   journalOf(id: number): CalendarDate | undefined;
+  /**
+   * Every `appendSummaryToJournal` that succeeded, oldest first, with the
+   * day of the journal it went to; the blocks themselves are not modelled.
+   */
+  journalSummaries(): readonly {
+    day: CalendarDate;
+    title: string;
+    parts: readonly JournalSummaryPart[];
+  }[];
   /** Every `moveTask` that succeeded, oldest first. */
   moves(): readonly TaskMove[];
   /** Every `linkTaskInNote` that succeeded, oldest first; the notes are not modelled. */
@@ -216,6 +227,11 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     [];
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
+  const journalSummaries: {
+    day: CalendarDate;
+    title: string;
+    parts: readonly JournalSummaryPart[];
+  }[] = [];
   /** IDs of new blocks, far from the ones tests pick. */
   let nextId = 100_000;
   /** Reference IDs of 所属项目 values, far from block IDs too. */
@@ -498,6 +514,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     writeCount: () => writes,
 
     journalOf: (id) => journalDays.get(id),
+
+    journalSummaries: () =>
+      journalSummaries.map((entry) => ({
+        ...entry,
+        parts: entry.parts.map((part) => ({
+          heading: part.heading,
+          items: [...part.items],
+        })),
+      })),
 
     moves: () => [...moves],
 
@@ -806,6 +831,97 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async createTasks(placement, newTasks, also = []) {
+      if (placement.kind !== "journal" && !blocks.has(placement.blockId)) {
+        throw new Error(`no block ${placement.blockId}`);
+      }
+      // Checked before anything is written, as the port says.
+      const targets = also.map((taskWrite) => {
+        const block = taskToWrite(taskWrite.id);
+        refuseUnreadable(block, taskWrite.id, taskWrite);
+        return { block, taskWrite };
+      });
+      // The parent the new tasks go below, and the last position before
+      // them: after the block's last block below it, as Orca's lastChild and
+      // after put it; at the end of the notes for a journal.
+      let parentId: number | undefined;
+      let last: number;
+      if (placement.kind === "journal") {
+        parentId = undefined;
+        last = Math.max(
+          0,
+          ...[...blocks.values()].map((block) => block.position),
+        );
+      } else {
+        const anchor = placement.blockId;
+        parentId =
+          placement.kind === "lastChild"
+            ? anchor
+            : (blocks.get(anchor) as StoredBlock).parentId;
+        const below = [...blocks.entries()].filter(
+          ([id]) => id === anchor || isBelow(id, anchor),
+        );
+        last = Math.max(...below.map(([, block]) => block.position));
+      }
+      const ids = newTasks.map(() => nextId++);
+      write(() => {
+        for (const block of blocks.values()) {
+          if (block.position > last) block.position += newTasks.length;
+        }
+        newTasks.forEach((newTask, index) => {
+          const id = ids[index] as number;
+          const created = new Date(0);
+          if (placement.kind === "journal") {
+            // get-journal-block picks the journal by local date (journal-capture J3).
+            const { now } = placement;
+            journalDays.set(id, {
+              year: now.getFullYear(),
+              month: now.getMonth() + 1,
+              day: now.getDate(),
+            });
+          }
+          store(id, {
+            text: newTask.text,
+            created,
+            parentId,
+            position: last + 1 + index,
+            notConvertible: undefined,
+            task: {
+              ...freshTask(id, newTask.text, created),
+              ...newTask.initial,
+              status: newTask.status,
+            },
+            completionHistory: undefined,
+            myDay: undefined,
+            page: false,
+            tags: [],
+            project: undefined,
+          });
+        });
+        for (const { block, taskWrite } of targets)
+          applyWrite(block, taskWrite);
+      });
+      return ids;
+    },
+
+    async readOutline(id) {
+      // Each block's own text, its children in note order; a task's text is
+      // its task's, as Orca shows it.
+      const outlineOf = (blockId: number): OutlineBlock => {
+        const block = blocks.get(blockId) as StoredBlock;
+        const children = [...blocks.entries()]
+          .filter(([, child]) => child.parentId === blockId)
+          .sort(([, a], [, b]) => a.position - b.position)
+          .map(([childId]) => outlineOf(childId));
+        return {
+          text: (block.task?.text ?? block.text).trim(),
+          isTask: block.task !== undefined,
+          children,
+        };
+      };
+      return blocks.has(id) ? outlineOf(id) : null;
+    },
+
     async getProject(id) {
       if (projectTagPaused) return null;
       return blocks.get(id)?.project ?? null;
@@ -880,6 +996,26 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         });
       });
       return id;
+    },
+
+    async appendSummaryToJournal(title, parts, now) {
+      // Copied, so the caller changing its parts later changes nothing here.
+      const written = parts.map((part) => ({
+        heading: part.heading,
+        items: [...part.items],
+      }));
+      write(() => {
+        // get-journal-block picks the journal by local date (journal-capture J3).
+        journalSummaries.push({
+          day: {
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            day: now.getDate(),
+          },
+          title,
+          parts: written,
+        });
+      });
     },
 
     async appendTaskToJournal(text, now, initial = {}) {

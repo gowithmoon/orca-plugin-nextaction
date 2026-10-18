@@ -1,3 +1,4 @@
+import type { ReadPromptContext } from "../application/ai/prompt-context";
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
@@ -27,12 +28,17 @@ import { createReadStats } from "../application/usecases/read-stats";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
 import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
+import { createWriteAiSummary } from "../application/usecases/write-ai-summary";
+import { createWriteSummaryToJournal } from "../application/usecases/write-summary-to-journal";
 import type { CalendarDate } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
 import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
+import { createOrcaAiChat } from "../infra/orca/orca-ai-chat";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
+import { t } from "../shared/l10n/l10n";
 import type { OpenQuickCapture } from "../ui/capture/quick-capture-popup";
+import { formatDate } from "../ui/components/format";
 import type { LayoutStore } from "../ui/components/layout-store";
 import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
@@ -149,6 +155,8 @@ export function createPanelFeature(deps: {
   openQuickCapture: OpenQuickCapture;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
+  /** What every AI request is given (#201), for the review's AI summary (#205). */
+  promptContext: ReadPromptContext;
 }): { feature: FeatureModule; views: PanelViews } {
   const { repository, changes, taskPanel } = deps;
   const views = createPanelViews();
@@ -333,12 +341,36 @@ export function createPanelFeature(deps: {
       }),
     }),
   );
+  const readReview = createReadReview({
+    ...myDayDeps,
+    startPreviewDays: deps.startPreviewDays,
+    lastFullReview,
+  });
   views.register(
     createReviewView({
-      readReview: createReadReview({
-        ...myDayDeps,
-        startPreviewDays: deps.startPreviewDays,
-        lastFullReview,
+      readReview,
+      // The AI summary (#205), with Orca's AI chat behind the AiChat port
+      // (ADR 0026); read over the same range as look back.
+      writeAiSummary: createWriteAiSummary({
+        readReview,
+        chat: createOrcaAiChat(),
+        dayBoundary: deps.dayBoundary,
+        promptContext: deps.promptContext,
+        // Given to the AI to write as they are, so the parts read back into
+        // the journal's blocks under these names (orca-ai H4).
+        partNames: {
+          period: t("This period"),
+          notable: t("Worth noting"),
+        },
+      }),
+      writeSummaryToJournal: createWriteSummaryToJournal({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        summaryTitle: (day) =>
+          t("NextAction review summary (${day})", {
+            day: formatDate(day, day),
+          }),
       }),
       completeFullReview: createCompleteFullReview({
         clock: systemClock,

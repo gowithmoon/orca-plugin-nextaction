@@ -6,7 +6,11 @@ import {
   type ConvertToTaskResult,
   type DiscardableData,
   type InitialProperties,
+  type JournalSummaryPart,
+  type NewTask,
+  type NewTasksPlacement,
   type NoteTarget,
+  type OutlineBlock,
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
@@ -114,6 +118,7 @@ import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
 import type { PropertyDefinition } from "../schema/tag-schema";
 import type { ProjectTagState, TaskTagState } from "../schema/tag-state";
+import { readOutline } from "./outline";
 import {
   type HierarchyBlock,
   missingParents,
@@ -152,6 +157,29 @@ async function getBlocks(ids: readonly number[]): Promise<Map<number, Block>> {
     }
   }
   return blocks;
+}
+
+/** Block `id` as the backend holds it now, with `get-block`. */
+async function fetchBlock(id: number): Promise<Block> {
+  const block = await invokeBackend("get-block", id);
+  if (typeof block !== "object" || block === null || !("id" in block)) {
+    throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
+  }
+  return block as Block;
+}
+
+/**
+ * The journal of `now`'s local date, created when missing, with
+ * `get-journal-block` (journal-capture J2, J3).
+ */
+async function journalBlock(now: Date): Promise<Block> {
+  const journal = await invokeBackend("get-journal-block", now);
+  if (typeof journal !== "object" || journal === null || !("id" in journal)) {
+    throw new OrcaError(
+      `get-journal-block returned ${JSON.stringify(journal)}`,
+    );
+  }
+  return journal as Block;
 }
 
 /**
@@ -1404,16 +1432,7 @@ export function createOrcaTaskRepository(
       // journal is created (journal-capture J2, J3). This runs outside the
       // group below, so a journal it creates is not removed by the one undo;
       // accepted (journal-capture).
-      const journal = await invokeBackend("get-journal-block", now);
-      if (
-        typeof journal !== "object" ||
-        journal === null ||
-        !("id" in journal)
-      ) {
-        throw new OrcaError(
-          `get-journal-block returned ${JSON.stringify(journal)}`,
-        );
-      }
+      const journal = await journalBlock(now);
       let id: unknown;
       try {
         // insertBlock and insertTag in one group are one undo (J4, J6); a
@@ -1460,6 +1479,69 @@ export function createOrcaTaskRepository(
         throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
       }
       return id;
+    },
+
+    async appendSummaryToJournal(
+      title: string,
+      parts: readonly JournalSummaryPart[],
+      now: Date,
+    ): Promise<void> {
+      // As appendTaskToJournal: the journal by local date, created when
+      // missing, before the group below, so a journal it creates is not
+      // removed by the one undo (journal-capture J2, J3).
+      const journal = await journalBlock(now);
+      const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " ");
+      const inserted = (id: unknown): number => {
+        if (typeof id !== "number") {
+          throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+        }
+        return id;
+      };
+      // As measured (orca-ai H4), in one group, one undo: the title as the
+      // journal's last child; the first part's block as the title's last
+      // child, each next one after the part before; each part's items as
+      // its block's children with batchInsertText, Markdown parsed and tags
+      // not extracted. The reference is fetched afresh with get-block before
+      // each write: lastChild of one parent object again and again puts
+      // them in reverse (F1). A fetched block needs no cache (C2).
+      await invokeGroup(async () => {
+        const top = inserted(
+          await invokeEditorCommand(
+            "core.editor.insertBlock",
+            journal,
+            "lastChild",
+            // Plain text: tags and formatting in it are not parsed.
+            [{ t: "t", v: oneLine(title) }],
+          ),
+        );
+        let previousPart: number | undefined;
+        for (const part of parts) {
+          // A part with no name puts its items straight below the title, as
+          // its last children: written in order, they stay in order.
+          let under = top;
+          if (part.heading !== "") {
+            under = inserted(
+              await invokeEditorCommand(
+                "core.editor.insertBlock",
+                await fetchBlock(previousPart ?? top),
+                previousPart === undefined ? "lastChild" : "after",
+                [{ t: "t", v: oneLine(part.heading) }],
+              ),
+            );
+            previousPart = under;
+          }
+          if (part.items.length === 0) continue;
+          await invokeEditorCommand(
+            "core.editor.batchInsertText",
+            await fetchBlock(under),
+            "lastChild",
+            part.items.map((item) => `- ${oneLine(item)}`).join("\n"),
+            // Markdown parsed; tags not extracted (orca-ai C3, H4).
+            false,
+            true,
+          );
+        }
+      });
     },
 
     async appendSubtask(
@@ -1555,6 +1637,97 @@ export function createOrcaTaskRepository(
         // The task gained a reference; views read again (ADR 0007).
         onWritten(block.id);
       }
+    },
+
+    async createTasks(
+      placement: NewTasksPlacement,
+      tasks: readonly NewTask[],
+      also: readonly TaskWrite[] = [],
+    ): Promise<TaskId[]> {
+      const state = readyTag();
+      // Encoded and planned first: an invalidated property or a write in
+      // `also` that cannot be done fails before anything is written.
+      const encoded = tasks.map((task) =>
+        encodeTaskChanges(
+          { ...task.initial, status: task.status },
+          { language: state.language, invalidated: state.invalidated },
+        ),
+      );
+      const plans: NonNullable<Awaited<ReturnType<typeof planTaskWrite>>>[] =
+        [];
+      for (const write of also) {
+        const plan = await planTaskWrite(state, write);
+        if (plan) plans.push(plan);
+      }
+      // The block the new tasks go relative to: a mirror's ID stands for its
+      // source block (block-properties-json M3); a journal is picked by
+      // local date and created when missing (journal-capture J2, J3), outside
+      // the group below, so a journal it creates is not removed by the one
+      // undo, as in appendTaskToJournal.
+      let anchorId: number;
+      if (placement.kind === "journal") {
+        anchorId = (await journalBlock(placement.now)).id;
+      } else {
+        const anchor = await sourceBlock(placement.blockId);
+        if (!anchor) throw new OrcaError(`block ${placement.blockId} is gone`);
+        anchorId = anchor.id;
+      }
+      // Indexes into `tasks` in the order they are inserted: right after the
+      // anchor, the last first, so they end up in order (orca-ai C1).
+      const order = [...tasks.keys()];
+      if (placement.kind === "after") order.reverse();
+      const created = new Map<number, number>();
+      try {
+        // One group: one undo for every task and every write in `also`
+        // (orca-ai C1, F1; multi-block-undo).
+        await invokeGroup(async () => {
+          let previous: number | undefined;
+          for (const index of order) {
+            const task = tasks[index] as NewTask;
+            // After a block: each one right after it (C1). As the last
+            // child blocks (of a block or a journal): the first as the last
+            // child, each next one right after the one before, the reference
+            // fetched afresh each time: lastChild of one parent object again
+            // and again puts them in reverse (F1). A fetched block needs no
+            // cache (C2).
+            const after = placement.kind === "after" || previous !== undefined;
+            const reference = await fetchBlock(
+              placement.kind === "after" ? anchorId : (previous ?? anchorId),
+            );
+            const id = await invokeEditorCommand(
+              "core.editor.insertBlock",
+              reference,
+              after ? "after" : "lastChild",
+              // Plain text: tags and formatting in it are not parsed.
+              [{ t: "t", v: task.text }],
+            );
+            if (typeof id !== "number") {
+              throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+            }
+            created.set(index, id);
+            previous = id;
+            // The status and initial values go in with the tag (orca-ai F1).
+            await invokeEditorCommand(
+              "core.editor.insertTag",
+              id,
+              state.tagName,
+              encoded[index] ?? [],
+            );
+          }
+          for (const plan of plans) await plan.run();
+        });
+      } finally {
+        for (const id of created.values()) onWritten(id);
+        for (const plan of plans) onWritten(plan.block.id);
+      }
+      // In the order of `tasks`, whatever order they went in.
+      return [...tasks.keys()].map((index) => created.get(index) as number);
+    },
+
+    async readOutline(id: number): Promise<OutlineBlock | null> {
+      const block = await sourceBlock(id);
+      if (!block) return null;
+      return readOutline(block, currentTag());
     },
 
     async readCustomPropertyDefinitions() {

@@ -27,6 +27,7 @@ import { registerMyDayMenuItem } from "../ui/task-menu/my-day-menu-item";
 import { createNoteStatusMenu } from "../ui/task-menu/note-status-menu";
 import { statusIconAt } from "../ui/task-menu/orca-dom";
 import { registerSkipMenuItem } from "../ui/task-menu/skip-menu-item";
+import { registerSplitMenuItem } from "../ui/task-menu/split-menu-item";
 import { registerSubtaskMenuItem } from "../ui/task-menu/subtask-menu-item";
 import {
   createTaskBlockMenuCommand,
@@ -51,6 +52,8 @@ export function createTaskMenuFeature(deps: {
   openTaskPanel: (taskId: TaskId) => void;
   /** "Create subtask" (#190): opens the capture window for the task. */
   openCreateSubtask: (parent: Task) => void;
+  /** "Split into subtasks" (#202): opens the AI's draft window for the task. */
+  openSplitSubtasks: (parent: Task) => void;
   /** The task tag's name, for finding status icons; none while paused. */
   names: TaskTagNamesSource;
 }): { feature: FeatureModule; items: () => TaskMenuItems | undefined } {
@@ -91,6 +94,7 @@ export function createTaskMenuFeature(deps: {
       pluginName,
     });
     registerSubtaskMenuItem(items, deps.openCreateSubtask);
+    registerSplitMenuItem(items, deps.openSplitSubtasks);
     registerTaskPanelMenuItem(items, deps.openTaskPanel);
 
     const menuDeps = {

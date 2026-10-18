@@ -18,6 +18,7 @@ import { t } from "../../../shared/l10n/l10n";
 import { formatDate } from "../../components/format";
 import { ContextMenu } from "../../components/popup-controls";
 import { projectStatusLabel } from "../../components/project-status-label";
+import { selectsText } from "../../components/selects-text";
 import type { ProjectMenuItems } from "../../project-menu/menu-items";
 import { ProjectMenu } from "../../project-menu/project-menu";
 import { projectStatusIcons } from "../../project-menu/project-status-icons";
@@ -104,12 +105,6 @@ export function signalChips(node: ProjectNode): React.ReactNode[] {
     );
   }
   return items;
-}
-
-/** A click that selected text is not a click on the row. */
-function selectsText(): boolean {
-  const selection = window.getSelection();
-  return selection !== null && !selection.isCollapsed;
 }
 
 export interface ProjectRowProps {
@@ -222,7 +217,8 @@ export function ProjectRow(props: ProjectRowProps) {
           // menu opened from this row is not a click on the row.
           if (!(event.target instanceof Node)) return;
           if (!event.currentTarget.contains(event.target)) return;
-          if (!selectsText()) onActivate();
+          // A click that selected the row's text is not a click on it.
+          if (!selectsText(event.currentTarget)) onActivate();
         })
       }
       onContextMenu={

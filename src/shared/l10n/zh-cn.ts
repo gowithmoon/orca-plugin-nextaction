@@ -15,6 +15,9 @@ const zhCN: Record<string, string> = {
   "Start preview days": "开始日期预览天数",
   "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
     "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
+  "AI instructions block": "AI 说明块",
+  "The ID of a block in your notes, or ((ID)), telling the AI about you and your habits. The block and everything below it go with every AI request, to the AI service set up in Orca. Leave it empty for none.":
+    "填笔记里一个块的编号（也可以写成 ((编号))），在这个块里向 AI 介绍你的情况和习惯。每次请求 AI 时，这个块和它下面的所有内容都会一起发给你在 Orca 里配置的 AI 服务。不需要就留空。",
   'The task tag name cannot be empty. It was set back to "${name}".':
     "任务标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':
@@ -192,7 +195,7 @@ const zhCN: Record<string, string> = {
   "My Day default layout": "我的一天默认布局",
   "The layout the My Day view shows today's tasks in. Changing it switches the layout at once.":
     "我的一天视图用哪种布局呈现今天的任务。修改后立即切换。",
-  "Timeline layout": "时间轴布局",
+  "Timeline layout": "时间轴",
   List: "列表",
   // The Eisenhower Matrix layout (GLOSSARY: 四象限, #198) and its quadrants.
   "Eisenhower Matrix": "四象限",
@@ -688,6 +691,64 @@ const zhCN: Record<string, string> = {
   // The gantt chart's time scale (#179); Week and Month are the stats'.
   "Time scale": "刻度",
   Day: "日",
+  // Split into subtasks (#202).
+  "Split into subtasks": "拆分子任务",
+  "The AI is drafting…": "AI 正在起草……",
+  "The AI would like to know a few things first:": "AI 想先了解几件事：",
+  "Your answer (may be left empty)": "你的回答（可以不填）",
+  "Skip and get the draft": "跳过，直接给草稿",
+  Answer: "回答",
+  "Subtask ${n}": "子任务 ${n}",
+  "Subtask name": "子任务名",
+  "Move up": "上移",
+  "Move down": "下移",
+  Unsure: "不确定",
+  "The AI thinks this task need not be split: ${reason}":
+    "AI 认为这个任务不必再拆：${reason}",
+  "Add subtask": "添加子任务",
+  "Do in order": "按顺序执行",
+  "Goes below the task as todo subtasks": "写在任务下面，状态为待开始",
+  "Try again": "重试",
+  "The AI did not answer. Check that the AI chat is set up in Orca's settings, then try again.":
+    "AI 没有回应。请到 Orca 设置里检查 AI 对话是否配置好，然后重试。",
+  "The AI did not give a draft the plugin can use. Try again.":
+    "AI 没有给出能用的草稿，请重试。",
+  "Could not get a draft: ${reason}": "没能拿到草稿：${reason}",
+  "${count} subtasks created": "已新建 ${count} 个子任务",
+  "Could not create the subtasks: ${reason}": "没能新建子任务：${reason}",
+  // Extract tasks (#204).
+  "Extract tasks": "提取任务",
+  "Put the cursor in a block to extract tasks from it.":
+    "请把光标放在要提取任务的块里。",
+  "Task ${n}": "任务 ${n}",
+  "Create ${task}": "创建${task}",
+  "Put them": "放在",
+  "Below the selection": "所选块下方",
+  "As child blocks": "所选块的子块",
+  "End of today's journal": "今天日记末尾",
+  "Next to the last selected block": "以最后一个选中的块为准",
+  "Created as inbox tasks": "新任务放进收集箱",
+  "The AI found nothing to do in the selected blocks. Blocks that are tasks already are left out.":
+    "AI 在所选内容里没有找到要做的事。已经是任务的块不会再提取。",
+  "${count} tasks created": "已新建 ${count} 个任务",
+  "Could not create the tasks: ${reason}": "没能新建任务：${reason}",
+  // AI summary (#205).
+  "AI summary": "AI 小结",
+  "NextAction review summary (${day})": "NextAction任务回顾小结（${day}）",
+  "This period": "这段时间",
+  "Worth noting": "值得留意",
+  "Write it again": "重新生成",
+  "The AI is writing…": "AI 正在写……",
+  "Replace your edited summary with a new one?":
+    "小结已经改过，要用新生成的替换吗？",
+  "Keep editing": "继续修改",
+  Replace: "替换",
+  "Write to today's journal": "写进今天日记",
+  "Only what you write down is kept.": "不写进日记就不会保留。",
+  "Could not get the AI summary: ${reason}": "没能生成 AI 小结：${reason}",
+  "The AI summary was written to today's journal": "AI 小结已写进今天日记",
+  "Could not write the AI summary to the journal: ${reason}":
+    "没能把 AI 小结写进日记：${reason}",
 };
 
 export default zhCN;

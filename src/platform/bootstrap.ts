@@ -1,7 +1,13 @@
+import { createReadPromptContext } from "../application/ai/prompt-context";
+import { createReadUserInstructions } from "../application/ai/user-instructions";
+import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
 import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
+import { createLoadAiInstructions } from "./ai-instructions";
+import { uiLanguage } from "./ai-language";
 import { createLoadDayBoundary } from "./day-boundary";
+import { createExtractTasksFeature } from "./extract-tasks-feature";
 import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
 import { createProjectMenuFeature } from "./project-menu-feature";
@@ -15,6 +21,7 @@ import {
   type SettingsDefinition,
   settingsDefinition,
 } from "./settings";
+import { createSplitSubtasksFeature } from "./split-subtasks-feature";
 import { createLoadStartPreviewDays } from "./start-preview-days";
 import { createStatusIconFeature } from "./status-icon-feature";
 import { createTaskActionsFeature } from "./task-actions-feature";
@@ -149,6 +156,32 @@ export function createNextActionPlugin(): Plugin {
     reminderDefaultTime: reminderTime.reminderDefaultTime,
     taskActions: taskActions.taskActions,
   });
+  const aiInstructions = createLoadAiInstructions();
+  // One reader shared by every AI feature (#203), so a block that is missing
+  // or cannot be read warns once, not once per feature or request.
+  const userInstructions = createReadUserInstructions({
+    repository,
+    setting: aiInstructions.aiInstructions,
+    warn: (message) => console.warn(`[nextaction] ${message}`),
+  });
+  // What every AI request is given besides its material (#201), shared by
+  // every AI feature.
+  const promptContext = createReadPromptContext({
+    clock: systemClock,
+    dayBoundary: day.dayBoundary,
+    uiLanguage,
+    userInstructions,
+  });
+  const splitSubtasks = createSplitSubtasksFeature({
+    repository,
+    promptContext,
+  });
+  const extractTasks = createExtractTasksFeature({
+    repository,
+    today: day.today,
+    promptContext,
+    taskTagBlockId: taskTag.taskTagBlockId,
+  });
   const taskMenu = createTaskMenuFeature({
     repository,
     taskTagBlockId: taskTag.taskTagBlockId,
@@ -157,6 +190,7 @@ export function createNextActionPlugin(): Plugin {
       taskPanel.open(taskId);
     },
     openCreateSubtask: taskTag.openCreateSubtask,
+    openSplitSubtasks: splitSubtasks.open,
     names: taskTag.names,
   });
   const projectMenu = createProjectMenuFeature({
@@ -181,6 +215,7 @@ export function createNextActionPlugin(): Plugin {
       current: taskTag.taskTagBlockId,
       subscribe: taskTag.names.subscribe,
     },
+    promptContext,
   });
   return createPlugin({
     features: [
@@ -192,6 +227,7 @@ export function createNextActionPlugin(): Plugin {
       // After the task change signal it gives on a change of the setting.
       preview.feature,
       reminderTime.feature,
+      aiInstructions.feature,
       taskActions.feature,
       // Before the task tag feature, so it hears the outcome of startup.
       createStatusIconFeature(taskTag.names, taskTag.projectNames),
@@ -202,6 +238,9 @@ export function createNextActionPlugin(): Plugin {
       // Before the menus and the plugin panel that open it, so its root is
       // released after them.
       taskPanel.feature,
+      // Before the task menu that opens it, so its root is released after it.
+      splitSubtasks.feature,
+      extractTasks,
       taskMenu.feature,
       projectMenu.feature,
       panel.feature,
