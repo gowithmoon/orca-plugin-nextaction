@@ -207,6 +207,11 @@ export function createTaskTagFeature(
     );
     // The `/` menu calls editor commands only (slash-commands): this one only
     // opens the window, writing nothing, so there is nothing to undo.
+    // `hasArgs: true` keeps it out of Orca's command palette and shortcut
+    // settings, which list every command without it: the palette runs editor
+    // commands with no cursor, so this entry would sit next to the real
+    // "Create task" and do nothing. With `hasArgs` Orca also skips the editor
+    // focus check, so the `/` menu still runs it (read from Orca's source).
     const quickCaptureEditorId = context.registry.editorCommand(
       "quickCaptureFromEditor",
       async () => {
@@ -214,7 +219,7 @@ export function createTaskTagFeature(
         return null;
       },
       () => undefined,
-      { label: t("Create task") },
+      { label: t("Create task"), hasArgs: true },
     );
     // Released before the commands they call (#194); the typed "/…" does not
     // stay in the block (slash-commands).
