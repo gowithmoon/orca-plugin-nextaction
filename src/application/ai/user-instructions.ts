@@ -45,6 +45,8 @@ export function createReadUserInstructions(deps: {
       );
       return undefined;
     }
-    return outlineText([outline]);
+    // A block with nothing written in it, or below it, is as good as none.
+    const text = outlineText([outline]);
+    return text.trim() === "" ? undefined : text;
   };
 }

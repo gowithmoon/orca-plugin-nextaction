@@ -134,6 +134,21 @@ describe("draft subtasks: the user's AI instructions", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("gives no instructions, warning nothing, when the block and those below it are empty", async () => {
+    const { repository, chat, aiInstructions, warnings, draftSubtasks } = setup(
+      [propose({ items: [{ title: "Book the movers" }] })],
+    );
+    repository.addTask({ id: 1, text: "Move house" });
+    repository.addBlock(10, { text: "" });
+    repository.addBlock(11, { text: "   ", parentId: 10 });
+    aiInstructions.set(10);
+
+    await draftSubtasks(1, noSignal());
+
+    expect(requestText(chat.requests()[0])).not.toContain("user_instructions");
+    expect(warnings).toEqual([]);
+  });
+
   it("gives no instructions when the setting names no block", async () => {
     const { repository, chat, warnings, draftSubtasks } = setup([
       propose({ items: [{ title: "Book the movers" }] }),
