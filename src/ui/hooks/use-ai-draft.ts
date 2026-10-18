@@ -4,11 +4,7 @@
 // the window closes. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import { AiDraftFailedError } from "../../application/ai/conversation";
-import {
-  AiCancelledError,
-  AiRequestFailedError,
-} from "../../application/ports/ai-chat";
-import { TaskFeaturesPausedError } from "../../application/ports/task-repository";
+import { AiCancelledError } from "../../application/ports/ai-chat";
 import type {
   DraftExtractedTasks,
   ExtractDraft,
@@ -18,9 +14,8 @@ import type {
   SubtaskDraft,
 } from "../../application/usecases/draft-subtasks";
 import type { TaskId } from "../../domain/task/task";
-import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
-import { pausedText } from "../notify";
+import { aiFailureText } from "../notify";
 
 /** What the first request gave, whatever the feature: questions or `D`. */
 type AiStart<D> =
@@ -53,24 +48,14 @@ export interface AiDraft<D> {
   retry: () => void;
 }
 
-/**
- * What the window shows for a failure. Orca has already told the user about
- * a request that got no reply ("Error calling AI", orca-ai), so nothing is
- * notified again here: the window says where to look.
- */
+/** What the window shows for a failure. */
 function failureText(error: unknown): string {
-  if (error instanceof AiRequestFailedError) {
-    return t(
-      "The AI did not answer. Check that the AI chat is set up in Orca's settings, then try again.",
-    );
-  }
   if (error instanceof AiDraftFailedError) {
     return t("The AI did not give a draft the plugin can use. Try again.");
   }
-  if (error instanceof TaskFeaturesPausedError) return pausedText();
-  return t("Could not get a draft: ${reason}", {
-    reason: describeError(error),
-  });
+  return aiFailureText(error, (reason) =>
+    t("Could not get a draft: ${reason}", { reason }),
+  );
 }
 
 /** `begin` keeps its identity while the window shows one conversation. */

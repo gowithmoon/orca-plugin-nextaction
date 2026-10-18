@@ -1,5 +1,6 @@
 // Telling the user what happened (docs/ARCHITECTURE.md §4 错误处理: errors are
 // caught in ui and reported with orca.notify). Verified by hand in Orca.
+import { AiRequestFailedError } from "../application/ports/ai-chat";
 import {
   NoNotePanelError,
   TaskFeaturesPausedError,
@@ -36,6 +37,25 @@ export function pausedText(): string {
   return t(
     "Task features are paused. See the plugin's earlier notice or its task tag setting.",
   );
+}
+
+/**
+ * What an AI window or step shows when its request failed: `failed(reason)`
+ * unless it got no reply or task features are paused. Orca has already told
+ * the user about a request that got no reply ("Error calling AI", orca-ai),
+ * so nothing is notified again: the text says where to look.
+ */
+export function aiFailureText(
+  error: unknown,
+  failed: (reason: string) => string,
+): string {
+  if (error instanceof AiRequestFailedError) {
+    return t(
+      "The AI did not answer. Check that the AI chat is set up in Orca's settings, then try again.",
+    );
+  }
+  if (error instanceof TaskFeaturesPausedError) return pausedText();
+  return failed(describeError(error));
 }
 
 /**

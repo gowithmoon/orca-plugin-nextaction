@@ -3,16 +3,11 @@
 // when asked or when the step closes, and writes the edited text to today's
 // journal. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import {
-  AiCancelledError,
-  AiRequestFailedError,
-} from "../../application/ports/ai-chat";
-import { TaskFeaturesPausedError } from "../../application/ports/task-repository";
+import { AiCancelledError } from "../../application/ports/ai-chat";
 import type { WriteAiSummary } from "../../application/usecases/write-ai-summary";
 import type { WriteSummaryToJournal } from "../../application/usecases/write-summary-to-journal";
-import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
-import { type Notify, notifyActionFailure, pausedText } from "../notify";
+import { aiFailureText, type Notify, notifyActionFailure } from "../notify";
 
 /**
  * Where the summary is: `idle` before the first one; `streaming` while the
@@ -42,21 +37,11 @@ export interface AiSummary {
   write(): void;
 }
 
-/**
- * What the step shows for a failure. Orca has already told the user about a
- * request that got no reply ("Error calling AI", orca-ai), so nothing is
- * notified again: the step says where to look.
- */
+/** What the step shows for a failure. */
 function failureText(error: unknown): string {
-  if (error instanceof AiRequestFailedError) {
-    return t(
-      "The AI did not answer. Check that the AI chat is set up in Orca's settings, then try again.",
-    );
-  }
-  if (error instanceof TaskFeaturesPausedError) return pausedText();
-  return t("Could not get the AI summary: ${reason}", {
-    reason: describeError(error),
-  });
+  return aiFailureText(error, (reason) =>
+    t("Could not get the AI summary: ${reason}", { reason }),
+  );
 }
 
 export function useAiSummary(deps: {
