@@ -17,6 +17,7 @@ import { shownText } from "./format";
 import { ContextMenu } from "./popup-controls";
 import { projectStatusLabel } from "./project-status-label";
 import { PropertyRow } from "./property-row";
+import { selectsText } from "./selects-text";
 import { StatusIcon } from "./status-icon";
 import { markedStatus, StatusMenu } from "./status-menu";
 
@@ -82,12 +83,6 @@ export interface TaskCardProps {
    * open the task panel and the card's task menu.
    */
   footer?: React.ReactNode;
-}
-
-/** A click that selected text is not a click on the card. */
-function selectsText(): boolean {
-  const selection = window.getSelection();
-  return selection !== null && !selection.isCollapsed;
 }
 
 /**
@@ -246,7 +241,8 @@ export function TaskCard(props: TaskCardProps) {
           // opened from this card is not a click on the card.
           if (!(event.target instanceof Node)) return;
           if (!event.currentTarget.contains(event.target)) return;
-          if (!selectsText()) onOpen(task);
+          // A click that selected the card's text is not a click on it.
+          if (!selectsText(event.currentTarget)) onOpen(task);
         })
       }
       // The keyboard opens it too: Enter on the focused card, not on its buttons.
