@@ -69,6 +69,12 @@ export interface TodaysMyDay {
   readonly scheduled: readonly ScheduledMyDayItem[];
   /** Highest score first, done and skipped ones after the others. */
   readonly unscheduled: readonly MyDayItem[];
+  /**
+   * All of today's tasks, scheduled and unscheduled, in the unscheduled
+   * order: highest score first, done and skipped ones after the others.
+   * What the list layout shows (#197).
+   */
+  readonly all: readonly MyDayItem[];
 }
 
 /** Reads today's My Day. Errors are thrown as they are. */
@@ -147,6 +153,6 @@ export function createReadMyDay(deps: {
     scheduled.sort(
       (a, b) => a.schedule.start.getTime() - b.schedule.start.getTime(),
     );
-    return { range, scheduled, unscheduled };
+    return { range, scheduled, unscheduled, all: ordered };
   };
 }

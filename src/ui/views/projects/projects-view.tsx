@@ -37,6 +37,10 @@ import type { CalendarDate, TaskId } from "../../../domain/task/task";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import type { OpenQuickCapture } from "../../capture/quick-capture-popup";
+import {
+  type LayoutChoice,
+  LayoutSwitch,
+} from "../../components/layout-switch";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { projectStatusLabel } from "../../components/project-status-label";
 import { ViewHeader } from "../../components/view-header";
@@ -99,10 +103,7 @@ import {
   isGroupCollapsed,
   type ProjectGroupsStore,
 } from "./project-groups-store";
-import {
-  type ProjectLayoutStore,
-  projectLayoutFrom,
-} from "./project-layout-store";
+import type { ProjectLayout, ProjectLayoutStore } from "./project-layout-store";
 
 export interface ProjectsViewDeps {
   readProjectList: ReadProjectList;
@@ -353,40 +354,14 @@ function DetailsContent<
 }
 
 /**
- * The layout switch (#166), first in the toolbar: icons only, one choice for
- * every project, kept in memory.
+ * Each layout's icon and name in the layout switch (#166), first in the
+ * toolbar: one choice for every project, kept in memory.
  */
-function LayoutSwitch(props: { store: ProjectLayoutStore }) {
-  const { Segmented } = orca.components;
-  const layout = React.useSyncExternalStore(
-    props.store.subscribe,
-    props.store.current,
-  );
-  const icon = (className: string, label: string) => (
-    <span
-      className="nextaction-layout-icon"
-      role="img"
-      aria-label={label}
-      title={label}
-    >
-      <i className={className} aria-hidden="true" />
-    </span>
-  );
-  return (
-    <Segmented
-      role="group"
-      aria-label={t("Layout")}
-      className="nextaction-layout-switch"
-      selected={layout}
-      options={[
-        { value: "tree", jsx: icon("ti ti-list-tree", t("Tree")) },
-        { value: "board", jsx: icon("ti ti-layout-kanban", t("Board")) },
-        { value: "gantt", jsx: icon("ti ti-timeline", t("Gantt")) },
-      ]}
-      onChange={(value) => props.store.set(projectLayoutFrom(value))}
-    />
-  );
-}
+const layoutChoices: Record<ProjectLayout, LayoutChoice> = {
+  tree: { icon: "ti ti-list-tree", label: () => t("Tree") },
+  board: { icon: "ti ti-layout-kanban", label: () => t("Board") },
+  gantt: { icon: "ti ti-timeline", label: () => t("Gantt") },
+};
 
 /**
  * The board's grouping switch (GLOSSARY: 分列方式, #171), beside the layout
@@ -473,7 +448,7 @@ function DetailsBoard(props: {
   return (
     <>
       <div className="nextaction-toolbar">
-        <LayoutSwitch store={deps.layout} />
+        <LayoutSwitch store={deps.layout} choices={layoutChoices} />
         <GroupingSwitch store={stores.grouping} />
         <AllTasksSearchBox
           search={filter.search}
@@ -581,7 +556,7 @@ function DetailsGantt(props: {
   return (
     <>
       <div className="nextaction-toolbar">
-        <LayoutSwitch store={deps.layout} />
+        <LayoutSwitch store={deps.layout} choices={layoutChoices} />
         <GanttScaleSwitch store={deps.gantt.scale} />
         <AllTasksSearchBox
           search={filter.search}
@@ -710,7 +685,7 @@ function DetailsTree(props: {
   return (
     <>
       <div className="nextaction-toolbar">
-        <LayoutSwitch store={deps.layout} />
+        <LayoutSwitch store={deps.layout} choices={layoutChoices} />
         <AllTasksSearchBox
           search={filter.search}
           onChange={(search) => stores.filter.set({ ...filter, search })}
