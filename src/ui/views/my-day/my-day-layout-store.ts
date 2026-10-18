@@ -1,12 +1,12 @@
-// The My Day view's layout (GLOSSARY: 布局, #197): the timeline layout or
-// the list. It lives in the plugin instance's memory: each load starts from
-// the "My Day default layout" setting, and a change of that setting
-// overrides it at once (platform/panel-feature.ts). Never written with
-// `plugins.setData`.
+// The My Day view's layout (GLOSSARY: 布局, #197): the timeline layout, the
+// list or the quadrants (GLOSSARY: 四象限, #198). It lives in the plugin
+// instance's memory: each load starts from the "My Day default layout"
+// setting, and a change of that setting overrides it at once
+// (platform/panel-feature.ts). Never written with `plugins.setData`.
 import { createMemoryStore } from "../../components/memory-store";
 
 /** The layouts in the order offered (the header's switch, the setting). */
-export const myDayLayouts = ["timeline", "list"] as const;
+export const myDayLayouts = ["timeline", "list", "matrix"] as const;
 
 export type MyDayLayout = (typeof myDayLayouts)[number];
 

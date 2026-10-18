@@ -194,6 +194,12 @@ const zhCN: Record<string, string> = {
     "我的一天视图用哪种布局呈现今天的任务。修改后立即切换。",
   "Timeline layout": "时间轴布局",
   List: "列表",
+  // The quadrant layout (GLOSSARY: 四象限, #198).
+  Quadrants: "四象限",
+  "Important and urgent": "重要且紧急",
+  "Important, not urgent": "重要不紧急",
+  "Urgent, not important": "紧急不重要",
+  "Not important, not urgent": "不重要不紧急",
   "Task panel": "任务属性面板",
   Close: "关闭",
   Status: "状态",

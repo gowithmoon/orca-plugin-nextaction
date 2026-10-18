@@ -7,8 +7,12 @@
 // tier), and fills the view's height: each area scrolls by itself. Every
 // card there has a button for the schedule popup (#84). The list: all of
 // today's tasks in one column by score, done and skipped ones last, with no
-// schedules; the task panel beside the view when wide enough. Between the next actions and all tasks in the
-// navigation, with no count there. It reads when the plugin panel opens and
+// schedules; the task panel beside the view when wide enough. The
+// quadrants (GLOSSARY: 四象限, #198): the same tasks in four quadrants by
+// their own importance and urgency, two by two or, narrow, one above the
+// other, by the view's own width; no schedules, and the task panel always in
+// the popup. Between the next actions and all tasks in the navigation, with
+// no count there. It reads when the plugin panel opens and
 // again on every task change signal (ADR 0007); open across the day boundary,
 // it moves on to the new day. An unscheduled card, or a timeline card by its
 // body, dragged onto a block in a note panel links the task there (#127).
@@ -27,6 +31,11 @@ import type {
   ReadMyDayCandidates,
 } from "../../../application/usecases/read-my-day-candidates";
 import type { MyDaySchedule } from "../../../domain/task/my-day";
+import {
+  type Quadrant,
+  quadrantOf,
+  quadrants,
+} from "../../../domain/task/quadrant";
 import type { CalendarDate } from "../../../domain/task/task";
 import type { SelectOption } from "../../../orca.d.ts";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
@@ -53,7 +62,7 @@ import {
   useViewQuery,
   type ViewQuery,
 } from "../../hooks/use-view-query";
-import { usePanel } from "../../panel/panel-context";
+import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import {
@@ -239,25 +248,23 @@ function UnscheduledItem(props: {
 }
 
 /**
- * The list layout (#197): all of today's tasks, highest score first, done
- * and skipped ones last and faded, as the unscheduled area shows them; no
- * schedules and no schedule button.
+ * Cards for `items` in their order, with no schedule button: the list and
+ * each quadrant. Done and skipped ones faded, as in the unscheduled area.
  */
-function MyDayList(props: {
-  read: TodaysMyDay;
+function MyDayCards(props: {
+  items: readonly MyDayItem[];
   today: CalendarDate;
   deps: MyDayViewDeps;
 }) {
-  const { read, today, deps } = props;
+  const { items, today, deps } = props;
   const actions = useTaskActions(deps.taskActions);
   const menuItems = deps.menuItems();
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
-  if (read.all.length === 0) return <NothingInMyDay />;
   return (
     <ul className="nextaction-task-list">
-      {read.all.map((item) => (
-        <MyDayListItem key={item.task.id} item={item}>
+      {items.map((item) => (
+        <MyDayCardItem key={item.task.id} item={item}>
           <TaskCard
             task={item.task}
             today={today}
@@ -272,15 +279,91 @@ function MyDayList(props: {
             skippedToday={item.skipped}
             project={item.project}
           />
-        </MyDayListItem>
+        </MyDayCardItem>
       ))}
     </ul>
   );
 }
 
-/** A list card, dragged by a press anywhere on it onto a note (#127). */
-function MyDayListItem(props: { item: MyDayItem; children: React.ReactNode }) {
+/** A list or quadrant card, dragged by a press anywhere on it onto a note (#127). */
+function MyDayCardItem(props: { item: MyDayItem; children: React.ReactNode }) {
   return <li {...useCardDrag(props.item.task)}>{props.children}</li>;
+}
+
+/**
+ * The list layout (#197): all of today's tasks, highest score first, done
+ * and skipped ones last and faded, as the unscheduled area shows them; no
+ * schedules and no schedule button.
+ */
+function MyDayList(props: {
+  read: TodaysMyDay;
+  today: CalendarDate;
+  deps: MyDayViewDeps;
+}) {
+  const { read, today, deps } = props;
+  if (read.all.length === 0) return <NothingInMyDay />;
+  return <MyDayCards items={read.all} today={today} deps={deps} />;
+}
+
+/** Each quadrant's title. */
+const quadrantTitles: Record<Quadrant, () => string> = {
+  importantUrgent: () => t("Important and urgent"),
+  importantNotUrgent: () => t("Important, not urgent"),
+  urgentNotImportant: () => t("Urgent, not important"),
+  notImportantNotUrgent: () => t("Not important, not urgent"),
+};
+
+/**
+ * Today's tasks by quadrant, each keeping the order of `items`: by score,
+ * done and skipped ones last.
+ */
+function byQuadrant(
+  items: readonly MyDayItem[],
+): Record<Quadrant, MyDayItem[]> {
+  const grouped: Record<Quadrant, MyDayItem[]> = {
+    importantUrgent: [],
+    importantNotUrgent: [],
+    urgentNotImportant: [],
+    notImportantNotUrgent: [],
+  };
+  for (const item of items) grouped[quadrantOf(item.task)].push(item);
+  return grouped;
+}
+
+/**
+ * The quadrant layout (#198): all of today's tasks in their quadrants, by
+ * their own importance and urgency, by score within each, done and skipped
+ * ones last and faded. Every quadrant shows its title, empty or not. No
+ * schedules and no schedule button.
+ */
+function MyDayMatrix(props: {
+  read: TodaysMyDay;
+  today: CalendarDate;
+  deps: MyDayViewDeps;
+}) {
+  const { read, today, deps } = props;
+  if (read.all.length === 0) return <NothingInMyDay />;
+  const grouped = byQuadrant(read.all);
+  return (
+    <div className="nextaction-my-day-matrix">
+      {quadrants.map((quadrant) => (
+        <section
+          key={quadrant}
+          className="nextaction-my-day-quadrant"
+          aria-label={quadrantTitles[quadrant]()}
+        >
+          <div className="nextaction-my-day-section-header">
+            <h3 className="nextaction-my-day-section-title">
+              {quadrantTitles[quadrant]()}
+            </h3>
+          </div>
+          <div className="nextaction-my-day-section-body">
+            <MyDayCards items={grouped[quadrant]} today={today} deps={deps} />
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 function TimelineArea(props: {
@@ -321,6 +404,7 @@ const layoutChoices: Record<
 > = {
   timeline: { icon: "ti ti-clock", label: () => t("Timeline layout") },
   list: { icon: "ti ti-list", label: () => t("List") },
+  matrix: { icon: "ti ti-layout-grid", label: () => t("Quadrants") },
 };
 
 /** The header's layout switch (#197), as the project details' (#166). */
@@ -360,8 +444,8 @@ function LayoutSwitch(props: { store: MyDayLayoutStore }) {
 /**
  * The header's controls and the layout shown, from one read. Loading,
  * paused and failed show once: in the unscheduled area in the timeline
- * layout, in place of the list in the list; the timeline shows once there
- * is a read.
+ * layout, in place of the list or the quadrants in those; the timeline
+ * shows once there is a read.
  */
 function MyDayAreas(props: {
   query: ViewQuery<TodaysMyDay>;
@@ -373,6 +457,9 @@ function MyDayAreas(props: {
     deps.layout.subscribe,
     deps.layout.current,
   );
+  // The quadrants need the width: no side pane beside them, even in the
+  // wide tier; their tasks open in the popup (#198), as on the board.
+  useWithoutSidePane(layout === "matrix");
   // What a drop wrote shows at once, until a read after it arrives (#85).
   const { shown: state, commit } = useOptimisticMyDay(
     query,
@@ -439,6 +526,14 @@ function MyDayAreas(props: {
       {layout === "list" ? (
         <div className="nextaction-my-day-list">
           {read ? <MyDayList read={read} today={today} deps={deps} /> : notice}
+        </div>
+      ) : layout === "matrix" ? (
+        <div className="nextaction-my-day-list">
+          {read ? (
+            <MyDayMatrix read={read} today={today} deps={deps} />
+          ) : (
+            notice
+          )}
         </div>
       ) : (
         <MyDayDragProvider value={drag.current}>

@@ -1,6 +1,7 @@
 // The My Day view (#83): its layout shell, which puts the unscheduled area
 // and the timeline side by side once the view itself is wide enough, one
-// above the other otherwise. The view's own width decides, not the plugin
+// above the other otherwise; the quadrants (#198) likewise two by two or in
+// one column. The view's own width decides, not the plugin
 // panel's tier: the side pane takes part of the panel. The shell fills the
 // view's height and each area scrolls by itself, so the timeline takes all
 // the room there is (one above the other, the unscheduled area takes at most
@@ -87,6 +88,30 @@ export const myDayCss = `
 /* The header's row stays its height; the layout below takes the rest. */
 .nextaction-my-day-toolbar {
   flex: 0 0 auto;
+}
+
+/*
+ * The quadrant layout (#198): one quadrant above the other in the order
+ * important and urgent, important not urgent, urgent not important, neither;
+ * two by two once the view is wide enough (below). It scrolls as a whole in
+ * the list's frame; every quadrant shows its title, empty or not.
+ */
+.nextaction-my-day-matrix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--orca-spacing-md);
+  min-width: 0;
+}
+
+.nextaction-my-day-quadrant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
+  min-height: 4rem;
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border: 1px solid color-mix(in srgb, var(--orca-color-border) 60%, transparent);
+  border-radius: var(--orca-radius-md);
 }
 
 /* The list layout (#197): one column filling the view's height, scrolling by itself. */
@@ -468,6 +493,9 @@ export const myDayCss = `
 }
 
 @container nextaction-my-day (min-width: ${myDaySideBySideWidth}px) {
+  .nextaction-my-day-matrix {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .nextaction-my-day-layout {
     flex-direction: row;
   }
