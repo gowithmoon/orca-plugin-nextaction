@@ -734,7 +734,9 @@ const zhCN: Record<string, string> = {
   "Could not create the tasks: ${reason}": "没能新建任务：${reason}",
   // AI summary (#205).
   "AI summary": "AI 小结",
-  "AI summary (${day})": "AI 小结（${day}）",
+  "NextAction review summary (${day})": "NextAction任务回顾小结（${day}）",
+  "This period": "这段时间",
+  "Worth noting": "值得留意",
   "Write it again": "重新生成",
   "The AI is writing…": "AI 正在写……",
   "Replace your edited summary with a new one?":

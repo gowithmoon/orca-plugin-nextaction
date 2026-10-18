@@ -67,6 +67,23 @@
 - **连续三次 `insertBlock(父块对象, "lastChild", …)`，父块对象是写入前用 `get-block` 取的同一份时，顺序反了**：父块的子块成了"三、二、一"（F1）。Orca 按传入对象的 `children` 判断"最后"，那份对象不会随写入更新。
 - `batchInsertText(日记, "lastChild", "NA16 F2 小结\n- 第一条 #…\n- 第二条", false, true)`：只建出一个顶层块，后面的列表行成了它的子块；没有生成标签；一次撤销撤回（F2）。
 
+### 按层级写进日记（H4）
+
+2026-10-18 在 Orca 中从插件面板实测（插件面板为活动面板），以下五步放在**一个** `invokeGroup` 中：
+
+1. `top = insertBlock(日记, "lastChild", [{ t: "t", v: 标题 }])`
+2. `s1 = insertBlock(await get-block(top), "lastChild", [{ t: "t", v: "这段时间" }])`
+3. `batchInsertText(await get-block(s1), "lastChild", "- 第一句 **加粗**\n- 第二句 #词", false, true)`
+4. `s2 = insertBlock(await get-block(s1), "after", [{ t: "t", v: "值得留意" }])`
+5. `batchInsertText(await get-block(s2), "lastChild", "- 一条\n- 两条", false, true)`
+
+结果：
+
+- `top` 在日记下；`s1`、`s2` 是 `top` 的子块，顺序正确。
+- 每部分的条目成为该部分块的子块，类型为列表项（`ul`），加粗保留。
+- `#词` 保持为文字，没有生成别名或标签。
+- 一次 Ctrl+Z 全部撤回。
+
 ### 块菜单多选（D）
 
 - `worksOnMultipleBlocks: true` 的项在多选时收到**选中的那几个块**（不含它们的子块），按笔记中的顺序；只右键一个块时收到只有一个元素的数组。`rootBlockId` 是面板的根块（这里是日记）。
@@ -78,7 +95,8 @@
 - 交给 AI 的所选内容、任务说明和 AI 说明由插件自己拼成缩进的大纲：用 `get-block-tree` 取回后代，每个块只转换它自己的内容（`blockConvert` 不带子块），按层级缩进，去掉转换结果首尾的空白，结果为空或只有 `>` 的块不占一行（它的子块照常缩进）；已经是任务的块由插件标为 `[已是任务]`（插件读块时就知道它是不是任务）。不用整棵转换，也不用块的 `text` 字段。
 - 转换前，把块内行内引用的目标块、镜像块的源块中不在 `orca.state.blocks` 里的，用 `get-block` 取回放进缓存（只补缺，不覆盖，与 `move-blocks` 相同），否则引用的文字会丢失（G3）。被转换的块本身不必放进缓存。
 - 提取任务、拆分子任务写入多个任务时，在一个 `invokeGroup` 中用 `insertBlock` 加 `insertTag`（状态等初始值随 `insertTag` 一起写入）：放在所选块下方时按倒序插在它之后（C1）；放在子块或日记末尾时，第一条插为最后子块，之后每一条插在上一条新块之后，参考块每次用 `get-block` 重新取回。不能拿同一份父块对象连续 `lastChild`，顺序会反（F1）。参考块不必写进缓存（C2）。
-- AI 小结写进日记用 `batchInsertText`，`skipTags` 为 `true`。第一行是插件加的"AI 小结（日期）"，小结的内容按 Orca 的解析成为它的子块，写进日记后可以整块折叠（F2）。
+- AI 小结按层级写进日记（H4），全部在一个 `invokeGroup` 中：先用 `insertBlock` 把插件加的标题块"NextAction任务回顾小结（日期）"插为日记的最后子块；每部分的名称（"这段时间""值得留意"）用 `insertBlock` 建成标题块的子块，第一部分插为最后子块，之后每部分插在上一部分之后；每部分的条目用 `batchInsertText(部分块, "lastChild", "- …", false, true)` 写成它的子块。参考块每次用 `get-block` 重新取回（F1）。整个小结可以整块折叠，一次撤销撤回，`#` 不变成标签。不再把整段文字交给一次 `batchInsertText`：AI 写出的 Markdown 标题会自己成为顶层块（C3）。
+- 写入前插件把（用户改过的）文字读成几部分：不以列表符号开头的非空行开始一部分，`- ` 开头的行归入最近的一部分；第一部分之前的条目直接写在标题块下面。提示词把两部分的名称按界面语言原样给 AI，要求照写、不翻译。
 - 提取任务的块菜单项用 `worksOnMultipleBlocks: true`，单选和多选都覆盖；收到的块已按笔记顺序排好，各自再读全部子块。
 
 ## 没有实测

@@ -7,6 +7,7 @@ import type { ReadPromptContext } from "../ai/prompt-context";
 import {
   pad,
   type SummaryMaterial,
+  type SummaryPartNames,
   type SummaryTask,
   summaryMessages,
 } from "../ai/prompts";
@@ -91,6 +92,8 @@ export function createWriteAiSummary(deps: {
   dayBoundary: DayBoundarySetting;
   /** Today, the interface language and the AI instructions, per request. */
   promptContext: ReadPromptContext;
+  /** The two parts' names in the interface language: "这段时间", "值得留意". */
+  partNames: SummaryPartNames;
 }): WriteAiSummary {
   return async function* (signal) {
     const boundary = deps.dayBoundary.current();
@@ -99,7 +102,7 @@ export function createWriteAiSummary(deps: {
       deps.promptContext(),
     ]);
     yield* deps.chat.stream(
-      summaryMessages(summaryMaterial(read, boundary), context),
+      summaryMessages(summaryMaterial(read, boundary), context, deps.partNames),
       signal,
     );
   };

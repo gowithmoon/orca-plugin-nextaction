@@ -6,6 +6,7 @@ import {
   type ConvertToTaskResult,
   type DiscardableData,
   type InitialProperties,
+  type JournalSummaryPart,
   type NewTask,
   type NewTasksPlacement,
   type NoteTarget,
@@ -1480,30 +1481,67 @@ export function createOrcaTaskRepository(
       return id;
     },
 
-    async appendTextToJournal(
+    async appendSummaryToJournal(
       title: string,
-      body: string,
+      parts: readonly JournalSummaryPart[],
       now: Date,
     ): Promise<void> {
       // As appendTaskToJournal: the journal by local date, created when
-      // missing, before the write below, so a journal it creates is not
+      // missing, before the group below, so a journal it creates is not
       // removed by the one undo (journal-capture J2, J3).
       const journal = await journalBlock(now);
-      // One batchInsertText, as measured (orca-ai F2): the first line is one
-      // top-level block, the lines below it its children, one undo, no tag
-      // created. The title is kept to one line. A Markdown heading in the
-      // body starts a top-level block of its own instead (C3); not worked
-      // around here, as writing it any other way is not measured. The AI
-      // summary's prompt asks for no headings.
-      await invokeEditorCommand(
-        "core.editor.batchInsertText",
-        journal,
-        "lastChild",
-        `${title.replace(/\s*\n\s*/g, " ")}\n${body}`,
-        // Markdown parsed; tags not extracted (orca-ai C3).
-        false,
-        true,
-      );
+      const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " ");
+      const inserted = (id: unknown): number => {
+        if (typeof id !== "number") {
+          throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+        }
+        return id;
+      };
+      // As measured (orca-ai H4), in one group, one undo: the title as the
+      // journal's last child; the first part's block as the title's last
+      // child, each next one after the part before; each part's items as
+      // its block's children with batchInsertText, Markdown parsed and tags
+      // not extracted. The reference is fetched afresh with get-block before
+      // each write: lastChild of one parent object again and again puts
+      // them in reverse (F1). A fetched block needs no cache (C2).
+      await invokeGroup(async () => {
+        const top = inserted(
+          await invokeEditorCommand(
+            "core.editor.insertBlock",
+            journal,
+            "lastChild",
+            // Plain text: tags and formatting in it are not parsed.
+            [{ t: "t", v: oneLine(title) }],
+          ),
+        );
+        let previousPart: number | undefined;
+        for (const part of parts) {
+          // A part with no name puts its items straight below the title, as
+          // its last children: written in order, they stay in order.
+          let under = top;
+          if (part.heading !== "") {
+            under = inserted(
+              await invokeEditorCommand(
+                "core.editor.insertBlock",
+                await fetchBlock(previousPart ?? top),
+                previousPart === undefined ? "lastChild" : "after",
+                [{ t: "t", v: oneLine(part.heading) }],
+              ),
+            );
+            previousPart = under;
+          }
+          if (part.items.length === 0) continue;
+          await invokeEditorCommand(
+            "core.editor.batchInsertText",
+            await fetchBlock(under),
+            "lastChild",
+            part.items.map((item) => `- ${oneLine(item)}`).join("\n"),
+            // Markdown parsed; tags not extracted (orca-ai C3, H4).
+            false,
+            true,
+          );
+        }
+      });
     },
 
     async appendSubtask(

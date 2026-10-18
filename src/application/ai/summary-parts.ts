@@ -1,12 +1,7 @@
 // The AI summary's text, as the user edited it, read into its parts (#201
 // AI 小结): each part's name and the list items below it, for writing to the
 // journal as blocks under blocks. Pure.
-
-/** One part of the summary: its name line and its items. */
-export interface SummaryPart {
-  readonly heading: string;
-  readonly items: readonly string[];
-}
+import type { JournalSummaryPart } from "../ports/task-repository";
 
 /**
  * How a list item starts: "- ", or "* " and "• " the user may type; a marker
@@ -14,7 +9,13 @@ export interface SummaryPart {
  */
 const itemMarker = /^[-*•](?:\s|$)/;
 
-export function summaryParts(text: string): SummaryPart[] {
+/**
+ * `text`'s parts in order. A non-blank line that is not a list item starts a
+ * part, named by it; a list item goes to the latest part, its marker
+ * removed; items before any part go to a part with an empty name. Blank
+ * lines and empty items are left out.
+ */
+export function summaryParts(text: string): JournalSummaryPart[] {
   const parts: { heading: string; items: string[] }[] = [];
   for (const line of text.split("\n")) {
     const trimmed = line.trim();

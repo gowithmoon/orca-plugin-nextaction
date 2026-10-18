@@ -356,13 +356,21 @@ export function createPanelFeature(deps: {
         chat: createOrcaAiChat(),
         dayBoundary: deps.dayBoundary,
         promptContext: deps.promptContext,
+        // Given to the AI to write as they are, so the parts read back into
+        // the journal's blocks under these names (orca-ai H4).
+        partNames: {
+          period: t("This period"),
+          notable: t("Worth noting"),
+        },
       }),
       writeSummaryToJournal: createWriteSummaryToJournal({
         repository,
         clock: systemClock,
         dayBoundary: deps.dayBoundary,
         summaryTitle: (day) =>
-          t("AI summary (${day})", { day: formatDate(day, day) }),
+          t("NextAction review summary (${day})", {
+            day: formatDate(day, day),
+          }),
       }),
       completeFullReview: createCompleteFullReview({
         clock: systemClock,

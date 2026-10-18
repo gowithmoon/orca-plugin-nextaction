@@ -8,6 +8,7 @@ import type {
   ChoiceProperty,
   CompletionHistoryRead,
   ConvertToTaskResult,
+  JournalSummaryPart,
   NotConvertibleReason,
   NoteTarget,
   OutlineBlock,
@@ -128,13 +129,13 @@ export interface InMemoryTaskRepository extends TaskRepository {
    */
   journalOf(id: number): CalendarDate | undefined;
   /**
-   * Every `appendTextToJournal` that succeeded, oldest first, with the day
-   * of the journal it went to; the blocks themselves are not modelled.
+   * Every `appendSummaryToJournal` that succeeded, oldest first, with the
+   * day of the journal it went to; the blocks themselves are not modelled.
    */
-  journalTexts(): readonly {
+  journalSummaries(): readonly {
     day: CalendarDate;
     title: string;
-    body: string;
+    parts: readonly JournalSummaryPart[];
   }[];
   /** Every `moveTask` that succeeded, oldest first. */
   moves(): readonly TaskMove[];
@@ -226,7 +227,11 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     [];
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
-  const journalTexts: { day: CalendarDate; title: string; body: string }[] = [];
+  const journalSummaries: {
+    day: CalendarDate;
+    title: string;
+    parts: readonly JournalSummaryPart[];
+  }[] = [];
   /** IDs of new blocks, far from the ones tests pick. */
   let nextId = 100_000;
   /** Reference IDs of 所属项目 values, far from block IDs too. */
@@ -510,7 +515,14 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     journalOf: (id) => journalDays.get(id),
 
-    journalTexts: () => journalTexts.map((entry) => ({ ...entry })),
+    journalSummaries: () =>
+      journalSummaries.map((entry) => ({
+        ...entry,
+        parts: entry.parts.map((part) => ({
+          heading: part.heading,
+          items: [...part.items],
+        })),
+      })),
 
     moves: () => [...moves],
 
@@ -986,17 +998,22 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return id;
     },
 
-    async appendTextToJournal(title, body, now) {
+    async appendSummaryToJournal(title, parts, now) {
+      // Copied, so the caller changing its parts later changes nothing here.
+      const written = parts.map((part) => ({
+        heading: part.heading,
+        items: [...part.items],
+      }));
       write(() => {
         // get-journal-block picks the journal by local date (journal-capture J3).
-        journalTexts.push({
+        journalSummaries.push({
           day: {
             year: now.getFullYear(),
             month: now.getMonth() + 1,
             day: now.getDate(),
           },
           title,
-          body,
+          parts: written,
         });
       });
     },

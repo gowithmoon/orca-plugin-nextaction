@@ -37,6 +37,8 @@ function setup(
     }),
     chat,
     dayBoundary,
+    // The parts' names in the interface language, as the plugin passes them.
+    partNames: { period: "这段时间", notable: "值得留意" },
     promptContext: createReadPromptContext({
       clock,
       dayBoundary,
@@ -209,19 +211,24 @@ describe("write AI summary: what the AI is given", () => {
     );
   });
 
-  it("asks for the two parts' names as plain lines, not Markdown headings, as a heading would become a block of its own in the journal", async () => {
+  it("asks for each part as its name, exactly as given, on a line of its own, then a list of items", async () => {
     const { chat, writeAiSummary } = setup([streamReply("ok")]);
 
     await pieces(writeAiSummary(noSignal()));
 
     const sent = requestText(chat.requests()[0]);
     expect(sent).toContain(
-      'a line reading just "This period", then 2 to 4 sentences',
+      'First part: a line reading just "这段时间", then 2 to 4 items as a "- " list',
     );
     expect(sent).toContain(
-      'a line reading just "Worth noting", then at most 5 items as a "- " list',
+      'Second part: a line reading just "值得留意", then at most 5 items as a "- " list',
+    );
+    expect(sent).toContain(
+      "Write the part names exactly as given here, without translating them",
     );
     expect(sent).toContain("not as Markdown headings: no line starts with #");
+    expect(sent).toContain("Give no advice on what to do");
+    expect(sent).toContain("The whole text stays within 300 characters.");
   });
 
   it("gives the user's AI instructions when they are set", async () => {

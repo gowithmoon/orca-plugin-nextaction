@@ -141,15 +141,25 @@ function withDetails(
 const projectDetail = (task: SummaryTask) =>
   task.project === null ? null : `project: ${task.project}`;
 
+/** The two parts' names, in the interface language, as the AI must write them. */
+export interface SummaryPartNames {
+  /** "这段时间": what was done and skipped. */
+  readonly period: string;
+  /** "值得留意": facts worth the user's attention. */
+  readonly notable: string;
+}
+
 /**
- * The messages that ask for the AI summary; no tools go with them. The two
- * parts' names are asked for as plain lines, not Markdown headings: written
- * to the journal, a heading becomes a top-level block of its own (orca-ai
- * C3), beside the summary's first line instead of below it.
+ * The messages that ask for the AI summary; no tools go with them. Each part
+ * is its name on a plain line, then "- " items: the plugin reads them back
+ * into blocks under blocks for the journal (`summaryParts`, orca-ai H4). The
+ * names are given, not translated by the AI, and asked for as plain lines,
+ * not Markdown headings.
  */
 export function summaryMessages(
   material: SummaryMaterial,
   context: PromptContext,
+  partNames: SummaryPartNames,
 ): AiMessage[] {
   const onDay = (task: SummaryTask & { readonly on: CalendarDate }) =>
     withDetails(task.text, [isoDate(task.on), projectDetail(task)]);
@@ -171,8 +181,9 @@ export function summaryMessages(
 
 Writing rules:
 - Speak only from the lists. Do not judge the user, do not lecture, and do not write empty words of encouragement.
-- First part: a line reading just "This period", then 2 to 4 sentences summing up, by project, what was done and what was skipped.
-- Second part: a line reading just "Worth noting", then at most 5 items as a "- " list, each naming a specific task or project and stating a fact, e.g. "three planned tasks are still not done".
+- First part: a line reading just "${partNames.period}", then 2 to 4 items as a "- " list, each one sentence summing up, by project, what was done and what was skipped.
+- Second part: a line reading just "${partNames.notable}", then at most 5 items as a "- " list, each naming a specific task or project and stating a fact, e.g. "three planned tasks are still not done".
+- Write the part names exactly as given here, without translating them, each on a line of its own; every other line is a "- " item.
 - Write the two part names as plain lines, not as Markdown headings: no line starts with #.
 - Give no advice on what to do: the user makes the final decisions in the review themselves.
 - The whole text stays within 300 characters.

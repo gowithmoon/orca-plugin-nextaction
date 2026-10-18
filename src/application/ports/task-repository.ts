@@ -219,6 +219,15 @@ export interface NoteTarget {
  * (#31), quick capture and the completion history (#32). Step 7 adds the My
  * Day entries (#82).
  */
+/**
+ * One part of the AI summary as written to the journal (#205): its name and
+ * its items, each item one line of Markdown.
+ */
+export interface JournalSummaryPart {
+  readonly heading: string;
+  readonly items: readonly string[];
+}
+
 export interface TaskRepository {
   /**
    * The task with the given block ID, or `null` when that block is not a task
@@ -326,12 +335,18 @@ export interface TaskRepository {
   /**
    * Writes a block `title`, as plain text, at the end of the journal of the
    * calendar day `now` falls on in local time (not the logical day, ADR
-   * 0005), creating that journal if it does not exist yet, and `body`, as
-   * Markdown, as its children (#205): the whole folds as one block. Tags in
-   * either are left as text, never created (orca-ai C3). The user undoes it
-   * with one undo; a failed write writes nothing.
+   * 0005), creating that journal if it does not exist yet (#205). Below it,
+   * in order, a block for each part's `heading`, as plain text, with the
+   * part's items, as Markdown list items, as its children; a part with an
+   * empty heading puts its items directly below `title`. The whole folds as
+   * one block. Tags anywhere are left as text, never created (orca-ai C3,
+   * H4). The user undoes it with one undo; a failed write writes nothing.
    */
-  appendTextToJournal(title: string, body: string, now: Date): Promise<void>;
+  appendSummaryToJournal(
+    title: string,
+    parts: readonly JournalSummaryPart[],
+    now: Date,
+  ): Promise<void>;
 
   /**
    * Creates an inbox task with `text`, as plain text, as the last child

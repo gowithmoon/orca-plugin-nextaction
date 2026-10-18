@@ -12,7 +12,8 @@ function setup(now = "2026-10-18T09:00:00+08:00") {
     clock: createFixedClock(now),
     dayBoundary: createFixedDayBoundary(),
     // As the plugin words it, here without translation.
-    summaryTitle: (day: CalendarDate) => `AI summary (${day.month}/${day.day})`,
+    summaryTitle: (day: CalendarDate) =>
+      `NextAction review summary (${day.month}/${day.day})`,
   });
   return { repository, writeSummaryToJournal };
 }
@@ -20,20 +21,37 @@ function setup(now = "2026-10-18T09:00:00+08:00") {
 const october = (day: number) => ({ year: 2026, month: 10, day });
 
 describe("write summary to journal", () => {
-  it("writes the edited text below a first line naming the review's day, at the end of today's journal", async () => {
+  it("writes the edited text's parts and their items below a first block naming the review's day, at the end of today's journal", async () => {
     const { repository, writeSummaryToJournal } = setup();
 
     const result = await writeSummaryToJournal(
-      "This period\nYou moved house. #done stays text",
+      "This period\n- You moved house.\n- #done stays text\nWorth noting\n- Pay the rent is overdue",
     );
 
     expect(result).toEqual({ kind: "written" });
-    expect(repository.journalTexts()).toEqual([
+    expect(repository.journalSummaries()).toEqual([
       {
         day: october(18),
-        title: "AI summary (10/18)",
-        body: "This period\nYou moved house. #done stays text",
+        title: "NextAction review summary (10/18)",
+        parts: [
+          {
+            heading: "This period",
+            items: ["You moved house.", "#done stays text"],
+          },
+          { heading: "Worth noting", items: ["Pay the rent is overdue"] },
+        ],
       },
+    ]);
+  });
+
+  it("writes the text as the user edited it: an item added, a part removed", async () => {
+    const { repository, writeSummaryToJournal } = setup();
+
+    await writeSummaryToJournal("- My own line\nWorth noting\n- One\n- Two");
+
+    expect(repository.journalSummaries()[0]?.parts).toEqual([
+      { heading: "", items: ["My own line"] },
+      { heading: "Worth noting", items: ["One", "Two"] },
     ]);
   });
 
@@ -43,18 +61,23 @@ describe("write summary to journal", () => {
       "2026-10-19T03:00:00+08:00",
     );
 
-    await writeSummaryToJournal("Late review");
+    await writeSummaryToJournal("This period\n- Late review");
 
-    expect(repository.journalTexts()).toEqual([
-      { day: october(19), title: "AI summary (10/18)", body: "Late review" },
+    expect(repository.journalSummaries()).toEqual([
+      {
+        day: october(19),
+        title: "NextAction review summary (10/18)",
+        parts: [{ heading: "This period", items: ["Late review"] }],
+      },
     ]);
   });
 
-  it("writes nothing for blank text", async () => {
+  it("writes nothing for blank text, or text with nothing but empty items", async () => {
     const { repository, writeSummaryToJournal } = setup();
 
     expect(await writeSummaryToJournal("  \n ")).toEqual({ kind: "empty" });
-    expect(repository.journalTexts()).toEqual([]);
+    expect(await writeSummaryToJournal("- \n-\n")).toEqual({ kind: "empty" });
+    expect(repository.journalSummaries()).toEqual([]);
     expect(repository.writeCount()).toBe(0);
   });
 
@@ -62,9 +85,9 @@ describe("write summary to journal", () => {
     const { repository, writeSummaryToJournal } = setup();
     repository.failWrites(new Error("no note panel"));
 
-    await expect(writeSummaryToJournal("This period")).rejects.toThrow(
+    await expect(writeSummaryToJournal("This period\n- One")).rejects.toThrow(
       "no note panel",
     );
-    expect(repository.journalTexts()).toEqual([]);
+    expect(repository.journalSummaries()).toEqual([]);
   });
 });
