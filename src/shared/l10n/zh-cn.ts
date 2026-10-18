@@ -195,7 +195,7 @@ const zhCN: Record<string, string> = {
   "My Day default layout": "我的一天默认布局",
   "The layout the My Day view shows today's tasks in. Changing it switches the layout at once.":
     "我的一天视图用哪种布局呈现今天的任务。修改后立即切换。",
-  "Timeline layout": "时间轴布局",
+  "Timeline layout": "时间轴",
   List: "列表",
   // The Eisenhower Matrix layout (GLOSSARY: 四象限, #198) and its quadrants.
   "Eisenhower Matrix": "四象限",
