@@ -111,7 +111,7 @@ export const settingsDefinition: SettingsDefinition = {
       choices: [
         { label: t("Timeline layout"), value: "timeline" },
         { label: t("List"), value: "list" },
-        { label: t("Quadrants"), value: "matrix" },
+        { label: t("Eisenhower Matrix"), value: "matrix" },
       ],
       defaultValue: "timeline",
     }),

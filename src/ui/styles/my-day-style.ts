@@ -91,10 +91,10 @@ export const myDayCss = `
 }
 
 /*
- * The quadrant layout (#198): one quadrant above the other in the order
+ * The Eisenhower Matrix layout (#198): one quadrant above the other in the order
  * important and urgent, important not urgent, urgent not important, neither;
  * two by two once the view is wide enough (below). It scrolls as a whole in
- * the list's frame; every quadrant shows its title, empty or not.
+ * the frame it shares with the list; every quadrant shows its title, empty or not.
  */
 .nextaction-my-day-matrix {
   display: grid;
@@ -114,8 +114,11 @@ export const myDayCss = `
   border-radius: var(--orca-radius-md);
 }
 
-/* The list layout (#197): one column filling the view's height, scrolling by itself. */
-.nextaction-my-day-list {
+/*
+ * The frame of the list (#197) and the Eisenhower Matrix (#198): fills the
+ * view's height below the header and scrolls by itself.
+ */
+.nextaction-my-day-scroll {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;

@@ -60,46 +60,41 @@ function showing(drop: PendingDrop, shownAt: number): boolean {
   return drop.writtenAt === undefined || shownAt <= drop.writtenAt;
 }
 
-/** `item` with the importance and urgency `ratings` writes. */
-function withRatings<Item extends MyDayItem>(
-  item: Item,
-  ratings: QuadrantChanges | undefined,
-): Item {
-  return ratings ? { ...item, task: { ...item.task, ...ratings } } : item;
+/** `read` with the importance and urgency quadrant drops write (#199). */
+function withRatings(
+  read: TodaysMyDay,
+  ratings: ReadonlyMap<TaskId, QuadrantChanges>,
+): TodaysMyDay {
+  if (ratings.size === 0) return read;
+  // Only the task's values change: the order is as read.
+  const rated = <Item extends MyDayItem>(items: readonly Item[]) =>
+    items.map((item) => {
+      const changes = ratings.get(item.task.id);
+      return changes ? { ...item, task: { ...item.task, ...changes } } : item;
+    });
+  return {
+    range: read.range,
+    scheduled: rated(read.scheduled),
+    unscheduled: rated(read.unscheduled),
+    all: rated(read.all),
+  };
 }
 
-/** `read` with the drops laid over it; `read` itself without any. */
-function withDrops(
+/**
+ * `read` with the schedules timeline drops write (#85), `null` for
+ * unscheduled: every card where the read will put it.
+ */
+function withSchedules(
   read: TodaysMyDay,
-  changes: ReadonlyMap<TaskId, DropChange>,
+  schedules: ReadonlyMap<TaskId, MyDaySchedule | null>,
 ): TodaysMyDay {
-  if (changes.size === 0) return read;
-  const drops = new Map<TaskId, MyDaySchedule | null>();
-  const ratings = new Map<TaskId, QuadrantChanges>();
-  for (const [id, change] of changes) {
-    if (change.kind === "schedule") drops.set(id, change.schedule);
-    else ratings.set(id, change.ratings);
-  }
-  // A quadrant drop changes only the task's values: the order is as read.
-  const rated = <Item extends MyDayItem>(items: readonly Item[]) =>
-    ratings.size === 0
-      ? items
-      : items.map((item) => withRatings(item, ratings.get(item.task.id)));
-  const all = rated(read.all);
-  if (drops.size === 0) {
-    return {
-      range: read.range,
-      scheduled: rated(read.scheduled),
-      unscheduled: rated(read.unscheduled),
-      all,
-    };
-  }
+  if (schedules.size === 0) return read;
   const scheduled: ScheduledMyDayItem[] = [];
   const unscheduled: MyDayItem[] = [];
   const items: readonly (MyDayItem & { readonly schedule?: MyDaySchedule })[] =
-    [...rated(read.scheduled), ...rated(read.unscheduled)];
+    [...read.scheduled, ...read.unscheduled];
   for (const item of items) {
-    const drop = drops.get(item.task.id);
+    const drop = schedules.get(item.task.id);
     if (drop === undefined) {
       if (item.schedule) scheduled.push({ ...item, schedule: item.schedule });
       else unscheduled.push(item);
@@ -123,7 +118,61 @@ function withDrops(
   );
   unscheduled.sort((a, b) => a.unscheduledOrder - b.unscheduledOrder);
   // A drop changes no task's place among all of today's (the list's order).
-  return { range: read.range, scheduled, unscheduled, all };
+  return { range: read.range, scheduled, unscheduled, all: read.all };
+}
+
+/** `read` with the drops laid over it; `read` itself without any. */
+function withDrops(
+  read: TodaysMyDay,
+  changes: ReadonlyMap<TaskId, DropChange>,
+): TodaysMyDay {
+  if (changes.size === 0) return read;
+  const schedules = new Map<TaskId, MyDaySchedule | null>();
+  const ratings = new Map<TaskId, QuadrantChanges>();
+  for (const [id, change] of changes) {
+    if (change.kind === "schedule") schedules.set(id, change.schedule);
+    else ratings.set(id, change.ratings);
+  }
+  return withSchedules(withRatings(read, ratings), schedules);
+}
+
+/** A drop's change to lay over the read, and the write that makes it. */
+interface DropOverlay {
+  readonly change: DropChange;
+  write(actions: MyDayDropWrites): Promise<boolean>;
+}
+
+/** A drop on the timeline or in the unscheduled area (#85). */
+function scheduleOverlay(drop: MyDayDrop): DropOverlay {
+  const id = drop.task.id;
+  if (drop.kind === "unschedule") {
+    return {
+      change: { kind: "schedule", schedule: null },
+      write: (actions) => actions.unschedule(id),
+    };
+  }
+  const { schedule } = drop;
+  return {
+    change: { kind: "schedule", schedule },
+    // Already snapped; the use case snaps it the same way.
+    write: (actions) =>
+      actions.schedule(id, {
+        start: schedule.start,
+        minutes: (schedule.end.getTime() - schedule.start.getTime()) / minuteMs,
+      }),
+  };
+}
+
+/** A drop in another quadrant (#199). */
+function ratingsOverlay(drop: QuadrantDrop): DropOverlay {
+  return {
+    // As the use case works it out, from the values shown.
+    change: {
+      kind: "ratings",
+      ratings: quadrantChanges(drop.task, drop.target),
+    },
+    write: (actions) => actions.moveToQuadrant(drop.task.id, drop.target),
+  };
 }
 
 /**
@@ -187,31 +236,12 @@ export function useOptimisticMyDay(
       tokens.current += 1;
       const token = tokens.current;
       const id = drop.task.id;
-      const change: DropChange =
-        drop.kind === "quadrant"
-          ? // As the use case works it out, from the values shown.
-            {
-              kind: "ratings",
-              ratings: quadrantChanges(drop.task, drop.target),
-            }
-          : {
-              kind: "schedule",
-              schedule: drop.kind === "schedule" ? drop.schedule : null,
-            };
-      setPending((current) => new Map(current).set(id, { token, change }));
-      const schedule = change.kind === "schedule" ? change.schedule : null;
-      const write =
-        drop.kind === "quadrant"
-          ? actions.moveToQuadrant(id, drop.target)
-          : schedule
-            ? // Already snapped; the use case snaps it the same way.
-              actions.schedule(id, {
-                start: schedule.start,
-                minutes:
-                  (schedule.end.getTime() - schedule.start.getTime()) /
-                  minuteMs,
-              })
-            : actions.unschedule(id);
+      const overlay =
+        drop.kind === "quadrant" ? ratingsOverlay(drop) : scheduleOverlay(drop);
+      setPending((current) =>
+        new Map(current).set(id, { token, change: overlay.change }),
+      );
+      const write = overlay.write(actions);
       void write.then((written) => {
         if (!mounted.current) return;
         // The query's own count, not the rendered state's: a read that

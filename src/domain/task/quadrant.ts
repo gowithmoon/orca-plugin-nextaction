@@ -1,6 +1,7 @@
-// The quadrants of the My Day view's quadrant layout (GLOSSARY: 四象限,
-// #198): a task falls in one by its own importance and urgency, not by the
-// values its score inherits up the parent chain; 5 and above is high. Pure.
+// The quadrants of the My Day view's Eisenhower Matrix layout (GLOSSARY:
+// 四象限, 象限, #198): a task falls in one by its own importance and urgency,
+// not by the values its score inherits up the parent chain; 5 and above is
+// high. Pure.
 import { defaultRating, isRating, type Rating } from "./task";
 
 /**
@@ -15,12 +16,37 @@ export const quadrants = [
 ] as const;
 export type Quadrant = (typeof quadrants)[number];
 
+/**
+ * A task's own importance and urgency as the quadrants read them: either may
+ * be empty or unreadable.
+ */
+export interface QuadrantRatings {
+  readonly importance: number | null;
+  readonly urgency: number | null;
+}
+
+/** Which side of the threshold each quadrant holds importance and urgency on. */
+const quadrantSides: Record<
+  Quadrant,
+  { readonly important: boolean; readonly urgent: boolean }
+> = {
+  importantUrgent: { important: true, urgent: true },
+  importantNotUrgent: { important: true, urgent: false },
+  urgentNotImportant: { important: false, urgent: true },
+  notImportantNotUrgent: { important: false, urgent: false },
+};
+
 /** Importance or urgency from this value up is high. */
 const high: Rating = 5;
+/** A high value lowered across the threshold becomes this. */
+const low: Rating = 4;
 
-/** A rating as the quadrants read it: unreadable or outside 1–7 is 4. */
-function readRating(value: number | null): number {
-  return isRating(value) ? value : defaultRating;
+/**
+ * Whether an importance or urgency is high. A value that is empty, not an
+ * integer or outside 1–7 reads as 4: low.
+ */
+function isHigh(value: number | null): boolean {
+  return (isRating(value) ? value : defaultRating) >= high;
 }
 
 /**
@@ -28,14 +54,16 @@ function readRating(value: number | null): number {
  * A value that is empty, not an integer or outside 1–7 reads as 4, so a task
  * never rated falls in "not important, not urgent".
  */
-export function quadrantOf(ratings: {
-  readonly importance: number | null;
-  readonly urgency: number | null;
-}): Quadrant {
-  const important = readRating(ratings.importance) >= high;
-  const urgent = readRating(ratings.urgency) >= high;
-  if (important) return urgent ? "importantUrgent" : "importantNotUrgent";
-  return urgent ? "urgentNotImportant" : "notImportantNotUrgent";
+export function quadrantOf(ratings: QuadrantRatings): Quadrant {
+  const important = isHigh(ratings.importance);
+  const urgent = isHigh(ratings.urgency);
+  return (
+    quadrants.find(
+      (quadrant) =>
+        quadrantSides[quadrant].important === important &&
+        quadrantSides[quadrant].urgent === urgent,
+    ) ?? "notImportantNotUrgent"
+  );
 }
 
 /** The importance and urgency a move to another quadrant writes. */
@@ -43,9 +71,6 @@ export interface QuadrantChanges {
   readonly importance?: Rating;
   readonly urgency?: Rating;
 }
-
-/** A high value lowered across the threshold becomes this. */
-const low: Rating = 4;
 
 /**
  * What moving a task with this importance and urgency, its own, to quadrant
@@ -55,20 +80,16 @@ const low: Rating = 4;
  * `quadrantOf` reads them: unreadable or outside 1–7 is 4.
  */
 export function quadrantChanges(
-  ratings: {
-    readonly importance: number | null;
-    readonly urgency: number | null;
-  },
+  ratings: QuadrantRatings,
   target: Quadrant,
 ): QuadrantChanges {
-  const important = readRating(ratings.importance) >= high;
-  const urgent = readRating(ratings.urgency) >= high;
-  const toImportant =
-    target === "importantUrgent" || target === "importantNotUrgent";
-  const toUrgent =
-    target === "importantUrgent" || target === "urgentNotImportant";
+  const { important, urgent } = quadrantSides[target];
   return {
-    ...(important !== toImportant && { importance: toImportant ? high : low }),
-    ...(urgent !== toUrgent && { urgency: toUrgent ? high : low }),
+    ...(isHigh(ratings.importance) !== important && {
+      importance: important ? high : low,
+    }),
+    ...(isHigh(ratings.urgency) !== urgent && {
+      urgency: urgent ? high : low,
+    }),
   };
 }

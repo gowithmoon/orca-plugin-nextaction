@@ -1,37 +1,18 @@
 // The project details' layout (GLOSSARY: 布局, #166, #186): tree, board or
-// gantt, one choice for every project. It lives in the plugin instance's
-// memory: each load starts from the "project view default layout" setting,
-// and a change of that setting overrides it at once
-// (platform/panel-feature.ts). Never written with `plugins.setData`.
-import { createMemoryStore } from "../../components/memory-store";
-
-export type ProjectLayout = "tree" | "board" | "gantt";
+// gantt, one choice for every project; anything unreadable reads as the
+// tree. In memory only (ui/components/layout-store.ts).
+import {
+  createLayoutStore,
+  type LayoutStore,
+} from "../../components/layout-store";
 
 /** The layouts in the order offered (the toolbar, the setting). */
-export const projectLayouts: readonly ProjectLayout[] = [
-  "tree",
-  "board",
-  "gantt",
-];
+export const projectLayouts = ["tree", "board", "gantt"] as const;
 
-/**
- * The layout a setting value names: its English key; anything else (no
- * value, a value from a later version) reads as the tree.
- */
-export function projectLayoutFrom(value: unknown): ProjectLayout {
-  return projectLayouts.find((layout) => layout === value) ?? "tree";
-}
+export type ProjectLayout = (typeof projectLayouts)[number];
 
-export interface ProjectLayoutStore {
-  current(): ProjectLayout;
-  set(layout: ProjectLayout): void;
-  /** Back to the tree; what unloading does. */
-  clear(): void;
-  /** Calls `listener` on every change; returns the unsubscribe function. */
-  subscribe(listener: () => void): () => void;
-}
+export type ProjectLayoutStore = LayoutStore<ProjectLayout>;
 
 export function createProjectLayoutStore(): ProjectLayoutStore {
-  const store = createMemoryStore<ProjectLayout>("tree");
-  return { ...store, clear: () => store.set("tree") };
+  return createLayoutStore(projectLayouts);
 }

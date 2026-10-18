@@ -12,7 +12,7 @@
 // their own importance and urgency, two by two or, narrow, one above the
 // other, by the view's own width; no schedules, and the task panel always in
 // the popup; a card dragged to another quadrant rewrites its importance or
-// urgency (#199), showing there at once. Between the next actions and all
+// urgency (#199), showing there at once (my-day-matrix.tsx). Between the next actions and all
 // tasks in the navigation, with no count there. It reads when the plugin
 // panel opens and
 // again on every task change signal (ADR 0007); open across the day boundary,
@@ -34,16 +34,15 @@ import type {
   ReadMyDayCandidates,
 } from "../../../application/usecases/read-my-day-candidates";
 import type { MyDaySchedule } from "../../../domain/task/my-day";
-import {
-  type Quadrant,
-  quadrantOf,
-  quadrants,
-} from "../../../domain/task/quadrant";
 import type { CalendarDate } from "../../../domain/task/task";
 import type { SelectOption } from "../../../orca.d.ts";
 import type { ChangeSignalSource } from "../../../shared/change-signal";
 import { t } from "../../../shared/l10n/l10n";
 import { shownText } from "../../components/format";
+import {
+  type LayoutChoice,
+  LayoutSwitch,
+} from "../../components/layout-switch";
 import { TaskListPlaceholder } from "../../components/loading-placeholder";
 import { Select } from "../../components/popup-controls";
 import { TaskCard } from "../../components/task-card";
@@ -76,12 +75,8 @@ import {
   type MyDayDragSetup,
   useMyDayDrag,
 } from "./my-day-drag";
-import {
-  type MyDayLayout,
-  type MyDayLayoutStore,
-  myDayLayoutFrom,
-  myDayLayouts,
-} from "./my-day-layout-store";
+import type { MyDayLayout, MyDayLayoutStore } from "./my-day-layout-store";
+import { MyDayMatrix } from "./my-day-matrix";
 import type { MyDayScheduleActions } from "./my-day-schedule-actions";
 import { type MyDayDropWrites, useOptimisticMyDay } from "./optimistic-my-day";
 import {
@@ -89,7 +84,6 @@ import {
   type QuadrantDrag,
   QuadrantDragProvider,
   type QuadrantDragSetup,
-  quadrantAttribute,
   useQuadrantDrag,
 } from "./quadrant-drag";
 import type { OpenSchedulePopup } from "./schedule-popup";
@@ -330,70 +324,6 @@ function MyDayList(props: {
   return <MyDayCards items={read.all} today={today} deps={deps} />;
 }
 
-/** Each quadrant's title. */
-const quadrantTitles: Record<Quadrant, () => string> = {
-  importantUrgent: () => t("Important and urgent"),
-  importantNotUrgent: () => t("Important, not urgent"),
-  urgentNotImportant: () => t("Urgent, not important"),
-  notImportantNotUrgent: () => t("Not important, not urgent"),
-};
-
-/**
- * Today's tasks by quadrant, each keeping the order of `items`: by score,
- * done and skipped ones last.
- */
-function byQuadrant(
-  items: readonly MyDayItem[],
-): Record<Quadrant, MyDayItem[]> {
-  const grouped: Record<Quadrant, MyDayItem[]> = {
-    importantUrgent: [],
-    importantNotUrgent: [],
-    urgentNotImportant: [],
-    notImportantNotUrgent: [],
-  };
-  for (const item of items) grouped[quadrantOf(item.task)].push(item);
-  return grouped;
-}
-
-/**
- * The quadrant layout (#198): all of today's tasks in their quadrants, by
- * their own importance and urgency, by score within each, done and skipped
- * ones last and faded. Every quadrant shows its title, empty or not, and
- * takes a card dragged from another (#199). No schedules and no schedule
- * button.
- */
-function MyDayMatrix(props: {
-  read: TodaysMyDay;
-  today: CalendarDate;
-  deps: MyDayViewDeps;
-  root: React.RefObject<HTMLDivElement>;
-}) {
-  const { read, today, deps, root } = props;
-  if (read.all.length === 0) return <NothingInMyDay />;
-  const grouped = byQuadrant(read.all);
-  return (
-    <div className="nextaction-my-day-matrix" ref={root}>
-      {quadrants.map((quadrant) => (
-        <section
-          key={quadrant}
-          className="nextaction-my-day-quadrant"
-          aria-label={quadrantTitles[quadrant]()}
-          {...{ [quadrantAttribute]: quadrant }}
-        >
-          <div className="nextaction-my-day-section-header">
-            <h3 className="nextaction-my-day-section-title">
-              {quadrantTitles[quadrant]()}
-            </h3>
-          </div>
-          <div className="nextaction-my-day-section-body">
-            <MyDayCards items={grouped[quadrant]} today={today} deps={deps} />
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
 function TimelineArea(props: {
   read: TodaysMyDay;
   deps: MyDayViewDeps;
@@ -425,49 +355,12 @@ function TimelineArea(props: {
   );
 }
 
-/** Each layout's icon and name in the header's switch. */
-const layoutChoices: Record<
-  MyDayLayout,
-  { readonly icon: string; readonly label: () => string }
-> = {
+/** Each layout's icon and name in the header's switch (#197). */
+const layoutChoices: Record<MyDayLayout, LayoutChoice> = {
   timeline: { icon: "ti ti-clock", label: () => t("Timeline layout") },
   list: { icon: "ti ti-list", label: () => t("List") },
-  matrix: { icon: "ti ti-layout-grid", label: () => t("Quadrants") },
+  matrix: { icon: "ti ti-layout-grid", label: () => t("Eisenhower Matrix") },
 };
-
-/** The header's layout switch (#197), as the project details' (#166). */
-function LayoutSwitch(props: { store: MyDayLayoutStore }) {
-  const { Segmented } = orca.components;
-  const layout = React.useSyncExternalStore(
-    props.store.subscribe,
-    props.store.current,
-  );
-  return (
-    <Segmented
-      role="group"
-      aria-label={t("Layout")}
-      className="nextaction-layout-switch"
-      selected={layout}
-      options={myDayLayouts.map((value) => {
-        const label = layoutChoices[value].label();
-        return {
-          value,
-          jsx: (
-            <span
-              className="nextaction-layout-icon"
-              role="img"
-              aria-label={label}
-              title={label}
-            >
-              <i className={layoutChoices[value].icon} aria-hidden="true" />
-            </span>
-          ),
-        };
-      })}
-      onChange={(value) => props.store.set(myDayLayoutFrom(value))}
-    />
-  );
-}
 
 /**
  * The header's controls and the layout shown, from one read. Loading,
@@ -573,26 +466,29 @@ function MyDayAreas(props: {
     // cards and are not dragged.
     <CardDragArea onNoteDrop={linkTaskInNote}>
       <div className="nextaction-toolbar nextaction-my-day-toolbar">
-        <LayoutSwitch store={deps.layout} />
+        <LayoutSwitch store={deps.layout} choices={layoutChoices} />
         {search}
       </div>
       {layout === "list" ? (
-        <div className="nextaction-my-day-list">
+        <div className="nextaction-my-day-scroll">
           {read ? <MyDayList read={read} today={today} deps={deps} /> : notice}
         </div>
       ) : layout === "matrix" ? (
-        <div className="nextaction-my-day-list">
-          {read ? (
+        <div className="nextaction-my-day-scroll">
+          {!read ? (
+            notice
+          ) : read.all.length === 0 ? (
+            <NothingInMyDay />
+          ) : (
             <QuadrantDragProvider value={quadrantDrag.current}>
               <MyDayMatrix
-                read={read}
-                today={today}
-                deps={deps}
+                items={read.all}
+                cards={(items) => (
+                  <MyDayCards items={items} today={today} deps={deps} />
+                )}
                 root={matrixRoot}
               />
             </QuadrantDragProvider>
-          ) : (
-            notice
           )}
         </div>
       ) : (

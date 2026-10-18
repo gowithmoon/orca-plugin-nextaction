@@ -33,6 +33,7 @@ import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
 import type { OpenQuickCapture } from "../ui/capture/quick-capture-popup";
+import type { LayoutStore } from "../ui/components/layout-store";
 import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
@@ -63,10 +64,7 @@ import { createTaskPanelSidePane } from "../ui/task-panel/task-panel-side-pane";
 import { createAllTasksView } from "../ui/views/all-tasks/all-tasks-view";
 import { createTaskTreeStores } from "../ui/views/all-tasks/task-tree-stores";
 import { createInboxView } from "../ui/views/inbox/inbox-view";
-import {
-  createMyDayLayoutStore,
-  myDayLayoutFrom,
-} from "../ui/views/my-day/my-day-layout-store";
+import { createMyDayLayoutStore } from "../ui/views/my-day/my-day-layout-store";
 import { createMyDayScheduleActions } from "../ui/views/my-day/my-day-schedule-actions";
 import { createMyDayView } from "../ui/views/my-day/my-day-view";
 import { createSchedulePopup } from "../ui/views/my-day/schedule-popup";
@@ -76,10 +74,7 @@ import { createOpenProjectStore } from "../ui/views/projects/open-project-store"
 import { createProjectBoardStores } from "../ui/views/projects/project-board-stores";
 import { createProjectGanttStores } from "../ui/views/projects/project-gantt-stores";
 import { createProjectGroupsStore } from "../ui/views/projects/project-groups-store";
-import {
-  createProjectLayoutStore,
-  projectLayoutFrom,
-} from "../ui/views/projects/project-layout-store";
+import { createProjectLayoutStore } from "../ui/views/projects/project-layout-store";
 import { createProjectsView } from "../ui/views/projects/projects-view";
 import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
@@ -101,6 +96,27 @@ export function pluginPanelType(pluginName: string): string {
  * is the navigation's registration; later features append their views to it
  * before this feature loads.
  */
+/**
+ * Starts `store` at the layout its default layout setting names, the layout
+ * this load starts in, and returns what a settings change runs: a change of
+ * that setting overrides the layout in memory at once. Every settings change
+ * fires it, the plugin's own writes included (plugin-lifecycle-settings):
+ * only a change of this value counts.
+ */
+function followDefaultLayout<Layout extends string>(
+  store: LayoutStore<Layout>,
+  setting: () => unknown,
+): () => void {
+  let last = store.from(setting());
+  store.set(last);
+  return () => {
+    const next = store.from(setting());
+    if (next === last) return;
+    last = next;
+    store.set(next);
+  };
+}
+
 export function createPanelFeature(deps: {
   repository: TaskRepository;
   /** The task change signal; focus and the refresh button give it at once. */
@@ -393,33 +409,16 @@ export function createPanelFeature(deps: {
     registry.add(`${pluginName}.projectLayout`, projectLayout.clear);
     registry.add(`${pluginName}.projectBoardStores`, projectBoard.clear);
     registry.add(`${pluginName}.projectGanttStores`, projectGantt.clear);
-    // The default layout (#166): the layout this load starts in; a change of
-    // the setting overrides the layout in memory at once. Every settings
-    // change fires the subscription, the plugin's own writes included
-    // (plugin-lifecycle-settings): only a change of this value counts.
-    const defaultLayout = () =>
-      projectLayoutFrom(settings().projectDefaultLayout);
-    let lastDefaultLayout = defaultLayout();
-    projectLayout.set(lastDefaultLayout);
-    // My Day's default layout (#197), the same way.
     registry.add(`${pluginName}.myDayLayout`, myDayLayout.clear);
-    const myDayDefaultLayout = () =>
-      myDayLayoutFrom(settings().myDayDefaultLayout);
-    let lastMyDayDefaultLayout = myDayDefaultLayout();
-    myDayLayout.set(lastMyDayDefaultLayout);
+    // The default layouts: the project details' (#166) and My Day's (#197).
+    const followLayouts = [
+      followDefaultLayout(projectLayout, () => settings().projectDefaultLayout),
+      followDefaultLayout(myDayLayout, () => settings().myDayDefaultLayout),
+    ];
     const pluginState = orca.state.plugins[pluginName];
     if (pluginState) {
       registry.subscribe(pluginState, () => {
-        const next = defaultLayout();
-        if (next !== lastDefaultLayout) {
-          lastDefaultLayout = next;
-          projectLayout.set(next);
-        }
-        const nextMyDay = myDayDefaultLayout();
-        if (nextMyDay !== lastMyDayDefaultLayout) {
-          lastMyDayDefaultLayout = nextMyDay;
-          myDayLayout.set(nextMyDay);
-        }
+        for (const follow of followLayouts) follow();
       });
     }
     registry.add(`${pluginName}.reviewPage`, reviewPage.clear);
