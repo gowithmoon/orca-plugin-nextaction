@@ -403,10 +403,14 @@ export const myDayCss = `
   opacity: 0.4;
 }
 
-/* A card would move to this quadrant (#199). */
+/*
+ * A card would move to this quadrant (#199). Drawn within the quadrant's own
+ * box, over its border: the scrolling frame clips anything outside it, which
+ * would cut the line where a quadrant meets the frame's edges.
+ */
 .nextaction-my-day-quadrant[data-drop-over] {
   outline: 2px dashed var(--orca-color-primary-5);
-  outline-offset: 2px;
+  outline-offset: -2px;
   background-color: color-mix(in srgb, var(--orca-color-primary-5) 6%, transparent);
 }
 
