@@ -128,6 +128,18 @@ export const settingsDefinition: SettingsDefinition = {
       defaultValue: 0,
     }),
   },
+  // The user's AI instructions (#203): read through instructionsBlockIdFrom,
+  // a block ID or ((ID)); anything else names no block
+  // (infra/settings-ai-instructions.ts). Read on every AI request.
+  aiInstructions: {
+    schema: () => ({
+      label: t("AI instructions block"),
+      description: t(
+        "The ID of a block in your notes, or ((ID)), telling the AI about you and your habits. The block and everything below it go with every AI request, to the AI service set up in Orca. Leave it empty for none.",
+      ),
+      type: "string",
+    }),
+  },
 };
 
 export type Settings = Record<string, unknown>;
