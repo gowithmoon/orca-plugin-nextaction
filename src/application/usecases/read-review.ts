@@ -135,8 +135,10 @@ export interface LookBackStepRead extends ReviewStepRead {
     readonly project: Project | null;
   })[];
   /**
-   * The tasks created since the start (by their `created`), whatever their
-   * status now, the earliest created first; for the AI summary (#205).
+   * Every task created since the start (by its `created`), whatever its
+   * status now: done and skipped ones are listed too, not only unfinished
+   * ones, as #201 asks. The earliest created first; for the AI summary
+   * (#205).
    */
   readonly created: readonly ReviewItem[];
 }
