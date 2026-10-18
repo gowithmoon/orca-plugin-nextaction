@@ -123,5 +123,57 @@ export function createOrcaAiChat(): AiChat {
         };
       }
     },
+
+    async *stream(messages, signal) {
+      if (signal.aborted) throw new AiCancelledError("cancelled");
+      // Orca stops the stream on abort without throwing (orca-ai A5). The
+      // caller's signal is checked at every piece (infra adds no listener,
+      // tests/architecture.test.ts); stopping early for any reason aborts
+      // Orca's request in `finally`.
+      const controller = new AbortController();
+      let gave = false;
+      try {
+        let pieces: AsyncIterable<unknown>;
+        try {
+          pieces = orca.ai.sendStreamMessage(
+            messages.map(toChatMessage) as never,
+            controller,
+          );
+        } catch (error) {
+          throw new AiRequestFailedError(describeError(error), false);
+        }
+        try {
+          for await (const delta of pieces) {
+            if (signal.aborted) break;
+            // Only the text; `reasoning_content` is left out (orca-ai A4).
+            const content =
+              typeof delta === "object" && delta !== null && "content" in delta
+                ? delta.content
+                : null;
+            if (typeof content !== "string" || content === "") continue;
+            gave = true;
+            yield content;
+          }
+        } catch (error) {
+          if (signal.aborted) throw new AiCancelledError("cancelled");
+          // Orca catches request errors itself (orca-ai); not expected.
+          throw new AiRequestFailedError(describeError(error), false);
+        }
+      } finally {
+        // Done, cancelled, failed, or the caller stopped reading: either way
+        // Orca need not go on (aborting a finished stream does nothing).
+        controller.abort();
+      }
+      if (signal.aborted) throw new AiCancelledError("cancelled");
+      // No text at all: the request failed (the AI chat not set up
+      // included) or Orca's own AI chat is busy; Orca has told the user
+      // (orca-ai).
+      if (!gave) {
+        throw new AiRequestFailedError(
+          "orca.ai.sendStreamMessage gave no text",
+          true,
+        );
+      }
+    },
   };
 }

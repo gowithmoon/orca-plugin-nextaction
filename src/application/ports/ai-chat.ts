@@ -77,4 +77,16 @@ export interface AiChat {
     tools: readonly AiTool[],
     signal: AbortSignal,
   ): Promise<AiReply>;
+
+  /**
+   * Sends `messages` with no tool of the plugin's and gives the model's text
+   * piece by piece as it comes (#205); its reasoning is left out. Fails with
+   * `AiRequestFailedError` when the stream ends with no text at all (Orca
+   * has told the user already, orca-ai), and with `AiCancelledError` as soon
+   * as `signal` aborts.
+   */
+  stream(
+    messages: readonly AiMessage[],
+    signal: AbortSignal,
+  ): AsyncIterable<string>;
 }

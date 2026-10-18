@@ -41,15 +41,27 @@ export const proposeSubtasksName = "propose_subtasks";
 
 /** The opening every drafting prompt shares (#201 所有功能共用的开头). */
 export function sharedOpening(context: PromptContext): string {
-  const weekday = weekdays[dayOfWeek(context.today) - 1];
-  const opening = `You are the assistant in "NextAction", a GTD task management plugin. You only organize what the user has already written; you do not make judgements for the user.
+  const opening = `${assistantLine}
 
 Rules:
 1. Only call the ${askQuestionsName} and propose_* tools provided this time; no other tool is available here.
-2. Do not make up anything that is not in the source text, do not expand on it, and do not add steps you think "should" be there.
-3. Do not estimate importance, urgency or effort. Take a start date or due date only when the source text states it explicitly, written as YYYY-MM-DD. Today is ${isoDate(context.today)} (${weekday}).
+2. ${noMakingUpRule}
+3. Do not estimate importance, urgency or effort. Take a start date or due date only when the source text states it explicitly, written as YYYY-MM-DD. ${todayIs(context.today)}
 4. When you are unsure: if no questions have been asked in this conversation yet, you may call ${askQuestionsName} once, with at most 3 questions, asking only about things that would change the result. If you have asked already, or the user chose to skip, give the draft directly, and on each item you are unsure about write why.
 5. Write questions and explanations in ${context.uiLanguage}; keep task names in the language of the source text.`;
+  return withUserInstructions(opening, context);
+}
+
+const assistantLine = `You are the assistant in "NextAction", a GTD task management plugin. You only organize what the user has already written; you do not make judgements for the user.`;
+
+const noMakingUpRule = `Do not make up anything that is not in the source text, do not expand on it, and do not add steps you think "should" be there.`;
+
+function todayIs(today: CalendarDate): string {
+  return `Today is ${isoDate(today)} (${weekdays[dayOfWeek(today) - 1]}).`;
+}
+
+/** `opening`, then the user's AI instructions when there are some. */
+function withUserInstructions(opening: string, context: PromptContext): string {
   if (context.userInstructions === undefined) return opening;
   return `${opening}
 
@@ -57,6 +69,120 @@ Below are instructions the user wrote for you. Adjust how you work by them, but 
 <user_instructions>
 ${context.userInstructions}
 </user_instructions>`;
+}
+
+/**
+ * The opening of the AI summary (#201 AI 小结): no tools and no questions,
+ * so of the shared opening's rules only 2, the date of 3, and 5 hold.
+ */
+function summaryOpening(context: PromptContext): string {
+  return withUserInstructions(
+    `${assistantLine}
+
+Rules:
+1. ${noMakingUpRule}
+2. ${todayIs(context.today)}
+3. Write in ${context.uiLanguage}; keep task names in the language of the source text.`,
+    context,
+  );
+}
+
+/** A task as the summary's lists give it. */
+export interface SummaryTask {
+  readonly text: string;
+  /** The project it belongs to; `null` for none. */
+  readonly project: string | null;
+}
+
+/** The material of the AI summary (#201 AI 小结), from the read review. */
+export interface SummaryMaterial {
+  /** Where look back starts, as the user's local date and time. */
+  readonly since: string;
+  /** Each completion, with the logical day it was on. */
+  readonly done: readonly (SummaryTask & { readonly on: CalendarDate })[];
+  /** Each skip, likewise. */
+  readonly skipped: readonly (SummaryTask & { readonly on: CalendarDate })[];
+  /** Added to My Day in this period and still not done. */
+  readonly plannedNotDone: readonly SummaryTask[];
+  /** Created in this period, whatever their status now. */
+  readonly created: readonly SummaryTask[];
+  /** Overdue now, each with its due date. */
+  readonly overdue: readonly (SummaryTask & { readonly due: CalendarDate })[];
+  /** Due in the next 7 days, likewise. */
+  readonly dueSoon: readonly (SummaryTask & { readonly due: CalendarDate })[];
+  readonly waiting: readonly SummaryTask[];
+  /** The projects with a problem, each with its problems. */
+  readonly projects: readonly {
+    readonly text: string;
+    readonly noNextAction: boolean;
+    readonly noProgress: boolean;
+    readonly overdue: boolean;
+  }[];
+  /** How many tasks are due for review. */
+  readonly dueForReview: number;
+}
+
+const listed = (lines: readonly string[]): string =>
+  lines.length === 0
+    ? " none"
+    : `\n${lines.map((line) => `- ${line}`).join("\n")}`;
+
+/** "text (detail; detail)", the details that are there. */
+function withDetails(
+  text: string,
+  details: readonly (string | null)[],
+): string {
+  const shown = details.filter((detail) => detail !== null);
+  const name = text.trim() === "" ? "(no text)" : text;
+  return shown.length === 0 ? name : `${name} (${shown.join("; ")})`;
+}
+
+const projectDetail = (task: SummaryTask) =>
+  task.project === null ? null : `project: ${task.project}`;
+
+/** The messages that ask for the AI summary; no tools go with them. */
+export function summaryMessages(
+  material: SummaryMaterial,
+  context: PromptContext,
+): AiMessage[] {
+  const onDay = (task: SummaryTask & { readonly on: CalendarDate }) =>
+    withDetails(task.text, [isoDate(task.on), projectDetail(task)]);
+  const plain = (task: SummaryTask) =>
+    withDetails(task.text, [projectDetail(task)]);
+  const due = (task: SummaryTask & { readonly due: CalendarDate }) =>
+    withDetails(task.text, [`due ${isoDate(task.due)}`, projectDetail(task)]);
+  const project = (item: SummaryMaterial["projects"][number]) =>
+    withDetails(item.text, [
+      item.noNextAction ? "no next action" : null,
+      item.noProgress ? "no recent progress" : null,
+      item.overdue ? "overdue" : null,
+    ]);
+  return [
+    { role: "system", content: summaryOpening(context) },
+    {
+      role: "user",
+      content: `Write a review summary for the user from the lists below, covering ${material.since} to today.
+
+Writing rules:
+- Speak only from the lists. Do not judge the user, do not lecture, and do not write empty words of encouragement.
+- First part, "This period": 2 to 4 sentences summing up, by project, what was done and what was skipped.
+- Second part, "Worth noting": at most 5 items, each naming a specific task or project and stating a fact, e.g. "three planned tasks are still not done".
+- Give no advice on what to do: the user makes the final decisions in the review themselves.
+- The whole text stays within 300 characters.
+
+<lists>
+Done:${listed(material.done.map(onDay))}
+Skipped:${listed(material.skipped.map(onDay))}
+Added to My Day but still not done:${listed(material.plannedNotDone.map(plain))}
+Tasks created in this period:${listed(material.created.map(plain))}
+Overdue:${listed(material.overdue.map(due))}
+Due in the next 7 days:${listed(material.dueSoon.map(due))}
+Waiting:${listed(material.waiting.map(plain))}
+Projects with problems:${listed(material.projects.map(project))}
+Tasks due for review: ${material.dueForReview}
+</lists>`,
+    },
+  ];
 }
 
 /** `ask_questions` (#201 拆分子任务): at most 3 questions, offered only first. */
