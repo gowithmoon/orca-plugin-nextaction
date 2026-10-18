@@ -65,6 +65,7 @@ src/
     project-menu/          项目状态图标（只显示）与项目操作菜单（菜单项通过登记的方式添加，渲染进项目标签的标签菜单，项目行复用）
     capture/               快速捕获弹窗
     split/                 拆分子任务的草稿窗口
+    extract/               提取任务的草稿窗口
     components/            可复用组件
     hooks/                 React hooks（只调用 application）
     styles/                CSS

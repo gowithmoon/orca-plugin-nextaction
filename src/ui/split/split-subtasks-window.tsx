@@ -9,13 +9,17 @@ import type { DraftSubtasks } from "../../application/usecases/draft-subtasks";
 import type { Task } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import {
+  AiBody,
+  AiDraftContent,
+  UncertainNote,
+} from "../components/ai-draft-parts";
+import {
   PluginWindow,
   WindowFooter,
   WindowHeader,
-  WindowSpacer,
 } from "../components/plugin-window";
+import { useSubtaskDraft } from "../hooks/use-ai-draft";
 import { useCreateSplitSubtasks } from "../hooks/use-create-split-subtasks";
-import { useSubtaskDraft } from "../hooks/use-subtask-draft";
 
 /** One row of the draft as the user edits it. */
 interface Row {
@@ -24,58 +28,6 @@ interface Row {
   readonly title: string;
   /** Why the AI is unsure; shown only here, never written (GLOSSARY: 草稿). */
   readonly uncertain?: string;
-}
-
-/** The questions, each with its answer, then skip or go on. */
-function Questions(props: {
-  questions: readonly string[];
-  onAnswer: (answers: readonly string[] | null) => void;
-}) {
-  const { Button, CompositionInput } = orca.components;
-  const [answers, setAnswers] = React.useState(() =>
-    props.questions.map(() => ""),
-  );
-  const idPrefix = React.useId();
-  return (
-    <>
-      <div className="nextaction-split-body">
-        <p className="nextaction-split-lead">
-          {t("The AI would like to know a few things first:")}
-        </p>
-        {props.questions.map((question, index) => (
-          <label
-            // The questions do not change while shown.
-            // biome-ignore lint/suspicious/noArrayIndexKey: fixed list.
-            key={index}
-            className="nextaction-split-question"
-            htmlFor={`${idPrefix}-${index}`}
-          >
-            <span>{question}</span>
-            <CompositionInput
-              id={`${idPrefix}-${index}`}
-              value={answers[index] ?? ""}
-              placeholder={t("Your answer (may be left empty)")}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                const value = e.target.value;
-                setAnswers((current) =>
-                  current.map((answer, i) => (i === index ? value : answer)),
-                );
-              }}
-            />
-          </label>
-        ))}
-      </div>
-      <WindowFooter>
-        <WindowSpacer />
-        <Button variant="plain" onClick={() => props.onAnswer(null)}>
-          {t("Skip and get the draft")}
-        </Button>
-        <Button variant="solid" onClick={() => props.onAnswer(answers)}>
-          {t("Answer")}
-        </Button>
-      </WindowFooter>
-    </>
-  );
 }
 
 /** One editable row: its name, the AI's doubt under it, and its buttons. */
@@ -133,12 +85,7 @@ function DraftRow(props: {
           </Button>
         </Tooltip>
       </div>
-      {row.uncertain !== undefined && (
-        <div className="nextaction-split-uncertain">
-          <span className="nextaction-split-badge">{t("Unsure")}</span>
-          <span>{row.uncertain}</span>
-        </div>
-      )}
+      {row.uncertain !== undefined && <UncertainNote reason={row.uncertain} />}
     </li>
   );
 }
@@ -197,7 +144,7 @@ function Draft(props: {
 
   return (
     <>
-      <div className="nextaction-split-body">
+      <AiBody>
         {props.notSplittable !== undefined && (
           <div className="nextaction-split-not-splittable" role="note">
             <i className="ti ti-info-circle" aria-hidden="true" />
@@ -244,7 +191,7 @@ function Draft(props: {
             <span id={sequentialId}>{t("Do in order")}</span>
           </div>
         )}
-      </div>
+      </AiBody>
       <WindowFooter>
         <span className="nextaction-split-hint">
           <i className="ti ti-subtask" aria-hidden="true" />
@@ -272,73 +219,8 @@ function SplitSubtasksWindow(props: {
   pluginName: string;
   onClose: () => void;
 }) {
-  const { Button } = orca.components;
   const titleId = React.useId();
-  const { state, answer, retry } = useSubtaskDraft(
-    props.draftSubtasks,
-    props.parent.id,
-  );
-  let content: React.ReactNode;
-  switch (state.kind) {
-    case "waiting":
-      content = (
-        <>
-          <div
-            className="nextaction-split-body nextaction-split-waiting"
-            role="status"
-          >
-            <i className="ti ti-loader-2" aria-hidden="true" />
-            {t("The AI is drafting…")}
-          </div>
-          <WindowFooter>
-            <WindowSpacer />
-            <Button variant="plain" onClick={props.onClose}>
-              {t("Cancel")}
-            </Button>
-          </WindowFooter>
-        </>
-      );
-      break;
-    case "questions":
-      content = <Questions questions={state.questions} onAnswer={answer} />;
-      break;
-    case "draft":
-      content = (
-        <Draft
-          parent={props.parent}
-          initial={state.draft.items.map((item, key) => ({
-            key,
-            title: item.title,
-            ...(item.uncertain !== undefined && { uncertain: item.uncertain }),
-          }))}
-          {...(state.draft.notSplittable !== undefined && {
-            notSplittable: state.draft.notSplittable,
-          })}
-          createSplitSubtasks={props.createSplitSubtasks}
-          pluginName={props.pluginName}
-          onClose={props.onClose}
-        />
-      );
-      break;
-    case "failed":
-      content = (
-        <>
-          <div className="nextaction-split-body" role="alert">
-            {state.message}
-          </div>
-          <WindowFooter>
-            <WindowSpacer />
-            <Button variant="plain" onClick={props.onClose}>
-              {t("Close")}
-            </Button>
-            <Button variant="solid" onClick={retry}>
-              {t("Try again")}
-            </Button>
-          </WindowFooter>
-        </>
-      );
-      break;
-  }
+  const ai = useSubtaskDraft(props.draftSubtasks, props.parent.id);
   return (
     <PluginWindow
       onClose={props.onClose}
@@ -351,7 +233,28 @@ function SplitSubtasksWindow(props: {
         task={props.parent}
         onClose={props.onClose}
       />
-      {content}
+      <AiDraftContent
+        ai={ai}
+        onClose={props.onClose}
+        renderDraft={(draft) => (
+          <Draft
+            parent={props.parent}
+            initial={draft.items.map((item, key) => ({
+              key,
+              title: item.title,
+              ...(item.uncertain !== undefined && {
+                uncertain: item.uncertain,
+              }),
+            }))}
+            {...(draft.notSplittable !== undefined && {
+              notSplittable: draft.notSplittable,
+            })}
+            createSplitSubtasks={props.createSplitSubtasks}
+            pluginName={props.pluginName}
+            onClose={props.onClose}
+          />
+        )}
+      />
     </PluginWindow>
   );
 }

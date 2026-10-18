@@ -716,6 +716,22 @@ const zhCN: Record<string, string> = {
   "Could not get a draft: ${reason}": "没能拿到草稿：${reason}",
   "${count} subtasks created": "已新建 ${count} 个子任务",
   "Could not create the subtasks: ${reason}": "没能新建子任务：${reason}",
+  // Extract tasks (#204).
+  "Extract tasks": "提取任务",
+  "Put the cursor in a block to extract tasks from it.":
+    "请把光标放在要提取任务的块里。",
+  "Task ${n}": "任务 ${n}",
+  "Create ${task}": "创建${task}",
+  "Put them": "放在",
+  "Below the selection": "所选块下方",
+  "As child blocks": "所选块的子块",
+  "End of today's journal": "今天日记末尾",
+  "Next to the last selected block": "以最后一个选中的块为准",
+  "Created as inbox tasks": "新任务放进收集箱",
+  "The AI found nothing to do in the selected blocks. Blocks that are tasks already are left out.":
+    "AI 在所选内容里没有找到要做的事。已经是任务的块不会再提取。",
+  "${count} tasks created": "已新建 ${count} 个任务",
+  "Could not create the tasks: ${reason}": "没能新建任务：${reason}",
 };
 
 export default zhCN;

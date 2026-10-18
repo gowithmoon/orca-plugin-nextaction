@@ -1590,32 +1590,63 @@ export function createOrcaTaskRepository(
         const plan = await planTaskWrite(state, write);
         if (plan) plans.push(plan);
       }
-      // The source block for a mirror's ID (block-properties-json M3).
-      const parent = await sourceBlock(placement.blockId);
-      if (!parent) throw new OrcaError(`block ${placement.blockId} is gone`);
-      const ids: number[] = [];
+      // The block the new tasks go relative to: a mirror's ID stands for its
+      // source block (block-properties-json M3); a journal is picked by
+      // local date and created when missing (journal-capture J2, J3), outside
+      // the group below, so a journal it creates is not removed by the one
+      // undo, as in appendTaskToJournal.
+      let anchorId: number;
+      if (placement.kind === "journal") {
+        const journal = await invokeBackend("get-journal-block", placement.now);
+        if (
+          typeof journal !== "object" ||
+          journal === null ||
+          !("id" in journal)
+        ) {
+          throw new OrcaError(
+            `get-journal-block returned ${JSON.stringify(journal)}`,
+          );
+        }
+        anchorId = (journal as Block).id;
+      } else {
+        const anchor = await sourceBlock(placement.blockId);
+        if (!anchor) throw new OrcaError(`block ${placement.blockId} is gone`);
+        anchorId = anchor.id;
+      }
+      // Indexes into `tasks` in the order they are inserted: right after the
+      // anchor, the last first, so they end up in order (orca-ai C1).
+      const order = [...tasks.keys()];
+      if (placement.kind === "after") order.reverse();
+      const created = new Map<number, number>();
       try {
         // One group: one undo for every task and every write in `also`
         // (orca-ai C1, F1; multi-block-undo).
         await invokeGroup(async () => {
-          for (const [index, task] of tasks.entries()) {
-            // The first goes in as the parent's last child, each next one
-            // right after the one before, the reference fetched afresh each
-            // time: lastChild of one parent object again and again puts them
-            // in reverse (orca-ai F1). A fetched block needs no cache (C2).
-            const previous = ids.at(-1);
-            const reference = await fetchBlock(previous ?? parent.id);
+          let previous: number | undefined;
+          for (const index of order) {
+            const task = tasks[index] as NewTask;
+            // After a block: each one right after it (C1). As the last
+            // child blocks (of a block or a journal): the first as the last
+            // child, each next one right after the one before, the reference
+            // fetched afresh each time: lastChild of one parent object again
+            // and again puts them in reverse (F1). A fetched block needs no
+            // cache (C2).
+            const after = placement.kind === "after" || previous !== undefined;
+            const reference = await fetchBlock(
+              placement.kind === "after" ? anchorId : (previous ?? anchorId),
+            );
             const id = await invokeEditorCommand(
               "core.editor.insertBlock",
               reference,
-              previous === undefined ? "lastChild" : "after",
+              after ? "after" : "lastChild",
               // Plain text: tags and formatting in it are not parsed.
               [{ t: "t", v: task.text }],
             );
             if (typeof id !== "number") {
               throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
             }
-            ids.push(id);
+            created.set(index, id);
+            previous = id;
             // The status and initial values go in with the tag (orca-ai F1).
             await invokeEditorCommand(
               "core.editor.insertTag",
@@ -1627,10 +1658,11 @@ export function createOrcaTaskRepository(
           for (const plan of plans) await plan.run();
         });
       } finally {
-        for (const id of ids) onWritten(id);
+        for (const id of created.values()) onWritten(id);
         for (const plan of plans) onWritten(plan.block.id);
       }
-      return ids;
+      // In the order of `tasks`, whatever order they went in.
+      return [...tasks.keys()].map((index) => created.get(index) as number);
     },
 
     async readOutline(id: number): Promise<OutlineBlock | null> {

@@ -4,6 +4,7 @@ import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
 import { createLoadAiInstructions } from "./ai-instructions";
 import { createLoadDayBoundary } from "./day-boundary";
+import { createExtractTasksFeature } from "./extract-tasks-feature";
 import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
 import { createProjectMenuFeature } from "./project-menu-feature";
@@ -165,6 +166,13 @@ export function createNextActionPlugin(): Plugin {
     dayBoundary: day.dayBoundary,
     userInstructions,
   });
+  const extractTasks = createExtractTasksFeature({
+    repository,
+    dayBoundary: day.dayBoundary,
+    today: day.today,
+    userInstructions,
+    taskTagBlockId: taskTag.taskTagBlockId,
+  });
   const taskMenu = createTaskMenuFeature({
     repository,
     taskTagBlockId: taskTag.taskTagBlockId,
@@ -222,6 +230,7 @@ export function createNextActionPlugin(): Plugin {
       taskPanel.feature,
       // Before the task menu that opens it, so its root is released after it.
       splitSubtasks.feature,
+      extractTasks,
       taskMenu.feature,
       projectMenu.feature,
       panel.feature,

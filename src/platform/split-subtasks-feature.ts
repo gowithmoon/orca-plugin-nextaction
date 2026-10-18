@@ -14,17 +14,8 @@ import {
   type OpenSplitSubtasks,
 } from "../ui/split/split-subtasks-window";
 import { splitSubtasksCss } from "../ui/styles/split-subtasks-style";
+import { uiLanguage } from "./ai-language";
 import type { FeatureModule } from "./bootstrap";
-
-/**
- * The language the AI writes its questions and explanations in (#201 提示词
- * rule 5): Orca's interface language, as far as the plugin is translated.
- */
-function uiLanguage(): string {
-  return orca.state.locale.toLowerCase().startsWith("zh")
-    ? "Simplified Chinese"
-    : "English";
-}
 
 export function createSplitSubtasksFeature(deps: {
   repository: TaskRepository;
