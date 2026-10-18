@@ -11,8 +11,10 @@
 // quadrants (GLOSSARY: 四象限, #198): the same tasks in four quadrants by
 // their own importance and urgency, two by two or, narrow, one above the
 // other, by the view's own width; no schedules, and the task panel always in
-// the popup. Between the next actions and all tasks in the navigation, with
-// no count there. It reads when the plugin panel opens and
+// the popup; a card dragged to another quadrant rewrites its importance or
+// urgency (#199), showing there at once. Between the next actions and all
+// tasks in the navigation, with no count there. It reads when the plugin
+// panel opens and
 // again on every task change signal (ADR 0007); open across the day boundary,
 // it moves on to the new day. An unscheduled card, or a timeline card by its
 // body, dragged onto a block in a note panel links the task there (#127).
@@ -20,6 +22,7 @@
 import * as React from "react";
 import type { AddToMyDay } from "../../../application/usecases/add-to-my-day";
 import type { LinkTaskInNote } from "../../../application/usecases/link-task-in-note";
+import type { MoveToQuadrant } from "../../../application/usecases/move-to-quadrant";
 import type {
   MyDayItem,
   ReadMyDay,
@@ -50,6 +53,7 @@ import { FailedNotice, PausedNotice } from "../../components/view-notice";
 import { CardDragArea, useCardDrag } from "../../drag/card-drag";
 import { useAddToMyDay } from "../../hooks/use-add-to-my-day";
 import { useLinkTaskInNote } from "../../hooks/use-link-task-in-note";
+import { useMoveToQuadrant } from "../../hooks/use-move-to-quadrant";
 import { useMyDayCandidates } from "../../hooks/use-my-day-candidates";
 import { useNow } from "../../hooks/use-now";
 import {
@@ -79,7 +83,15 @@ import {
   myDayLayouts,
 } from "./my-day-layout-store";
 import type { MyDayScheduleActions } from "./my-day-schedule-actions";
-import { useOptimisticMyDay } from "./optimistic-my-day";
+import { type MyDayDropWrites, useOptimisticMyDay } from "./optimistic-my-day";
+import {
+  createQuadrantDrag,
+  type QuadrantDrag,
+  QuadrantDragProvider,
+  type QuadrantDragSetup,
+  quadrantAttribute,
+  useQuadrantDrag,
+} from "./quadrant-drag";
 import type { OpenSchedulePopup } from "./schedule-popup";
 import { ScheduleButton, Timeline, type TimelineCardActions } from "./timeline";
 
@@ -108,6 +120,8 @@ export interface MyDayViewDeps {
   openSchedulePopup: OpenSchedulePopup;
   /** The writes a drop makes (#85), reporting their failures. */
   scheduleActions: MyDayScheduleActions;
+  /** A card dropped in another quadrant moves its task there (#199). */
+  moveToQuadrant: MoveToQuadrant;
   /** The layout shown (#197), in memory, from the default layout setting. */
   layout: MyDayLayoutStore;
 }
@@ -285,9 +299,20 @@ function MyDayCards(props: {
   );
 }
 
-/** A list or quadrant card, dragged by a press anywhere on it onto a note (#127). */
+/**
+ * A list or quadrant card, dragged by a press anywhere on it onto a note
+ * (#127); a quadrant card also to another quadrant (#199).
+ */
 function MyDayCardItem(props: { item: MyDayItem; children: React.ReactNode }) {
-  return <li {...useCardDrag(props.item.task)}>{props.children}</li>;
+  const { task } = props.item;
+  const quadrants = useQuadrantDrag();
+  const inPanel = React.useMemo(
+    () => quadrants?.target(task),
+    [quadrants, task],
+  );
+  return (
+    <li {...useCardDrag(task, inPanel ? { inPanel } : {})}>{props.children}</li>
+  );
 }
 
 /**
@@ -333,24 +358,27 @@ function byQuadrant(
 /**
  * The quadrant layout (#198): all of today's tasks in their quadrants, by
  * their own importance and urgency, by score within each, done and skipped
- * ones last and faded. Every quadrant shows its title, empty or not. No
- * schedules and no schedule button.
+ * ones last and faded. Every quadrant shows its title, empty or not, and
+ * takes a card dragged from another (#199). No schedules and no schedule
+ * button.
  */
 function MyDayMatrix(props: {
   read: TodaysMyDay;
   today: CalendarDate;
   deps: MyDayViewDeps;
+  root: React.RefObject<HTMLDivElement>;
 }) {
-  const { read, today, deps } = props;
+  const { read, today, deps, root } = props;
   if (read.all.length === 0) return <NothingInMyDay />;
   const grouped = byQuadrant(read.all);
   return (
-    <div className="nextaction-my-day-matrix">
+    <div className="nextaction-my-day-matrix" ref={root}>
       {quadrants.map((quadrant) => (
         <section
           key={quadrant}
           className="nextaction-my-day-quadrant"
           aria-label={quadrantTitles[quadrant]()}
+          {...{ [quadrantAttribute]: quadrant }}
         >
           <div className="nextaction-my-day-section-header">
             <h3 className="nextaction-my-day-section-title">
@@ -460,11 +488,24 @@ function MyDayAreas(props: {
   // The quadrants need the width: no side pane beside them, even in the
   // wide tier; their tasks open in the popup (#198), as on the board.
   useWithoutSidePane(layout === "matrix");
-  // What a drop wrote shows at once, until a read after it arrives (#85).
+  const writeQuadrant = useMoveToQuadrant(
+    deps.moveToQuadrant,
+    deps.taskActions.notify,
+  );
+  const writes = React.useMemo<MyDayDropWrites>(
+    () => ({
+      schedule: deps.scheduleActions.schedule,
+      unschedule: deps.scheduleActions.unschedule,
+      moveToQuadrant: writeQuadrant,
+    }),
+    [deps.scheduleActions, writeQuadrant],
+  );
+  // What a drop wrote shows at once, until a read after it arrives (#85,
+  // #199).
   const { shown: state, commit } = useOptimisticMyDay(
     query,
     useViewQuery(query),
-    deps.scheduleActions,
+    writes,
   );
   const read = state.kind === "loaded" ? state.data : undefined;
   const range = read?.range;
@@ -480,6 +521,18 @@ function MyDayAreas(props: {
   drag.current ??= createMyDayDrag(() => ({
     ...setup.current,
     root: root.current,
+  }));
+  // The quadrants' drag (#199), likewise.
+  const matrixRoot = React.useRef<HTMLDivElement>(null);
+  const quadrantSetup = React.useRef<QuadrantDragSetup>({
+    root: null,
+    commit,
+  });
+  quadrantSetup.current = { root: matrixRoot.current, commit };
+  const quadrantDrag = React.useRef<QuadrantDrag>();
+  quadrantDrag.current ??= createQuadrantDrag(() => ({
+    ...quadrantSetup.current,
+    root: matrixRoot.current,
   }));
   const linkTaskInNote = useLinkTaskInNote(
     deps.linkTaskInNote,
@@ -530,7 +583,14 @@ function MyDayAreas(props: {
       ) : layout === "matrix" ? (
         <div className="nextaction-my-day-list">
           {read ? (
-            <MyDayMatrix read={read} today={today} deps={deps} />
+            <QuadrantDragProvider value={quadrantDrag.current}>
+              <MyDayMatrix
+                read={read}
+                today={today}
+                deps={deps}
+                root={matrixRoot}
+              />
+            </QuadrantDragProvider>
           ) : (
             notice
           )}

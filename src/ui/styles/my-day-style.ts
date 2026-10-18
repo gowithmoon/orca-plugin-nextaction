@@ -400,6 +400,13 @@ export const myDayCss = `
   opacity: 0.4;
 }
 
+/* A card would move to this quadrant (#199). */
+.nextaction-my-day-quadrant[data-drop-over] {
+  outline: 2px dashed var(--orca-color-primary-5);
+  outline-offset: 2px;
+  background-color: color-mix(in srgb, var(--orca-color-primary-5) 6%, transparent);
+}
+
 /* A timeline card would be unscheduled here. */
 .nextaction-my-day-unscheduled[data-drop-over] {
   outline: 2px dashed var(--orca-color-primary-5);

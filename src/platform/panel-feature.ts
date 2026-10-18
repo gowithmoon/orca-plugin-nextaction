@@ -11,6 +11,7 @@ import {
   createMarkReviewed,
 } from "../application/usecases/mark-reviewed";
 import { createMoveTask } from "../application/usecases/move-task";
+import { createMoveToQuadrant } from "../application/usecases/move-to-quadrant";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadInbox } from "../application/usecases/read-inbox";
@@ -224,6 +225,8 @@ export function createPanelFeature(deps: {
       }),
       // Dragging on the timeline (#85) writes as the popup does.
       scheduleActions: createMyDayScheduleActions(scheduleDeps),
+      // Dragging in the quadrants (#199) writes as editing the task does.
+      moveToQuadrant: createMoveToQuadrant({ repository }),
       layout: myDayLayout,
     }),
   );
