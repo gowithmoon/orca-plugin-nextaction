@@ -20,6 +20,7 @@ import {
   type SplitMaterial,
   splitMessages,
 } from "../ai/prompts";
+import type { ReadUserInstructions } from "../ai/user-instructions";
 import type { AiChat } from "../ports/ai-chat";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -133,6 +134,8 @@ export function createDraftSubtasks(deps: {
   dayBoundary: DayBoundarySetting;
   /** Orca's interface language, by name, for the AI's questions. */
   uiLanguage: () => string;
+  /** The user's AI instructions (GLOSSARY: AI 说明), read for each request. */
+  userInstructions: ReadUserInstructions;
 }): DraftSubtasks {
   const readProjectOfTask = createReadProjectOfTask(deps);
 
@@ -162,11 +165,14 @@ export function createDraftSubtasks(deps: {
   };
 
   return async (id, signal) => {
+    const split = await material(id);
+    const userInstructions = await deps.userInstructions();
     const context: PromptContext = {
       today: logicalDay(deps.clock.now(), deps.dayBoundary.current()),
       uiLanguage: deps.uiLanguage(),
+      ...(userInstructions !== undefined && { userInstructions }),
     };
-    const messages = splitMessages(await material(id), context);
+    const messages = splitMessages(split, context);
     const first = await requestToolCall(
       deps.chat,
       messages,

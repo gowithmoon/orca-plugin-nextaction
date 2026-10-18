@@ -1,6 +1,8 @@
+import { createReadUserInstructions } from "../application/ai/user-instructions";
 import { describeError } from "../shared/describe-error";
 import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
+import { createLoadAiInstructions } from "./ai-instructions";
 import { createLoadDayBoundary } from "./day-boundary";
 import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
@@ -150,9 +152,18 @@ export function createNextActionPlugin(): Plugin {
     reminderDefaultTime: reminderTime.reminderDefaultTime,
     taskActions: taskActions.taskActions,
   });
+  const aiInstructions = createLoadAiInstructions();
+  // One reader shared by every AI feature (#203), so a block that is missing
+  // or cannot be read warns once, not once per feature or request.
+  const userInstructions = createReadUserInstructions({
+    repository,
+    setting: aiInstructions.aiInstructions,
+    warn: (message) => console.warn(`[nextaction] ${message}`),
+  });
   const splitSubtasks = createSplitSubtasksFeature({
     repository,
     dayBoundary: day.dayBoundary,
+    userInstructions,
   });
   const taskMenu = createTaskMenuFeature({
     repository,
@@ -198,6 +209,7 @@ export function createNextActionPlugin(): Plugin {
       // After the task change signal it gives on a change of the setting.
       preview.feature,
       reminderTime.feature,
+      aiInstructions.feature,
       taskActions.feature,
       // Before the task tag feature, so it hears the outcome of startup.
       createStatusIconFeature(taskTag.names, taskTag.projectNames),
