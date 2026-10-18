@@ -688,6 +688,31 @@ const zhCN: Record<string, string> = {
   // The gantt chart's time scale (#179); Week and Month are the stats'.
   "Time scale": "刻度",
   Day: "日",
+  // Split into subtasks (#202).
+  "Split into subtasks": "拆分子任务",
+  "The AI is drafting…": "AI 正在起草……",
+  "The AI would like to know a few things first:": "AI 想先了解几件事：",
+  "Your answer (may be left empty)": "你的回答（可以不填）",
+  "Skip and get the draft": "跳过，直接给草稿",
+  Answer: "回答",
+  "Subtask ${n}": "子任务 ${n}",
+  "Subtask name": "子任务名",
+  "Move up": "上移",
+  "Move down": "下移",
+  Unsure: "不确定",
+  "The AI thinks this task need not be split: ${reason}":
+    "AI 认为这个任务不必再拆：${reason}",
+  "Add subtask": "添加子任务",
+  "Do in order": "按顺序执行",
+  "Goes below the task as todo subtasks": "写在任务下面，状态为待开始",
+  "Try again": "重试",
+  "The AI did not answer. Check that the AI chat is set up in Orca's settings, then try again.":
+    "AI 没有回应。请到 Orca 设置里检查 AI 对话是否配置好，然后重试。",
+  "The AI did not give a draft the plugin can use. Try again.":
+    "AI 没有给出能用的草稿，请重试。",
+  "Could not get a draft: ${reason}": "没能拿到草稿：${reason}",
+  "${count} subtasks created": "已新建 ${count} 个子任务",
+  "Could not create the subtasks: ${reason}": "没能新建子任务：${reason}",
 };
 
 export default zhCN;

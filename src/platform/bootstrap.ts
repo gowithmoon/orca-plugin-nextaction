@@ -15,6 +15,7 @@ import {
   type SettingsDefinition,
   settingsDefinition,
 } from "./settings";
+import { createSplitSubtasksFeature } from "./split-subtasks-feature";
 import { createLoadStartPreviewDays } from "./start-preview-days";
 import { createStatusIconFeature } from "./status-icon-feature";
 import { createTaskActionsFeature } from "./task-actions-feature";
@@ -149,6 +150,10 @@ export function createNextActionPlugin(): Plugin {
     reminderDefaultTime: reminderTime.reminderDefaultTime,
     taskActions: taskActions.taskActions,
   });
+  const splitSubtasks = createSplitSubtasksFeature({
+    repository,
+    dayBoundary: day.dayBoundary,
+  });
   const taskMenu = createTaskMenuFeature({
     repository,
     taskTagBlockId: taskTag.taskTagBlockId,
@@ -157,6 +162,7 @@ export function createNextActionPlugin(): Plugin {
       taskPanel.open(taskId);
     },
     openCreateSubtask: taskTag.openCreateSubtask,
+    openSplitSubtasks: splitSubtasks.open,
     names: taskTag.names,
   });
   const projectMenu = createProjectMenuFeature({
@@ -202,6 +208,8 @@ export function createNextActionPlugin(): Plugin {
       // Before the menus and the plugin panel that open it, so its root is
       // released after them.
       taskPanel.feature,
+      // Before the task menu that opens it, so its root is released after it.
+      splitSubtasks.feature,
       taskMenu.feature,
       projectMenu.feature,
       panel.feature,

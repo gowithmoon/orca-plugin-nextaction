@@ -87,6 +87,13 @@ const rules: ArchitectureRules = {
         "write through src/infra/orca/orca-calls.ts: Orca writes through the active panel's editor, and the plugin panel has one only through its hidden editor (ADR 0014)",
     },
     {
+      name: "calls orca.ai",
+      pattern: /\borca\s*\.\s*ai\b/,
+      forbiddenIn: ["domain", "application", "ui", "platform", "shared"],
+      allowed:
+        "call Orca's AI only in infra, behind the AiChat port (ADR 0026)",
+    },
+    {
       name: "calls Orca register*/unregister* directly",
       pattern: /\borca\s*\.(?:\s*\w+\s*\.)*?\s*(?:un)?register\w*/,
       forbiddenIn: ["domain", "application", "infra", "ui", "shared"],
@@ -248,6 +255,8 @@ describe("architecture rules", () => {
         "ui takes Select, DatePicker or ContextMenu from orca.components",
       ],
     ],
+    ["src/ui/calls-orca-ai.ts", ["ui calls orca.ai", "ui calls orca.ai"]],
+    ["src/platform/calls-orca-ai.ts", ["platform calls orca.ai"]],
     [
       "src/ui/takes-modal-overlay-from-orca.ts",
       [

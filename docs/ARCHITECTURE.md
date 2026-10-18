@@ -49,6 +49,7 @@ src/
   application/
     ports/                 TaskRepository、TaskQuery、Clock、Settings、Notifier 等接口
     usecases/              每个用例一个文件
+    ai/                    AI 起草共用的部分：提示词与工具定义、对话流程、大纲文字（纯函数，#201）
   infra/
     system-clock.ts        Clock 端口的真实实现（与 Orca 无关）
   infra/orca/
@@ -63,6 +64,7 @@ src/
     task-menu/             状态图标（点击弹出状态菜单）与任务操作菜单（菜单项通过登记的方式添加，渲染进 Orca 的标签菜单和块右键菜单）
     project-menu/          项目状态图标（只显示）与项目操作菜单（菜单项通过登记的方式添加，渲染进项目标签的标签菜单，项目行复用）
     capture/               快速捕获弹窗
+    split/                 拆分子任务的草稿窗口
     components/            可复用组件
     hooks/                 React hooks（只调用 application）
     styles/                CSS
@@ -136,7 +138,7 @@ tests/
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。
 - 一个 `invokeGroup` 里写多个块（各自 `setRefData`、`setProperties`），一次撤销全部还原，写入顺序不影响结果（`multi-block-undo`）。重复任务安排下一次时，父任务和被重置的后代任务就这样一次写入。
 - **所有接收块 ID 的入口都先把镜像块解析成源块**（`_repr.type === "mirror"` 时改用 `mirroredId`），在仓储入口统一处理，否则数据会写到镜像块上。
-- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。唯一写入它的地方是移动块之前补上目标块（`move-blocks`）。
+- `orca.state.blocks` 只是前端缓存，不作为任务数据的来源；批量读取用 `get-blocks`。写入它的地方只有两处，都只补缺、不覆盖：移动块之前补上目标块（`move-blocks`）；为 AI 读大纲时补上行内引用的目标块和镜像块的源块（`orca-ai` G3）。
 - 任务的父任务和先后位置：取回全部任务后，对不在任务集合中的 `parent` 按层用 `get-blocks` 补取，在内存中沿 `parent` 找最近的任务祖先、按"在父块 `children` 中的序号"路径排先后。1000 个任务约 32 ms。不用 `get-block-tree`（`next-action-hierarchy-boolean-deps`）。
 
 日记与日期（`journal-capture`）：
@@ -156,6 +158,13 @@ tests/
 - 不传 `autoMatchType`，否则块会改成目标处的类型（例如变成列表项）。
 - 放在根级块（页面）的前面或后面，被移动的块也成为根级块。
 - 移到自己或自己的后代下面时抛出 `MovingBlockToSelfOrItsDescendant`，什么都不写。
+
+AI（`orca-ai`，ADR 0026）：
+- `orca.ai` 只在 `infra/orca/orca-ai-chat.ts` 中调用，经 `AiChat` 端口给用例使用，由架构测试检查。
+- 模型会调用 Orca 自己的工具（`read_skills`、`call_commands`、MCP 工具）：每一个这样的调用都回一条"不可用"的工具结果再请求，这是必需的（A1）。
+- `sendMessage` 返回 `null` 时 Orca 已经弹过"Error calling AI"，插件按失败处理，不再弹提示。`sendMessage` 不能中止：用户关闭窗口后，迟到的结果被丢弃。
+- 把块读成文字时，每个块只转换自己的内容，按层级缩进成大纲，任务块由插件标出；不用整棵转换，也不用块的 `text` 字段（B、E、G）。
+- 连续建多个子块时，第一个插为最后子块，之后每个插在上一个新块之后，参考块每次用 `get-block` 重新取回；同一份父块对象连续 `lastChild` 顺序会反（F1）。
 
 撤销（`tag-operations`）：
 - `core.editor.undo` 返回时撤销还没有完全生效，不能假设数据已经更新。

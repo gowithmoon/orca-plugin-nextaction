@@ -6,7 +6,10 @@ import {
   type ConvertToTaskResult,
   type DiscardableData,
   type InitialProperties,
+  type NewTask,
+  type NewTasksPlacement,
   type NoteTarget,
+  type OutlineBlock,
   TaskFeaturesPausedError,
   type TaskFilter,
   type TaskRepository,
@@ -114,6 +117,7 @@ import { planChoiceAdditions } from "../schema/choice-plan";
 import { choiceName } from "../schema/startup-plan";
 import type { PropertyDefinition } from "../schema/tag-schema";
 import type { ProjectTagState, TaskTagState } from "../schema/tag-state";
+import { readOutline } from "./outline";
 import {
   type HierarchyBlock,
   missingParents,
@@ -152,6 +156,15 @@ async function getBlocks(ids: readonly number[]): Promise<Map<number, Block>> {
     }
   }
   return blocks;
+}
+
+/** Block `id` as the backend holds it now, with `get-block`. */
+async function fetchBlock(id: number): Promise<Block> {
+  const block = await invokeBackend("get-block", id);
+  if (typeof block !== "object" || block === null || !("id" in block)) {
+    throw new OrcaError(`get-block returned ${JSON.stringify(block)}`);
+  }
+  return block as Block;
 }
 
 /**
@@ -1555,6 +1568,75 @@ export function createOrcaTaskRepository(
         // The task gained a reference; views read again (ADR 0007).
         onWritten(block.id);
       }
+    },
+
+    async createTasks(
+      placement: NewTasksPlacement,
+      tasks: readonly NewTask[],
+      also: readonly TaskWrite[] = [],
+    ): Promise<TaskId[]> {
+      const state = readyTag();
+      // Encoded and planned first: an invalidated property or a write in
+      // `also` that cannot be done fails before anything is written.
+      const encoded = tasks.map((task) =>
+        encodeTaskChanges(
+          { ...task.initial, status: task.status },
+          { language: state.language, invalidated: state.invalidated },
+        ),
+      );
+      const plans: NonNullable<Awaited<ReturnType<typeof planTaskWrite>>>[] =
+        [];
+      for (const write of also) {
+        const plan = await planTaskWrite(state, write);
+        if (plan) plans.push(plan);
+      }
+      // The source block for a mirror's ID (block-properties-json M3).
+      const parent = await sourceBlock(placement.blockId);
+      if (!parent) throw new OrcaError(`block ${placement.blockId} is gone`);
+      const ids: number[] = [];
+      try {
+        // One group: one undo for every task and every write in `also`
+        // (orca-ai C1, F1; multi-block-undo).
+        await invokeGroup(async () => {
+          for (const [index, task] of tasks.entries()) {
+            // The first goes in as the parent's last child, each next one
+            // right after the one before, the reference fetched afresh each
+            // time: lastChild of one parent object again and again puts them
+            // in reverse (orca-ai F1). A fetched block needs no cache (C2).
+            const previous = ids.at(-1);
+            const reference = await fetchBlock(previous ?? parent.id);
+            const id = await invokeEditorCommand(
+              "core.editor.insertBlock",
+              reference,
+              previous === undefined ? "lastChild" : "after",
+              // Plain text: tags and formatting in it are not parsed.
+              [{ t: "t", v: task.text }],
+            );
+            if (typeof id !== "number") {
+              throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+            }
+            ids.push(id);
+            // The status and initial values go in with the tag (orca-ai F1).
+            await invokeEditorCommand(
+              "core.editor.insertTag",
+              id,
+              state.tagName,
+              encoded[index] ?? [],
+            );
+          }
+          for (const plan of plans) await plan.run();
+        });
+      } finally {
+        for (const id of ids) onWritten(id);
+        for (const plan of plans) onWritten(plan.block.id);
+      }
+      return ids;
+    },
+
+    async readOutline(id: number): Promise<OutlineBlock | null> {
+      const block = await sourceBlock(id);
+      if (!block) return null;
+      return readOutline(block, currentTag());
     },
 
     async readCustomPropertyDefinitions() {
