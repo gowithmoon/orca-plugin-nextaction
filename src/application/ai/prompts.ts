@@ -29,7 +29,8 @@ const weekdays = [
   "Sunday",
 ] as const;
 
-const pad = (n: number) => String(n).padStart(2, "0");
+/** A number as two digits at least, for dates and times. */
+export const pad = (n: number) => String(n).padStart(2, "0");
 
 /** A calendar date as YYYY-MM-DD. */
 export function isoDate(date: CalendarDate): string {

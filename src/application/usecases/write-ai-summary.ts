@@ -5,6 +5,7 @@
 import { logicalDay } from "../../domain/time/logical-day";
 import {
   type PromptContext,
+  pad,
   type SummaryMaterial,
   type SummaryTask,
   summaryMessages,
@@ -28,8 +29,6 @@ function summaryTask(item: {
 }): SummaryTask {
   return { text: item.task.text, project: item.project?.text ?? null };
 }
-
-const pad = (n: number) => String(n).padStart(2, "0");
 
 /** A moment as the user's local date and time, "YYYY-MM-DD HH:MM". */
 function localMoment(at: Date): string {
