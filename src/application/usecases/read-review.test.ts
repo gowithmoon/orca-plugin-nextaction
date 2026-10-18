@@ -459,16 +459,22 @@ describe("read review", () => {
     it("lists the tasks created since the last full review, the earliest first, whatever their status", async () => {
       const { repository, readReview } = setup("2026-10-09T20:00:00+08:00");
       const created = (at: string) => ({ created: new Date(`${at}+08:00`) });
-      repository.addTask(
-        { id: 1, status: "todo", ...created("2026-10-12T08:00:00") },
-      );
+      repository.addTask({
+        id: 1,
+        status: "todo",
+        ...created("2026-10-12T08:00:00"),
+      });
       // Before the last full review.
-      repository.addTask(
-        { id: 2, status: "inbox", ...created("2026-10-09T19:00:00") },
-      );
-      repository.addTask(
-        { id: 3, status: "done", ...created("2026-10-10T08:00:00") },
-      );
+      repository.addTask({
+        id: 2,
+        status: "inbox",
+        ...created("2026-10-09T19:00:00"),
+      });
+      repository.addTask({
+        id: 3,
+        status: "done",
+        ...created("2026-10-10T08:00:00"),
+      });
 
       const { lookBack } = (await readReview()).steps;
 
