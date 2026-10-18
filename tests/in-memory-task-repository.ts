@@ -124,7 +124,7 @@ export interface InMemoryTaskRepository extends TaskRepository {
   writeCount(): number;
   /**
    * The day of the journal a block was appended to with
-   * `appendTaskToJournal`, or `undefined` when it was not.
+   * `appendTaskToJournal` or `createTasks`, or `undefined` when it was not.
    */
   journalOf(id: number): CalendarDate | undefined;
   /** Every `moveTask` that succeeded, oldest first. */
@@ -808,7 +808,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     async createTasks(placement, newTasks, also = []) {
-      if (!blocks.has(placement.blockId)) {
+      if (placement.kind !== "journal" && !blocks.has(placement.blockId)) {
         throw new Error(`no block ${placement.blockId}`);
       }
       // Checked before anything is written, as the port says.
@@ -817,12 +817,28 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         refuseUnreadable(block, taskWrite.id, taskWrite);
         return { block, taskWrite };
       });
-      const parentId = placement.blockId;
-      // After the block's last block below it, as Orca's lastChild puts it.
-      const below = [...blocks.entries()].filter(
-        ([id]) => id === parentId || isBelow(id, parentId),
-      );
-      const last = Math.max(...below.map(([, block]) => block.position));
+      // The parent the new tasks go below, and the last position before
+      // them: after the block's last block below it, as Orca's lastChild and
+      // after put it; at the end of the notes for a journal.
+      let parentId: number | undefined;
+      let last: number;
+      if (placement.kind === "journal") {
+        parentId = undefined;
+        last = Math.max(
+          0,
+          ...[...blocks.values()].map((block) => block.position),
+        );
+      } else {
+        const anchor = placement.blockId;
+        parentId =
+          placement.kind === "lastChild"
+            ? anchor
+            : (blocks.get(anchor) as StoredBlock).parentId;
+        const below = [...blocks.entries()].filter(
+          ([id]) => id === anchor || isBelow(id, anchor),
+        );
+        last = Math.max(...below.map(([, block]) => block.position));
+      }
       const ids = newTasks.map(() => nextId++);
       write(() => {
         for (const block of blocks.values()) {
@@ -831,6 +847,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         newTasks.forEach((newTask, index) => {
           const id = ids[index] as number;
           const created = new Date(0);
+          if (placement.kind === "journal") {
+            // get-journal-block picks the journal by local date (journal-capture J3).
+            const { now } = placement;
+            journalDays.set(id, {
+              year: now.getFullYear(),
+              month: now.getMonth() + 1,
+              day: now.getDate(),
+            });
+          }
           store(id, {
             text: newTask.text,
             created,

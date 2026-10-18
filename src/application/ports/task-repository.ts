@@ -135,12 +135,19 @@ export interface OutlineBlock {
   readonly children: readonly OutlineBlock[];
 }
 
-/** Where `createTasks` puts the new tasks: the last child blocks of a block. */
-export interface NewTasksPlacement {
-  readonly kind: "lastChild";
-  /** A mirror's ID stands for its source block. */
-  readonly blockId: number;
-}
+/**
+ * Where `createTasks` puts the new tasks: the last child blocks of a block;
+ * right after a block, at its level (#204); or at the end of the journal of
+ * the calendar day `now` falls on in local time (not the logical day, ADR
+ * 0005), created if it does not exist yet (#204).
+ */
+export type NewTasksPlacement =
+  | {
+      readonly kind: "lastChild" | "after";
+      /** A mirror's ID stands for its source block. */
+      readonly blockId: number;
+    }
+  | { readonly kind: "journal"; readonly now: Date };
 
 /** One task `createTasks` creates. */
 export interface NewTask {
