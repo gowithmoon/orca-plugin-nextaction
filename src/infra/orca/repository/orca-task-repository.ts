@@ -1493,7 +1493,8 @@ export function createOrcaTaskRepository(
       // top-level block, the lines below it its children, one undo, no tag
       // created. The title is kept to one line. A Markdown heading in the
       // body starts a top-level block of its own instead (C3); not worked
-      // around here, as writing it any other way is not measured.
+      // around here, as writing it any other way is not measured. The AI
+      // summary's prompt asks for no headings.
       await invokeEditorCommand(
         "core.editor.batchInsertText",
         journal,

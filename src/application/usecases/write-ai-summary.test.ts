@@ -209,6 +209,21 @@ describe("write AI summary: what the AI is given", () => {
     );
   });
 
+  it("asks for the two parts' names as plain lines, not Markdown headings, as a heading would become a block of its own in the journal", async () => {
+    const { chat, writeAiSummary } = setup([streamReply("ok")]);
+
+    await pieces(writeAiSummary(noSignal()));
+
+    const sent = requestText(chat.requests()[0]);
+    expect(sent).toContain(
+      'a line reading just "This period", then 2 to 4 sentences',
+    );
+    expect(sent).toContain(
+      'a line reading just "Worth noting", then at most 5 items as a "- " list',
+    );
+    expect(sent).toContain("not as Markdown headings: no line starts with #");
+  });
+
   it("gives the user's AI instructions when they are set", async () => {
     const { repository, chat, aiInstructions, writeAiSummary } = setup([
       streamReply("ok"),
