@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createFixedAiInstructions } from "../../../tests/fixed-ai-instructions";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
@@ -9,20 +10,27 @@ import {
   type ScriptedAnswer,
   toolResults,
 } from "../../../tests/scripted-ai-chat";
+import { createReadUserInstructions } from "../ai/user-instructions";
 import { createDraftExtractedTasks } from "./draft-extracted-tasks";
 
 function setup(answers: readonly ScriptedAnswer[]) {
   const repository = createInMemoryTaskRepository();
   const chat = createScriptedAiChat(answers);
   const clock = createFixedClock("2026-10-18T09:00:00+08:00");
+  const aiInstructions = createFixedAiInstructions();
   const draftExtractedTasks = createDraftExtractedTasks({
     repository,
     chat,
     clock,
     dayBoundary: createFixedDayBoundary(),
     uiLanguage: () => "Simplified Chinese",
+    userInstructions: createReadUserInstructions({
+      repository,
+      setting: aiInstructions,
+      warn: () => {},
+    }),
   });
-  return { repository, chat, draftExtractedTasks };
+  return { repository, chat, aiInstructions, draftExtractedTasks };
 }
 
 const propose = (args: unknown) =>
@@ -54,6 +62,37 @@ describe("draft extracted tasks: what the AI is given", () => {
         "  - Paint the fence",
       ].join("\n"),
     );
+  });
+});
+
+describe("draft extracted tasks: the user's AI instructions", () => {
+  it("gives the instructions block and every block below it", async () => {
+    const { repository, chat, aiInstructions, draftExtractedTasks } = setup([
+      propose({ items: [] }),
+    ]);
+    repository.addBlock(1, { text: "Meeting notes" });
+    repository.addBlock(20, { text: "About me" });
+    repository.addBlock(21, { text: "I lead the team", parentId: 20 });
+    aiInstructions.set(20);
+
+    await draftExtractedTasks([1], noSignal());
+
+    expect(requestText(chat.requests()[0])).toContain(
+      "<user_instructions>\n- About me\n  - I lead the team\n</user_instructions>",
+    );
+  });
+
+  it("goes on without instructions when the block does not exist", async () => {
+    const { repository, chat, aiInstructions, draftExtractedTasks } = setup([
+      propose({ items: [] }),
+    ]);
+    repository.addBlock(1, { text: "Meeting notes" });
+    aiInstructions.set(99);
+
+    const result = await draftExtractedTasks([1], noSignal());
+
+    expect(result).toEqual({ kind: "nothing" });
+    expect(requestText(chat.requests()[0])).not.toContain("user_instructions");
   });
 });
 
