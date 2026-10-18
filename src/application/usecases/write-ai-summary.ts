@@ -3,16 +3,14 @@
 // comes. Nothing is written to the notes here (ADR 0026).
 
 import { logicalDay } from "../../domain/time/logical-day";
+import type { ReadPromptContext } from "../ai/prompt-context";
 import {
-  type PromptContext,
   pad,
   type SummaryMaterial,
   type SummaryTask,
   summaryMessages,
 } from "../ai/prompts";
-import type { ReadUserInstructions } from "../ai/user-instructions";
 import type { AiChat } from "../ports/ai-chat";
-import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { ReadReview, ReadReviewResult } from "./read-review";
 
@@ -89,24 +87,17 @@ function summaryMaterial(
 export function createWriteAiSummary(deps: {
   readReview: ReadReview;
   chat: AiChat;
-  clock: Clock;
+  /** For the logical days the completions and skips were on. */
   dayBoundary: DayBoundarySetting;
-  /** Orca's interface language, by name, for the summary's language. */
-  uiLanguage: () => string;
-  /** The user's AI instructions (GLOSSARY: AI 说明), read for each request. */
-  userInstructions: ReadUserInstructions;
+  /** Today, the interface language and the AI instructions, per request. */
+  promptContext: ReadPromptContext;
 }): WriteAiSummary {
   return async function* (signal) {
     const boundary = deps.dayBoundary.current();
-    const [read, userInstructions] = await Promise.all([
+    const [read, context] = await Promise.all([
       deps.readReview(),
-      deps.userInstructions(),
+      deps.promptContext(),
     ]);
-    const context: PromptContext = {
-      today: logicalDay(deps.clock.now(), boundary),
-      uiLanguage: deps.uiLanguage(),
-      ...(userInstructions !== undefined && { userInstructions }),
-    };
     yield* deps.chat.stream(
       summaryMessages(summaryMaterial(read, boundary), context),
       signal,

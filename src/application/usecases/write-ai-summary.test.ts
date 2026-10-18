@@ -11,6 +11,7 @@ import {
   type ScriptedAnswer,
   streamReply,
 } from "../../../tests/scripted-ai-chat";
+import { createReadPromptContext } from "../ai/prompt-context";
 import { createReadUserInstructions } from "../ai/user-instructions";
 import { AiCancelledError, AiRequestFailedError } from "../ports/ai-chat";
 import { createReadReview } from "./read-review";
@@ -35,13 +36,16 @@ function setup(
       lastFullReview: createInMemoryLastFullReview(lastFullReviewAt),
     }),
     chat,
-    clock,
     dayBoundary,
-    uiLanguage: () => "Simplified Chinese",
-    userInstructions: createReadUserInstructions({
-      repository,
-      setting: aiInstructions,
-      warn: () => {},
+    promptContext: createReadPromptContext({
+      clock,
+      dayBoundary,
+      uiLanguage: () => "Simplified Chinese",
+      userInstructions: createReadUserInstructions({
+        repository,
+        setting: aiInstructions,
+        warn: () => {},
+      }),
     }),
   });
   return { repository, chat, aiInstructions, writeAiSummary };

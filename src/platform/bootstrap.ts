@@ -1,8 +1,11 @@
+import { createReadPromptContext } from "../application/ai/prompt-context";
 import { createReadUserInstructions } from "../application/ai/user-instructions";
+import { systemClock } from "../infra/system-clock";
 import { describeError } from "../shared/describe-error";
 import { setupL10N, t } from "../shared/l10n/l10n";
 import zhCN from "../shared/l10n/zh-cn";
 import { createLoadAiInstructions } from "./ai-instructions";
+import { uiLanguage } from "./ai-language";
 import { createLoadDayBoundary } from "./day-boundary";
 import { createExtractTasksFeature } from "./extract-tasks-feature";
 import { createPanelFeature } from "./panel-feature";
@@ -161,16 +164,22 @@ export function createNextActionPlugin(): Plugin {
     setting: aiInstructions.aiInstructions,
     warn: (message) => console.warn(`[nextaction] ${message}`),
   });
+  // What every AI request is given besides its material (#201), shared by
+  // every AI feature.
+  const promptContext = createReadPromptContext({
+    clock: systemClock,
+    dayBoundary: day.dayBoundary,
+    uiLanguage,
+    userInstructions,
+  });
   const splitSubtasks = createSplitSubtasksFeature({
     repository,
-    dayBoundary: day.dayBoundary,
-    userInstructions,
+    promptContext,
   });
   const extractTasks = createExtractTasksFeature({
     repository,
-    dayBoundary: day.dayBoundary,
     today: day.today,
-    userInstructions,
+    promptContext,
     taskTagBlockId: taskTag.taskTagBlockId,
   });
   const taskMenu = createTaskMenuFeature({
@@ -206,7 +215,7 @@ export function createNextActionPlugin(): Plugin {
       current: taskTag.taskTagBlockId,
       subscribe: taskTag.names.subscribe,
     },
-    userInstructions,
+    promptContext,
   });
   return createPlugin({
     features: [

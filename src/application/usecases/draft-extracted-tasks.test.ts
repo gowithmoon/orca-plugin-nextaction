@@ -10,6 +10,7 @@ import {
   type ScriptedAnswer,
   toolResults,
 } from "../../../tests/scripted-ai-chat";
+import { createReadPromptContext } from "../ai/prompt-context";
 import { createReadUserInstructions } from "../ai/user-instructions";
 import { createDraftExtractedTasks } from "./draft-extracted-tasks";
 
@@ -21,13 +22,15 @@ function setup(answers: readonly ScriptedAnswer[]) {
   const draftExtractedTasks = createDraftExtractedTasks({
     repository,
     chat,
-    clock,
-    dayBoundary: createFixedDayBoundary(),
-    uiLanguage: () => "Simplified Chinese",
-    userInstructions: createReadUserInstructions({
-      repository,
-      setting: aiInstructions,
-      warn: () => {},
+    promptContext: createReadPromptContext({
+      clock,
+      dayBoundary: createFixedDayBoundary(),
+      uiLanguage: () => "Simplified Chinese",
+      userInstructions: createReadUserInstructions({
+        repository,
+        setting: aiInstructions,
+        warn: () => {},
+      }),
     }),
   });
   return { repository, chat, aiInstructions, draftExtractedTasks };

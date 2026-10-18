@@ -1,4 +1,4 @@
-import type { ReadUserInstructions } from "../application/ai/user-instructions";
+import type { ReadPromptContext } from "../application/ai/prompt-context";
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
@@ -86,7 +86,6 @@ import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
 import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
 import { createStatsView } from "../ui/views/stats/stats-view";
-import { uiLanguage } from "./ai-language";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -156,8 +155,8 @@ export function createPanelFeature(deps: {
   openQuickCapture: OpenQuickCapture;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
-  /** The user's AI instructions (#203), for the review's AI summary (#205). */
-  userInstructions: ReadUserInstructions;
+  /** What every AI request is given (#201), for the review's AI summary (#205). */
+  promptContext: ReadPromptContext;
 }): { feature: FeatureModule; views: PanelViews } {
   const { repository, changes, taskPanel } = deps;
   const views = createPanelViews();
@@ -355,10 +354,8 @@ export function createPanelFeature(deps: {
       writeAiSummary: createWriteAiSummary({
         readReview,
         chat: createOrcaAiChat(),
-        clock: systemClock,
         dayBoundary: deps.dayBoundary,
-        uiLanguage,
-        userInstructions: deps.userInstructions,
+        promptContext: deps.promptContext,
       }),
       writeSummaryToJournal: createWriteSummaryToJournal({
         repository,

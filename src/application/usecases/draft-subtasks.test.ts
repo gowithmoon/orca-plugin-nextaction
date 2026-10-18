@@ -12,6 +12,7 @@ import {
   toolResults,
 } from "../../../tests/scripted-ai-chat";
 import { AiDraftFailedError } from "../ai/conversation";
+import { createReadPromptContext } from "../ai/prompt-context";
 import { createReadUserInstructions } from "../ai/user-instructions";
 import { AiCancelledError, AiRequestFailedError } from "../ports/ai-chat";
 import type { TaskRepository } from "../ports/task-repository";
@@ -32,17 +33,19 @@ function setup(
   const draftSubtasks = createDraftSubtasks({
     repository,
     chat,
-    clock,
-    dayBoundary: createFixedDayBoundary(),
-    uiLanguage: () => "Simplified Chinese",
-    userInstructions: createReadUserInstructions({
-      repository: {
-        readOutline:
-          options.readInstructionsOutline ??
-          ((id) => repository.readOutline(id)),
-      },
-      setting: aiInstructions,
-      warn: (message) => warnings.push(message),
+    promptContext: createReadPromptContext({
+      clock,
+      dayBoundary: createFixedDayBoundary(),
+      uiLanguage: () => "Simplified Chinese",
+      userInstructions: createReadUserInstructions({
+        repository: {
+          readOutline:
+            options.readInstructionsOutline ??
+            ((id) => repository.readOutline(id)),
+        },
+        setting: aiInstructions,
+        warn: (message) => warnings.push(message),
+      }),
     }),
   });
   return { repository, chat, clock, aiInstructions, warnings, draftSubtasks };

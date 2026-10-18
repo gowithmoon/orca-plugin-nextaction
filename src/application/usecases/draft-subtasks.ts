@@ -3,7 +3,6 @@
 // to edit in the window, nothing is written here (ADR 0026).
 
 import type { TaskId, TaskStatus } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
 import {
   nonBlank,
   type Parsed,
@@ -12,18 +11,15 @@ import {
   type ToolSpec,
 } from "../ai/conversation";
 import { outlineText, withoutTasks } from "../ai/outline-text";
+import type { ReadPromptContext } from "../ai/prompt-context";
 import {
   answersResult,
   askQuestionsTool,
-  type PromptContext,
   proposeSubtasksTool,
   type SplitMaterial,
   splitMessages,
 } from "../ai/prompts";
-import type { ReadUserInstructions } from "../ai/user-instructions";
 import type { AiChat } from "../ports/ai-chat";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
 import { createReadProjectOfTask } from "./read-project-of-task";
 
@@ -130,12 +126,8 @@ const proposeSpec: ToolSpec<unknown> = {
 export function createDraftSubtasks(deps: {
   repository: TaskRepository;
   chat: AiChat;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  /** Orca's interface language, by name, for the AI's questions. */
-  uiLanguage: () => string;
-  /** The user's AI instructions (GLOSSARY: AI 说明), read for each request. */
-  userInstructions: ReadUserInstructions;
+  /** Today, the interface language and the AI instructions, per request. */
+  promptContext: ReadPromptContext;
 }): DraftSubtasks {
   const readProjectOfTask = createReadProjectOfTask(deps);
 
@@ -166,12 +158,7 @@ export function createDraftSubtasks(deps: {
 
   return async (id, signal) => {
     const split = await material(id);
-    const userInstructions = await deps.userInstructions();
-    const context: PromptContext = {
-      today: logicalDay(deps.clock.now(), deps.dayBoundary.current()),
-      uiLanguage: deps.uiLanguage(),
-      ...(userInstructions !== undefined && { userInstructions }),
-    };
+    const context = await deps.promptContext();
     const messages = splitMessages(split, context);
     const first = await requestToolCall(
       deps.chat,

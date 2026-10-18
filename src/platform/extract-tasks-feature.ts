@@ -2,8 +2,7 @@
 // runs with Orca's AI chat behind the AiChat port (ADR 0026), and where it
 // starts: the block menu, an editor command for the block at the cursor and
 // its `/` entry. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
-import type { ReadUserInstructions } from "../application/ai/user-instructions";
-import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
+import type { ReadPromptContext } from "../application/ai/prompt-context";
 import type { TaskRepository } from "../application/ports/task-repository";
 import {
   createCreateExtractedTasks,
@@ -21,14 +20,12 @@ import {
 import { createMemoryStore } from "../ui/components/memory-store";
 import { createExtractTasksWindow } from "../ui/extract/extract-tasks-window";
 import { extractTasksCss } from "../ui/styles/extract-tasks-style";
-import { uiLanguage } from "./ai-language";
 import type { FeatureModule } from "./bootstrap";
 
 export function createExtractTasksFeature(deps: {
   repository: TaskRepository;
-  dayBoundary: DayBoundarySetting;
   today: () => CalendarDate;
-  userInstructions: ReadUserInstructions;
+  promptContext: ReadPromptContext;
   /** The task tag block's ID; `undefined` while task features are paused. */
   taskTagBlockId: () => number | undefined;
 }): FeatureModule {
@@ -40,10 +37,7 @@ export function createExtractTasksFeature(deps: {
         draftExtractedTasks: createDraftExtractedTasks({
           repository: deps.repository,
           chat: createOrcaAiChat(),
-          clock: systemClock,
-          dayBoundary: deps.dayBoundary,
-          uiLanguage,
-          userInstructions: deps.userInstructions,
+          promptContext: deps.promptContext,
         }),
         createExtractedTasks: createCreateExtractedTasks({
           repository: deps.repository,

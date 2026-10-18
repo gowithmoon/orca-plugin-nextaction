@@ -4,7 +4,6 @@
 // here (ADR 0026).
 import type { CalendarDate } from "../../domain/task/task";
 import { daysInMonth } from "../../domain/time/calendar-days";
-import { logicalDay } from "../../domain/time/logical-day";
 import {
   nonBlank,
   type Parsed,
@@ -14,15 +13,9 @@ import {
 } from "../ai/conversation";
 import { extractMessages, proposeTasksTool } from "../ai/extract-prompts";
 import { outlineText } from "../ai/outline-text";
-import {
-  answersResult,
-  askQuestionsTool,
-  type PromptContext,
-} from "../ai/prompts";
-import type { ReadUserInstructions } from "../ai/user-instructions";
+import type { ReadPromptContext } from "../ai/prompt-context";
+import { answersResult, askQuestionsTool } from "../ai/prompts";
 import type { AiChat } from "../ports/ai-chat";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { OutlineBlock, TaskRepository } from "../ports/task-repository";
 
 /** One task the AI found. */
@@ -141,12 +134,8 @@ const proposeSpec: ToolSpec<unknown> = {
 export function createDraftExtractedTasks(deps: {
   repository: TaskRepository;
   chat: AiChat;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  /** Orca's interface language, by name, for the AI's questions. */
-  uiLanguage: () => string;
-  /** The user's AI instructions (GLOSSARY: AI 说明), read for each request. */
-  userInstructions: ReadUserInstructions;
+  /** Today, the interface language and the AI instructions, per request. */
+  promptContext: ReadPromptContext;
 }): DraftExtractedTasks {
   return async (blockIds, signal) => {
     const outlines: OutlineBlock[] = [];
@@ -154,12 +143,7 @@ export function createDraftExtractedTasks(deps: {
       const outline = await deps.repository.readOutline(id);
       if (outline) outlines.push(outline);
     }
-    const userInstructions = await deps.userInstructions();
-    const context: PromptContext = {
-      today: logicalDay(deps.clock.now(), deps.dayBoundary.current()),
-      uiLanguage: deps.uiLanguage(),
-      ...(userInstructions !== undefined && { userInstructions }),
-    };
+    const context = await deps.promptContext();
     const first = await requestToolCall(
       deps.chat,
       extractMessages(outlineText(outlines), context),
