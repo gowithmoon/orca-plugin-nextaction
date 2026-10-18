@@ -127,6 +127,15 @@ export interface InMemoryTaskRepository extends TaskRepository {
    * `appendTaskToJournal` or `createTasks`, or `undefined` when it was not.
    */
   journalOf(id: number): CalendarDate | undefined;
+  /**
+   * Every `appendTextToJournal` that succeeded, oldest first, with the day
+   * of the journal it went to; the blocks themselves are not modelled.
+   */
+  journalTexts(): readonly {
+    day: CalendarDate;
+    title: string;
+    body: string;
+  }[];
   /** Every `moveTask` that succeeded, oldest first. */
   moves(): readonly TaskMove[];
   /** Every `linkTaskInNote` that succeeded, oldest first; the notes are not modelled. */
@@ -217,6 +226,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     [];
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
+  const journalTexts: { day: CalendarDate; title: string; body: string }[] = [];
   /** IDs of new blocks, far from the ones tests pick. */
   let nextId = 100_000;
   /** Reference IDs of 所属项目 values, far from block IDs too. */
@@ -499,6 +509,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     writeCount: () => writes,
 
     journalOf: (id) => journalDays.get(id),
+
+    journalTexts: () => journalTexts.map((entry) => ({ ...entry })),
 
     moves: () => [...moves],
 
@@ -972,6 +984,21 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         });
       });
       return id;
+    },
+
+    async appendTextToJournal(title, body, now) {
+      write(() => {
+        // get-journal-block picks the journal by local date (journal-capture J3).
+        journalTexts.push({
+          day: {
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            day: now.getDate(),
+          },
+          title,
+          body,
+        });
+      });
     },
 
     async appendTaskToJournal(text, now, initial = {}) {

@@ -371,6 +371,63 @@ export const panelCss = `
 }
 
 /*
+ * The AI summary (#205): its buttons, the text as it comes and to edit, the
+ * question before replacing an edited text, and a failure in place.
+ */
+.nextaction-review-ai-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  align-self: stretch;
+}
+
+.nextaction-review-ai-summary-actions,
+.nextaction-review-ai-summary-confirm,
+.nextaction-review-ai-summary-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+.nextaction-review-ai-summary-confirm,
+.nextaction-review-ai-summary-failed {
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border-radius: var(--orca-radius-md);
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-review-ai-summary-status,
+.nextaction-review-ai-summary-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orca-spacing-xs);
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-review-ai-summary-status .ti {
+  animation: nextaction-review-ai-spin 1s linear infinite;
+}
+
+@keyframes nextaction-review-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nextaction-review-ai-summary-status .ti {
+    animation: none;
+  }
+}
+
+.nextaction-review-ai-summary-text {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+/*
  * Look back (#102): its two groups' titles, and the completions and skips as
  * one compact row each: which it was, the task's text cut to a line, when.
  */

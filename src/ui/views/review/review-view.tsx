@@ -24,6 +24,8 @@ import {
   type ReviewKeep,
   type ReviewStepKey,
 } from "../../../application/usecases/read-review";
+import type { WriteAiSummary } from "../../../application/usecases/write-ai-summary";
+import type { WriteSummaryToJournal } from "../../../application/usecases/write-summary-to-journal";
 import type { ProjectId } from "../../../domain/project/project";
 import { quickDueDate } from "../../../domain/review/due-steps";
 import type { CalendarDate, Task, TaskId } from "../../../domain/task/task";
@@ -72,6 +74,7 @@ import {
   ProjectGroupPart,
   ProjectsPausedNotice,
 } from "../projects/projects-view";
+import { AiSummarySection } from "./ai-summary-section";
 import type { ReviewPage, ReviewPageStore } from "./review-page-store";
 import {
   adjacentStep,
@@ -131,6 +134,10 @@ export interface ReviewViewDeps {
    * shows the projects view.
    */
   openProject: Pick<OpenProjectStore, "set">;
+  /** The summary's "AI summary" (#205): the AI's text, streamed. */
+  writeAiSummary: WriteAiSummary;
+  /** The summary's "Write to today's journal" (#205). */
+  writeSummaryToJournal: WriteSummaryToJournal;
 }
 
 /** A step whose listed tasks or projects stay in place while it shows. */
@@ -592,6 +599,7 @@ function LookBackHistory(props: {
  */
 function SummaryPage(props: {
   query: ViewQuery<ReadReviewResult>;
+  deps: ReviewViewDeps;
   opened: readonly FullReviewStepId[];
   onOpen: (step: FullReviewStepId) => void;
   onComplete: () => void;
@@ -681,6 +689,11 @@ function SummaryPage(props: {
           </ul>
         </div>
       )}
+      <AiSummarySection
+        writeAiSummary={props.deps.writeAiSummary}
+        writeSummaryToJournal={props.deps.writeSummaryToJournal}
+        notify={props.deps.taskActions.notify}
+      />
       <div>
         <Button variant="solid" onClick={props.onComplete}>
           <i className="ti ti-circle-check" aria-hidden="true" />
@@ -870,6 +883,7 @@ function FullReviewPage(props: {
       {page.step === "summary" && (
         <SummaryPage
           query={query}
+          deps={deps}
           opened={page.opened}
           onOpen={onOpen}
           onComplete={props.onComplete}

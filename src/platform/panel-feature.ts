@@ -1,3 +1,4 @@
+import type { ReadUserInstructions } from "../application/ai/user-instructions";
 import type { DayBoundarySetting } from "../application/ports/day-boundary-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
@@ -27,12 +28,17 @@ import { createReadStats } from "../application/usecases/read-stats";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
 import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
+import { createWriteAiSummary } from "../application/usecases/write-ai-summary";
+import { createWriteSummaryToJournal } from "../application/usecases/write-summary-to-journal";
 import type { CalendarDate } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
 import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
+import { createOrcaAiChat } from "../infra/orca/orca-ai-chat";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignal, ChangeSignalSource } from "../shared/change-signal";
+import { t } from "../shared/l10n/l10n";
 import type { OpenQuickCapture } from "../ui/capture/quick-capture-popup";
+import { formatDate } from "../ui/components/format";
 import type { LayoutStore } from "../ui/components/layout-store";
 import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
@@ -80,6 +86,7 @@ import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
 import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
 import { createStatsView } from "../ui/views/stats/stats-view";
+import { uiLanguage } from "./ai-language";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -149,6 +156,8 @@ export function createPanelFeature(deps: {
   openQuickCapture: OpenQuickCapture;
   /** The block the panel's hidden editor shows: the task tag block. */
   editorHost: EditorHost;
+  /** The user's AI instructions (#203), for the review's AI summary (#205). */
+  userInstructions: ReadUserInstructions;
 }): { feature: FeatureModule; views: PanelViews } {
   const { repository, changes, taskPanel } = deps;
   const views = createPanelViews();
@@ -333,12 +342,30 @@ export function createPanelFeature(deps: {
       }),
     }),
   );
+  const readReview = createReadReview({
+    ...myDayDeps,
+    startPreviewDays: deps.startPreviewDays,
+    lastFullReview,
+  });
   views.register(
     createReviewView({
-      readReview: createReadReview({
-        ...myDayDeps,
-        startPreviewDays: deps.startPreviewDays,
-        lastFullReview,
+      readReview,
+      // The AI summary (#205), with Orca's AI chat behind the AiChat port
+      // (ADR 0026); read over the same range as look back.
+      writeAiSummary: createWriteAiSummary({
+        readReview,
+        chat: createOrcaAiChat(),
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        uiLanguage,
+        userInstructions: deps.userInstructions,
+      }),
+      writeSummaryToJournal: createWriteSummaryToJournal({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        summaryTitle: (day) =>
+          t("AI summary (${day})", { day: formatDate(day, day) }),
       }),
       completeFullReview: createCompleteFullReview({
         clock: systemClock,

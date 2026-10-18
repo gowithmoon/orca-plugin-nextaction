@@ -732,6 +732,21 @@ const zhCN: Record<string, string> = {
     "AI 在所选内容里没有找到要做的事。已经是任务的块不会再提取。",
   "${count} tasks created": "已新建 ${count} 个任务",
   "Could not create the tasks: ${reason}": "没能新建任务：${reason}",
+  // AI summary (#205).
+  "AI summary": "AI 小结",
+  "AI summary (${day})": "AI 小结（${day}）",
+  "Write it again": "重新生成",
+  "The AI is writing…": "AI 正在写……",
+  "Replace your edited summary with a new one?":
+    "小结已经改过，要用新生成的替换吗？",
+  "Keep editing": "继续修改",
+  Replace: "替换",
+  "Write to today's journal": "写进今天日记",
+  "Only what you write down is kept.": "不写进日记就不会保留。",
+  "Could not get the AI summary: ${reason}": "没能生成 AI 小结：${reason}",
+  "The AI summary was written to today's journal": "AI 小结已写进今天日记",
+  "Could not write the AI summary to the journal: ${reason}":
+    "没能把 AI 小结写进日记：${reason}",
 };
 
 export default zhCN;

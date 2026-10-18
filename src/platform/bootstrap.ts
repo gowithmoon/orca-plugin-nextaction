@@ -206,6 +206,7 @@ export function createNextActionPlugin(): Plugin {
       current: taskTag.taskTagBlockId,
       subscribe: taskTag.names.subscribe,
     },
+    userInstructions,
   });
   return createPlugin({
     features: [

@@ -1475,6 +1475,40 @@ export function createOrcaTaskRepository(
       return id;
     },
 
+    async appendTextToJournal(
+      title: string,
+      body: string,
+      now: Date,
+    ): Promise<void> {
+      // As appendTaskToJournal: the journal by local date, created when
+      // missing, before the write below, so a journal it creates is not
+      // removed by the one undo (journal-capture J2, J3).
+      const journal = await invokeBackend("get-journal-block", now);
+      if (
+        typeof journal !== "object" ||
+        journal === null ||
+        !("id" in journal)
+      ) {
+        throw new OrcaError(
+          `get-journal-block returned ${JSON.stringify(journal)}`,
+        );
+      }
+      // One batchInsertText, as measured (orca-ai F2): the first line is one
+      // top-level block, the lines below it its children, one undo, no tag
+      // created. The title is kept to one line. A Markdown heading in the
+      // body starts a top-level block of its own instead (C3); not worked
+      // around here, as writing it any other way is not measured.
+      await invokeEditorCommand(
+        "core.editor.batchInsertText",
+        journal,
+        "lastChild",
+        `${title.replace(/\s*\n\s*/g, " ")}\n${body}`,
+        // Markdown parsed; tags not extracted (orca-ai C3).
+        false,
+        true,
+      );
+    },
+
     async appendSubtask(
       parentId: TaskId,
       text: string,

@@ -324,6 +324,16 @@ export interface TaskRepository {
   ): Promise<TaskId>;
 
   /**
+   * Writes a block `title`, as plain text, at the end of the journal of the
+   * calendar day `now` falls on in local time (not the logical day, ADR
+   * 0005), creating that journal if it does not exist yet, and `body`, as
+   * Markdown, as its children (#205): the whole folds as one block. Tags in
+   * either are left as text, never created (orca-ai C3). The user undoes it
+   * with one undo; a failed write writes nothing.
+   */
+  appendTextToJournal(title: string, body: string, now: Date): Promise<void>;
+
+  /**
    * Creates an inbox task with `text`, as plain text, as the last child
    * block of task `parentId` (#190), with the `initial` properties given but
    * no 所属项目: the parent task decides it (GLOSSARY: 所属项目). A mirror
