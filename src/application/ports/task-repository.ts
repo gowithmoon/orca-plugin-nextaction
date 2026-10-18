@@ -120,6 +120,38 @@ export type InitialProperties = Pick<
 };
 
 /**
+ * A block read as part of an outline (#201 读笔记内容为大纲), for the AI to
+ * read: its own content as text, without its children's, whether it is a
+ * task, and its child blocks in note order. A mirror reads as its source.
+ */
+export interface OutlineBlock {
+  /**
+   * Its own content as Markdown-like text, trimmed; empty when it shows
+   * nothing of its own (an empty block, a quote whose text is in its
+   * children). May span lines (a code block).
+   */
+  readonly text: string;
+  readonly isTask: boolean;
+  readonly children: readonly OutlineBlock[];
+}
+
+/** Where `createTasks` puts the new tasks: the last child blocks of a block. */
+export interface NewTasksPlacement {
+  readonly kind: "lastChild";
+  /** A mirror's ID stands for its source block. */
+  readonly blockId: number;
+}
+
+/** One task `createTasks` creates. */
+export interface NewTask {
+  /** Written as plain text. */
+  readonly text: string;
+  readonly status: TaskStatus;
+  /** As `InitialProperties`; no 所属项目: where it is put decides it. */
+  readonly initial?: Omit<InitialProperties, "project">;
+}
+
+/**
  * A write to one task (`updateTask`, `updateTasks`). Every part is optional:
  * what is absent is left as it is. The plugin block properties (completion
  * history, recurrence rule, reminders, My Day entries, review plan) are each
@@ -297,6 +329,26 @@ export interface TaskRepository {
     text: string,
     initial?: Omit<InitialProperties, "project">,
   ): Promise<TaskId>;
+
+  /**
+   * Creates `tasks` in their order at `placement` (#202), each as plain text
+   * with its status and initial properties, and applies `also` (writes to
+   * existing tasks, as `updateTasks` does) in the same undo: the user undoes
+   * all of it with one undo. Fails, writing nothing, when the placement's
+   * block does not exist or a write in `also` would fail. Returns the new
+   * tasks' IDs in order.
+   */
+  createTasks(
+    placement: NewTasksPlacement,
+    tasks: readonly NewTask[],
+    also?: readonly TaskWrite[],
+  ): Promise<TaskId[]>;
+
+  /**
+   * Block `id` and every block below it as an outline (#201), or `null`
+   * when there is no such block. A mirror's ID reads its source block.
+   */
+  readOutline(id: number): Promise<OutlineBlock | null>;
 
   /**
    * Moves the task's block, with every block below it, to `placement`

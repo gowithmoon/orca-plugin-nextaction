@@ -10,6 +10,7 @@ import type {
   ConvertToTaskResult,
   NotConvertibleReason,
   NoteTarget,
+  OutlineBlock,
   TaskFilter,
   TaskRepository,
   TaskWrite,
@@ -804,6 +805,72 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           }
         }
       });
+    },
+
+    async createTasks(placement, newTasks, also = []) {
+      if (!blocks.has(placement.blockId)) {
+        throw new Error(`no block ${placement.blockId}`);
+      }
+      // Checked before anything is written, as the port says.
+      const targets = also.map((taskWrite) => {
+        const block = taskToWrite(taskWrite.id);
+        refuseUnreadable(block, taskWrite.id, taskWrite);
+        return { block, taskWrite };
+      });
+      const parentId = placement.blockId;
+      // After the block's last block below it, as Orca's lastChild puts it.
+      const below = [...blocks.entries()].filter(
+        ([id]) => id === parentId || isBelow(id, parentId),
+      );
+      const last = Math.max(...below.map(([, block]) => block.position));
+      const ids = newTasks.map(() => nextId++);
+      write(() => {
+        for (const block of blocks.values()) {
+          if (block.position > last) block.position += newTasks.length;
+        }
+        newTasks.forEach((newTask, index) => {
+          const id = ids[index] as number;
+          const created = new Date(0);
+          store(id, {
+            text: newTask.text,
+            created,
+            parentId,
+            position: last + 1 + index,
+            notConvertible: undefined,
+            task: {
+              ...freshTask(id, newTask.text, created),
+              ...newTask.initial,
+              status: newTask.status,
+            },
+            completionHistory: undefined,
+            myDay: undefined,
+            page: false,
+            tags: [],
+            project: undefined,
+          });
+        });
+        for (const { block, taskWrite } of targets)
+          applyWrite(block, taskWrite);
+      });
+      return ids;
+    },
+
+    async readOutline(id) {
+      // Each block's own text, its children in note order; a task's text is
+      // its task's, as Orca shows it.
+      const outlineOf = (blockId: number): OutlineBlock => {
+        const block = blocks.get(blockId) as StoredBlock;
+        const children = [...blocks.entries()]
+          .filter(([, child]) => child.parentId === blockId)
+          .sort(([, a], [, b]) => a.position - b.position)
+          .map(([childId]) => outlineOf(childId));
+        return {
+          text: (block.task?.text ?? block.text).trim(),
+          isTask: block.task !== undefined,
+          children,
+        };
+      };
+      return blocks.has(id) ? outlineOf(id) : null;
     },
 
     async getProject(id) {
