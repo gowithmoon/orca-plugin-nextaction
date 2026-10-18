@@ -3,7 +3,10 @@
 // answer or skip the AI's questions, and cancels whatever is under way when
 // the window closes. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import { AiDraftFailedError } from "../../application/ai/conversation";
+import {
+  AiDraftFailedError,
+  type AiStart,
+} from "../../application/ai/conversation";
 import { AiCancelledError } from "../../application/ports/ai-chat";
 import type {
   DraftExtractedTasks,
@@ -16,18 +19,6 @@ import type {
 import type { TaskId } from "../../domain/task/task";
 import { t } from "../../shared/l10n/l10n";
 import { aiFailureText } from "../notify";
-
-/** What the first request gave, whatever the feature: questions or `D`. */
-type AiStart<D> =
-  | {
-      readonly kind: "questions";
-      readonly questions: readonly string[];
-      readonly answer: (
-        answers: readonly string[] | null,
-        signal: AbortSignal,
-      ) => Promise<D>;
-    }
-  | { readonly kind: "result"; readonly result: D };
 
 /** Where the conversation with the AI is. */
 export type AiDraftState<D> =
@@ -86,7 +77,7 @@ function useAiDraft<D>(
             start.current = result;
             setState({ kind: "questions", questions: result.questions });
           } else {
-            setState({ kind: "draft", draft: result.result });
+            setState({ kind: "draft", draft: result.draft });
           }
         },
         (error: unknown) => {
@@ -110,8 +101,8 @@ function useAiDraft<D>(
       const questions = start.current;
       if (!questions) return;
       run(async (signal) => ({
-        kind: "result",
-        result: await questions.answer(answers, signal),
+        kind: "draft",
+        draft: await questions.answer(answers, signal),
       }));
     },
     [run],
@@ -128,12 +119,7 @@ export function useSubtaskDraft(
   taskId: TaskId,
 ): AiDraft<SubtaskDraft> {
   const begin = React.useCallback(
-    async (signal: AbortSignal): Promise<AiStart<SubtaskDraft>> => {
-      const start = await draftSubtasks(taskId, signal);
-      return start.kind === "questions"
-        ? start
-        : { kind: "result", result: start.draft };
-    },
+    (signal: AbortSignal) => draftSubtasks(taskId, signal),
     [draftSubtasks, taskId],
   );
   return useAiDraft(begin);
@@ -145,12 +131,7 @@ export function useExtractDraft(
   blockIds: readonly number[],
 ): AiDraft<ExtractDraft> {
   const begin = React.useCallback(
-    async (signal: AbortSignal): Promise<AiStart<ExtractDraft>> => {
-      const start = await draftExtractedTasks(blockIds, signal);
-      return start.kind === "questions"
-        ? start
-        : { kind: "result", result: start };
-    },
+    (signal: AbortSignal) => draftExtractedTasks(blockIds, signal),
     [draftExtractedTasks, blockIds],
   );
   return useAiDraft(begin);

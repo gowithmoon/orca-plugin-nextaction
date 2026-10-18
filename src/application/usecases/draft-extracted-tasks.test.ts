@@ -41,6 +41,15 @@ const propose = (args: unknown) =>
 
 const noSignal = () => new AbortController().signal;
 
+/** The draft given at once, without questions. */
+async function draftOf(
+  start: ReturnType<ReturnType<typeof createDraftExtractedTasks>>,
+) {
+  const given = await start;
+  if (given.kind !== "draft") throw new Error("questions, not a draft");
+  return given.draft;
+}
+
 describe("draft extracted tasks: what the AI is given", () => {
   it("gives the selected blocks in the order given, each with everything below it, tasks marked", async () => {
     const { repository, chat, draftExtractedTasks } = setup([
@@ -92,7 +101,7 @@ describe("draft extracted tasks: the user's AI instructions", () => {
     repository.addBlock(1, { text: "Meeting notes" });
     aiInstructions.set(99);
 
-    const result = await draftExtractedTasks([1], noSignal());
+    const result = await draftOf(draftExtractedTasks([1], noSignal()));
 
     expect(result).toEqual({ kind: "nothing" });
     expect(requestText(chat.requests()[0])).not.toContain("user_instructions");
@@ -148,7 +157,7 @@ describe("draft extracted tasks: the draft", () => {
     ]);
     repository.addBlock(1, { text: "Notes" });
 
-    const result = await draftExtractedTasks([1], noSignal());
+    const result = await draftOf(draftExtractedTasks([1], noSignal()));
 
     expect(result).toEqual({
       kind: "draft",
@@ -178,7 +187,7 @@ describe("draft extracted tasks: the draft", () => {
     ]);
     repository.addBlock(1, { text: "Li will look into it" });
 
-    const result = await draftExtractedTasks([1], noSignal());
+    const result = await draftOf(draftExtractedTasks([1], noSignal()));
 
     expect(result).toEqual({
       kind: "draft",
@@ -196,7 +205,7 @@ describe("draft extracted tasks: the draft", () => {
     const { repository, draftExtractedTasks } = setup([propose({ items: [] })]);
     repository.addBlock(1, { text: "The sky was blue" });
 
-    const result = await draftExtractedTasks([1], noSignal());
+    const result = await draftOf(draftExtractedTasks([1], noSignal()));
 
     expect(result).toEqual({ kind: "nothing" });
   });

@@ -5,16 +5,15 @@
 import type { CalendarDate } from "../../domain/task/task";
 import { daysInMonth } from "../../domain/time/calendar-days";
 import {
+  type AiStart,
   nonBlank,
   type Parsed,
-  parseQuestions,
-  requestToolCall,
+  startDraft,
   type ToolSpec,
 } from "../ai/conversation";
 import { extractMessages, proposeTasksTool } from "../ai/extract-prompts";
 import { outlineText } from "../ai/outline-text";
 import type { ReadPromptContext } from "../ai/prompt-context";
-import { answersResult, askQuestionsTool } from "../ai/prompts";
 import type { AiChat } from "../ports/ai-chat";
 import type { OutlineBlock, TaskRepository } from "../ports/task-repository";
 
@@ -39,23 +38,6 @@ export type ExtractDraft =
   | { readonly kind: "nothing" };
 
 /**
- * What the first request gave: the AI's questions, to answer or skip with
- * `answer` (which asks for the draft, offering no more questions), or the
- * draft itself.
- */
-export type ExtractStart =
-  | {
-      readonly kind: "questions";
-      readonly questions: readonly string[];
-      /** `answers` in the questions' order, `null` to skip them. */
-      readonly answer: (
-        answers: readonly string[] | null,
-        signal: AbortSignal,
-      ) => Promise<ExtractDraft>;
-    }
-  | ExtractDraft;
-
-/**
  * Asks the AI for the tasks in blocks `blockIds` (in note order) and
  * everything below them. Fails, having written nothing, with
  * `AiDraftFailedError` when the AI gives nothing usable after the retries,
@@ -65,7 +47,7 @@ export type ExtractStart =
 export type DraftExtractedTasks = (
   blockIds: readonly number[],
   signal: AbortSignal,
-) => Promise<ExtractStart>;
+) => Promise<AiStart<ExtractDraft>>;
 
 /** A `YYYY-MM-DD` string naming a day that exists, or `undefined`. */
 function parseDate(value: unknown): CalendarDate | undefined {
@@ -122,11 +104,7 @@ export function parseExtractDraft(args: unknown): Parsed<ExtractDraft> {
   return { ok: true, value: { kind: "draft", items } };
 }
 
-const askSpec: ToolSpec<unknown> = {
-  tool: askQuestionsTool,
-  parse: parseQuestions,
-};
-const proposeSpec: ToolSpec<unknown> = {
+const proposeSpec: ToolSpec<ExtractDraft> = {
   tool: proposeTasksTool,
   parse: parseExtractDraft,
 };
@@ -144,29 +122,11 @@ export function createDraftExtractedTasks(deps: {
       if (outline) outlines.push(outline);
     }
     const context = await deps.promptContext();
-    const first = await requestToolCall(
+    return startDraft(
       deps.chat,
       extractMessages(outlineText(outlines), context),
-      [askSpec, proposeSpec],
+      proposeSpec,
       signal,
     );
-    if (first.name === proposeTasksTool.name) {
-      return first.value as ExtractDraft;
-    }
-    const questions = first.value as string[];
-    return {
-      kind: "questions",
-      questions,
-      answer: async (answers, answerSignal) => {
-        // Only propose_tasks now: at most one round of questions.
-        const next = await requestToolCall(
-          deps.chat,
-          first.continueWith(answersResult(questions, answers)),
-          [proposeSpec],
-          answerSignal,
-        );
-        return next.value as ExtractDraft;
-      },
-    };
   };
 }

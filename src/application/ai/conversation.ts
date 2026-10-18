@@ -11,6 +11,8 @@ import {
   type AiToolCall,
 } from "../ports/ai-chat";
 import {
+  answersResult,
+  askQuestionsTool,
   invalidArgumentsResult,
   notAvailableResult,
   notTakenResult,
@@ -183,6 +185,65 @@ export async function requestToolCall(
       history = [...history, assistant, ...answered()];
     }
   }
+}
+
+/**
+ * What the first request of a draft gave, whatever the feature: the AI's
+ * questions, to answer or skip with `answer` (which asks for the draft,
+ * offering no more questions), or the draft itself.
+ */
+export type AiStart<D> =
+  | {
+      readonly kind: "questions";
+      readonly questions: readonly string[];
+      /** `answers` in the questions' order, `null` to skip them. */
+      readonly answer: (
+        answers: readonly string[] | null,
+        signal: AbortSignal,
+      ) => Promise<D>;
+    }
+  | { readonly kind: "draft"; readonly draft: D };
+
+const askSpec: ToolSpec<unknown> = {
+  tool: askQuestionsTool,
+  parse: parseQuestions,
+};
+
+/**
+ * Sends `messages` offering `ask_questions` and `propose`, and gives the
+ * draft, or the questions with a way to answer them that offers `propose`
+ * only: at most one round of questions (#201 对话流程). Fails as
+ * `requestToolCall` does.
+ */
+export async function startDraft<D>(
+  chat: AiChat,
+  messages: readonly AiMessage[],
+  propose: ToolSpec<D>,
+  signal: AbortSignal,
+): Promise<AiStart<D>> {
+  const first = await requestToolCall(
+    chat,
+    messages,
+    [askSpec, propose],
+    signal,
+  );
+  if (first.name === propose.tool.name) {
+    return { kind: "draft", draft: first.value as D };
+  }
+  const questions = first.value as string[];
+  return {
+    kind: "questions",
+    questions,
+    answer: async (answers, answerSignal) => {
+      const next = await requestToolCall(
+        chat,
+        first.continueWith(answersResult(questions, answers)),
+        [propose],
+        answerSignal,
+      );
+      return next.value as D;
+    },
+  };
 }
 
 /** A string with something in it after trimming, or `undefined`. */

@@ -4,17 +4,15 @@
 
 import type { TaskId, TaskStatus } from "../../domain/task/task";
 import {
+  type AiStart,
   nonBlank,
   type Parsed,
-  parseQuestions,
-  requestToolCall,
+  startDraft,
   type ToolSpec,
 } from "../ai/conversation";
 import { outlineText, withoutTasks } from "../ai/outline-text";
 import type { ReadPromptContext } from "../ai/prompt-context";
 import {
-  answersResult,
-  askQuestionsTool,
   proposeSubtasksTool,
   type SplitMaterial,
   splitMessages,
@@ -39,23 +37,6 @@ export interface SubtaskDraft {
 }
 
 /**
- * What the first request gave: the AI's questions, to answer or skip with
- * `answer` (which asks for the draft, offering no more questions), or the
- * draft itself.
- */
-export type SplitStart =
-  | {
-      readonly kind: "questions";
-      readonly questions: readonly string[];
-      /** `answers` in the questions' order, `null` to skip them. */
-      readonly answer: (
-        answers: readonly string[] | null,
-        signal: AbortSignal,
-      ) => Promise<SubtaskDraft>;
-    }
-  | { readonly kind: "draft"; readonly draft: SubtaskDraft };
-
-/**
  * Asks the AI for a draft of task `id`'s subtasks. Fails, having written
  * nothing, when the block is not a task, with `AiDraftFailedError` when the
  * AI gives nothing usable after the retries, `AiRequestFailedError` when a
@@ -64,7 +45,7 @@ export type SplitStart =
 export type DraftSubtasks = (
   id: TaskId,
   signal: AbortSignal,
-) => Promise<SplitStart>;
+) => Promise<AiStart<SubtaskDraft>>;
 
 /** Status names as the AI reads them. */
 const statusText: Record<TaskStatus, string> = {
@@ -114,11 +95,7 @@ export function parseSubtaskDraft(args: unknown): Parsed<SubtaskDraft> {
   };
 }
 
-const askSpec: ToolSpec<unknown> = {
-  tool: askQuestionsTool,
-  parse: parseQuestions,
-};
-const proposeSpec: ToolSpec<unknown> = {
+const proposeSpec: ToolSpec<SubtaskDraft> = {
   tool: proposeSubtasksTool,
   parse: parseSubtaskDraft,
 };
@@ -159,30 +136,11 @@ export function createDraftSubtasks(deps: {
   return async (id, signal) => {
     const split = await material(id);
     const context = await deps.promptContext();
-    const messages = splitMessages(split, context);
-    const first = await requestToolCall(
+    return startDraft(
       deps.chat,
-      messages,
-      [askSpec, proposeSpec],
+      splitMessages(split, context),
+      proposeSpec,
       signal,
     );
-    if (first.name === proposeSubtasksTool.name) {
-      return { kind: "draft", draft: first.value as SubtaskDraft };
-    }
-    const questions = first.value as string[];
-    return {
-      kind: "questions",
-      questions,
-      answer: async (answers, answerSignal) => {
-        // Only propose_subtasks now: at most one round of questions.
-        const next = await requestToolCall(
-          deps.chat,
-          first.continueWith(answersResult(questions, answers)),
-          [proposeSpec],
-          answerSignal,
-        );
-        return next.value as SubtaskDraft;
-      },
-    };
   };
 }
