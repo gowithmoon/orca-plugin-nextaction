@@ -15,6 +15,9 @@ const zhCN: Record<string, string> = {
   "Start preview days": "开始日期预览天数",
   "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
     "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
+  "AI instructions block": "AI 说明块",
+  "The ID of a block in your notes, or ((ID)), telling the AI about you and your habits. The block and everything below it go with every AI request, to the AI service set up in Orca. Leave it empty for none.":
+    "填笔记里一个块的编号（也可以写成 ((编号))），在这个块里向 AI 介绍你的情况和习惯。每次请求 AI 时，这个块和它下面的所有内容都会一起发给你在 Orca 里配置的 AI 服务。不需要就留空。",
   'The task tag name cannot be empty. It was set back to "${name}".':
     "任务标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':

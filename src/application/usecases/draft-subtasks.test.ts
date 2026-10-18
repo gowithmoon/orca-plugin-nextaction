@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createFixedAiInstructions } from "../../../tests/fixed-ai-instructions";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
@@ -11,21 +12,40 @@ import {
   toolResults,
 } from "../../../tests/scripted-ai-chat";
 import { AiDraftFailedError } from "../ai/conversation";
+import { createReadUserInstructions } from "../ai/user-instructions";
 import { AiCancelledError, AiRequestFailedError } from "../ports/ai-chat";
+import type { TaskRepository } from "../ports/task-repository";
 import { createDraftSubtasks } from "./draft-subtasks";
 
-function setup(answers: readonly ScriptedAnswer[]) {
+function setup(
+  answers: readonly ScriptedAnswer[],
+  options: {
+    /** Replaces how the instructions block is read, e.g. to fail. */
+    readInstructionsOutline?: TaskRepository["readOutline"];
+  } = {},
+) {
   const repository = createInMemoryTaskRepository();
   const chat = createScriptedAiChat(answers);
   const clock = createFixedClock("2026-10-18T09:00:00+08:00");
+  const aiInstructions = createFixedAiInstructions();
+  const warnings: string[] = [];
   const draftSubtasks = createDraftSubtasks({
     repository,
     chat,
     clock,
     dayBoundary: createFixedDayBoundary(),
     uiLanguage: () => "Simplified Chinese",
+    userInstructions: createReadUserInstructions({
+      repository: {
+        readOutline:
+          options.readInstructionsOutline ??
+          ((id) => repository.readOutline(id)),
+      },
+      setting: aiInstructions,
+      warn: (message) => warnings.push(message),
+    }),
   });
-  return { repository, chat, clock, draftSubtasks };
+  return { repository, chat, clock, aiInstructions, warnings, draftSubtasks };
 }
 
 const propose = (args: unknown) =>
@@ -91,6 +111,102 @@ describe("draft subtasks: a task with little around it", () => {
 
     await expect(draftSubtasks(1, noSignal())).rejects.toThrow();
     expect(chat.requests()).toHaveLength(0);
+  });
+});
+
+describe("draft subtasks: the user's AI instructions", () => {
+  it("gives the instructions block and every block below it as an outline", async () => {
+    const { repository, chat, aiInstructions, warnings, draftSubtasks } = setup(
+      [propose({ items: [{ title: "Book the movers" }] })],
+    );
+    repository.addTask({ id: 1, text: "Move house" });
+    repository.addBlock(10, { text: "About me" });
+    repository.addBlock(11, { text: "I work from home", parentId: 10 });
+    repository.addBlock(12, { text: "Split into at most 5", parentId: 10 });
+    repository.addBlock(13, { text: "Small steps", parentId: 12 });
+    aiInstructions.set(10);
+
+    await draftSubtasks(1, noSignal());
+
+    expect(requestText(chat.requests()[0])).toContain(
+      "<user_instructions>\n- About me\n  - I work from home\n  - Split into at most 5\n    - Small steps\n</user_instructions>",
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("gives no instructions, warning nothing, when the block and those below it are empty", async () => {
+    const { repository, chat, aiInstructions, warnings, draftSubtasks } = setup(
+      [propose({ items: [{ title: "Book the movers" }] })],
+    );
+    repository.addTask({ id: 1, text: "Move house" });
+    repository.addBlock(10, { text: "" });
+    repository.addBlock(11, { text: "   ", parentId: 10 });
+    aiInstructions.set(10);
+
+    await draftSubtasks(1, noSignal());
+
+    expect(requestText(chat.requests()[0])).not.toContain("user_instructions");
+    expect(warnings).toEqual([]);
+  });
+
+  it("gives no instructions when the setting names no block", async () => {
+    const { repository, chat, warnings, draftSubtasks } = setup([
+      propose({ items: [{ title: "Book the movers" }] }),
+    ]);
+    repository.addTask({ id: 1, text: "Move house" });
+
+    await draftSubtasks(1, noSignal());
+
+    expect(requestText(chat.requests()[0])).not.toContain("user_instructions");
+    expect(warnings).toEqual([]);
+  });
+
+  it("goes on without instructions when the block does not exist, warning once for it", async () => {
+    const { repository, chat, aiInstructions, warnings, draftSubtasks } = setup(
+      [
+        propose({ items: [{ title: "Book the movers" }] }),
+        propose({ items: [{ title: "Book the movers" }] }),
+      ],
+    );
+    repository.addTask({ id: 1, text: "Move house" });
+    aiInstructions.set(99);
+
+    const first = await draftSubtasks(1, noSignal());
+    await draftSubtasks(1, noSignal());
+
+    expect(first.kind).toBe("draft");
+    expect(chat.requests()).toHaveLength(2);
+    for (const request of chat.requests()) {
+      expect(requestText(request)).not.toContain("user_instructions");
+    }
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("99");
+  });
+
+  it("goes on without instructions when the block cannot be read, warning once for it", async () => {
+    const { repository, chat, aiInstructions, warnings, draftSubtasks } = setup(
+      [
+        propose({ items: [{ title: "Book the movers" }] }),
+        propose({ items: [{ title: "Book the movers" }] }),
+      ],
+      {
+        readInstructionsOutline: async () => {
+          throw new Error("get-block-tree failed");
+        },
+      },
+    );
+    repository.addTask({ id: 1, text: "Move house" });
+    aiInstructions.set(10);
+
+    await draftSubtasks(1, noSignal());
+    await draftSubtasks(1, noSignal());
+
+    expect(chat.requests()).toHaveLength(2);
+    for (const request of chat.requests()) {
+      expect(requestText(request)).not.toContain("user_instructions");
+    }
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("get-block-tree failed");
   });
 });
 
