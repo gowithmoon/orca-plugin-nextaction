@@ -231,14 +231,18 @@ function Draft(props: {
           </Button>
         </div>
         {!props.parent.sequential && (
-          <label className="nextaction-split-sequential" htmlFor={sequentialId}>
+          // Orca's Checkbox is a span, so a <label> cannot point at it: the
+          // text names it through aria-labelledby.
+          <div className="nextaction-split-sequential">
             <Checkbox
-              id={sequentialId}
+              role="checkbox"
+              aria-checked={sequential}
+              aria-labelledby={sequentialId}
               checked={sequential}
               onChange={({ checked }) => setSequential(checked)}
             />
-            <span>{t("Do in order")}</span>
-          </label>
+            <span id={sequentialId}>{t("Do in order")}</span>
+          </div>
         )}
       </div>
       <WindowFooter>

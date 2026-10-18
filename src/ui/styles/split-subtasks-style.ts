@@ -102,7 +102,6 @@ export const splitSubtasksCss = `
   display: inline-flex;
   align-items: center;
   gap: var(--orca-spacing-sm);
-  cursor: pointer;
 }
 
 .nextaction-split-hint {
