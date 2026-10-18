@@ -79,49 +79,47 @@ export function createOrcaAiChat(): AiChat {
       if (signal.aborted) throw new AiCancelledError("cancelled");
       // sendMessage cannot be aborted: a reply coming after the user
       // cancelled is dropped once it arrives.
-      {
-        let response: unknown;
-        try {
-          response = await orca.ai.sendMessage(
-            messages.map(toChatMessage) as never,
-            {
-              extraTools: tools.map((tool) => ({
-                type: "function",
-                function: {
-                  name: tool.name,
-                  description: tool.description,
-                  parameters: tool.parameters,
-                },
-              })) as never,
-            },
-          );
-        } catch (error) {
-          // Orca catches request errors itself (orca-ai); not expected.
-          throw new AiRequestFailedError(describeError(error), false);
-        }
-        // `null`: the request failed (the AI chat not set up included) or
-        // Orca's own AI chat is busy; Orca has told the user (orca-ai).
-        const message =
-          typeof response === "object" &&
-          response !== null &&
-          "choices" in response &&
-          Array.isArray(response.choices)
-            ? response.choices[0]?.message
-            : undefined;
-        if (typeof message !== "object" || message === null) {
-          throw new AiRequestFailedError(
-            `orca.ai.sendMessage returned ${response === null ? "null" : "no message"}`,
-            response === null,
-          );
-        }
-        if (signal.aborted) throw new AiCancelledError("cancelled");
-        const content = "content" in message ? message.content : null;
-        return {
-          text: typeof content === "string" ? content : "",
-          toolCalls: toolCallsOf(message),
-          raw: message,
-        };
+      let response: unknown;
+      try {
+        response = await orca.ai.sendMessage(
+          messages.map(toChatMessage) as never,
+          {
+            extraTools: tools.map((tool) => ({
+              type: "function",
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+              },
+            })) as never,
+          },
+        );
+      } catch (error) {
+        // Orca catches request errors itself (orca-ai); not expected.
+        throw new AiRequestFailedError(describeError(error), false);
       }
+      // `null`: the request failed (the AI chat not set up included) or
+      // Orca's own AI chat is busy; Orca has told the user (orca-ai).
+      const message =
+        typeof response === "object" &&
+        response !== null &&
+        "choices" in response &&
+        Array.isArray(response.choices)
+          ? response.choices[0]?.message
+          : undefined;
+      if (typeof message !== "object" || message === null) {
+        throw new AiRequestFailedError(
+          `orca.ai.sendMessage returned ${response === null ? "null" : "no message"}`,
+          response === null,
+        );
+      }
+      if (signal.aborted) throw new AiCancelledError("cancelled");
+      const content = "content" in message ? message.content : null;
+      return {
+        text: typeof content === "string" ? content : "",
+        toolCalls: toolCallsOf(message),
+        raw: message,
+      };
     },
 
     async *stream(messages, signal) {
