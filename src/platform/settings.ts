@@ -128,9 +128,9 @@ export const settingsDefinition: SettingsDefinition = {
       defaultValue: 0,
     }),
   },
-  // The user's AI instructions (#203): read through instructionsBlockIdFrom,
-  // a block ID or ((ID)); anything else names no block
-  // (infra/settings-ai-instructions.ts). Read on every AI request.
+  // The user's AI instructions (#203): read through
+  // createSettingsAiInstructions (infra/settings-ai-instructions.ts), a block
+  // ID or ((ID)); anything else names no block. Read on every AI request.
   aiInstructions: {
     schema: () => ({
       label: t("AI instructions block"),
