@@ -32,6 +32,7 @@
 | [project-board.md](./project-board.md) | #166–#172 | `lastChild` 移到项目块（含页面）末尾与撤销；插件面板里的横向滚动与吸附；`singleChoice` 设置；浏览器能力（第十一步第四阶段开工前） | 第十一步的看板布局 |
 | [status-icon-click.md](./status-icon-click.md) | #192 | 点笔记中的状态图标弹出菜单：命中判断、捕获阶段拦截、菜单的容器（第三步那次看不见的原因） | 体验打磨的点状态图标改状态（#193） |
 | [slash-commands.md](./slash-commands.md) | #194 | 斜杠命令调用插件的编辑器命令与普通命令 | 体验打磨的斜杠命令（#194） |
+| [my-day-hover-grow.md](./my-day-hover-grow.md) | — | 我的一天未排期卡片悬停变大：滚动条宽度与任务列表 320 px 紧凑档的循环 | 我的一天 |
 | [orca-ai.md](./orca-ai.md) | #201 | Orca 的三条官方 AI 途径（读源码）；`orca.ai` 带插件工具的返回、Orca 自带工具的调用与"不可用"、多轮、流式与中止、出错；块转 Markdown 丢层级和任务标签，逐块转换各类块的输出、行内引用要求目标在缓存中；倒序插入多个任务一次撤销、`insertBlock` 不需要缓存、同一份父块对象连续 `lastChild` 顺序会反；`batchInsertText` 不提取标签；块菜单多选（第十六步开工前） | 第十六步的 AI 功能 |
 
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。

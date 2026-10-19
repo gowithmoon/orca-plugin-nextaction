@@ -56,6 +56,12 @@ export const myDayCss = `
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  /*
+   * The scrollbar's room kept: near the narrow list's 320 px, the scrollbar
+   * coming and going switched the cards' padding, which brought it back or
+   * took it away again; hovering flipped it (docs/spikes/my-day-hover-grow.md).
+   */
+  scrollbar-gutter: stable;
 }
 
 /* An area's title. */
