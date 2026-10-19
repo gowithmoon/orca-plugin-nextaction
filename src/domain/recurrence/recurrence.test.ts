@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   countEnd,
+  countingDate,
   countsFrom,
   isLastOccurrence,
   isNotAdvanced,
   isResume,
   nextOccurrence,
+  overlapsNextOccurrence,
   planAdvance,
   planRepair,
   planResume,
@@ -557,6 +559,103 @@ describe("advancing onto a placement, on either basis (#88)", () => {
       start: day(2026, 10, 27),
       due: day(2026, 10, 30),
     });
+  });
+});
+
+describe("which day the next occurrence counts from", () => {
+  const schedule = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+
+  it.each([
+    [
+      "the due date",
+      { start: day(2026, 10, 1), due: day(2026, 10, 12) },
+      "due",
+    ],
+    [
+      "the start date without a due date",
+      { start: day(2026, 10, 1), due: null },
+      "start",
+    ],
+    ["the completion without dates", { start: null, due: null }, "event"],
+  ] as const)("on a fixed schedule, %s", (_, dates, date) => {
+    expect(countingDate(schedule, dates)).toBe(date);
+  });
+
+  it("after completion, the completion whatever the dates", () => {
+    expect(
+      countingDate(
+        { ...schedule, basis: "completion" },
+        { start: day(2026, 10, 1), due: day(2026, 10, 12) },
+      ),
+    ).toBe("event");
+  });
+});
+
+describe("dates overlapping the next occurrence", () => {
+  const everyMonWedFri: RecurrenceRule = {
+    period: {
+      interval: 1,
+      unit: "week",
+      placement: { kind: "daysOfWeek", days: [1, 3, 5] },
+    },
+    basis: "schedule",
+  };
+  const today = day(2026, 10, 19);
+
+  it("a span longer than the way to the next occurrence overlaps it", () => {
+    // Monday October 19 to Friday November 13: the next one, due Monday
+    // November 16, would start October 22, before November 13.
+    expect(
+      overlapsNextOccurrence(
+        everyMonWedFri,
+        { start: day(2026, 10, 19), due: day(2026, 11, 13) },
+        today,
+      ),
+    ).toBe(true);
+  });
+
+  it("a span as long as the way to the next occurrence does not", () => {
+    // Due Monday October 19, starting two days before: the next one, due
+    // Wednesday October 21, starts October 19.
+    expect(
+      overlapsNextOccurrence(
+        everyMonWedFri,
+        { start: day(2026, 10, 17), due: day(2026, 10, 19) },
+        today,
+      ),
+    ).toBe(false);
+  });
+
+  it("never without both dates", () => {
+    expect(
+      overlapsNextOccurrence(
+        everyMonWedFri,
+        { start: null, due: day(2026, 11, 13) },
+        today,
+      ),
+    ).toBe(false);
+    expect(
+      overlapsNextOccurrence(
+        everyMonWedFri,
+        { start: day(2026, 10, 19), due: null },
+        today,
+      ),
+    ).toBe(false);
+  });
+
+  it("after completion, counts from the day it is done", () => {
+    // Due in the past, done today: the next one, Wednesday October 21, would
+    // start October 18 (three days before), before today.
+    expect(
+      overlapsNextOccurrence(
+        { ...everyMonWedFri, basis: "completion" },
+        { start: day(2026, 10, 2), due: day(2026, 10, 5) },
+        today,
+      ),
+    ).toBe(true);
   });
 });
 

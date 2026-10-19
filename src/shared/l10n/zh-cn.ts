@@ -410,6 +410,18 @@ const zhCN: Record<string, string> = {
   "Years without February 29 are skipped.":
     "平年没有 2 月 29 日，那一年不重复。",
   "Done today, next: ${date}": "如果今天完成，下次是 ${date}",
+  "Counted from the due date ${from}: done today, next: ${date}":
+    "从截止日期 ${from} 往后算，如果今天完成，下次是 ${date}",
+  "Counted from the start date ${from}: done today, next: ${date}":
+    "从开始日期 ${from} 往后算，如果今天完成，下次是 ${date}",
+  "Counted from the due date ${from}, the next occurrence, ${date}, is after the end day. This is the last occurrence: once it is done, the task stays done and the rule is removed.":
+    "从截止日期 ${from} 往后算，下次是 ${date}，已过结束日期。这是最后一次，完成后就不再重复。",
+  "Counted from the start date ${from}, the next occurrence, ${date}, is after the end day. This is the last occurrence: once it is done, the task stays done and the rule is removed.":
+    "从开始日期 ${from} 往后算，下次是 ${date}，已过结束日期。这是最后一次，完成后就不再重复。",
+  "Done today, the next occurrence, ${date}, is after the end day. This is the last occurrence: once it is done, the task stays done and the rule is removed.":
+    "如果今天完成，下次是 ${date}，已过结束日期。这是最后一次，完成后就不再重复。",
+  "Its start and due dates span ${days} days, longer than the time between occurrences, so each occurrence overlaps the one before. To repeat it over a stretch of time, set the due date to its first occurrence and end the rule on the last day.":
+    "开始日期到截止日期跨了 ${days} 天，比两次重复的间隔还长，每一次都会和上一次重叠。想在一段时间里定期做，把截止日期设成第一次的日子，再用“结束”设定到哪天为止。",
   "Once done, it shows again right away. To have it show only when due, set a start date.":
     "只设了截止日期，完成后它会马上重新出现。想到时候才出现，请再设一个开始日期。",
   "Did not advance": "未自动重复",

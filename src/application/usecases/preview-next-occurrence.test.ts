@@ -31,7 +31,12 @@ describe("preview next occurrence", () => {
 
     expect(
       preview({ period: everyMonWedFri, basis: "schedule" }, task),
-    ).toEqual({ year: 2026, month: 10, day: 14 });
+    ).toEqual({
+      from: { date: "due", day: { year: 2026, month: 10, day: 12 } },
+      next: { year: 2026, month: 10, day: 14 },
+      last: false,
+      overlaps: false,
+    });
     // A preview, nothing written.
     expect(repository.writeCount()).toBe(0);
   });
@@ -44,7 +49,10 @@ describe("preview next occurrence", () => {
         { period: everyMonWedFri, basis: "completion" },
         { start: null, due: { year: 2026, month: 9, day: 1 } },
       ),
-    ).toEqual({ year: 2026, month: 10, day: 9 });
+    ).toMatchObject({
+      from: { date: "event", day: { year: 2026, month: 10, day: 8 } },
+      next: { year: 2026, month: 10, day: 9 },
+    });
   });
 
   it("on a fixed schedule without dates, counts from today", () => {
@@ -55,10 +63,53 @@ describe("preview next occurrence", () => {
         { period: { interval: 1, unit: "weekday" }, basis: "schedule" },
         { start: null, due: null },
       ),
-    ).toEqual({ year: 2026, month: 10, day: 9 });
+    ).toMatchObject({
+      from: { date: "event", day: { year: 2026, month: 10, day: 8 } },
+      next: { year: 2026, month: 10, day: 9 },
+    });
   });
 
-  it("is none when completing today would be the last occurrence (#89)", () => {
+  it("on a fixed schedule with only a start date, counts from it", () => {
+    const preview = createPreviewNextOccurrence(deps());
+
+    expect(
+      preview(
+        { period: everyMonWedFri, basis: "schedule" },
+        { start: { year: 2026, month: 10, day: 12 }, due: null },
+      ),
+    ).toMatchObject({
+      from: { date: "start", day: { year: 2026, month: 10, day: 12 } },
+      next: { year: 2026, month: 10, day: 14 },
+    });
+  });
+
+  it("tells the last occurrence counted from a due date past the end day, the start being today", () => {
+    const preview = createPreviewNextOccurrence(deps());
+
+    // Started today, due Friday November 13; every Monday, Wednesday and
+    // Friday until Sunday November 15: the next one, Monday November 16, is
+    // after the end day, and the dates overlap each occurrence.
+    expect(
+      preview(
+        {
+          period: everyMonWedFri,
+          basis: "schedule",
+          end: { kind: "until", day: { year: 2026, month: 11, day: 15 } },
+        },
+        {
+          start: { year: 2026, month: 10, day: 8 },
+          due: { year: 2026, month: 11, day: 13 },
+        },
+      ),
+    ).toEqual({
+      from: { date: "due", day: { year: 2026, month: 11, day: 13 } },
+      next: { year: 2026, month: 11, day: 16 },
+      last: true,
+      overlaps: true,
+    });
+  });
+
+  it("is the last when completing today would be the last occurrence (#89)", () => {
     const preview = createPreviewNextOccurrence(deps());
     const weekly = { interval: 1, unit: "week" } as const;
     const dueMonday = { start: null, due: { year: 2026, month: 10, day: 12 } };
@@ -71,8 +122,8 @@ describe("preview next occurrence", () => {
           end: { kind: "count", total: 3, remaining: 1 },
         },
         dueMonday,
-      ),
-    ).toBeNull();
+      ).last,
+    ).toBe(true);
     // The next occurrence, October 19, is after the end day.
     expect(
       preview(
@@ -83,6 +134,6 @@ describe("preview next occurrence", () => {
         },
         dueMonday,
       ),
-    ).toBeNull();
+    ).toMatchObject({ next: { year: 2026, month: 10, day: 19 }, last: true });
   });
 });

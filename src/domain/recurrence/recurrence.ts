@@ -203,8 +203,48 @@ export function countsFrom(
   dates: TaskDates,
   completedOn: CalendarDate,
 ): CalendarDate {
-  if (rule.basis === "completion") return completedOn;
-  return dates.due ?? dates.start ?? completedOn;
+  switch (countingDate(rule, dates)) {
+    case "due":
+      return dates.due ?? completedOn;
+    case "start":
+      return dates.start ?? completedOn;
+    case "event":
+      return completedOn;
+  }
+}
+
+/**
+ * Which day `countsFrom` takes: the task's due date, its start date, or the
+ * logical day of the completion or skip (`event`).
+ */
+export function countingDate(
+  rule: RecurrenceRule,
+  dates: TaskDates,
+): "due" | "start" | "event" {
+  if (rule.basis === "completion") return "event";
+  if (dates.due !== null) return "due";
+  if (dates.start !== null) return "start";
+  return "event";
+}
+
+/**
+ * Whether the task's start and due dates span longer than the way to its
+ * next occurrence, completed or skipped on `eventDay`: once it advances, its
+ * moved start falls before the day it counted from, so each occurrence
+ * overlaps the one before. Usually the dates were meant as the stretch the
+ * task repeats in, which the end condition gives. Never without both dates.
+ */
+export function overlapsNextOccurrence(
+  rule: RecurrenceRule,
+  dates: TaskDates,
+  eventDay: CalendarDate,
+): boolean {
+  if (dates.start === null || dates.due === null) return false;
+  const from = countsFrom(rule, dates, eventDay);
+  const next = nextOccurrence(rule.period, from);
+  // As planAdvance moves it: the start keeps its days before the due date.
+  const movedStart = addDays(next, daysBetween(dates.due, dates.start));
+  return compareDays(movedStart, from) < 0;
 }
 
 /** What advancing a task needs to know about it. */

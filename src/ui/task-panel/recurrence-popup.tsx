@@ -8,7 +8,10 @@
 // In a plugin window, rendered into its own React root, as the schedule popup.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { PreviewNextOccurrence } from "../../application/usecases/preview-next-occurrence";
+import type {
+  NextOccurrencePreview,
+  PreviewNextOccurrence,
+} from "../../application/usecases/preview-next-occurrence";
 import type { SetRecurrence } from "../../application/usecases/set-recurrence";
 import {
   countEnd,
@@ -20,6 +23,7 @@ import {
   recurrenceUnits,
 } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, Task } from "../../domain/task/task";
+import { daysBetween } from "../../domain/time/calendar-days";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
 import {
@@ -66,6 +70,60 @@ function endKindName(kind: EndKind): string {
       return t("On a day");
     case "count":
       return t("After a number of times");
+  }
+}
+
+/**
+ * The preview line: which day the next occurrence counts from, and the day
+ * it falls on, or why this is the last occurrence (#89).
+ */
+function previewText(
+  preview: NextOccurrencePreview,
+  rule: RecurrenceRule,
+  today: CalendarDate,
+): string {
+  const values = {
+    from: formatDate(preview.from.day, today),
+    date: formatDate(preview.next, today),
+  };
+  if (preview.last) {
+    // A count running out has no day to tell; an end day does.
+    if (rule.end?.kind !== "until") {
+      return t(
+        "This is the last occurrence: once it is done, the task stays done and the rule is removed.",
+      );
+    }
+    switch (preview.from.date) {
+      case "due":
+        return t(
+          "Counted from the due date ${from}, the next occurrence, ${date}, is after the end day. This is the last occurrence: once it is done, the task stays done and the rule is removed.",
+          values,
+        );
+      case "start":
+        return t(
+          "Counted from the start date ${from}, the next occurrence, ${date}, is after the end day. This is the last occurrence: once it is done, the task stays done and the rule is removed.",
+          values,
+        );
+      case "event":
+        return t(
+          "Done today, the next occurrence, ${date}, is after the end day. This is the last occurrence: once it is done, the task stays done and the rule is removed.",
+          values,
+        );
+    }
+  }
+  switch (preview.from.date) {
+    case "due":
+      return t(
+        "Counted from the due date ${from}: done today, next: ${date}",
+        values,
+      );
+    case "start":
+      return t(
+        "Counted from the start date ${from}: done today, next: ${date}",
+        values,
+      );
+    case "event":
+      return t("Done today, next: ${date}", values);
   }
 }
 
@@ -158,7 +216,7 @@ function RecurrencePopup(props: {
   // An unreadable rule cannot be overwritten (the repository refuses); the
   // popup says so instead of offering a save that would fail.
   const unreadable = task.recurrence.kind === "unreadable";
-  // `null`: completing it today would be the last occurrence (#89).
+  // What completing it today would do; `last` on its last occurrence (#89).
   const preview =
     draft && !unreadable ? deps.previewNextOccurrence(draft, task) : undefined;
 
@@ -382,18 +440,20 @@ function RecurrencePopup(props: {
             </div>
           </div>
         )}
-        {preview !== undefined && (
+        {preview !== undefined && draft && (
           <div
             className="nextaction-recurrence-popup-preview"
             aria-live="polite"
           >
-            {preview === null
-              ? t(
-                  "This is the last occurrence: once it is done, the task stays done and the rule is removed.",
-                )
-              : t("Done today, next: ${date}", {
-                  date: formatDate(preview, today),
-                })}
+            {previewText(preview, draft, today)}
+          </div>
+        )}
+        {preview?.overlaps && task.start !== null && task.due !== null && (
+          <div className="nextaction-recurrence-popup-warning">
+            {t(
+              "Its start and due dates span ${days} days, longer than the time between occurrences, so each occurrence overlaps the one before. To repeat it over a stretch of time, set the due date to its first occurrence and end the rule on the last day.",
+              { days: String(daysBetween(task.start, task.due)) },
+            )}
           </div>
         )}
         {task.due !== null && task.start === null && (
