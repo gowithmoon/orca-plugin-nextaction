@@ -15,6 +15,7 @@ import { createMoveTask } from "../application/usecases/move-task";
 import { createMoveToQuadrant } from "../application/usecases/move-to-quadrant";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
+import { createReadDependentRefusals } from "../application/usecases/read-dependent-refusals";
 import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadMoveCrossing } from "../application/usecases/read-move-crossing";
 import { createReadMyDay } from "../application/usecases/read-my-day";
@@ -27,6 +28,7 @@ import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
 import { createReadTaskMap } from "../application/usecases/read-task-map";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
+import { createSetDependencies } from "../application/usecases/set-dependencies";
 import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
 import { createSetSequential } from "../application/usecases/set-sequential";
 import { createShiftLater } from "../application/usecases/shift-later";
@@ -367,6 +369,8 @@ export function createPanelFeature(deps: {
         setSequential: createSetSequential({ repository }),
         setDependencyMode: createSetDependencyMode({ repository }),
         editTask: createEditTask({ repository }),
+        setDependencies: createSetDependencies({ repository }),
+        readDependentRefusals: createReadDependentRefusals({ repository }),
       },
     }),
   );

@@ -95,6 +95,8 @@ export interface CanvasInput {
   readonly handlers: React.HTMLAttributes<HTMLElement>;
   /** The world's style: its transform for the current view. */
   readonly worldStyle: React.CSSProperties;
+  /** A point on the screen as a point on the world, for the current view. */
+  toWorld(clientX: number, clientY: number): { x: number; y: number };
 }
 
 /**
@@ -295,8 +297,21 @@ export function useCanvasInput(options: {
     },
   };
 
+  const toWorld = React.useCallback(
+    (clientX: number, clientY: number) => {
+      const box = viewport.current?.getBoundingClientRect();
+      const view = live.current;
+      return {
+        x: (clientX - (box?.left ?? 0) - view.x) / view.scale,
+        y: (clientY - (box?.top ?? 0) - view.y) / view.scale,
+      };
+    },
+    [viewport],
+  );
+
   return {
     handlers,
     worldStyle: { transform: transformOf(live.current) },
+    toWorld,
   };
 }

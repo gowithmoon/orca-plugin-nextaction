@@ -797,6 +797,12 @@ const zhCN: Record<string, string> = {
   "${done}/${total} done": "已完成 ${done}/${total}",
   // The task map's sequential switch and dependency badge (#220).
   "Dependency mode and delay": "依赖模式与依赖延迟",
+  // The task map's dependencies drawn and deleted (#219).
+  "Drag to a task to make it depend on this one":
+    "拖到另一个任务上，让它依赖这个任务",
+  "A task cannot depend on itself": "任务不能依赖自己",
+  "Already depends on this task": "已经依赖这个任务",
+  "Delete dependency": "删除依赖",
 };
 
 export default zhCN;

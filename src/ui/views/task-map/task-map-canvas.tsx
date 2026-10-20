@@ -4,7 +4,10 @@
 // box and card is placed absolutely inside its own box, as the layout gives
 // them relative to their container. One CSS transform on the world pans and
 // zooms (canvas-input.ts); an SVG layer above the cards draws the sequence
-// and dependency arrows (#215). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// and dependency arrows (#215). A dependency is drawn from a card's connector
+// (task-map-links.tsx) and selected by a click on its arrow, deleted with
+// Delete or from its right-click menu (#219). Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   TaskMapArea,
@@ -21,7 +24,11 @@ import {
   layoutTaskMap,
 } from "../../../domain/task-map/layout";
 import { t } from "../../../shared/l10n/l10n";
-import type { MemoryStore } from "../../components/memory-store";
+import {
+  createMemoryStore,
+  type MemoryStore,
+} from "../../components/memory-store";
+import { ContextMenu } from "../../components/popup-controls";
 import { projectStatusLabel } from "../../components/project-status-label";
 import { TaskCard } from "../../components/task-card";
 import type { TaskActions } from "../../hooks/use-task-actions";
@@ -32,6 +39,14 @@ import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
 import { SequentialToggle } from "./sequential-toggle";
 import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
+import { useTaskMapEdits } from "./task-map-edits";
+import {
+  LinkAreaProvider,
+  LinkConnector,
+  type LinkDrag,
+  LinkPreview,
+  linkTargetAttributes,
+} from "./task-map-links";
 import type { CanvasView } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -186,6 +201,7 @@ function MapNode(props: {
       <div
         {...drag}
         {...drop}
+        {...linkTargetAttributes(node.task)}
         className="nextaction-task-map-card"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
@@ -193,6 +209,7 @@ function MapNode(props: {
       >
         <MapCard node={node} deps={deps} />
         {badgeButton}
+        <LinkConnector task={node.task} />
       </div>
     );
   }
@@ -205,12 +222,14 @@ function MapNode(props: {
     >
       <div
         {...drag}
+        {...linkTargetAttributes(node.task)}
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
       >
         <MapCard node={node} deps={deps} />
         {badgeButton}
+        <LinkConnector task={node.task} />
       </div>
       {node.children.map((child) => (
         <MapNode
@@ -275,38 +294,69 @@ function dependencyKind(edge: TaskMapDependencyEdge): ArrowKind {
   return edge.conflict ? "conflict" : "dependency";
 }
 
-/**
- * The arrows, from a node's right side to the next one's left: the sequence
- * arrows thin and faint, then the dependencies (#215), those in a date
- * conflict and on a cycle last so no plain line covers them.
- */
-function Arrows(props: {
-  edges: readonly TaskMapEdge[];
-  dependencies: readonly TaskMapDependencyEdge[];
-  boxes: ReadonlyMap<string, LayoutBox>;
-  heads: Sizes;
-  width: number;
-  height: number;
-}) {
-  const prefix = `nextaction-task-map-arrow-${React.useId().replace(/:/g, "")}`;
-  /** Where on a node's side an arrow meets it: level with its card. */
+/** Where arrows meet the nodes on the world: level with their cards. */
+interface Anchors {
+  /** Where an arrow out of the node starts: just right of it. */
+  exit(id: TaskId): { x: number; y: number } | null;
+  /** Where an arrow into the node ends: just left of it. */
+  entry(id: TaskId): { x: number; y: number } | null;
+}
+
+function anchorsOf(
+  boxes: ReadonlyMap<string, LayoutBox>,
+  heads: Sizes,
+): Anchors {
   const level = (id: TaskId, box: LayoutBox) => {
-    const head = props.heads.get(id);
+    const head = heads.get(id);
     return head
       ? box.y + boxPadding.top + head.height / 2
       : box.y + box.height / 2;
   };
-  /** Where an arrow into the node ends: just left of it, level with its card. */
-  const entry = (id: TaskId) => {
-    const to = props.boxes.get(taskKey(id));
-    return to ? { x: to.x - 4, y: level(id, to) } : null;
+  return {
+    exit(id) {
+      const box = boxes.get(taskKey(id));
+      return box ? { x: box.x + box.width + 4, y: level(id, box) } : null;
+    },
+    entry(id) {
+      const box = boxes.get(taskKey(id));
+      return box ? { x: box.x - 4, y: level(id, box) } : null;
+    },
   };
+}
+
+/** A dependency, by its two ends. */
+export interface EdgeKey {
+  readonly from: TaskId;
+  readonly to: TaskId;
+}
+
+const sameEdge = (a: EdgeKey | null, b: EdgeKey | null) =>
+  a === b || (!!a && !!b && a.from === b.from && a.to === b.to);
+
+/**
+ * The arrows, from a node's right side to the next one's left: the sequence
+ * arrows thin and faint, then the dependencies (#215), those in a date
+ * conflict and on a cycle last so no plain line covers them. Under each
+ * dependency a wide transparent line takes its clicks (#219): a click
+ * selects it, a right-click opens its menu.
+ */
+function Arrows(props: {
+  edges: readonly TaskMapEdge[];
+  dependencies: readonly TaskMapDependencyEdge[];
+  anchors: Anchors;
+  width: number;
+  height: number;
+  selected: EdgeKey | null;
+  onSelect: (edge: EdgeKey) => void;
+  onDelete: (edge: EdgeKey) => void;
+}) {
+  const prefix = `nextaction-task-map-arrow-${React.useId().replace(/:/g, "")}`;
+  const { MenuText } = orca.components;
   const path = (edge: TaskMapEdge) => {
-    const from = props.boxes.get(taskKey(edge.from));
-    const end = entry(edge.to);
-    if (!from || !end) return null;
-    const x0 = from.x + from.width + 4;
-    const y0 = level(edge.from, from);
+    const start = props.anchors.exit(edge.from);
+    const end = props.anchors.entry(edge.to);
+    if (!start || !end) return null;
+    const { x: x0, y: y0 } = start;
     const { x: x3, y: y3 } = end;
     const ctrl = Math.min(
       150,
@@ -323,7 +373,7 @@ function Arrows(props: {
   const dependencies = [...props.dependencies].sort(
     (a, b) => rank[dependencyKind(a)] - rank[dependencyKind(b)],
   );
-  return (
+  const svg = (openMenu?: (event: React.MouseEvent, edge: EdgeKey) => void) => (
     <svg
       className="nextaction-task-map-edges"
       width={props.width}
@@ -366,18 +416,58 @@ function Arrows(props: {
       {dependencies.map((edge) => {
         const d = path(edge);
         const kind = dependencyKind(edge);
-        return d ? (
-          <path
-            key={`dependency-${edge.from}-${edge.to}`}
-            className="nextaction-task-map-arrow"
-            data-kind={kind}
-            data-any={edge.any || undefined}
-            d={d}
-            markerEnd={`url(#${prefix}-${kind})`}
-          />
-        ) : null;
+        if (!d) return null;
+        const key = { from: edge.from, to: edge.to };
+        return (
+          <g key={`dependency-${edge.from}-${edge.to}`}>
+            <path
+              className="nextaction-task-map-arrow"
+              data-kind={kind}
+              data-any={edge.any || undefined}
+              data-selected={sameEdge(props.selected, key) || undefined}
+              d={d}
+              markerEnd={`url(#${prefix}-${kind})`}
+            />
+            {openMenu && (
+              // The pointer's way to an arrow; the dependency is also edited
+              // in the task panel, by keyboard too.
+              // biome-ignore lint/a11y/noStaticElementInteractions: see above
+              <path
+                className="nextaction-task-map-arrow-hit"
+                d={d}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onSelect(key);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onSelect(key);
+                  openMenu(event, key);
+                }}
+              />
+            )}
+          </g>
+        );
       })}
     </svg>
+  );
+  return (
+    <ContextMenu
+      menu={(close, edge?: EdgeKey) => (
+        <MenuText
+          title={t("Delete dependency")}
+          preIcon="ti ti-trash"
+          dangerous
+          onClick={() => {
+            close();
+            if (edge) props.onDelete(edge);
+          }}
+        />
+      )}
+    >
+      {(open) => svg((event, edge) => open(event, edge))}
+    </ContextMenu>
   );
 }
 
@@ -455,6 +545,77 @@ export function TaskMapCanvas(props: {
     [placed],
   );
   const input = useCanvasInput({ viewport, world, store, content });
+  const anchors = React.useMemo(
+    () => placed && anchorsOf(placed.boxes, placed.heads),
+    [placed],
+  );
+
+  // Drawing a dependency (#219): the drag in a store, so a move renders the
+  // preview only.
+  const [linkDrag] = React.useState(() =>
+    createMemoryStore<LinkDrag | null>(null),
+  );
+  const tasks = React.useMemo(
+    () => new Map(nodes.map((node) => [node.task.id, node.task])),
+    [nodes],
+  );
+  const { toWorld } = input;
+  const linkArea = React.useMemo(
+    () => ({ drag: linkDrag, viewport, toWorld, tasks }),
+    [linkDrag, toWorld, tasks],
+  );
+
+  // The dependency selected by a click on its arrow (#219): Delete removes it.
+  const edits = useTaskMapEdits();
+  const [selectedEdge, setSelectedEdge] = React.useState<EdgeKey | null>(null);
+  const deleteEdge = React.useCallback(
+    (edge: EdgeKey) => {
+      const dependent = tasks.get(edge.to);
+      if (!edits || !dependent) return;
+      setSelectedEdge(null);
+      void edits.removeDependency(dependent, edge.from);
+    },
+    [edits, tasks],
+  );
+  const selectEdge = React.useCallback((edge: EdgeKey) => {
+    setSelectedEdge(edge);
+    viewport.current?.focus({ preventScroll: true });
+  }, []);
+  // A selected dependency gone from the map (deleted, or in the notes).
+  const shownEdge =
+    selectedEdge &&
+    read.dependencyEdges.some((edge) => sameEdge(edge, selectedEdge))
+      ? selectedEdge
+      : null;
+  const handlers: React.HTMLAttributes<HTMLElement> = {
+    ...input.handlers,
+    onPointerDown(event) {
+      // A press anywhere but on an arrow lets go of the arrow selected.
+      if (
+        event.button === 0 &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(".nextaction-task-map-arrow-hit")
+        )
+      ) {
+        setSelectedEdge(null);
+      }
+      input.handlers.onPointerDown?.(event);
+    },
+    onKeyDown(event) {
+      if (
+        shownEdge &&
+        (event.key === "Delete" || event.key === "Backspace") &&
+        event.target === event.currentTarget
+      ) {
+        event.preventDefault();
+        deleteEdge(shownEdge);
+        return;
+      }
+      if (shownEdge && event.key === "Escape") setSelectedEdge(null);
+      input.handlers.onKeyDown?.(event);
+    },
+  };
 
   return (
     <section
@@ -463,7 +624,7 @@ export function TaskMapCanvas(props: {
       // biome-ignore lint/a11y/noNoninteractiveTabindex: the canvas takes F and Space to fit and pan (#213)
       tabIndex={0}
       aria-label={t("Task map")}
-      {...input.handlers}
+      {...handlers}
     >
       {measuring && (
         <div
@@ -483,42 +644,54 @@ export function TaskMapCanvas(props: {
           ))}
         </div>
       )}
-      <div
-        ref={world}
-        className="nextaction-task-map-world"
-        style={input.worldStyle}
-      >
-        {placed &&
-          read.areas.map((area) => (
-            <section
-              key={areaKey(area)}
-              className="nextaction-task-map-area"
-              data-kind={area.kind}
-              style={placeStyle(placed.layout.get(areaKey(area)))}
-            >
-              <AreaHead area={area} />
-              {area.tasks.map((node) => (
-                <MapNode
-                  key={node.task.id}
-                  node={node}
-                  layout={placed.layout}
-                  badges={badges}
-                  deps={deps}
-                />
-              ))}
-            </section>
-          ))}
-        {placed && (
-          <Arrows
-            edges={read.sequenceEdges}
-            dependencies={read.dependencyEdges}
-            boxes={placed.boxes}
-            heads={placed.heads}
-            width={placed.root.width}
-            height={placed.root.height}
-          />
-        )}
-      </div>
+      <LinkAreaProvider value={linkArea}>
+        <div
+          ref={world}
+          className="nextaction-task-map-world"
+          style={input.worldStyle}
+        >
+          {placed &&
+            read.areas.map((area) => (
+              <section
+                key={areaKey(area)}
+                className="nextaction-task-map-area"
+                data-kind={area.kind}
+                style={placeStyle(placed.layout.get(areaKey(area)))}
+              >
+                <AreaHead area={area} />
+                {area.tasks.map((node) => (
+                  <MapNode
+                    key={node.task.id}
+                    node={node}
+                    layout={placed.layout}
+                    badges={badges}
+                    deps={deps}
+                  />
+                ))}
+              </section>
+            ))}
+          {placed && anchors && (
+            <Arrows
+              edges={read.sequenceEdges}
+              dependencies={read.dependencyEdges}
+              anchors={anchors}
+              width={placed.root.width}
+              height={placed.root.height}
+              selected={shownEdge}
+              onSelect={selectEdge}
+              onDelete={deleteEdge}
+            />
+          )}
+          {placed && anchors && (
+            <LinkPreview
+              drag={linkDrag}
+              anchor={anchors.exit}
+              width={placed.root.width}
+              height={placed.root.height}
+            />
+          )}
+        </div>
+      </LinkAreaProvider>
     </section>
   );
 }
