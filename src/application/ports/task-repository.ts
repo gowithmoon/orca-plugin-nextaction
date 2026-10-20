@@ -33,7 +33,11 @@ export type CompletionHistoryRead =
  * The task data held as a versioned plugin block property that the user can
  * discard when this plugin cannot read it (`discardUnreadable`).
  */
-export type DiscardableData = "recurrence" | "review" | "reminders";
+export type DiscardableData =
+  | "recurrence"
+  | "review"
+  | "reminders"
+  | "completionHistory";
 
 /** Values a multi-value property (contexts, labels) must or must not hold. */
 export interface ValuesFilter {

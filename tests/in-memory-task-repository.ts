@@ -783,6 +783,13 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async discardUnreadable(id, data) {
       const block = taskToWrite(id);
+      if (data === "completionHistory") {
+        if (block.completionHistory?.kind !== "unreadable") return;
+        write(() => {
+          block.completionHistory = { kind: "readable", history: [] };
+        });
+        return;
+      }
       if (block.task[data].kind !== "unreadable") return;
       // The empty value of each, as the codecs write it.
       const empty = {

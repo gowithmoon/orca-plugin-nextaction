@@ -11,7 +11,9 @@ import type {
 } from "../../../domain/task/completion-history";
 import {
   type BlockWithProperties,
+  type PluginPropertyDiscard,
   type PluginPropertyWrite,
+  planPluginPropertyDiscard,
   planPluginPropertyWrite,
   pluginPropertyPrefix,
   readPluginProperty,
@@ -69,6 +71,20 @@ export function readCompletionHistory(
     history.push(entry);
   }
   return { kind: "readable", history };
+}
+
+/**
+ * Plans discarding a completion history this plugin cannot read, writing an
+ * empty one over it; a readable history, or none, is left as it is.
+ */
+export function planCompletionHistoryDiscard(
+  block: BlockWithProperties,
+): PluginPropertyDiscard {
+  return planPluginPropertyDiscard(
+    readCompletionHistory(block).kind === "unreadable",
+    key,
+    { entries: [] },
+  );
 }
 
 /**
