@@ -13,6 +13,7 @@ import type {
 import type { ReadBlockRefCandidates } from "../../application/usecases/read-block-ref-candidates";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
 import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
+import type { ReadDependents } from "../../application/usecases/read-dependents";
 import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
 import type { ReadProjectCandidates } from "../../application/usecases/read-project-candidates";
 import type { ReadProjectOfTask } from "../../application/usecases/read-project-of-task";
@@ -56,6 +57,7 @@ import {
   CustomPropertiesField,
 } from "./custom-properties-field";
 import { DependenciesField } from "./dependencies-field";
+import { DependentsField } from "./dependents-field";
 import { NotNextActionReasonsField } from "./not-next-action-reasons-field";
 import { ProjectOfTaskField } from "./project-of-task-field";
 import type { OpenRecurrencePopup } from "./recurrence-popup";
@@ -97,6 +99,8 @@ export interface TaskPanelFormDeps {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /** The tasks that depend on the task, for the last row (#208). */
+  readDependents: ReadDependents;
   /** The task's 所属项目 and where it comes from (#146). */
   readProjectOfTask: ReadProjectOfTask;
   /** Projects offered as the task's 所属项目 (#146). */
@@ -201,6 +205,8 @@ function Fields(props: {
   dependencies: React.ReactNode;
   /** The 所属项目 field (#146). */
   projectOfTask: React.ReactNode;
+  /** Read only, after the custom properties: only shown with dependents (#208). */
+  dependents: React.ReactNode;
   /** For block reference custom properties (#115). */
   blockRefs: BlockRefsDeps;
   /** Opens the recurrence rule popup (#95). */
@@ -370,6 +376,7 @@ function Fields(props: {
         onChange={actions.setCustomProperty}
         blockRefs={props.blockRefs}
       />
+      {props.dependents}
     </div>
   );
 }
@@ -486,6 +493,16 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
               taskActions.openBlockInNotes(projectId);
               props.onOpenedInNotes?.();
             }}
+            onSelectTask={props.onSelectTask}
+          />
+        }
+        dependents={
+          <DependentsField
+            readDependents={deps.readDependents}
+            taskId={state.task.id}
+            changes={deps.changes}
+            notify={notify}
+            labelId={`${idPrefix}-dependents`}
             onSelectTask={props.onSelectTask}
           />
         }
