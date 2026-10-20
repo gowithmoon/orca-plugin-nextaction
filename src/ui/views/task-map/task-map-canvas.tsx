@@ -27,6 +27,7 @@ import type { TaskActions } from "../../hooks/use-task-actions";
 import { projectStatusIcons } from "../../project-menu/project-status-icons";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { useCanvasInput } from "./canvas-input";
+import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
 import type { CanvasView } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -158,12 +159,18 @@ function MapNode(props: {
   node: TaskMapNode;
   layout: ReadonlyMap<string, LayoutBox>;
   deps: CardDeps;
+  /** Its parent task is sequential (#216: where a drop on it goes). */
+  inSequence?: boolean;
 }) {
   const { node, layout, deps } = props;
   const box = layout.get(taskKey(node.task.id));
+  const drag = useMapCardDrag(node.task);
+  const drop = mapDropAttributes(node.task, props.inSequence ?? false);
   if (node.children.length === 0) {
     return (
       <div
+        {...drag}
+        {...drop}
         className="nextaction-task-map-card"
         data-next-action={node.nextAction || undefined}
         style={placeStyle(box)}
@@ -174,18 +181,26 @@ function MapNode(props: {
   }
   return (
     <div
+      {...drop}
       className="nextaction-task-map-box"
       data-sequential={node.sequential || undefined}
       style={placeStyle(box)}
     >
       <div
+        {...drag}
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
       >
         <MapCard node={node} deps={deps} />
       </div>
       {node.children.map((child) => (
-        <MapNode key={child.task.id} node={child} layout={layout} deps={deps} />
+        <MapNode
+          key={child.task.id}
+          node={child}
+          layout={layout}
+          deps={deps}
+          inSequence={node.sequential}
+        />
       ))}
     </div>
   );

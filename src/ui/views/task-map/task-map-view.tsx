@@ -4,6 +4,7 @@
 // opens and again on every task change signal (ADR 0007). The task panel
 // opens in its popup. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   ReadTaskMap,
   TaskMapRead,
@@ -18,6 +19,7 @@ import {
   PausedNotice,
   ViewNotice,
 } from "../../components/view-notice";
+import { useMoveTask } from "../../hooks/use-move-task";
 import {
   type TaskActionsDeps,
   useTaskActions,
@@ -31,6 +33,7 @@ import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import { TaskMapCanvas } from "./task-map-canvas";
+import { TaskMapDragArea } from "./task-map-drag";
 import type { TaskMapStores } from "./task-map-stores";
 
 export interface TaskMapViewDeps {
@@ -45,6 +48,8 @@ export interface TaskMapViewDeps {
   menuItems: () => TaskMenuItems | undefined;
   /** The pan and zoom, kept while the plugin instance lives. */
   stores: TaskMapStores;
+  /** Dragging a card onto another card or a box (#216). */
+  moveTask: MoveTask;
 }
 
 function TaskMapContent(props: {
@@ -54,6 +59,7 @@ function TaskMapContent(props: {
   const { query, deps } = props;
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
   const today = deps.today();
@@ -93,7 +99,13 @@ function TaskMapContent(props: {
     );
   }
   return (
-    <TaskMapCanvas read={state.data} store={deps.stores.view} deps={cardDeps} />
+    <TaskMapDragArea onMove={moveTask}>
+      <TaskMapCanvas
+        read={state.data}
+        store={deps.stores.view}
+        deps={cardDeps}
+      />
+    </TaskMapDragArea>
   );
 }
 

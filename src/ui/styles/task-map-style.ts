@@ -149,4 +149,48 @@ export const taskMapCss = `
 .nextaction-task-map-arrow-head {
   fill: var(--orca-color-text-3);
 }
+
+/*
+ * Dragging a card (#216): where it would go on the card or box under the
+ * pointer. As a subtask, an outline; before or after it, a line in the gap
+ * above or below it, or left or right of it in a sequential chain.
+ */
+[data-nextaction-map-drop][data-drop-over="lastChild"] {
+  outline: 2px solid var(--orca-color-primary-5);
+  outline-offset: 2px;
+  border-radius: var(--orca-radius-md);
+}
+
+[data-nextaction-map-drop][data-drop-over="before"]::after,
+[data-nextaction-map-drop][data-drop-over="after"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -9px;
+  height: 2px;
+  border-radius: 1px;
+  background-color: var(--orca-color-primary-5);
+  pointer-events: none;
+}
+
+[data-nextaction-map-drop][data-drop-over="after"]::after {
+  top: auto;
+  bottom: -9px;
+}
+
+[data-nextaction-map-drop][data-in-sequence][data-drop-over="before"]::after,
+[data-nextaction-map-drop][data-in-sequence][data-drop-over="after"]::after {
+  top: 0;
+  bottom: 0;
+  left: -25px;
+  right: auto;
+  width: 2px;
+  height: auto;
+}
+
+[data-nextaction-map-drop][data-in-sequence][data-drop-over="after"]::after {
+  left: auto;
+  right: -25px;
+}
 `;
