@@ -2,6 +2,7 @@
 // The tasks belonging to it are worked out with the ownership rule (ADR 0025),
 // so a task under the project block and one set to it count alike.
 import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
+import { buildTaskRelations } from "../../domain/blocking/task-relations";
 import { owningProject } from "../../domain/project/ownership";
 import type { Project, ProjectId } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
@@ -33,7 +34,7 @@ export type DropProject = (id: ProjectId) => Promise<void>;
 
 /** The tasks belonging to `id` that are not done, in no particular order. */
 function openTasksOf(snapshot: TaskGraphSnapshot, id: ProjectId): TaskId[] {
-  const byId = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
+  const relations = buildTaskRelations(snapshot.tasks);
   const projects = new Set(
     (snapshot.projects ?? []).map((entry) => entry.project.id),
   );
@@ -41,17 +42,8 @@ function openTasksOf(snapshot: TaskGraphSnapshot, id: ProjectId): TaskId[] {
   for (const item of snapshot.tasks) {
     if (item.task.status === "done") continue;
     // The task and its ancestor tasks, nearest first, as the task graph
-    // walks them; a loop (bad input only) is cut where it closes.
-    const chain = [item];
-    const seen = new Set([item.task.id]);
-    let parentId = item.parentId;
-    while (parentId !== null && !seen.has(parentId)) {
-      const parent = byId.get(parentId);
-      if (!parent) break;
-      chain.push(parent);
-      seen.add(parentId);
-      parentId = parent.parentId;
-    }
+    // walks them.
+    const chain = [item, ...relations.ancestorsOf(item.task.id)];
     if (owningProject(chain, (p) => projects.has(p)) === id) {
       open.push(item.task.id);
     }
