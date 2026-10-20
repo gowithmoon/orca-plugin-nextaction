@@ -19,7 +19,16 @@
 // selected one) keeps its place on screen, the view shifted to make up for
 // it, and the rest moves there in a short transition. Verified by hand in
 // Orca (docs/ARCHITECTURE.md §5).
+//
+// A task located (#221: the search box, "Show in task map") is centered, its
+// collapsed boxes shown expanded for now (`stores.expanded`), and becomes the
+// card the keyboard is on. The cards take the focus one at a time (roving
+// tabindex): only that card is in the Tab order; Tab and Shift+Tab move it
+// in note order, and past the last (or the first) card go to the header's
+// controls, so the focus never leaves the plugin panel (task-map-canvas
+// spike). The card focused by keyboard is panned into the window.
 import * as React from "react";
+import type { TaskMapPlace } from "../../../application/usecases/find-on-task-map";
 import type {
   TaskMapArea,
   TaskMapDependencyEdge,
@@ -70,6 +79,18 @@ const boxPadding = { top: 8, right: 12, bottom: 12, left: 12 };
 const rootId = "root";
 
 const taskKey = (id: TaskId) => `task:${id}`;
+
+/** The boxes holding a task located (`FindOnTaskMap.locate`), by their keys. */
+export function placeBoxKeys(place: TaskMapPlace): string[] {
+  return [
+    ...(place.project === null ? [] : [`project:${place.project}`]),
+    ...place.parents.map(taskKey),
+  ];
+}
+
+/** What the header's controls are, for Tab past the cards' ends. */
+const focusable =
+  'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 export function areaKey(area: TaskMapArea): string {
   return area.kind === "project" ? `project:${area.project.id}` : "no-project";
 }
@@ -151,6 +172,9 @@ interface CardDeps {
   selectTask: (id: TaskId) => void;
   selectedTaskId: TaskId | undefined;
 }
+
+/** Which card is in the Tab order (#221): the one the keyboard is on. */
+type Roving = (id: TaskId) => boolean;
 
 /** The highlight and the collapsed boxes, as the map shows them (#218). */
 interface Look {
@@ -235,6 +259,8 @@ function CollapseToggle(props: { collapsed: boolean; onToggle: () => void }) {
 function MapCard(props: {
   node: TaskMapNode;
   deps: CardDeps;
+  /** In the Tab order (#221); the measuring layer's never are. */
+  tabbable: boolean;
   /** A box's head: whether it is collapsed, and toggling it. */
   collapse?: { collapsed: boolean; onToggle: () => void };
 }) {
@@ -252,6 +278,8 @@ function MapCard(props: {
       blocked={node.blocked}
       kept={node.faded}
       keptStatusShown={false}
+      tabIndex={props.tabbable ? 0 : -1}
+      menuByKeyboard
       // A box's head switches sequential (#220).
       buttons={
         node.children.length > 0 ? (
@@ -291,10 +319,12 @@ function MapNode(props: {
   markers: EndpointMarkers;
   deps: CardDeps;
   look: Look;
+  roving: Roving;
   /** Its parent task is sequential (#216: where a drop on it goes). */
   inSequence?: boolean;
 }) {
-  const { node, layout, badges, markers, deps, look } = props;
+  const { node, layout, badges, markers, deps, look, roving } = props;
+  const tabbable = roving(node.task.id);
   const key = taskKey(node.task.id);
   const box = layout.get(key);
   const drag = useMapCardDrag(node.task);
@@ -329,7 +359,7 @@ function MapNode(props: {
         data-chosen={chosen}
         style={placeStyle(box)}
       >
-        <MapCard node={node} deps={deps} />
+        <MapCard node={node} deps={deps} tabbable={tabbable} />
         {badgeButton}
         <LinkConnector task={node.task} />
       </div>
@@ -358,6 +388,7 @@ function MapNode(props: {
         <MapCard
           node={node}
           deps={deps}
+          tabbable={tabbable}
           collapse={{ collapsed, onToggle: () => look.toggle(key) }}
         />
         {badgeButton}
@@ -373,6 +404,7 @@ function MapNode(props: {
             markers={markers}
             deps={deps}
             look={look}
+            roving={roving}
             inSequence={node.sequential}
           />
         ))}
@@ -680,10 +712,19 @@ export function TaskMapCanvas(props: {
   );
   // Where a dependency's other end is not on the map (#217).
   const markers = React.useMemo(() => endpointMarkers(read.endpoints), [read]);
-  const collapsed = React.useSyncExternalStore(
+  const kept = React.useSyncExternalStore(
     stores.collapsed.subscribe,
     stores.collapsed.current,
   );
+  // Boxes expanded for now to show a task located (#221).
+  const expanded = React.useSyncExternalStore(
+    stores.expanded.subscribe,
+    stores.expanded.current,
+  );
+  const collapsed = React.useMemo(() => {
+    if (expanded.size === 0) return kept;
+    return new Set([...kept].filter((key) => !expanded.has(key)));
+  }, [kept, expanded]);
   const picked = React.useSyncExternalStore(
     stores.selected.subscribe,
     stores.selected.current,
@@ -757,7 +798,17 @@ export function TaskMapCanvas(props: {
       selected,
       select: (id) => stores.selected.set(id),
       isCollapsed: (key) => collapsed.has(key),
-      toggle: (key) => stores.collapsed.toggle(key),
+      toggle: (key) => {
+        // A box expanded for now folds back; its kept state is unchanged.
+        const now = stores.expanded.current();
+        if (now.has(key) && stores.collapsed.current().has(key)) {
+          const next = new Set(now);
+          next.delete(key);
+          stores.expanded.set(next);
+          return;
+        }
+        stores.collapsed.toggle(key);
+      },
     };
   }, [chain, placed, selected, collapsed, stores]);
   const litEdges = React.useMemo(
@@ -883,7 +934,16 @@ export function TaskMapCanvas(props: {
       }
       stores.selected.set(null);
     },
+    onFocus(event) {
+      // A card focused, by click or by keyboard, is the one Tab goes on from;
+      // by keyboard it is panned into the window (#221).
+      const id = cardTask(event.target);
+      if (id === null) return;
+      setKeyed(id);
+      if ((event.target as Element).matches(":focus-visible")) showCard(id);
+    },
     onKeyDown(event) {
+      if (onCardKey(event)) return;
       if (
         event.key === "Escape" &&
         stores.selected.current() !== null &&
@@ -903,6 +963,75 @@ export function TaskMapCanvas(props: {
       if (shownEdge && event.key === "Escape") setSelectedEdge(null);
       input.handlers.onKeyDown?.(event);
     },
+  };
+
+  // The cards the keyboard moves through (#221): those shown, not hidden in
+  // a collapsed box, in note order; the one in the Tab order.
+  const order = React.useMemo(() => {
+    if (!placed) return [];
+    return nodes
+      .filter((node) => {
+        const key = taskKey(node.task.id);
+        return placed.shownAs(key) === key && placed.boxes.has(key);
+      })
+      .sort((a, b) => a.position - b.position)
+      .map((node) => node.task.id);
+  }, [nodes, placed]);
+  const [keyed, setKeyed] = React.useState<TaskId | null>(null);
+  const current =
+    keyed !== null && order.includes(keyed) ? keyed : (order[0] ?? null);
+  const roving = React.useCallback<Roving>((id) => id === current, [current]);
+  const { bringIntoView } = input;
+  /** The card of task `id` on the canvas, the head's for a box. */
+  const cardOf = (id: TaskId) =>
+    viewport.current?.querySelector<HTMLElement>(
+      `.nextaction-task-map-world [data-map-key="${taskKey(id)}"] .nextaction-task-card`,
+    ) ?? null;
+  const showCard = (id: TaskId) => {
+    const box = placed?.boxes.get(taskKey(id));
+    if (box) bringIntoView(box);
+  };
+  /** The task whose card `target` is, or `null`. */
+  const cardTask = (target: EventTarget | null): TaskId | null => {
+    if (!(target instanceof Element)) return null;
+    if (!target.classList.contains("nextaction-task-card")) return null;
+    if (!target.closest(".nextaction-task-map-world")) return null;
+    const key = target.closest<HTMLElement>("[data-map-key]")?.dataset.mapKey;
+    return key?.startsWith("task:") ? Number(key.slice(5)) : null;
+  };
+  /**
+   * Tab past the last card, or Shift+Tab before the first: to the view's
+   * header controls (the first, or the last), never out of the plugin panel.
+   */
+  const leaveCards = (back: boolean): boolean => {
+    const header = viewport.current
+      ?.closest(".nextaction-task-map")
+      ?.querySelector(".nextaction-view-header");
+    const controls = [
+      ...(header?.querySelectorAll<HTMLElement>(focusable) ?? []),
+    ].filter((element) => element.getClientRects().length > 0);
+    const to = back ? controls.at(-1) : controls[0];
+    if (!to) return false;
+    to.focus();
+    return true;
+  };
+  const onCardKey = (event: React.KeyboardEvent<HTMLElement>): boolean => {
+    if (event.key !== "Tab" || event.ctrlKey || event.altKey || event.metaKey) {
+      return false;
+    }
+    const id = cardTask(event.target);
+    if (id === null) return false;
+    const at = order.indexOf(id);
+    const next = order[at + (event.shiftKey ? -1 : 1)];
+    if (at >= 0 && next !== undefined) {
+      event.preventDefault();
+      setKeyed(next);
+      // Focusable now: tabbable or not, a card with onOpen takes the focus.
+      cardOf(next)?.focus({ preventScroll: true });
+      return true;
+    }
+    if (leaveCards(event.shiftKey)) event.preventDefault();
+    return true;
   };
 
   // An endpoint marker's other end, centered once the map shows it.
@@ -930,6 +1059,10 @@ export function TaskMapCanvas(props: {
         ? box.y + boxPadding.top + head.height / 2
         : box.y + box.height / 2,
     });
+    // The keyboard goes on from it (#221).
+    if (placed.shownAs(taskKey(located)) === taskKey(located)) {
+      setKeyed(located);
+    }
     locate.set(null);
   }, [located, placed, centerOn, locate]);
 
@@ -955,7 +1088,7 @@ export function TaskMapCanvas(props: {
               className="nextaction-task-map-card"
               data-next-action={node.nextAction || undefined}
             >
-              <MapCard node={node} deps={deps} />
+              <MapCard node={node} deps={deps} tabbable={false} />
             </div>
           ))}
         </div>
@@ -991,6 +1124,7 @@ export function TaskMapCanvas(props: {
                         markers={markers}
                         deps={deps}
                         look={look}
+                        roving={roving}
                       />
                     ))}
                 </section>

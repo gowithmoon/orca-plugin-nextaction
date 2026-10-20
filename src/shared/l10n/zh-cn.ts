@@ -810,6 +810,13 @@ const zhCN: Record<string, string> = {
   "Depends on tasks not shown": "依赖了图上未显示的任务",
   "Tasks not shown depend on it": "图上未显示的任务依赖它",
   "Shown with: ${conditions}": "显示条件：${conditions}",
+  // The task map's search and "Show in task map" (#221).
+  "None found": "没有找到",
+  "${at}/${count}": "${at}/${count}",
+  "Could not search the task map: ${reason}": "无法搜索任务全景图：${reason}",
+  "Show in task map": "在任务全景图中查看",
+  "Could not show the task in the task map: ${reason}":
+    "无法在任务全景图中查看这个任务：${reason}",
 };
 
 export default zhCN;

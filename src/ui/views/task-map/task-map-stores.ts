@@ -3,7 +3,9 @@
 // back keeps them; and the task an endpoint marker asked to be located,
 // until the map shows it; the collapsed boxes and the selected task (#218),
 // the collapse state kept as the all tasks view keeps its own, under its own
-// keys. Unloading clears it through `clear` (platform/panel-feature.ts);
+// keys; the boxes expanded for the time being to show a task located
+// (#221), apart from the collapse state, which they leave as it is.
+// Unloading clears it through `clear` (platform/panel-feature.ts);
 // never written with `plugins.setData`.
 import type { TaskMapInput } from "../../../application/usecases/read-task-map";
 import type { TaskId } from "../../../domain/task/task";
@@ -42,29 +44,41 @@ export interface TaskMapStores {
   readonly locate: MemoryStore<TaskId | null>;
   /** The boxes collapsed; none at first (all expanded). */
   readonly collapsed: IdSetStore<TaskMapBoxKey>;
+  /**
+   * Collapsed boxes shown expanded for now, to show a task located (#221):
+   * `collapsed` is left as it is; replaced by the next locate, emptied when
+   * the view is left or every box is folded or unfolded.
+   */
+  readonly expanded: MemoryStore<ReadonlySet<TaskMapBoxKey>>;
   /** The task whose chain is highlighted, `null` for none. */
   readonly selected: MemoryStore<TaskId | null>;
   /** Clears them all. */
   clear(): void;
 }
 
+/** No box. */
+export const noBoxes: ReadonlySet<TaskMapBoxKey> = new Set();
+
 export function createTaskMapStores(): TaskMapStores {
   const view = createMemoryStore<CanvasView | null>(null);
   const filter = createMemoryStore<TaskMapInput>(noTaskMapFilter);
   const locate = createMemoryStore<TaskId | null>(null);
   const collapsed = createIdSetStore<TaskMapBoxKey>();
+  const expanded = createMemoryStore<ReadonlySet<TaskMapBoxKey>>(noBoxes);
   const selected = createMemoryStore<TaskId | null>(null);
   return {
     view,
     filter,
     locate,
     collapsed,
+    expanded,
     selected,
     clear: () => {
       view.set(null);
       filter.set(noTaskMapFilter);
       locate.set(null);
       collapsed.clear();
+      expanded.set(noBoxes);
       selected.set(null);
     },
   };

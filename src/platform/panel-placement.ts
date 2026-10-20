@@ -15,6 +15,11 @@ export interface PanelPlacement {
    * from `originPanelId`. Throws when Orca does not open it.
    */
   toggle(originPanelId: string): void;
+  /**
+   * Opens the plugin panel from `originPanelId` unless one is open (#221:
+   * "Show in task map" from the notes). Throws when Orca does not open it.
+   */
+  show(originPanelId: string): void;
   /** Restores what the plugin panel covered, or closes it when it opened a new panel. */
   close(panelId: string): void;
 }
@@ -111,6 +116,9 @@ export function createPanelPlacement(panelType: string): PanelPlacement {
         return;
       }
       open(originPanelId);
+    },
+    show(originPanelId) {
+      if (findViewPanels(panelType).length === 0) open(originPanelId);
     },
     close,
   };

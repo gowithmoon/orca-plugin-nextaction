@@ -191,6 +191,8 @@ export function createNextActionPlugin(): Plugin {
     },
     openCreateSubtask: taskTag.openCreateSubtask,
     openSplitSubtasks: splitSubtasks.open,
+    // The panel feature is made below; called only once loaded.
+    showInTaskMap: (taskId) => panel.showInTaskMap(taskId),
     names: taskTag.names,
   });
   const projectMenu = createProjectMenuFeature({

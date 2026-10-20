@@ -29,6 +29,7 @@ import { statusIconAt } from "../ui/task-menu/orca-dom";
 import { registerSkipMenuItem } from "../ui/task-menu/skip-menu-item";
 import { registerSplitMenuItem } from "../ui/task-menu/split-menu-item";
 import { registerSubtaskMenuItem } from "../ui/task-menu/subtask-menu-item";
+import { registerTaskMapMenuItem } from "../ui/task-menu/task-map-menu-item";
 import {
   createTaskBlockMenuCommand,
   createTaskTagMenuCommand,
@@ -54,6 +55,8 @@ export function createTaskMenuFeature(deps: {
   openCreateSubtask: (parent: Task) => void;
   /** "Split into subtasks" (#202): opens the AI's draft window for the task. */
   openSplitSubtasks: (parent: Task) => void;
+  /** "Show in task map" (#221): the plugin panel's task map shows the task. */
+  showInTaskMap: (taskId: TaskId) => Promise<void>;
   /** The task tag's name, for finding status icons; none while paused. */
   names: TaskTagNamesSource;
 }): { feature: FeatureModule; items: () => TaskMenuItems | undefined } {
@@ -96,6 +99,10 @@ export function createTaskMenuFeature(deps: {
     registerSubtaskMenuItem(items, deps.openCreateSubtask);
     registerSplitMenuItem(items, deps.openSplitSubtasks);
     registerTaskPanelMenuItem(items, deps.openTaskPanel);
+    registerTaskMapMenuItem(items, {
+      showInTaskMap: deps.showInTaskMap,
+      pluginName,
+    });
 
     const menuDeps = {
       items,

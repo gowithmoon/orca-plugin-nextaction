@@ -8,6 +8,7 @@ import type { NoteCursorSource } from "../../application/ports/note-cursor";
 import type { TaskId } from "../../domain/task/task";
 import type { PanelProps } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
+import type { MemoryStore } from "../components/memory-store";
 import { PanelPopupLayer } from "../components/popup-layer";
 import { NoteCursorContext } from "../drag/card-drag";
 import type { OpenTaskPanelPopup } from "../task-panel/task-panel-popup";
@@ -52,6 +53,12 @@ export interface NextActionPanelOptions {
   onActivated: () => void;
   /** Orca's cursor data in a note panel, for dragging cards into the notes (#122). */
   noteCursors: NoteCursorSource;
+  /**
+   * A view asked for from outside the plugin panel (#221: "Show in task
+   * map"): shown when set, or when the panel opens while it is set, then
+   * cleared. Its preset is in the view's own store already.
+   */
+  viewRequest: MemoryStore<string | null>;
 }
 
 /** Calls `onActivated` each time `active` turns true after the first render. */
@@ -115,6 +122,7 @@ export function createNextActionPanel(
     onActivated,
     editorHost,
     noteCursors,
+    viewRequest,
   } = options;
 
   return function NextActionPanel(props) {
@@ -122,7 +130,9 @@ export function createNextActionPanel(
     const tier = useTier(root);
     useActivated(props.active, onActivated);
     const list = views.list();
-    const [currentId, setCurrentId] = React.useState(list[0]?.id);
+    const [currentId, setCurrentId] = React.useState(
+      () => viewRequest.current() ?? list[0]?.id,
+    );
     const current = list.find((view) => view.id === currentId) ?? list[0];
     // Only for this opening: nothing is selected when it opens (#42).
     const [selectedTaskId, setSelectedTaskId] = React.useState<TaskId>();
@@ -188,6 +198,15 @@ export function createNextActionPanel(
       setSelectedTaskId(undefined);
       setCurrentId(id);
     }, []);
+    const requested = React.useSyncExternalStore(
+      viewRequest.subscribe,
+      viewRequest.current,
+    );
+    React.useEffect(() => {
+      if (requested === null) return;
+      showView(requested);
+      viewRequest.set(null);
+    }, [requested, showView]);
     /**
      * A navigation item clicked: another view shows; the current one is told
      * it was clicked again (`PanelView.onReselect`), the selection kept.

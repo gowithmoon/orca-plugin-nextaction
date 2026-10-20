@@ -95,6 +95,18 @@ export const taskMapCss = `
   color: var(--orca-color-text-2);
 }
 
+/* The search box (#221), in the header's row: narrow panels keep it small. */
+.nextaction-task-map-search {
+  flex: 0 1 14em;
+  min-width: 6em;
+}
+
+.nextaction-task-map-search-count {
+  font-size: var(--orca-fontsize-xs);
+  color: var(--orca-color-text-2);
+  white-space: nowrap;
+}
+
 .nextaction-task-map-area {
   border: 1px solid var(--orca-color-border);
   border-radius: var(--orca-radius-md);

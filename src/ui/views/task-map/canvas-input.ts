@@ -8,7 +8,8 @@
 // - a left press on empty space, any left press with Space held, or a
 //   middle press, drags to pan, with pointer capture so it carries on
 //   outside the plugin panel; a right press only opens menus;
-// - F fits the map to the window.
+// - F fits the map to the window; + or = zooms in, - zooms out, around the
+//   window's center (#221: "+" is Shift + Equal on some keyboards).
 //
 // The wheel listener is the one DOM listener `ui` adds itself
 // (tests/architecture.test.ts, docs/ARCHITECTURE.md §4 插件面板中的画布):
@@ -33,6 +34,10 @@ const fitPadding = 48;
 const zoomPerDelta = 0.002;
 /** The view reaches the store once the wheel has been still this long. */
 const wheelCommitMs = 160;
+/** How much one + or - zooms. */
+const zoomPerKey = 1.25;
+/** Space kept around a card panned into view. */
+const revealMargin = 24;
 /** How far a press moves before it pans. */
 const panThreshold = 4;
 /** Set on the document root while panning (drag-to-pan-style.ts). */
@@ -104,6 +109,16 @@ export interface CanvasInput {
    * is on screen when the map is laid out again).
    */
   shift(dx: number, dy: number): void;
+  /**
+   * Pans as little as it takes for a box of the world to be in the window
+   * (#221: the card focused), centered on it where it does not fit.
+   */
+  bringIntoView(box: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  }): void;
 }
 
 /**
@@ -190,6 +205,23 @@ export function useCanvasInput(options: {
       }
     };
   }, [viewport, show, commit]);
+
+  /** Zooms by `factor` around the window's center. */
+  const zoomBy = React.useCallback(
+    (factor: number) => {
+      const element = viewport.current;
+      if (!element) return;
+      const view = live.current;
+      const mx = element.clientWidth / 2;
+      const my = element.clientHeight / 2;
+      const scale = clampScale(view.scale * factor);
+      const wx = (mx - view.x) / view.scale;
+      const wy = (my - view.y) / view.scale;
+      show({ x: mx - wx * scale, y: my - wy * scale, scale });
+      commit();
+    },
+    [viewport, show, commit],
+  );
 
   const stop = React.useCallback(() => {
     const current = press.current;
@@ -283,14 +315,17 @@ export function useCanvasInput(options: {
         // Held to pan; a focused card's Space would also scroll.
         event.preventDefault();
         spaceHeld.current = true;
-      } else if (
-        (event.key === "f" || event.key === "F") &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey
-      ) {
+      } else if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      } else if (event.key === "f" || event.key === "F") {
         event.preventDefault();
         fitToWindow();
+      } else if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        zoomBy(zoomPerKey);
+      } else if (event.key === "-") {
+        event.preventDefault();
+        zoomBy(1 / zoomPerKey);
       }
     },
     onKeyUp(event) {
@@ -344,11 +379,43 @@ export function useCanvasInput(options: {
     [show, commit],
   );
 
+  const bringIntoView = React.useCallback(
+    (box: { x: number; y: number; width: number; height: number }) => {
+      const element = viewport.current;
+      if (!element) return;
+      const view = live.current;
+      /** The view's offset on one axis that shows `[from, from + size]`. */
+      const axis = (
+        offset: number,
+        from: number,
+        size: number,
+        room: number,
+      ) => {
+        const start = offset + from * view.scale;
+        const end = start + size * view.scale;
+        if (end - start > room - 2 * revealMargin) {
+          return room / 2 - (from + size / 2) * view.scale;
+        }
+        if (start < revealMargin) return offset + revealMargin - start;
+        if (end > room - revealMargin)
+          return offset - (end - room + revealMargin);
+        return offset;
+      };
+      const x = axis(view.x, box.x, box.width, element.clientWidth);
+      const y = axis(view.y, box.y, box.height, element.clientHeight);
+      if (x === view.x && y === view.y) return;
+      show({ ...view, x, y });
+      commit();
+    },
+    [viewport, show, commit],
+  );
+
   return {
     handlers,
     worldStyle: { transform: transformOf(live.current) },
     toWorld,
     centerOn,
     shift,
+    bringIntoView,
   };
 }

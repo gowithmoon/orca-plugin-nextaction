@@ -83,6 +83,17 @@ export interface TaskCardProps {
    * open the task panel and the card's task menu.
    */
   footer?: React.ReactNode;
+  /**
+   * The card's place in the Tab order when it opens (`onOpen`): 0 unless a
+   * view moves the focus between its cards itself (the task map's roving
+   * focus, #221, gives -1 to all but one).
+   */
+  tabIndex?: number;
+  /**
+   * Shift+F10, or the menu key, on the focused card opens its task menu
+   * (#221); off unless asked for.
+   */
+  menuByKeyboard?: boolean;
 }
 
 /**
@@ -224,10 +235,14 @@ export function TaskCard(props: TaskCardProps) {
     doneToday,
     skippedToday,
     footer,
+    menuByKeyboard,
   } = props;
   const text = shownText(task);
 
-  const card = (onContextMenu?: (event: React.MouseEvent) => void) => (
+  const card = (
+    onContextMenu?: (event: React.MouseEvent) => void,
+    openMenu?: (event: React.UIEvent) => void,
+  ) => (
     <article
       className="nextaction-task-card"
       data-clickable={onOpen ? true : undefined}
@@ -247,15 +262,36 @@ export function TaskCard(props: TaskCardProps) {
       }
       // The keyboard opens it too: Enter on the focused card, not on its buttons.
       onKeyDown={
-        onOpen &&
-        ((event) => {
-          if (event.key === "Enter" && event.target === event.currentTarget) {
-            event.preventDefault();
-            onOpen(task);
-          }
-        })
+        !onOpen && !(menuByKeyboard && openMenu)
+          ? undefined
+          : (event) => {
+              if (event.target !== event.currentTarget) return;
+              if (onOpen && event.key === "Enter") {
+                event.preventDefault();
+                onOpen(task);
+              } else if (
+                menuByKeyboard &&
+                openMenu &&
+                ((event.key === "F10" && event.shiftKey) ||
+                  event.key === "ContextMenu")
+              ) {
+                event.preventDefault();
+                // Opened at the card's lower left, as Orca opens a menu at a
+                // pointer (as note-status-menu.tsx opens one at an icon).
+                const box = event.currentTarget.getBoundingClientRect();
+                openMenu({
+                  currentTarget: event.currentTarget,
+                  target: event.currentTarget,
+                  clientX: box.left,
+                  clientY: box.bottom,
+                  preventDefault() {},
+                  stopPropagation() {},
+                  nativeEvent: {},
+                } as unknown as React.UIEvent);
+              }
+            }
       }
-      tabIndex={onOpen ? 0 : undefined}
+      tabIndex={onOpen ? (props.tabIndex ?? 0) : undefined}
       onContextMenu={
         onContextMenu &&
         ((event) => {
@@ -314,7 +350,7 @@ export function TaskCard(props: TaskCardProps) {
         />
       )}
     >
-      {(open) => card(open)}
+      {(open) => card(open, open)}
     </ContextMenu>
   );
 }
