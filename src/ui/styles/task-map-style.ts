@@ -2,7 +2,8 @@
 // scroll, the canvas clipping a world that pans and zooms by transform; the
 // project boxes, the no-project area and the parent tasks' boxes placed
 // absolutely by the layout; fixed-width cards, their text up to two lines;
-// the sequence arrows on an SVG layer above the cards. Orca's CSS variables
+// the sequence and dependency arrows (#215) on an SVG layer above the
+// cards, a card on a dependency cycle outlined red. Orca's CSS variables
 // only, so both themes follow them.
 import { cardWidth } from "../views/task-map/task-map-canvas";
 
@@ -140,13 +141,65 @@ export const taskMapCss = `
   pointer-events: none;
 }
 
-.nextaction-task-map-sequence {
+/* A card on a dependency cycle (#215): a danger outline. */
+.nextaction-task-map [data-cycle] > .nextaction-task-card {
+  border-color: var(--orca-color-dangerous-5);
+  outline: 1px solid var(--orca-color-dangerous-5);
+}
+
+/*
+ * The arrows (#215): a sequence thin and faint; a dependency firmer, dashed
+ * in mode any; a date conflict the warning color, a cycle the danger one.
+ * Each kind's arrowhead is its own marker, filled to match.
+ */
+.nextaction-task-map-arrow {
   fill: none;
+  stroke: var(--orca-color-text-2);
+  stroke-width: 1.6;
+}
+
+.nextaction-task-map-arrow[data-kind="sequence"] {
   stroke: var(--orca-color-text-3);
-  stroke-width: 1.2;
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.nextaction-task-map-arrow[data-any] {
+  stroke-dasharray: 6 4;
+}
+
+.nextaction-task-map-arrow[data-kind="conflict"] {
+  stroke: var(--orca-color-warning-5);
+}
+
+.nextaction-task-map-arrow[data-kind="cycle"] {
+  stroke: var(--orca-color-dangerous-5);
 }
 
 .nextaction-task-map-arrow-head {
+  fill: var(--orca-color-text-2);
+}
+
+.nextaction-task-map-arrow-head[data-kind="sequence"] {
   fill: var(--orca-color-text-3);
+  opacity: 0.6;
+}
+
+.nextaction-task-map-arrow-head[data-kind="conflict"] {
+  fill: var(--orca-color-warning-5);
+}
+
+.nextaction-task-map-arrow-head[data-kind="cycle"] {
+  fill: var(--orca-color-dangerous-5);
+}
+
+/* "+N days" at the entry of a delayed task's dependency arrows. */
+.nextaction-task-map-delay {
+  font-size: 10px;
+  fill: var(--orca-color-text-2);
+  paint-order: stroke;
+  stroke: var(--orca-color-bg-1);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 `;

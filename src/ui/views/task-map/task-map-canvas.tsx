@@ -4,10 +4,11 @@
 // box and card is placed absolutely inside its own box, as the layout gives
 // them relative to their container. One CSS transform on the world pans and
 // zooms (canvas-input.ts); an SVG layer above the cards draws the sequence
-// arrows. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// and dependency arrows (#215). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   TaskMapArea,
+  TaskMapDependencyEdge,
   TaskMapEdge,
   TaskMapNode,
   TaskMapRead,
@@ -77,7 +78,7 @@ function layoutInput(read: TaskMapRead, sizes: Sizes): LayoutContainer | null {
   return missing ? null : root;
 }
 
-function sequenceInput(edges: readonly TaskMapEdge[]) {
+function edgeInput(edges: readonly TaskMapEdge[]) {
   return edges.map((edge) => ({
     from: taskKey(edge.from),
     to: taskKey(edge.to),
@@ -166,6 +167,7 @@ function MapNode(props: {
       <div
         className="nextaction-task-map-card"
         data-next-action={node.nextAction || undefined}
+        data-cycle={node.cycle || undefined}
         style={placeStyle(box)}
       >
         <MapCard node={node} deps={deps} />
@@ -181,6 +183,7 @@ function MapNode(props: {
       <div
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
+        data-cycle={node.cycle || undefined}
       >
         <MapCard node={node} deps={deps} />
       </div>
@@ -225,15 +228,36 @@ function AreaHead(props: { area: TaskMapArea }) {
   );
 }
 
-/** The sequence arrows, from a box's right side to the next one's left. */
+/** An arrow's kind: its line and its arrowhead's marker (#215). */
+type ArrowKind = "sequence" | "dependency" | "conflict" | "cycle";
+const arrowKinds: readonly ArrowKind[] = [
+  "sequence",
+  "dependency",
+  "conflict",
+  "cycle",
+];
+
+/** A dependency's kind: a cycle over a date conflict over a plain one. */
+function dependencyKind(edge: TaskMapDependencyEdge): ArrowKind {
+  if (edge.cycle) return "cycle";
+  return edge.conflict ? "conflict" : "dependency";
+}
+
+/**
+ * The arrows, from a node's right side to the next one's left: the sequence
+ * arrows thin and faint, then the dependencies (#215), those in a date
+ * conflict and on a cycle last so no plain line covers them.
+ */
 function Arrows(props: {
   edges: readonly TaskMapEdge[];
+  dependencies: readonly TaskMapDependencyEdge[];
+  delays: ReadonlyMap<TaskId, number>;
   boxes: ReadonlyMap<string, LayoutBox>;
   heads: Sizes;
   width: number;
   height: number;
 }) {
-  const marker = `nextaction-task-map-arrow-${React.useId().replace(/:/g, "")}`;
+  const prefix = `nextaction-task-map-arrow-${React.useId().replace(/:/g, "")}`;
   /** Where on a node's side an arrow meets it: level with its card. */
   const level = (id: TaskId, box: LayoutBox) => {
     const head = props.heads.get(id);
@@ -241,6 +265,33 @@ function Arrows(props: {
       ? box.y + boxPadding.top + head.height / 2
       : box.y + box.height / 2;
   };
+  /** Where an arrow into the node ends: just left of it, level with its card. */
+  const entry = (id: TaskId) => {
+    const to = props.boxes.get(taskKey(id));
+    return to ? { x: to.x - 4, y: level(id, to) } : null;
+  };
+  const path = (edge: TaskMapEdge) => {
+    const from = props.boxes.get(taskKey(edge.from));
+    const end = entry(edge.to);
+    if (!from || !end) return null;
+    const x0 = from.x + from.width + 4;
+    const y0 = level(edge.from, from);
+    const { x: x3, y: y3 } = end;
+    const ctrl = Math.min(
+      150,
+      Math.max(20, Math.hypot(x3 - x0, y3 - y0) * 0.42),
+    );
+    return `M ${x0} ${y0} C ${x0 + ctrl} ${y0}, ${x3 - ctrl} ${y3}, ${x3} ${y3}`;
+  };
+  const rank: Record<ArrowKind, number> = {
+    sequence: 0,
+    dependency: 1,
+    conflict: 2,
+    cycle: 3,
+  };
+  const dependencies = [...props.dependencies].sort(
+    (a, b) => rank[dependencyKind(a)] - rank[dependencyKind(b)],
+  );
   return (
     <svg
       className="nextaction-task-map-edges"
@@ -249,42 +300,65 @@ function Arrows(props: {
       aria-hidden="true"
     >
       <defs>
-        <marker
-          id={marker}
-          viewBox="0 0 8 8"
-          refX="7"
-          refY="4"
-          markerWidth="8"
-          markerHeight="8"
-          markerUnits="userSpaceOnUse"
-          orient="auto"
-        >
-          <path
-            d="M0 0.5 L7.5 4 L0 7.5 z"
-            className="nextaction-task-map-arrow-head"
-          />
-        </marker>
+        {arrowKinds.map((kind) => (
+          <marker
+            key={kind}
+            id={`${prefix}-${kind}`}
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="8"
+            markerHeight="8"
+            markerUnits="userSpaceOnUse"
+            orient="auto"
+          >
+            <path
+              d="M0 0.5 L7.5 4 L0 7.5 z"
+              className="nextaction-task-map-arrow-head"
+              data-kind={kind}
+            />
+          </marker>
+        ))}
       </defs>
       {props.edges.map((edge) => {
-        const from = props.boxes.get(taskKey(edge.from));
-        const to = props.boxes.get(taskKey(edge.to));
-        if (!from || !to) return null;
-        const x0 = from.x + from.width + 4;
-        const y0 = level(edge.from, from);
-        const x3 = to.x - 4;
-        const y3 = level(edge.to, to);
-        const ctrl = Math.min(
-          150,
-          Math.max(20, Math.hypot(x3 - x0, y3 - y0) * 0.42),
-        );
-        return (
+        const d = path(edge);
+        return d ? (
           <path
-            key={`${edge.from}-${edge.to}`}
-            className="nextaction-task-map-sequence"
-            d={`M ${x0} ${y0} C ${x0 + ctrl} ${y0}, ${x3 - ctrl} ${y3}, ${x3} ${y3}`}
-            markerEnd={`url(#${marker})`}
+            key={`sequence-${edge.from}-${edge.to}`}
+            className="nextaction-task-map-arrow"
+            data-kind="sequence"
+            d={d}
+            markerEnd={`url(#${prefix}-sequence)`}
           />
-        );
+        ) : null;
+      })}
+      {dependencies.map((edge) => {
+        const d = path(edge);
+        const kind = dependencyKind(edge);
+        return d ? (
+          <path
+            key={`dependency-${edge.from}-${edge.to}`}
+            className="nextaction-task-map-arrow"
+            data-kind={kind}
+            data-any={edge.any || undefined}
+            d={d}
+            markerEnd={`url(#${prefix}-${kind})`}
+          />
+        ) : null;
+      })}
+      {[...props.delays].map(([id, days]) => {
+        const end = entry(id);
+        return end ? (
+          <text
+            key={`delay-${id}`}
+            className="nextaction-task-map-delay"
+            x={end.x - 10}
+            y={end.y - 6}
+            textAnchor="end"
+          >
+            {t("+${days}d", { days: String(days) })}
+          </text>
+        ) : null;
       })}
     </svg>
   );
@@ -337,7 +411,11 @@ export function TaskMapCanvas(props: {
     if (!sizes) return null;
     const input = layoutInput(read, sizes);
     if (!input) return null;
-    const layout = layoutTaskMap(input, sequenceInput(read.sequenceEdges));
+    // Dependencies order the layers too, lifted across boxes (ADR 0027).
+    const layout = layoutTaskMap(
+      input,
+      edgeInput([...read.sequenceEdges, ...read.dependencyEdges]),
+    );
     const root = layout.get(rootId);
     if (!root) return null;
     // The boxes' head cards, for where arrows meet a box.
@@ -346,7 +424,14 @@ export function TaskMapCanvas(props: {
       const size = sizes.get(node.task.id);
       if (node.children.length > 0 && size) heads.set(node.task.id, size);
     }
-    return { layout, boxes: worldBoxes(read, layout), root, heads };
+    // "+N days" where a delayed task's dependency arrows come in.
+    const delays = new Map<TaskId, number>();
+    for (const node of nodes) {
+      if (node.dependencyDelay > 0) {
+        delays.set(node.task.id, node.dependencyDelay);
+      }
+    }
+    return { layout, boxes: worldBoxes(read, layout), root, heads, delays };
   }, [read, sizes, nodes]);
 
   const content = React.useMemo(
@@ -410,6 +495,8 @@ export function TaskMapCanvas(props: {
         {placed && (
           <Arrows
             edges={read.sequenceEdges}
+            dependencies={read.dependencyEdges}
+            delays={placed.delays}
             boxes={placed.boxes}
             heads={placed.heads}
             width={placed.root.width}
