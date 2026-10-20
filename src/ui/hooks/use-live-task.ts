@@ -2,6 +2,7 @@
 // and again on every task change signal (ADR 0007). Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { CompletionHistoryRead } from "../../application/ports/task-repository";
 import type {
   ReadTaskForPanel,
   TaskCustomProperty,
@@ -17,6 +18,8 @@ export type LiveTaskState =
       readonly task: Task;
       /** Its custom properties, in Orca's order (#113). */
       readonly customProperties: readonly TaskCustomProperty[];
+      /** Its completion history (#209). */
+      readonly completionHistory: CompletionHistoryRead;
     }
   /** The block is no longer a task (dropped, deleted, tag removed). */
   | { readonly kind: "gone" }

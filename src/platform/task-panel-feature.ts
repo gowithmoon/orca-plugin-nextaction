@@ -2,6 +2,10 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { ReminderDefaultTimeSetting } from "../application/ports/reminder-default-time-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import {
+  createClearCompletionHistory,
+  createDeleteCompletionEntry,
+} from "../application/usecases/delete-completion-entries";
 import { createDiscardUnreadable } from "../application/usecases/discard-unreadable";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
@@ -33,6 +37,7 @@ import type { CalendarDate } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
+import { createCompletionHistoryPopup } from "../ui/task-panel/completion-history-popup";
 import { createRecurrencePopup } from "../ui/task-panel/recurrence-popup";
 import { createReminderPopup } from "../ui/task-panel/reminder-popup";
 import {
@@ -77,11 +82,12 @@ export function createTaskPanelFeature(deps: {
   const { repository } = deps;
   // Until a load says otherwise, writing on leaving is allowed.
   let releasing = () => false;
-  // The recurrence rule (#95), review (#103) and reminder (#107) popups'
-  // roots.
+  // The recurrence rule (#95), review (#103), reminder (#107) and
+  // completion history (#209) popups' roots.
   const recurrenceRoot = rootWhileLoaded("recurrencePopup");
   const reviewRoot = rootWhileLoaded("reviewPopup");
   const reminderRoot = rootWhileLoaded("reminderPopup");
+  const completionHistoryRoot = rootWhileLoaded("completionHistoryPopup");
   const readTask = createReadTask({ repository });
   // The popups' "Discard and reset" (#106): the task read again afterwards.
   const discard = {
@@ -106,6 +112,21 @@ export function createTaskPanelFeature(deps: {
     // Into the load's root; nothing outside a load.
     render: (node) => reminderRoot.render(node),
   });
+  const readTaskForPanel = createReadTaskForPanel({ repository });
+  const openCompletionHistoryPopup = createCompletionHistoryPopup({
+    deps: {
+      actions: {
+        deleteCompletionEntry: createDeleteCompletionEntry({ repository }),
+        clearCompletionHistory: createClearCompletionHistory({ repository }),
+        readTaskForPanel,
+        notify: deps.taskActions.notify,
+      },
+      today: deps.today,
+      discard,
+    },
+    // Into the load's root; nothing outside a load.
+    render: (node) => completionHistoryRoot.render(node),
+  });
   const markReviewed = createMarkReviewed(clockDeps);
   const canMarkReviewed = createCanMarkReviewed();
   const openReviewPopup = createReviewPopup({
@@ -121,7 +142,7 @@ export function createTaskPanelFeature(deps: {
     render: (node) => reviewRoot.render(node),
   });
   const formDeps: TaskPanelFormDeps = {
-    readTaskForPanel: createReadTaskForPanel({ repository }),
+    readTaskForPanel,
     setCustomProperty: createSetCustomProperty({
       repository,
       clock: systemClock,
@@ -168,6 +189,7 @@ export function createTaskPanelFeature(deps: {
     }),
     openReviewPopup,
     openReminderPopup,
+    openCompletionHistoryPopup,
     now: () => systemClock.now(),
     markReviewed,
     canMarkReviewed,
@@ -186,6 +208,7 @@ export function createTaskPanelFeature(deps: {
     recurrenceRoot.load(context);
     reviewRoot.load(context);
     reminderRoot.load(context);
+    completionHistoryRoot.load(context);
     const root = registry.reactRoot("taskPanelPopup", null);
     let live = true;
     const open = createTaskPanelPopup({

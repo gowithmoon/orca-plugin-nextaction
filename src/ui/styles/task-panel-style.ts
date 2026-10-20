@@ -677,6 +677,22 @@ button.nextaction-block-ref-target:hover {
   margin-left: auto;
 }
 
+/* The completion history popup (completion-history-popup.tsx), in the
+   reminder popup's list look: the logical day and time, then the kind,
+   skips greyed. */
+.nextaction-completion-entry-when {
+  white-space: nowrap;
+}
+
+.nextaction-completion-entry-kind {
+  color: var(--orca-color-text-2);
+  font-size: var(--orca-fontsize-sm);
+}
+
+.nextaction-completion-entry-kind[data-skip] {
+  opacity: 0.7;
+}
+
 /* The quick options: toggles in a two-column grid of fixed cells, so
    choosing one changes neither its size nor anything around it. */
 .nextaction-reminder-options {

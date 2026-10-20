@@ -3,7 +3,10 @@
 // calls the use cases; it does not know whether it sits in a popup or a side
 // pane. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { Candidates } from "../../application/ports/task-repository";
+import type {
+  Candidates,
+  CompletionHistoryRead,
+} from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
 import type {
@@ -51,6 +54,8 @@ import {
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import { ChoicesField } from "./choices-field";
+import { CompletionHistoryField } from "./completion-history-field";
+import type { OpenCompletionHistoryPopup } from "./completion-history-popup";
 import {
   type BlockRefsDeps,
   CustomPropertiesField,
@@ -111,6 +116,8 @@ export interface TaskPanelFormDeps {
   openReviewPopup: OpenReviewPopup;
   /** Opens the reminder popup for the task (#107). */
   openReminderPopup: OpenReminderPopup;
+  /** Opens the completion history popup for the task (#209). */
+  openCompletionHistoryPopup: OpenCompletionHistoryPopup;
   /** The current time, for which reminders are still to come. */
   now: () => Date;
   /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
@@ -189,6 +196,8 @@ function Fields(props: {
   task: Task;
   /** In Orca's order; shown after the built-in fields (#113). */
   customProperties: readonly TaskCustomProperty[];
+  /** The completion history row's, last (#209). */
+  completionHistory: CompletionHistoryRead;
   today: CalendarDate;
   idPrefix: string;
   actions: ReturnType<typeof useTaskPanelActions>;
@@ -209,6 +218,8 @@ function Fields(props: {
   onOpenReview: () => void;
   /** Opens the reminder popup (#107). */
   onOpenReminders: () => void;
+  /** Opens the completion history popup (#209). */
+  onOpenCompletionHistory: () => void;
   /** The current time, for the reminder row. */
   now: Date;
   /** Whether "Mark reviewed" shows (#103). */
@@ -370,6 +381,13 @@ function Fields(props: {
         onChange={actions.setCustomProperty}
         blockRefs={props.blockRefs}
       />
+      {/* Only with an entry, or one this plugin cannot read (#209). */}
+      <CompletionHistoryField
+        labelId={id("completion-history")}
+        completionHistory={props.completionHistory}
+        today={today}
+        onOpen={props.onOpenCompletionHistory}
+      />
     </div>
   );
 }
@@ -420,6 +438,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
       <Fields
         task={state.task}
         customProperties={state.customProperties}
+        completionHistory={state.completionHistory}
         today={deps.today()}
         idPrefix={idPrefix}
         actions={actions}
@@ -428,6 +447,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         onOpenRecurrence={() => deps.openRecurrencePopup(state.task)}
         onOpenReview={() => deps.openReviewPopup(state.task)}
         onOpenReminders={() => deps.openReminderPopup(state.task)}
+        onOpenCompletionHistory={() => deps.openCompletionHistoryPopup(state)}
         now={now}
         canMarkReviewed={deps.canMarkReviewed(state.task)}
         blockRefs={{
