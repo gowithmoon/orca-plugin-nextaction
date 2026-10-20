@@ -73,7 +73,11 @@ import {
   LinkPreview,
   linkTargetAttributes,
 } from "./task-map-links";
-import type { TaskMapStores } from "./task-map-stores";
+import {
+  boxKey,
+  type TaskMapBoxKey,
+  type TaskMapStores,
+} from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
 export const cardWidth = 240;
@@ -82,12 +86,12 @@ const areaHeadHeight = 32;
 const boxPadding = { top: 8, right: 12, bottom: 12, left: 12 };
 const rootId = "root";
 
-const taskKey = (id: TaskId) => `task:${id}`;
+const taskKey = (id: TaskId) => boxKey("task", id);
 
 /** The boxes holding a task located (`FindOnTaskMap.locate`), by their keys. */
-export function placeBoxKeys(place: TaskMapPlace): string[] {
+export function placeBoxKeys(place: TaskMapPlace): TaskMapBoxKey[] {
   return [
-    ...(place.project === null ? [] : [`project:${place.project}`]),
+    ...(place.project === null ? [] : [boxKey("project", place.project)]),
     ...place.parents.map(taskKey),
   ];
 }
@@ -95,8 +99,10 @@ export function placeBoxKeys(place: TaskMapPlace): string[] {
 /** What the header's controls are, for Tab past the cards' ends. */
 const focusable =
   'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-export function areaKey(area: TaskMapArea): string {
-  return area.kind === "project" ? `project:${area.project.id}` : "no-project";
+export function areaKey(area: TaskMapArea): TaskMapBoxKey {
+  return area.kind === "project"
+    ? boxKey("project", area.project.id)
+    : boxKey("no-project");
 }
 
 type Sizes = ReadonlyMap<TaskId, { width: number; height: number }>;
@@ -189,8 +195,8 @@ interface Look {
   /** The task selected, `null` for none. */
   readonly selected: TaskId | null;
   select(id: TaskId): void;
-  isCollapsed(key: string): boolean;
-  toggle(key: string): void;
+  isCollapsed(key: TaskMapBoxKey): boolean;
+  toggle(key: TaskMapBoxKey): void;
 }
 
 /** Faded while highlighting, for a node not showing the chain. */
@@ -687,7 +693,7 @@ const relayoutMs = 240;
  * Every box that collapses on the map: the project boxes and the parent
  * tasks' boxes (#218; the no-project area does not).
  */
-export function taskMapBoxKeys(read: TaskMapRead): string[] {
+export function taskMapBoxKeys(read: TaskMapRead): TaskMapBoxKey[] {
   const keys = read.areas.flatMap((area) =>
     area.kind === "project" ? [areaKey(area)] : [],
   );

@@ -8,6 +8,7 @@
 // Unloading clears it through `clear` (platform/panel-feature.ts);
 // never written with `plugins.setData`.
 import type { TaskMapInput } from "../../../application/usecases/read-task-map";
+import type { ProjectId } from "../../../domain/project/project";
 import type { TaskId } from "../../../domain/task/task";
 import {
   createIdSetStore,
@@ -27,10 +28,27 @@ export interface CanvasView {
 }
 
 /**
- * A box on the map that collapses: a parent task's (`task:<id>`) or a
- * project's (`project:<id>`), keyed apart as a block may be both (ADR 0025).
+ * A box on the map: a parent task's (`task:<id>`) or a project's
+ * (`project:<id>`), the two that collapse, keyed apart as a block may be both
+ * (ADR 0025); or the no-project area's. Built only by `boxKey`.
  */
-export type TaskMapBoxKey = string;
+export type TaskMapBoxKey =
+  | `task:${TaskId}`
+  | `project:${ProjectId}`
+  | "no-project";
+
+/** The key of a task's box, a project's, or the no-project area's. */
+export function boxKey(
+  kind: "task" | "project",
+  id: TaskId | ProjectId,
+): TaskMapBoxKey;
+export function boxKey(kind: "no-project"): TaskMapBoxKey;
+export function boxKey(
+  kind: "task" | "project" | "no-project",
+  id?: number,
+): TaskMapBoxKey {
+  return kind === "no-project" ? kind : `${kind}:${id as number}`;
+}
 
 export interface TaskMapStores {
   /** `null` until the map is first fitted to the window (on first entry). */
