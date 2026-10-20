@@ -17,7 +17,6 @@ import { createPreviewNextOccurrence } from "../application/usecases/preview-nex
 import { createReadBlockRefCandidates } from "../application/usecases/read-block-ref-candidates";
 import { createReadCandidates } from "../application/usecases/read-candidates";
 import { createReadDependencyCandidates } from "../application/usecases/read-dependency-candidates";
-import { createReadDependents } from "../application/usecases/read-dependents";
 import { createReadNotNextActionReasons } from "../application/usecases/read-not-next-action-reasons";
 import { createReadProjectCandidates } from "../application/usecases/read-project-candidates";
 import { createReadProjectOfTask } from "../application/usecases/read-project-of-task";
@@ -25,6 +24,7 @@ import {
   createReadTask,
   createReadTaskForPanel,
 } from "../application/usecases/read-task";
+import { createReadWaiters } from "../application/usecases/read-waiters";
 import { createRepairNotAdvanced } from "../application/usecases/repair-not-advanced";
 import { createSetCustomProperty } from "../application/usecases/set-custom-property";
 import { createSetDependencies } from "../application/usecases/set-dependencies";
@@ -159,7 +159,7 @@ export function createTaskPanelFeature(deps: {
     }),
     setSequential: createSetSequential({ repository }),
     readDependencyCandidates: createReadDependencyCandidates({ repository }),
-    readDependents: createReadDependents({ repository }),
+    readWaiters: createReadWaiters({ repository }),
     readBlockRefCandidates: createReadBlockRefCandidates({ repository }),
     setDependencies: createSetDependencies({ repository }),
     setDependencyMode: createSetDependencyMode({ repository }),

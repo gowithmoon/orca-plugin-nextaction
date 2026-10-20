@@ -513,6 +513,13 @@ button.nextaction-block-ref-target:hover {
   color: var(--orca-color-text-2);
 }
 
+/* 阻塞 (#208): how each waiter waits, faint and small at the row's end. */
+.nextaction-waiter-kinds {
+  flex: 0 0 auto;
+  font-size: var(--orca-fontsize-sm);
+  color: var(--orca-color-text-2);
+}
+
 /* 所属项目 (#146): the project status icon before the name, the source after. */
 .nextaction-project-of-task-icon {
   flex: 0 0 auto;
