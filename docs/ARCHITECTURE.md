@@ -177,6 +177,11 @@ AI（`orca-ai`，ADR 0026）：
 - 例外：点笔记中的状态图标弹出状态菜单（#193，`status-icon-click`）。这是插件唯一拦截 Orca 鼠标事件的地方：在 `window` 的捕获阶段监听五种指针事件，只在命中状态图标时拦截，点击时打开菜单；命中判断（`::before` 的范围）和从 `.orca-block` 的 `data-id` 读块 ID 只放在 `ui/task-menu` 那个依赖 Orca DOM 的文件中，与图标选择器一起在 Orca 升级后手动检查。菜单放进挂在 `document.body` 下、铺满视口的弹出层（与插件面板的弹出层相同），没有这一层时菜单不显示。Orca 改版时最坏的结果是点了没有反应，右键菜单照样能改状态。
 - 例外：把任务卡片拖到笔记（ADR 0024，`drag-to-note`）。Orca 没有开放拖放钩子，落点只能从松开的坐标在 DOM 里找：笔记面板（`.orca-panel` 的 `data-panel-id`）、落点块（`.orca-block` 的 `data-id`）和它自己那一行的矩形。这些选择器集中在 `ui/drag` 的一个文件中，每次 Orca 升级后与状态图标的选择器一起手动检查。坐标到 Orca 光标的换算（`getCursorDataFromRange`）不在 `ui` 中调用，经端口由 `infra` 提供。
 
+插件面板中的画布（`task-map-canvas`）：
+- 插件自己的元素上，非被动的 `wheel` 监听 `preventDefault` 后，面板不滚动，Ctrl + 滚轮也不会让 Orca 整体缩放；鼠标滚轮每格约 100 像素，触控板两指滑动是带惯性的小像素值，捏合报成 Ctrl + 滚轮的小数值。
+- 指针捕获可用，拖出插件面板后仍收到移动和松开；中键 `preventDefault` 后没有自动滚动；`contextmenu` 拦得住。
+- 插件元素获得焦点时，F、+、-、=、Delete、Backspace、Esc、空格、Tab、Shift+F10 都先到达它，Orca 不先处理。Tab 没有可聚焦的下一个元素时，焦点离开到无处可见，所以插件面板里自己做的 Tab 顺序要在面板内部收住。
+
 弹出层（`orca-popup-container`）：
 - `ui` 中的下拉选择、日期选择器和菜单一律用 `ui/components/popup-controls.tsx` 的 `Select`、`DatePicker`、`ContextMenu`，不直接从 `orca.components` 取。Orca 的弹出层没有容器时挂进锚点的 `offsetParent`，并在它的矩形内摆放，在插件窗口里会被窗口截断，在插件面板里会被面板截断（面板窄时子菜单显示不全）；这三个包装默认把弹出层放进窗口或插件面板的弹出层（`usePopupLayer()`），两者之外沿用 Orca 的默认摆放。插件面板的弹出层挂在 `document.body` 下：放在面板里会和面板一起被右边的面板盖住。`tests/architecture.test.ts` 检查这条规矩。
 - 插件的窗口一律用 `ui/components/plugin-window.tsx` 的 `PluginWindow`（窗口外观、弹出层、打开时取得焦点、关闭后焦点回到原处、Esc 关闭），标准的标题区和底部用同一文件的 `WindowHeader`、`WindowFooter`。不直接从 `orca.components` 取 `ModalOverlay`，由架构测试检查（#118）。
