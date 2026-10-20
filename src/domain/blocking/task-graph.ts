@@ -21,7 +21,8 @@ import type {
   TaskStatus,
 } from "../task/task";
 import { addDays, compareDays } from "../time/calendar-days";
-import { findDependencyCycles } from "./dependency-cycles";
+import { dependencyCyclesIn } from "./dependency-cycles";
+import { buildTaskRelations } from "./task-relations";
 
 /** A task with where it sits among the others (ADR 0003). */
 export interface SnapshotTask {
@@ -259,33 +260,12 @@ export function analyzeTaskGraph(
 ): TaskGraph {
   /** The last effective start that still lets a task in. */
   const startsBy = addDays(options.today, options.previewDays);
-  const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
-  const byId = new Map(ordered.map((item) => [item.task.id, item]));
-  /**
-   * The task and its ancestor tasks, nearest first. A parent that is not in
-   * the snapshot ends the chain; a chain that loops back is cut where it does
-   * (the block tree cannot loop, so this only guards against bad input).
-   */
-  const selfAndAncestors = (item: SnapshotTask): SnapshotTask[] => {
-    const chain = [item];
-    const seen = new Set([item.task.id]);
-    let parentId = item.parentId;
-    while (parentId !== null && !seen.has(parentId)) {
-      const parent = byId.get(parentId);
-      if (!parent) break;
-      chain.push(parent);
-      seen.add(parentId);
-      parentId = parent.parentId;
-    }
-    return chain;
-  };
-  const children = new Map<TaskId, SnapshotTask[]>();
-  for (const item of ordered) {
-    if (item.parentId === null) continue;
-    const siblings = children.get(item.parentId) ?? [];
-    siblings.push(item);
-    children.set(item.parentId, siblings);
-  }
+  const relations = buildTaskRelations(snapshot.tasks);
+  /** The task and its ancestor tasks, nearest first. */
+  const selfAndAncestors = (item: SnapshotTask): SnapshotTask[] => [
+    item,
+    ...relations.ancestorsOf(item.task.id),
+  ];
 
   /**
    * Under a sequential parent, the earlier sibling subtasks (note order) that
@@ -293,9 +273,10 @@ export function analyzeTaskGraph(
    * when its parent task is not sequential.
    */
   const earlierOpenSiblings = (item: SnapshotTask): TaskId[] => {
-    const parent = item.parentId === null ? undefined : byId.get(item.parentId);
+    const parent = relations.parentOf(item.task.id);
     if (!parent?.task.sequential) return [];
-    return (children.get(parent.task.id) ?? [])
+    return relations
+      .childrenOf(parent.task.id)
       .filter(
         (sibling) =>
           sibling.position < item.position && !releasesParent(sibling.task),
@@ -313,7 +294,7 @@ export function analyzeTaskGraph(
    */
   const unmetDependencies = (item: SnapshotTask): TaskId[] => {
     const unmet = item.task.dependencies.filter((target) => {
-      const dependency = byId.get(target);
+      const dependency = relations.get(target);
       return dependency !== undefined && dependency.task.status !== "done";
     });
     const someMet = unmet.length < item.task.dependencies.length;
@@ -341,7 +322,7 @@ export function analyzeTaskGraph(
         : (day: CalendarDate, than: CalendarDate) => compareDays(day, than) > 0;
     let from: { day: CalendarDate; id: TaskId } | undefined;
     for (const target of item.task.dependencies) {
-      const dependency = byId.get(target);
+      const dependency = relations.get(target);
       // Not met: a record from before it was reopened does not count.
       if (dependency && dependency.task.status !== "done") continue;
       const day = dependency?.lastCompletion?.day;
@@ -360,15 +341,16 @@ export function analyzeTaskGraph(
     };
   };
 
-  const cycles = findDependencyCycles(snapshot);
+  const cycles = dependencyCyclesIn(relations);
   const projects = new Map(
     (snapshot.projects ?? []).map((item) => [item.project.id, item.project]),
   );
 
   const entries = new Map<TaskId, TaskGraphEntry>();
-  for (const item of ordered) {
+  for (const item of relations.tasks) {
     const blockedBy: BlockingReason[] = [];
-    const waitingFor = (children.get(item.task.id) ?? [])
+    const waitingFor = relations
+      .childrenOf(item.task.id)
       .filter((child) => !releasesParent(child.task))
       .map((child) => child.task.id);
     if (waitingFor.length > 0) {
