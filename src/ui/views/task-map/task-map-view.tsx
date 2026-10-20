@@ -2,7 +2,8 @@
 // project's box or the no-project area, nested by block, drawn on a canvas
 // that pans and zooms (task-map-canvas.tsx). It reads when the plugin panel
 // opens and again on every task change signal (ADR 0007). The task panel
-// opens in its popup. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// opens in its popup. The header's "Collapse all" and "Expand all" fold and
+// unfold every box (#218). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
@@ -32,7 +33,7 @@ import {
 import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
-import { TaskMapCanvas } from "./task-map-canvas";
+import { TaskMapCanvas, taskMapBoxKeys } from "./task-map-canvas";
 import { TaskMapDragArea } from "./task-map-drag";
 import { type TaskMapEditsDeps, TaskMapEditsProvider } from "./task-map-edits";
 import type { TaskMapStores } from "./task-map-stores";
@@ -47,7 +48,7 @@ export interface TaskMapViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
-  /** The pan and zoom, kept while the plugin instance lives. */
+  /** The pan and zoom, the collapsed boxes and the selection, kept while the plugin instance lives. */
   stores: TaskMapStores;
   /** Dragging a card onto another card or a box (#216). */
   moveTask: MoveTask;
@@ -104,13 +105,40 @@ function TaskMapContent(props: {
   return (
     <TaskMapEditsProvider deps={deps.edits} notify={deps.taskActions.notify}>
       <TaskMapDragArea onMove={moveTask}>
-        <TaskMapCanvas
-          read={state.data}
-          store={deps.stores.view}
-          deps={cardDeps}
-        />
+        <TaskMapCanvas read={state.data} stores={deps.stores} deps={cardDeps} />
       </TaskMapDragArea>
     </TaskMapEditsProvider>
+  );
+}
+
+/** "Collapse all" and "Expand all" (#218), once the map is read. */
+function CollapseButtons(props: {
+  query: ViewQuery<TaskMapRead>;
+  stores: TaskMapStores;
+}) {
+  const { query, stores } = props;
+  const state = useViewQuery(query);
+  const { Button, Tooltip } = orca.components;
+  if (state.kind !== "loaded") return null;
+  const keys = taskMapBoxKeys(state.data);
+  if (keys.length === 0) return null;
+  const button = (label: string, icon: string, on: boolean) => (
+    <Tooltip text={label}>
+      <Button
+        variant="plain"
+        className="nextaction-toolbar-button"
+        aria-label={label}
+        onClick={() => stores.collapsed.setAll(keys, on)}
+      >
+        <i className={icon} aria-hidden="true" />
+      </Button>
+    </Tooltip>
+  );
+  return (
+    <>
+      {button(t("Collapse all"), "ti ti-fold", true)}
+      {button(t("Expand all"), "ti ti-fold-down", false)}
+    </>
   );
 }
 
@@ -122,7 +150,10 @@ export function createTaskMapView(deps: TaskMapViewDeps): PanelView {
     useWithoutSidePane(true);
     return (
       <div className="nextaction-task-map">
-        <ViewHeader title={t("Task map")} />
+        <ViewHeader
+          title={t("Task map")}
+          actions={<CollapseButtons query={query} stores={deps.stores} />}
+        />
         <TaskMapContent query={query} deps={deps} />
       </div>
     );

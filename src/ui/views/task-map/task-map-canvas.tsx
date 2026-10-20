@@ -4,7 +4,16 @@
 // box and card is placed absolutely inside its own box, as the layout gives
 // them relative to their container. One CSS transform on the world pans and
 // zooms (canvas-input.ts); an SVG layer above the cards draws the sequence
-// and dependency arrows (#215). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// and dependency arrows (#215).
+//
+// A click on a card's blank space (not its text, which opens the task panel,
+// nor its buttons) selects it: its chain (task-map-chain.ts) is highlighted,
+// the rest faded; a click on blank canvas or Esc clears it (#218). A box
+// collapses to its head (domain/task-map/collapse.ts), the arrows into and
+// out of it attached to it. Laid out again, the card last pressed (or the
+// selected one) keeps its place on screen, the view shifted to make up for
+// it, and the rest moves there in a short transition. Verified by hand in
+// Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   TaskMapArea,
@@ -13,7 +22,9 @@ import type {
   TaskMapNode,
   TaskMapRead,
 } from "../../../application/usecases/read-task-map";
+import { taskMapChain } from "../../../application/usecases/task-map-chain";
 import type { CalendarDate, TaskId } from "../../../domain/task/task";
+import { collapseLayout } from "../../../domain/task-map/collapse";
 import {
   type LayoutBox,
   type LayoutContainer,
@@ -21,8 +32,8 @@ import {
   layoutTaskMap,
 } from "../../../domain/task-map/layout";
 import { t } from "../../../shared/l10n/l10n";
-import type { MemoryStore } from "../../components/memory-store";
 import { projectStatusLabel } from "../../components/project-status-label";
+import { selectsText } from "../../components/selects-text";
 import { TaskCard } from "../../components/task-card";
 import type { TaskActions } from "../../hooks/use-task-actions";
 import { projectStatusIcons } from "../../project-menu/project-status-icons";
@@ -32,7 +43,7 @@ import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
 import { SequentialToggle } from "./sequential-toggle";
 import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
-import type { CanvasView } from "./task-map-stores";
+import type { TaskMapStores } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
 export const cardWidth = 240;
@@ -42,7 +53,7 @@ const boxPadding = { top: 8, right: 12, bottom: 12, left: 12 };
 const rootId = "root";
 
 const taskKey = (id: TaskId) => `task:${id}`;
-function areaKey(area: TaskMapArea): string {
+export function areaKey(area: TaskMapArea): string {
   return area.kind === "project" ? `project:${area.project.id}` : "no-project";
 }
 
@@ -124,8 +135,93 @@ interface CardDeps {
   selectedTaskId: TaskId | undefined;
 }
 
-function MapCard(props: { node: TaskMapNode; deps: CardDeps }) {
-  const { node, deps } = props;
+/** The highlight and the collapsed boxes, as the map shows them (#218). */
+interface Look {
+  /** Something is selected: what is not in its chain is faded. */
+  readonly highlighting: boolean;
+  /** The node or box `key` (a layout ID) shows part of the chain. */
+  lit(key: string): boolean;
+  /** The task selected, `null` for none. */
+  readonly selected: TaskId | null;
+  select(id: TaskId): void;
+  isCollapsed(key: string): boolean;
+  toggle(key: string): void;
+}
+
+/** Faded while highlighting, for a node not showing the chain. */
+function dimAttribute(look: Look, key: string) {
+  return look.highlighting && !look.lit(key) ? "" : undefined;
+}
+
+/** A click on these on a card is theirs: it selects nothing. */
+const ownClick = [
+  ".nextaction-task-card-text",
+  "button",
+  "a",
+  "input",
+  '[role="button"]',
+].join(", ");
+
+/**
+ * The click handlers of an element holding a card: a click on the card's
+ * blank space selects `id`, the task panel not opened; the drag's own
+ * capture (the click ending a drag opens nothing) goes first.
+ */
+function selectOnBlank(
+  id: TaskId,
+  look: Look,
+  drag: React.HTMLAttributes<HTMLElement>,
+): React.MouseEventHandler<HTMLElement> {
+  return (event) => {
+    drag.onClickCapture?.(event);
+    if (event.isPropagationStopped()) return;
+    const { target } = event;
+    // React bubbles clicks out of portals: a menu's is not on the card.
+    if (!(target instanceof Element)) return;
+    if (!event.currentTarget.contains(target)) return;
+    if (!target.closest(".nextaction-task-card")) return;
+    if (target.closest(ownClick)) return;
+    if (selectsText(event.currentTarget)) return;
+    event.stopPropagation();
+    look.select(id);
+  };
+}
+
+function CollapseToggle(props: { collapsed: boolean; onToggle: () => void }) {
+  const { Tooltip } = orca.components;
+  const label = props.collapsed ? t("Expand") : t("Collapse");
+  return (
+    <Tooltip text={label}>
+      <button
+        type="button"
+        className="nextaction-task-card-button nextaction-task-card-extra nextaction-task-map-collapse"
+        data-on={props.collapsed || undefined}
+        aria-expanded={!props.collapsed}
+        aria-label={label}
+        onClick={(event) => {
+          // Not a click on the card: that opens the task panel.
+          event.stopPropagation();
+          props.onToggle();
+        }}
+      >
+        <i
+          className={
+            props.collapsed ? "ti ti-chevron-right" : "ti ti-chevron-down"
+          }
+          aria-hidden="true"
+        />
+      </button>
+    </Tooltip>
+  );
+}
+
+function MapCard(props: {
+  node: TaskMapNode;
+  deps: CardDeps;
+  /** A box's head: whether it is collapsed, and toggling it. */
+  collapse?: { collapsed: boolean; onToggle: () => void };
+}) {
+  const { node, deps, collapse } = props;
   const { done, total } = node.subtasks;
   return (
     <TaskCard
@@ -142,7 +238,13 @@ function MapCard(props: { node: TaskMapNode; deps: CardDeps }) {
       // A box's head switches sequential (#220).
       buttons={
         node.children.length > 0 ? (
-          <SequentialToggle task={node.task} />
+          <>
+            <SequentialToggle task={node.task} />
+            <CollapseToggle
+              collapsed={collapse?.collapsed ?? false}
+              onToggle={collapse?.onToggle ?? (() => {})}
+            />
+          </>
         ) : undefined
       }
       footer={
@@ -170,12 +272,16 @@ function MapNode(props: {
   layout: ReadonlyMap<string, LayoutBox>;
   badges: ReadonlyMap<TaskId, DependencyBadge>;
   deps: CardDeps;
+  look: Look;
   /** Its parent task is sequential (#216: where a drop on it goes). */
   inSequence?: boolean;
 }) {
-  const { node, layout, badges, deps } = props;
-  const box = layout.get(taskKey(node.task.id));
+  const { node, layout, badges, deps, look } = props;
+  const key = taskKey(node.task.id);
+  const box = layout.get(key);
   const drag = useMapCardDrag(node.task);
+  const onClickCapture = selectOnBlank(node.task.id, look, drag);
+  const chosen = look.selected === node.task.id || undefined;
   const drop = mapDropAttributes(node.task, props.inSequence ?? false);
   const badge = badges.get(node.task.id);
   const badgeButton = badge && (
@@ -186,9 +292,13 @@ function MapNode(props: {
       <div
         {...drag}
         {...drop}
+        onClickCapture={onClickCapture}
         className="nextaction-task-map-card"
+        data-map-key={key}
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
+        data-dim={dimAttribute(look, key)}
+        data-chosen={chosen}
         style={placeStyle(box)}
       >
         <MapCard node={node} deps={deps} />
@@ -196,38 +306,50 @@ function MapNode(props: {
       </div>
     );
   }
+  const collapsed = look.isCollapsed(key);
   return (
     <div
       {...drop}
       className="nextaction-task-map-box"
+      data-map-key={key}
       data-sequential={node.sequential || undefined}
+      data-collapsed={collapsed || undefined}
       style={placeStyle(box)}
     >
       <div
         {...drag}
+        onClickCapture={onClickCapture}
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
+        data-dim={dimAttribute(look, key)}
+        data-chosen={chosen}
       >
-        <MapCard node={node} deps={deps} />
+        <MapCard
+          node={node}
+          deps={deps}
+          collapse={{ collapsed, onToggle: () => look.toggle(key) }}
+        />
         {badgeButton}
       </div>
-      {node.children.map((child) => (
-        <MapNode
-          key={child.task.id}
-          node={child}
-          layout={layout}
-          badges={badges}
-          deps={deps}
-          inSequence={node.sequential}
-        />
-      ))}
+      {!collapsed &&
+        node.children.map((child) => (
+          <MapNode
+            key={child.task.id}
+            node={child}
+            layout={layout}
+            badges={badges}
+            deps={deps}
+            look={look}
+            inSequence={node.sequential}
+          />
+        ))}
     </div>
   );
 }
 
-function AreaHead(props: { area: TaskMapArea }) {
-  const { area } = props;
+function AreaHead(props: { area: TaskMapArea; look: Look }) {
+  const { area, look } = props;
   if (area.kind === "noProject") {
     return (
       <div className="nextaction-task-map-area-head">
@@ -238,8 +360,15 @@ function AreaHead(props: { area: TaskMapArea }) {
   }
   const icon = projectStatusIcons[area.project.status];
   const name = area.project.text.trim();
+  const key = areaKey(area);
+  const collapsed = look.isCollapsed(key);
   return (
-    <div className="nextaction-task-map-area-head" title={name}>
+    <div
+      className="nextaction-task-map-area-head"
+      title={name}
+      data-dim={collapsed ? dimAttribute(look, key) : undefined}
+    >
+      <CollapseToggle collapsed={collapsed} onToggle={() => look.toggle(key)} />
       <i
         className={icon.className}
         style={{ color: icon.color }}
@@ -287,27 +416,38 @@ function Arrows(props: {
   heads: Sizes;
   width: number;
   height: number;
+  /** Where a task's arrows meet: its node, or the collapsed box hiding it. */
+  shownAs: (key: string) => string;
+  /** While highlighting, the edges of the chain; `null` when not. */
+  lit: ReadonlySet<TaskMapEdge> | null;
 }) {
+  const { shownAs, lit } = props;
+  /** The node an arrow meets for task `id`: its key and its task, if one. */
+  const end = (id: TaskId) => {
+    const key = shownAs(taskKey(id));
+    const box = props.boxes.get(key);
+    const task = key.startsWith("task:") ? Number(key.slice(5)) : undefined;
+    return box ? { box, task } : null;
+  };
+  const dim = (edge: TaskMapEdge) => (lit && !lit.has(edge) ? "" : undefined);
   const prefix = `nextaction-task-map-arrow-${React.useId().replace(/:/g, "")}`;
   /** Where on a node's side an arrow meets it: level with its card. */
-  const level = (id: TaskId, box: LayoutBox) => {
-    const head = props.heads.get(id);
+  const level = (at: { box: LayoutBox; task: TaskId | undefined }) => {
+    const head = at.task === undefined ? undefined : props.heads.get(at.task);
     return head
-      ? box.y + boxPadding.top + head.height / 2
-      : box.y + box.height / 2;
-  };
-  /** Where an arrow into the node ends: just left of it, level with its card. */
-  const entry = (id: TaskId) => {
-    const to = props.boxes.get(taskKey(id));
-    return to ? { x: to.x - 4, y: level(id, to) } : null;
+      ? at.box.y + boxPadding.top + head.height / 2
+      : at.box.y + at.box.height / 2;
   };
   const path = (edge: TaskMapEdge) => {
-    const from = props.boxes.get(taskKey(edge.from));
-    const end = entry(edge.to);
-    if (!from || !end) return null;
-    const x0 = from.x + from.width + 4;
-    const y0 = level(edge.from, from);
-    const { x: x3, y: y3 } = end;
+    const from = end(edge.from);
+    const to = end(edge.to);
+    // Both ends hidden in one collapsed box: no arrow.
+    if (!from || !to || from.box === to.box) return null;
+    const x0 = from.box.x + from.box.width + 4;
+    const y0 = level(from);
+    // Just left of the node it goes into, level with its card.
+    const x3 = to.box.x - 4;
+    const y3 = level(to);
     const ctrl = Math.min(
       150,
       Math.max(20, Math.hypot(x3 - x0, y3 - y0) * 0.42),
@@ -358,6 +498,7 @@ function Arrows(props: {
             key={`sequence-${edge.from}-${edge.to}`}
             className="nextaction-task-map-arrow"
             data-kind="sequence"
+            data-dim={dim(edge)}
             d={d}
             markerEnd={`url(#${prefix}-sequence)`}
           />
@@ -372,6 +513,7 @@ function Arrows(props: {
             className="nextaction-task-map-arrow"
             data-kind={kind}
             data-any={edge.any || undefined}
+            data-dim={dim(edge)}
             d={d}
             markerEnd={`url(#${prefix}-${kind})`}
           />
@@ -391,12 +533,29 @@ function allNodes(read: TaskMapRead): TaskMapNode[] {
   return out;
 }
 
+/** How long the cards take to move to where a new layout puts them. */
+const relayoutMs = 240;
+
+/**
+ * Every box that collapses on the map: the project boxes and the parent
+ * tasks' boxes (#218; the no-project area does not).
+ */
+export function taskMapBoxKeys(read: TaskMapRead): string[] {
+  const keys = read.areas.flatMap((area) =>
+    area.kind === "project" ? [areaKey(area)] : [],
+  );
+  for (const node of allNodes(read)) {
+    if (node.children.length > 0) keys.push(taskKey(node.task.id));
+  }
+  return keys;
+}
+
 export function TaskMapCanvas(props: {
   read: TaskMapRead;
-  store: MemoryStore<CanvasView | null>;
+  stores: TaskMapStores;
   deps: CardDeps;
 }) {
-  const { read, store, deps } = props;
+  const { read, stores, deps } = props;
   const viewport = React.useRef<HTMLElement | null>(null);
   const world = React.useRef<HTMLDivElement | null>(null);
   const measure = React.useRef<HTMLDivElement | null>(null);
@@ -406,6 +565,19 @@ export function TaskMapCanvas(props: {
     () => dependencyBadges(nodes, read.dependencyEdges),
     [nodes, read],
   );
+  const collapsed = React.useSyncExternalStore(
+    stores.collapsed.subscribe,
+    stores.collapsed.current,
+  );
+  const picked = React.useSyncExternalStore(
+    stores.selected.subscribe,
+    stores.selected.current,
+  );
+  // A task no longer on the map is selected no more.
+  const selected =
+    picked !== null && nodes.some((node) => node.task.id === picked)
+      ? picked
+      : null;
   /** The cards' sizes, measured for `read`; `null` while measuring. */
   const [measured, setMeasured] = React.useState<{
     read: TaskMapRead;
@@ -433,11 +605,14 @@ export function TaskMapCanvas(props: {
     if (!sizes) return null;
     const input = layoutInput(read, sizes);
     if (!input) return null;
-    // Dependencies order the layers too, lifted across boxes (ADR 0027).
-    const layout = layoutTaskMap(
+    // Dependencies order the layers too, lifted across boxes (ADR 0027);
+    // those into a collapsed box attached to it (#218).
+    const folded = collapseLayout(
       input,
       edgeInput([...read.sequenceEdges, ...read.dependencyEdges]),
+      collapsed,
     );
+    const layout = layoutTaskMap(folded.root, folded.edges);
     const root = layout.get(rootId);
     if (!root) return null;
     // The boxes' head cards, for where arrows meet a box.
@@ -446,15 +621,113 @@ export function TaskMapCanvas(props: {
       const size = sizes.get(node.task.id);
       if (node.children.length > 0 && size) heads.set(node.task.id, size);
     }
-    return { layout, boxes: worldBoxes(read, layout), root, heads };
-  }, [read, sizes, nodes]);
+    const boxes = worldBoxes(read, layout);
+    return { layout, boxes, root, heads, shownAs: folded.shownAs };
+  }, [read, sizes, nodes, collapsed]);
+
+  // The chain of the task selected (#218), and the nodes showing it: a
+  // collapsed box hiding part of it shows it.
+  const chain = React.useMemo(
+    () => (selected === null ? null : taskMapChain(read, selected)),
+    [read, selected],
+  );
+  const look = React.useMemo((): Look => {
+    const lit = new Set<string>();
+    if (chain && placed) {
+      for (const id of chain.tasks) lit.add(placed.shownAs(taskKey(id)));
+    }
+    return {
+      highlighting: chain !== null,
+      lit: (key) => lit.has(key),
+      selected,
+      select: (id) => stores.selected.set(id),
+      isCollapsed: (key) => collapsed.has(key),
+      toggle: (key) => stores.collapsed.toggle(key),
+    };
+  }, [chain, placed, selected, collapsed, stores]);
+  const litEdges = React.useMemo(
+    () => (chain ? new Set<TaskMapEdge>(chain.edges) : null),
+    [chain],
+  );
 
   const content = React.useMemo(
     () =>
       placed ? { width: placed.root.width, height: placed.root.height } : null,
     [placed],
   );
-  const input = useCanvasInput({ viewport, world, store, content });
+  const input = useCanvasInput({
+    viewport,
+    world,
+    store: stores.view,
+    content,
+  });
+
+  // Laid out again (#218): the card last pressed, or else the one selected,
+  // stays where it is on screen, the view shifted by as much as it moved;
+  // everything moves there together in a transition (task-map-style.ts),
+  // the world's shift and the boxes' moves timed alike so it stays put.
+  const pressed = React.useRef<string | null>(null);
+  const before = React.useRef<typeof placed>(null);
+  const selectedRef = React.useRef(selected);
+  selectedRef.current = selected;
+  const { shift } = input;
+  React.useLayoutEffect(() => {
+    if (!placed) return;
+    const previous = before.current;
+    before.current = placed;
+    const element = world.current;
+    if (!previous || previous === placed || !element) return;
+    const anchor =
+      pressed.current ??
+      (selectedRef.current === null ? null : taskKey(selectedRef.current));
+    element.setAttribute("data-relayout", "");
+    const timer = setTimeout(
+      () => element.removeAttribute("data-relayout"),
+      relayoutMs,
+    );
+    if (anchor !== null) {
+      const from = previous.boxes.get(previous.shownAs(anchor));
+      const to = placed.boxes.get(placed.shownAs(anchor));
+      if (from && to) shift(from.x - to.x, from.y - to.y);
+    }
+    return () => clearTimeout(timer);
+  }, [placed, shift]);
+
+  const handlers: React.HTMLAttributes<HTMLElement> = {
+    ...input.handlers,
+    onPointerDownCapture(event) {
+      const { target } = event;
+      const key =
+        target instanceof Element
+          ? target.closest<HTMLElement>("[data-map-key]")?.dataset.mapKey
+          : undefined;
+      pressed.current = key ?? null;
+    },
+    onClick(event) {
+      // A click on blank canvas clears the selection; a click in a portal
+      // (a menu, a popover) is not on the canvas.
+      const { target } = event;
+      if (!(target instanceof Element)) return;
+      if (!event.currentTarget.contains(target)) return;
+      if (
+        target.closest(
+          ".nextaction-task-map-card, .nextaction-task-map-head, .nextaction-task-map-area-head",
+        )
+      ) {
+        return;
+      }
+      stores.selected.set(null);
+    },
+    onKeyDown(event) {
+      if (event.key === "Escape" && stores.selected.current() !== null) {
+        if (!event.currentTarget.contains(event.target as Node)) return;
+        event.preventDefault();
+        stores.selected.set(null);
+        return;
+      }
+      input.handlers.onKeyDown?.(event);
+    },
+  };
 
   return (
     <section
@@ -463,7 +736,7 @@ export function TaskMapCanvas(props: {
       // biome-ignore lint/a11y/noNoninteractiveTabindex: the canvas takes F and Space to fit and pan (#213)
       tabIndex={0}
       aria-label={t("Task map")}
-      {...input.handlers}
+      {...handlers}
     >
       {measuring && (
         <div
@@ -486,28 +759,37 @@ export function TaskMapCanvas(props: {
       <div
         ref={world}
         className="nextaction-task-map-world"
+        data-highlighting={look.highlighting || undefined}
         style={input.worldStyle}
       >
         {placed &&
-          read.areas.map((area) => (
-            <section
-              key={areaKey(area)}
-              className="nextaction-task-map-area"
-              data-kind={area.kind}
-              style={placeStyle(placed.layout.get(areaKey(area)))}
-            >
-              <AreaHead area={area} />
-              {area.tasks.map((node) => (
-                <MapNode
-                  key={node.task.id}
-                  node={node}
-                  layout={placed.layout}
-                  badges={badges}
-                  deps={deps}
-                />
-              ))}
-            </section>
-          ))}
+          read.areas.map((area) => {
+            const key = areaKey(area);
+            const folded = look.isCollapsed(key);
+            return (
+              <section
+                key={key}
+                className="nextaction-task-map-area"
+                data-kind={area.kind}
+                data-map-key={key}
+                data-collapsed={folded || undefined}
+                style={placeStyle(placed.layout.get(key))}
+              >
+                <AreaHead area={area} look={look} />
+                {!folded &&
+                  area.tasks.map((node) => (
+                    <MapNode
+                      key={node.task.id}
+                      node={node}
+                      layout={placed.layout}
+                      badges={badges}
+                      deps={deps}
+                      look={look}
+                    />
+                  ))}
+              </section>
+            );
+          })}
         {placed && (
           <Arrows
             edges={read.sequenceEdges}
@@ -516,6 +798,8 @@ export function TaskMapCanvas(props: {
             heads={placed.heads}
             width={placed.root.width}
             height={placed.root.height}
+            shownAs={placed.shownAs}
+            lit={litEdges}
           />
         )}
       </div>
