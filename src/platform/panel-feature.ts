@@ -25,6 +25,7 @@ import { createReadProjectGantt } from "../application/usecases/read-project-gan
 import { createReadProjectList } from "../application/usecases/read-project-list";
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
+import { createReadTaskMap } from "../application/usecases/read-task-map";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
 import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
@@ -62,6 +63,7 @@ import { statsPeriodCss } from "../ui/styles/stats-period-style";
 import { statsSelectionCss } from "../ui/styles/stats-selection-style";
 import { statsCss } from "../ui/styles/stats-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
+import { taskMapCss } from "../ui/styles/task-map-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { OpenReviewPopup } from "../ui/task-panel/review-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
@@ -86,6 +88,8 @@ import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
 import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
 import { createStatsView } from "../ui/views/stats/stats-view";
+import { createTaskMapStores } from "../ui/views/task-map/task-map-stores";
+import { createTaskMapView } from "../ui/views/task-map/task-map-view";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -191,6 +195,8 @@ export function createPanelFeature(deps: {
   const reviewProjectGroups = createProjectGroupsStore();
   // The stats view's scale (#135): in memory only, likewise.
   const statsScale = createStatsScaleStore();
+  // The task map's pan and zoom (#213): in memory only, likewise.
+  const taskMap = createTaskMapStores();
   // When the last full review was completed (#101), in `plugins.setData`
   // under the current load's name.
   let loadedPluginName: string | undefined;
@@ -341,6 +347,21 @@ export function createPanelFeature(deps: {
       }),
     }),
   );
+  views.register(
+    createTaskMapView({
+      readTaskMap: createReadTaskMap({
+        repository,
+        clock: systemClock,
+        dayBoundary: deps.dayBoundary,
+        startPreviewDays: deps.startPreviewDays,
+      }),
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      stores: taskMap,
+    }),
+  );
   const readReview = createReadReview({
     ...myDayDeps,
     startPreviewDays: deps.startPreviewDays,
@@ -459,6 +480,7 @@ export function createPanelFeature(deps: {
       reviewProjectGroups.clear,
     );
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
+    registry.add(`${pluginName}.taskMapStores`, taskMap.clear);
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
@@ -468,6 +490,7 @@ export function createPanelFeature(deps: {
     registry.css("ganttDependenciesStyle", ganttDependenciesCss);
     registry.css("ganttShiftLaterStyle", ganttShiftLaterCss);
     registry.css("dragToPanStyle", dragToPanCss);
+    registry.css("taskMapStyle", taskMapCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.

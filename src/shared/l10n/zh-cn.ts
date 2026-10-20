@@ -788,6 +788,13 @@ const zhCN: Record<string, string> = {
   "The AI summary was written to today's journal": "AI 小结已写进今天日记",
   "Could not write the AI summary to the journal: ${reason}":
     "没能把 AI 小结写进日记：${reason}",
+  // The task map (#213).
+  "Task map": "任务全景图",
+  "Could not read the task map: ${reason}": "无法读取任务全景图：${reason}",
+  "No tasks to show": "没有可显示的任务",
+  "Tasks not done appear here with how they relate.":
+    "未完成的任务会连同它们之间的关系显示在这里。",
+  "${done}/${total} done": "已完成 ${done}/${total}",
 };
 
 export default zhCN;
