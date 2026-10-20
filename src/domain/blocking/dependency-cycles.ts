@@ -219,6 +219,47 @@ export function dependencyTargetsThatCycle(
 }
 
 /**
+ * The reverse of `dependencyTargetsThatCycle`: the tasks that cannot depend
+ * on task `id` without making a dependency cycle, each with why, from the
+ * same graph. Task X depending on `id` makes X and everything below it wait
+ * for `id`, so it makes a cycle exactly when `id` is below X (`below`) or
+ * `id` already waits for X or something below it (`waits`): one search
+ * forward from `id` finds what it waits for, and each of those and its
+ * ancestor tasks are marked. The task itself is not in the map.
+ */
+export function dependentsThatCycle(
+  snapshot: TaskGraphSnapshot,
+  id: TaskId,
+): ReadonlyMap<TaskId, DependencyCycleReason> {
+  const structure = buildTaskRelations(snapshot.tasks);
+  const marked = new Map<TaskId, DependencyCycleReason>();
+  if (!structure.get(id)) return marked;
+  for (const ancestor of structure.ancestorsOf(id)) {
+    marked.set(ancestor.task.id, "below");
+  }
+  const graph = waitsForGraph(structure);
+  const reached = new Set<TaskId>();
+  const pending = [id];
+  while (pending.length > 0) {
+    const next = pending.pop() as TaskId;
+    for (const target of graph.get(next) ?? []) {
+      if (reached.has(target)) continue;
+      reached.add(target);
+      pending.push(target);
+    }
+  }
+  for (const target of reached) {
+    if (target === id) continue;
+    if (!marked.has(target)) marked.set(target, "waits");
+    for (const ancestor of structure.ancestorsOf(target)) {
+      if (ancestor.task.id === id || marked.has(ancestor.task.id)) continue;
+      marked.set(ancestor.task.id, "waits");
+    }
+  }
+  return marked;
+}
+
+/**
  * The targets in `targets` that would make a dependency cycle if task `id`
  * depended on them, in the order given. Targets it already depends on are
  * left alone (keeping or removing a dependency never makes a cycle), and so
