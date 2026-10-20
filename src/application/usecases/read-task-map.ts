@@ -46,6 +46,8 @@ export interface TaskMapNode {
   readonly sequential: boolean;
   /** Its subtasks shown on the map, in note order. */
   readonly children: readonly TaskMapNode[];
+  /** Its block's place in the notes, lower first: the cards' Tab order (#221). */
+  readonly position: number;
 }
 
 /** A project's box (its status and name in the head). */
@@ -221,6 +223,7 @@ export function createReadTaskMap(deps: {
           total: below.length,
         },
         children,
+        position: item.position,
       };
     };
     const trees = (roots: readonly SnapshotTask[]) =>
