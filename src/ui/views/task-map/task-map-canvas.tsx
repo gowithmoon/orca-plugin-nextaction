@@ -31,7 +31,11 @@ import { useCanvasInput } from "./canvas-input";
 import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
 import { SequentialToggle } from "./sequential-toggle";
-import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
+import {
+  mapAreaDropAttributes,
+  mapDropAttributes,
+  useMapCardDrag,
+} from "./task-map-drag";
 import type { CanvasView } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -494,6 +498,11 @@ export function TaskMapCanvas(props: {
               key={areaKey(area)}
               className="nextaction-task-map-area"
               data-kind={area.kind}
+              {...mapAreaDropAttributes(
+                area.kind === "project"
+                  ? { kind: "project", project: area.project.id }
+                  : { kind: "noProject" },
+              )}
               style={placeStyle(placed.layout.get(areaKey(area)))}
             >
               <AreaHead area={area} />
