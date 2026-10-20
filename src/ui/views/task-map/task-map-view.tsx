@@ -8,6 +8,9 @@
 // The search box (#221) finds tasks as the all tasks view does; Enter goes
 // to the next one found, selected and centered, its boxes expanded and the
 // filter relaxed for now (task-map-locate.ts), put back on leaving the view.
+// In the narrow tier the layout keeps its direction, the map seen whole by
+// zooming and panning; a line under the header says the panel can be
+// widened (#212).
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { FindOnTaskMap } from "../../../application/usecases/find-on-task-map";
@@ -288,6 +291,7 @@ export function createTaskMapView(deps: TaskMapViewDeps): PanelView {
     useWithoutSidePane(true);
     // Leaving the map puts back what showing a task relaxed (#221).
     React.useEffect(() => () => leftTaskMap(deps.stores), []);
+    const narrow = usePanel().tier === "narrow";
     return (
       <div className="nextaction-task-map">
         <ViewHeader
@@ -304,6 +308,11 @@ export function createTaskMapView(deps: TaskMapViewDeps): PanelView {
             </>
           }
         />
+        {narrow && (
+          <p className="nextaction-task-map-narrow-hint">
+            {t("Widen the panel to see more of the map")}
+          </p>
+        )}
         <TaskMapContent query={query} deps={deps} />
       </div>
     );

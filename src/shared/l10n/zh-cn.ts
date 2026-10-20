@@ -795,6 +795,7 @@ const zhCN: Record<string, string> = {
   "Tasks not done appear here with how they relate.":
     "未完成的任务会连同它们之间的关系显示在这里。",
   "${done}/${total} done": "已完成 ${done}/${total}",
+  "Widen the panel to see more of the map": "拉宽插件面板可以看到更多",
   // The task map's sequential switch and dependency badge (#220).
   "Dependency mode and delay": "依赖模式与依赖延迟",
   // The task map's drops on a project box or the no-project area (#222).

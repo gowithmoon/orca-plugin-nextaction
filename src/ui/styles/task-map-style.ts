@@ -30,6 +30,13 @@ export const taskMapCss = `
   flex: none;
 }
 
+/* The narrow tier's line under the header: the panel can be widened (#212). */
+.nextaction-task-map-narrow-hint {
+  margin: calc(-1 * var(--orca-spacing-sm)) 0 var(--orca-spacing-sm);
+  color: var(--orca-color-text-3);
+  font-size: var(--orca-fontsize-xs);
+}
+
 .nextaction-task-map-viewport {
   position: relative;
   flex: 1 1 auto !important;
