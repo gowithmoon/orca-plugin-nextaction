@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  planCompletionHistoryDiscard,
   planCompletionHistoryWrite,
   readCompletionHistory,
 } from "./completion-history-codec";
@@ -248,6 +249,46 @@ describe("completion history entry kinds (#91)", () => {
     expect(readCompletionHistory(written)).toEqual({
       kind: "readable",
       history,
+    });
+  });
+});
+
+describe("planCompletionHistoryDiscard", () => {
+  it("writes an empty history over one it cannot read, which then reads as no completions", () => {
+    const block = taskBlockWith({
+      name: "nextaction.completions",
+      value: { v: 2, entries: [] },
+    });
+    const discard = planCompletionHistoryDiscard(block);
+    if (discard.kind !== "write") throw new Error("nothing to discard");
+    expect(discard.property).toEqual({
+      name: "nextaction.completions",
+      type: 0,
+      value: { v: 1, entries: [] },
+    });
+    expect(readCompletionHistory(taskBlockWith(discard.property))).toEqual({
+      kind: "readable",
+      history: [],
+    });
+  });
+
+  it.each([
+    [
+      "a readable history",
+      {
+        v: 1,
+        entries: [{ at: "2026-01-02T03:04:05.006Z", day: "2026-01-02" }],
+      },
+    ],
+    ["an empty history", { v: 1, entries: [] }],
+  ])("writes nothing over %s", (_, value) => {
+    const block = taskBlockWith({ name: "nextaction.completions", value });
+    expect(planCompletionHistoryDiscard(block)).toEqual({ kind: "nothing" });
+  });
+
+  it("writes nothing to a task without one", () => {
+    expect(planCompletionHistoryDiscard(taskBlockWith())).toEqual({
+      kind: "nothing",
     });
   });
 });

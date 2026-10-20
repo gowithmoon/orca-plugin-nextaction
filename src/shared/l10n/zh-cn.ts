@@ -269,6 +269,12 @@ const zhCN: Record<string, string> = {
   "Could not search the blocks: ${reason}": "无法搜索块：${reason}",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
+  Blocks: "阻塞",
+  Parent: "父任务",
+  "Later in sequence": "顺序在后",
+  Dependent: "后续任务",
+  "Could not read the tasks this one blocks: ${reason}":
+    "无法读取它阻塞的任务：${reason}",
   "Dependency mode": "依赖模式",
   All: "全部",
   Any: "任一",
@@ -481,6 +487,27 @@ const zhCN: Record<string, string> = {
   "A reminder cannot be set in the past.": "不能把提醒设在过去的时刻。",
   "Clear all": "清除全部",
   "Discard and reset": "丢弃并重置",
+  // Completion history (#209).
+  "Completion history": "完成历史",
+  Completed: "完成",
+  "Completed on ${date}": "完成于 ${date}",
+  "Skipped on ${date}": "跳过于 ${date}",
+  "Completed ${n} times": "完成 ${n} 次",
+  "Skipped ${n} times": "跳过 ${n} 次",
+  "Latest ${date}": "最近 ${date}",
+  Records: "记录",
+  "Delete record": "删除记录",
+  "Delete the record ${kind} at ${when}": "删除 ${when} 的${kind}记录",
+  "Delete this record (${kind}, ${when})? ${consequence}":
+    "删除这条记录（${kind}，${when}）？${consequence}",
+  "Clear all ${n} records of this task? ${consequence}":
+    "清除这个任务的全部 ${n} 条记录？${consequence}",
+  "The statistics, dependency delays and anything else counted from it change with it. You can undo it.":
+    "统计、依赖延迟等按完成历史计算的内容会随之改变。可以撤销。",
+  "This task's completion history cannot be read (${reason}). It is kept as it is and cannot be changed here.":
+    "这个任务的完成历史无法读取（${reason}），已原样保留，不能在这里修改。",
+  "Could not delete: ${reason}": "无法删除：${reason}",
+  "Could not clear: ${reason}": "无法清除：${reason}",
   "It may have been written by a newer version of this plugin. Once discarded, this version cannot bring it back; you can undo it.":
     "这份数据可能是更新版本的插件写的，丢弃后无法用这个版本恢复；可以撤销。",
   "Could not discard: ${reason}": "无法丢弃：${reason}",

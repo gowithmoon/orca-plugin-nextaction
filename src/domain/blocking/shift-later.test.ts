@@ -5,7 +5,12 @@ import type {
   TaskId,
   TaskStatus,
 } from "../task/task";
-import { type ShiftTask, shiftLaterPlanner } from "./shift-later";
+import {
+  type ShiftItem,
+  type ShiftTask,
+  shiftLaterPlanner,
+} from "./shift-later";
+import { buildTaskRelations } from "./task-relations";
 
 function day(month: number, date: number): CalendarDate {
   return { year: 2026, month, day: date };
@@ -21,21 +26,32 @@ function task(
     dependencyMode?: DependencyMode;
     dependencyDelay?: number;
   } = {},
-): ShiftTask {
+): ShiftItem["task"] {
   return {
     id,
     status: setup.status ?? "todo",
     start: setup.start ?? null,
     due: setup.due ?? null,
+    sequential: false,
     dependencies: setup.dependencies ?? [],
     dependencyMode: setup.dependencyMode ?? "all",
     dependencyDelay: setup.dependencyDelay ?? 0,
   };
 }
 
+/** The task relations among `tasks`, top-level tasks in the order given. */
+function related(tasks: ShiftItem["task"][]) {
+  return buildTaskRelations(
+    tasks.map((task, position) => ({ task, parentId: null, position })),
+  );
+}
+
 /** The plan from `from` among `tasks`, every task not done movable. */
-function plan(tasks: ShiftTask[], from: TaskId) {
-  return shiftLaterPlanner(tasks, (item) => item.status !== "done")(from);
+function plan(tasks: ShiftItem["task"][], from: TaskId) {
+  return shiftLaterPlanner(
+    related(tasks),
+    (item: ShiftTask) => item.status !== "done",
+  )(from);
 }
 
 describe("shiftLaterPlanner", () => {
@@ -136,7 +152,7 @@ describe("shiftLaterPlanner", () => {
 
     expect(
       shiftLaterPlanner(
-        tasks,
+        related(tasks),
         (item) => item.status !== "done" && item.id !== 3,
       )(1),
     ).toEqual([]);

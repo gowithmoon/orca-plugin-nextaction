@@ -26,6 +26,77 @@ export interface BlockRefsFieldItem {
   readonly removable?: boolean;
 }
 
+/**
+ * The target blocks as a list, each opened by a click; nothing when there is
+ * none. Without `onRemove`, no item has a remove button (read only).
+ */
+export function BlockRefsList(props: {
+  labelId: string;
+  items: readonly BlockRefsFieldItem[];
+  /** What an item without a block to open reads as. */
+  missingText?: string;
+  /** The item's block is clicked. */
+  onOpen: (id: number) => void;
+  /** The remove button's label. */
+  removeLabel?: string;
+  onRemove?: (id: number) => void;
+  /** Each text on one line, cut off with an ellipsis; the whole on hover. */
+  singleLine?: boolean;
+}) {
+  const { Button, Tooltip } = orca.components;
+  const { onRemove } = props;
+  if (props.items.length === 0) return null;
+  return (
+    <ul
+      className="nextaction-block-refs"
+      aria-labelledby={props.labelId}
+      data-single-line={props.singleLine || undefined}
+    >
+      {props.items.map((item) => {
+        const text =
+          item.text === null ? undefined : shownText({ text: item.text });
+        return (
+          <li
+            key={item.key ?? item.id}
+            className="nextaction-block-ref"
+            data-struck={item.struck || undefined}
+          >
+            {item.before}
+            {text ? (
+              <button
+                type="button"
+                className="nextaction-block-ref-target"
+                data-empty={text.empty || undefined}
+                title={props.singleLine ? text.text : undefined}
+                onClick={() => props.onOpen(item.id)}
+              >
+                {text.text}
+              </button>
+            ) : (
+              <span className="nextaction-block-ref-target">
+                {props.missingText}
+              </span>
+            )}
+            {item.after}
+            {onRemove && item.removable !== false && (
+              <Tooltip text={props.removeLabel}>
+                <Button
+                  variant="plain"
+                  className="nextaction-block-ref-remove"
+                  aria-label={props.removeLabel}
+                  onClick={() => onRemove(item.id)}
+                >
+                  <i className="ti ti-x" aria-hidden="true" />
+                </Button>
+              </Tooltip>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function BlockRefsField(props: {
   labelId: string;
   items: readonly BlockRefsFieldItem[];
@@ -50,53 +121,16 @@ export function BlockRefsField(props: {
   /** A block was picked from the search. */
   onPick: (id: number) => void;
 }) {
-  const { Button, Tooltip } = orca.components;
   return (
     <div className="nextaction-block-refs-field">
-      {props.items.length > 0 && (
-        <ul className="nextaction-block-refs" aria-labelledby={props.labelId}>
-          {props.items.map((item) => {
-            const text =
-              item.text === null ? undefined : shownText({ text: item.text });
-            return (
-              <li
-                key={item.key ?? item.id}
-                className="nextaction-block-ref"
-                data-struck={item.struck || undefined}
-              >
-                {item.before}
-                {text ? (
-                  <button
-                    type="button"
-                    className="nextaction-block-ref-target"
-                    data-empty={text.empty || undefined}
-                    onClick={() => props.onOpen(item.id)}
-                  >
-                    {text.text}
-                  </button>
-                ) : (
-                  <span className="nextaction-block-ref-target">
-                    {props.missingText}
-                  </span>
-                )}
-                {item.after}
-                {item.removable !== false && (
-                  <Tooltip text={props.removeLabel}>
-                    <Button
-                      variant="plain"
-                      className="nextaction-block-ref-remove"
-                      aria-label={props.removeLabel}
-                      onClick={() => props.onRemove(item.id)}
-                    >
-                      <i className="ti ti-x" aria-hidden="true" />
-                    </Button>
-                  </Tooltip>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <BlockRefsList
+        labelId={props.labelId}
+        items={props.items}
+        missingText={props.missingText}
+        onOpen={props.onOpen}
+        removeLabel={props.removeLabel}
+        onRemove={props.onRemove}
+      />
       {props.below}
       {props.searchable !== false && (
         <Select

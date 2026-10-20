@@ -41,6 +41,7 @@ import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block, CursorData } from "../../../orca.d.ts";
 import {
+  planCompletionHistoryDiscard,
   planCompletionHistoryWrite,
   readCompletionHistory,
 } from "../codec/completion-history-codec";
@@ -397,6 +398,7 @@ const discardPlans = {
   recurrence: planRecurrenceDiscard,
   review: planReviewDiscard,
   reminders: planRemindersDiscard,
+  completionHistory: planCompletionHistoryDiscard,
 } satisfies Record<DiscardableData, unknown>;
 
 /**

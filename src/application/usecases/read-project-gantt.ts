@@ -379,7 +379,7 @@ export function createReadProjectGantt(deps: {
     if (!scoped) return { kind: "noProject" };
     // A project root task's descendant tasks are all the project's: the
     // parent task's ownership decides (domain/project/ownership.ts).
-    const tree = buildTaskTree(snapshot);
+    const tree = buildTaskTree(snapshot, graph.relations);
     const narrow = narrowing(options);
     const narrowed = narrows(narrow);
     /**
@@ -400,8 +400,10 @@ export function createReadProjectGantt(deps: {
     const dependenciesOf = (task: Task): RowDependencies => {
       const inside: GanttDependency[] = [];
       const outside: GanttOutsideDependency[] = [];
-      for (const id of task.dependencies) {
-        // Not a task in the graph: a stale dependency, shown nowhere.
+      // A stale dependency is no relation (#208): shown nowhere.
+      for (const relation of graph.relations.waitsFor(task.id)) {
+        if (relation.kind !== "dependency") continue;
+        const id = relation.waitingFor;
         const entry = graph.entry(id);
         if (!entry) continue;
         if (entry.project?.id === scoped.project.id) {
@@ -417,7 +419,7 @@ export function createReadProjectGantt(deps: {
       }
       return { dependencies: inside, outsideDependencies: outside };
     };
-    const shiftPlan = projectShiftPlanner(snapshot, graph, scoped.project.id);
+    const shiftPlan = projectShiftPlanner(graph, scoped.project.id);
     const standing = (item: SnapshotTask): RowStanding => ({
       overdue: isOverdue(item.task, today),
       blocked: marksBlocked(graph.entry(item.task.id)),
@@ -425,8 +427,8 @@ export function createReadProjectGantt(deps: {
       ...dependenciesOf(item.task),
       shiftCount: shiftPlan(item.task.id).length,
     });
-    const rows = projectRootTasks(snapshot, graph, scoped.project.id).flatMap(
-      (root) => rowsOf(tree, root, 0, kept, scoped.project, standing),
+    const rows = projectRootTasks(graph, scoped.project.id).flatMap((root) =>
+      rowsOf(tree, root, 0, kept, scoped.project, standing),
     );
     const project = projectNode(
       projectNodeContext(snapshot, graph, { today, previewDays, boundary }),

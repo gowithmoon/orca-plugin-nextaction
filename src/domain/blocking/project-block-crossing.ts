@@ -9,6 +9,7 @@ import type { ProjectId } from "../project/project";
 import type { TaskId } from "../task/task";
 import type { SnapshotTask, TaskGraphSnapshot } from "./task-graph";
 import { movedSnapshot, type TaskMove } from "./task-move";
+import { buildTaskRelations } from "./task-relations";
 
 /**
  * What a crossing move does to the moved task, seen from project `project`:
@@ -49,20 +50,14 @@ function owningProjectOf(
   snapshot: TaskGraphSnapshot,
   id: TaskId,
 ): ProjectId | null {
-  const byId = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
+  const relations = buildTaskRelations(snapshot.tasks);
   const projects = new Set(
     (snapshot.projects ?? []).map((entry) => entry.project.id),
   );
-  // The task and its ancestor tasks, nearest first; a loop (bad input only)
-  // is cut where it closes.
-  const chain: SnapshotTask[] = [];
-  const seen = new Set<TaskId>();
-  let current = byId.get(id);
-  while (current && !seen.has(current.task.id)) {
-    chain.push(current);
-    seen.add(current.task.id);
-    current =
-      current.parentId === null ? undefined : byId.get(current.parentId);
-  }
+  // The task and its ancestor tasks, nearest first.
+  const self = relations.get(id);
+  const chain: SnapshotTask[] = self
+    ? [self, ...relations.ancestorsOf(id)]
+    : [];
   return owningProject(chain, (p) => projects.has(p));
 }

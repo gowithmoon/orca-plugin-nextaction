@@ -3,6 +3,7 @@
 import type { ProjectId } from "../project/project";
 import type { TaskId } from "../task/task";
 import type { SnapshotTask, TaskGraphSnapshot } from "./task-graph";
+import { buildTaskRelations, type TaskRelations } from "./task-relations";
 
 /**
  * Where the moved block goes, relative to the target's block: its last child
@@ -40,23 +41,19 @@ export function movesToProjectEnd(
   return "projectEnd" in move;
 }
 
-/** Task `id` is task `ancestor` or one of its descendant tasks. */
+/**
+ * Task `id` is task `ancestor` or one of its descendant tasks, by the task
+ * relations of the snapshot.
+ */
 export function isSelfOrBelow(
-  snapshot: TaskGraphSnapshot,
+  relations: TaskRelations,
   id: TaskId,
   ancestor: TaskId,
 ): boolean {
-  const parents = new Map(
-    snapshot.tasks.map((item) => [item.task.id, item.parentId]),
+  return (
+    id === ancestor ||
+    relations.ancestorsOf(id).some((above) => above.task.id === ancestor)
   );
-  const seen = new Set<TaskId>();
-  let current: TaskId | null | undefined = id;
-  while (current !== null && current !== undefined && !seen.has(current)) {
-    if (current === ancestor) return true;
-    seen.add(current);
-    current = parents.get(current);
-  }
-  return false;
 }
 
 /**
@@ -69,8 +66,9 @@ export function movesOntoSelfOrBelow(
   snapshot: TaskGraphSnapshot,
   move: TaskMove,
 ): boolean {
+  const relations = buildTaskRelations(snapshot.tasks);
   if (!movesToProjectEnd(move)) {
-    return isSelfOrBelow(snapshot, move.target, move.id);
+    return isSelfOrBelow(relations, move.target, move.id);
   }
   if (move.projectEnd === move.id) return true;
   const project = (snapshot.projects ?? []).find(
@@ -78,7 +76,7 @@ export function movesOntoSelfOrBelow(
   );
   return (
     project?.parentId !== undefined &&
-    isSelfOrBelow(snapshot, project.parentId, move.id)
+    isSelfOrBelow(relations, project.parentId, move.id)
   );
 }
 
@@ -131,6 +129,7 @@ interface Landing {
 /** A move next to task `move.target`; `null` when it is not a task. */
 function landingNextToTask(
   snapshot: TaskGraphSnapshot,
+  relations: TaskRelations<SnapshotTask>,
   rest: readonly SnapshotTask[],
   move: TaskMoveNextToTask,
 ): Landing | null {
@@ -142,7 +141,7 @@ function landingNextToTask(
   while (
     afterTarget < rest.length &&
     isSelfOrBelow(
-      snapshot,
+      relations,
       (rest[afterTarget] as SnapshotTask).task.id,
       move.target,
     )
@@ -220,13 +219,14 @@ export function movedSnapshot(
   const moved = ordered.find((item) => item.task.id === move.id);
   if (!moved) return null;
   if (movesOntoSelfOrBelow(snapshot, move)) return null;
+  const relations = buildTaskRelations(snapshot.tasks);
   const inSubtree = (item: SnapshotTask) =>
-    isSelfOrBelow(snapshot, item.task.id, move.id);
+    isSelfOrBelow(relations, item.task.id, move.id);
   const subtree = ordered.filter(inSubtree);
   const rest = ordered.filter((item) => !inSubtree(item));
   const landing = movesToProjectEnd(move)
     ? landingAtProjectEnd(snapshot, rest, move)
-    : landingNextToTask(snapshot, rest, move);
+    : landingNextToTask(snapshot, relations, rest, move);
   if (!landing) return null;
   const { insertAt, parentId, projectBlock: newBlock } = landing;
   // Below the moved task, those that had its old nearest project block get

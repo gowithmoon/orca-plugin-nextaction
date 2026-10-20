@@ -9,7 +9,6 @@ import {
 import {
   analyzeTaskGraph,
   type TaskGraph,
-  type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
@@ -33,12 +32,11 @@ export type ShiftLater = (id: TaskId) => Promise<number>;
  * chart's read, so its count is what this writes.
  */
 export function projectShiftPlanner(
-  snapshot: TaskGraphSnapshot,
   graph: TaskGraph,
   project: ProjectId,
 ): ShiftLaterPlan {
   return shiftLaterPlanner(
-    snapshot.tasks.map((item) => item.task),
+    graph.relations,
     (task) =>
       task.status !== "done" && graph.entry(task.id)?.project?.id === project,
   );
@@ -59,7 +57,7 @@ export function createShiftLater(deps: {
     });
     const project = graph.entry(id)?.project;
     if (!project) return 0;
-    const plan = projectShiftPlanner(snapshot, graph, project.id)(id);
+    const plan = projectShiftPlanner(graph, project.id)(id);
     if (plan.length === 0) return 0;
     await deps.repository.updateTasks(
       plan.map(({ id: shifted, start, due }) => ({

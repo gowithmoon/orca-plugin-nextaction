@@ -125,13 +125,16 @@ export function WindowSpacer() {
   return <span className="nextaction-window-spacer" />;
 }
 
-/** What a task's window gets from `createTaskWindow`. */
-export interface TaskWindowProps<Deps> {
-  task: Task;
+/**
+ * What a task's window gets from `createTaskWindow`. `Subject` is what it is
+ * opened for: the task, or the task with more read along with it.
+ */
+export interface TaskWindowProps<Deps, Subject = Task> {
+  task: Subject;
   deps: Deps;
   onClose: () => void;
   /** Shows the window afresh for the task as read again. */
-  onReopen: (task: Task) => void;
+  onReopen: (task: Subject) => void;
 }
 
 /**
@@ -139,12 +142,12 @@ export interface TaskWindowProps<Deps> {
  * Another task, or the same one read again, starts afresh; a replaced
  * window's late close or reopen does nothing.
  */
-export function createTaskWindow<Deps>(
-  Window: React.ComponentType<TaskWindowProps<Deps>>,
+export function createTaskWindow<Deps, Subject = Task>(
+  Window: React.ComponentType<TaskWindowProps<Deps, Subject>>,
   options: { deps: Deps; render: (node: React.ReactNode) => void },
-): (task: Task) => void {
+): (task: Subject) => void {
   let shown = 0;
-  const open = (task: Task) => {
+  const open = (task: Subject) => {
     shown += 1;
     const mine = shown;
     options.render(

@@ -4,6 +4,7 @@
 // or stale). Nothing is written: a stale setting is cleared only by the next
 // edit (ADR 0016).
 import type { SnapshotTask } from "../../domain/blocking/task-graph";
+import { buildTaskRelations } from "../../domain/blocking/task-relations";
 import {
   ownershipDecision,
   settingCounts,
@@ -76,7 +77,7 @@ export function createReadProjectOfTask(deps: {
         projectsPaused: true,
       };
     }
-    const tasks = new Map(snapshot.tasks.map((item) => [item.task.id, item]));
+    const relations = buildTaskRelations(snapshot.tasks);
     const projects = new Map(
       (snapshot.projects ?? []).map(({ project }) => [
         project.id,
@@ -84,18 +85,10 @@ export function createReadProjectOfTask(deps: {
       ]),
     );
     const isProject = (target: ProjectId) => projects.has(target);
-    const self = tasks.get(id);
+    const self = relations.get(id);
     if (!self) return { project: null, source: null, ownSetting: null };
     // The task and its ancestor tasks, nearest first.
-    const chain: SnapshotTask[] = [self];
-    const seen = new Set([id]);
-    for (let at = self.parentId; at !== null && !seen.has(at); ) {
-      const link = tasks.get(at);
-      if (!link) break;
-      chain.push(link);
-      seen.add(at);
-      at = link.parentId;
-    }
+    const chain: SnapshotTask[] = [self, ...relations.ancestorsOf(id)];
     const decision = ownershipDecision(chain, isProject);
     const project =
       decision === null ? null : (projects.get(decision.project) ?? null);

@@ -14,83 +14,43 @@
 import type { TaskId } from "../task/task";
 import type { SnapshotTask, TaskGraphSnapshot } from "./task-graph";
 import { isSelfOrBelow, movedSnapshot, type TaskMove } from "./task-move";
-
-/** The tasks of a snapshot, with who sits below whom. */
-interface Structure {
-  /** In note order. */
-  readonly ordered: readonly SnapshotTask[];
-  readonly byId: ReadonlyMap<TaskId, SnapshotTask>;
-  /** The direct subtasks of each task, in note order. */
-  readonly children: ReadonlyMap<TaskId, readonly SnapshotTask[]>;
-  /** The sibling subtask just before each task, if any. */
-  readonly previous: ReadonlyMap<TaskId, SnapshotTask>;
-}
-
-function structureOf(tasks: readonly SnapshotTask[]): Structure {
-  const ordered = [...tasks].sort((a, b) => a.position - b.position);
-  const byId = new Map(ordered.map((item) => [item.task.id, item]));
-  const children = new Map<TaskId, SnapshotTask[]>();
-  const previous = new Map<TaskId, SnapshotTask>();
-  for (const item of ordered) {
-    if (item.parentId === null || !byId.has(item.parentId)) continue;
-    const siblings = children.get(item.parentId) ?? [];
-    const before = siblings.at(-1);
-    if (before) previous.set(item.task.id, before);
-    siblings.push(item);
-    children.set(item.parentId, siblings);
-  }
-  return { ordered, byId, children, previous };
-}
+import { buildTaskRelations, type TaskRelations } from "./task-relations";
 
 /**
- * The task and its ancestor tasks, nearest first. A parent not in the
- * snapshot ends the chain; a chain that loops back is cut where it does (the
- * block tree cannot loop, so this only guards against bad input).
+ * Every task `item` waits for directly in the waits-for graph, once each:
+ * its own direct relations (subtasks, the subtask just before it under a
+ * sequential parent, its dependencies), and the dependencies and sequential
+ * wait of every ancestor task, passed down to it (ADR 0015). Waiting for
+ * every earlier sibling is reached through the one just before: it waits
+ * for the one before it, and so on. Only reachability decides cycles, so
+ * one edge stands for all, and a long sequential list does not grow the
+ * graph quadratically.
  */
-function selfAndAncestors(
-  structure: Structure,
+function waitsFor(
+  structure: TaskRelations<SnapshotTask>,
   item: SnapshotTask,
-): SnapshotTask[] {
-  const chain = [item];
-  const seen = new Set([item.task.id]);
-  let parentId = item.parentId;
-  while (parentId !== null && !seen.has(parentId)) {
-    const parent = structure.byId.get(parentId);
-    if (!parent) break;
-    chain.push(parent);
-    seen.add(parentId);
-    parentId = parent.parentId;
-  }
-  return chain;
-}
-
-/** Every task `item` waits for directly in the waits-for graph, once each. */
-function waitsFor(structure: Structure, item: SnapshotTask): Set<TaskId> {
+): Set<TaskId> {
   const targets = new Set<TaskId>();
-  for (const child of structure.children.get(item.task.id) ?? []) {
-    targets.add(child.task.id);
+  for (const relation of structure.waitsFor(item.task.id)) {
+    targets.add(relation.waitingFor);
   }
-  for (const link of selfAndAncestors(structure, item)) {
-    for (const target of link.task.dependencies) {
-      if (structure.byId.has(target)) targets.add(target);
+  for (const ancestor of structure.ancestorsOf(item.task.id)) {
+    for (const relation of structure.waitsFor(ancestor.task.id)) {
+      // Only these pass down: waiting for its subtasks stays with it.
+      if (relation.kind === "dependency" || relation.kind === "sequential") {
+        targets.add(relation.waitingFor);
+      }
     }
-    const parent =
-      link.parentId === null ? undefined : structure.byId.get(link.parentId);
-    if (!parent?.task.sequential) continue;
-    // Waiting for every earlier sibling is reached through the one just
-    // before: it waits for the one before it, and so on. Only reachability
-    // decides cycles, so one edge stands for all, and a long sequential list
-    // does not grow the graph quadratically.
-    const previous = structure.previous.get(link.task.id);
-    if (previous) targets.add(previous.task.id);
   }
   return targets;
 }
 
 /** The waits-for graph: what each task waits for directly. */
-function waitsForGraph(structure: Structure): Map<TaskId, Set<TaskId>> {
+function waitsForGraph(
+  structure: TaskRelations<SnapshotTask>,
+): Map<TaskId, Set<TaskId>> {
   return new Map(
-    structure.ordered.map((item) => [item.task.id, waitsFor(structure, item)]),
+    structure.tasks.map((item) => [item.task.id, waitsFor(structure, item)]),
   );
 }
 
@@ -99,7 +59,7 @@ function waitsForGraph(structure: Structure): Map<TaskId, Set<TaskId>> {
  * (Tarjan's algorithm, iterative so a deep graph cannot overflow the stack).
  */
 function components(
-  structure: Structure,
+  structure: TaskRelations<SnapshotTask>,
   graph: ReadonlyMap<TaskId, ReadonlySet<TaskId>>,
 ): Map<TaskId, number> {
   const index = new Map<TaskId, number>();
@@ -109,7 +69,7 @@ function components(
   const onStack = new Set<TaskId>();
   let next = 0;
   let count = 0;
-  for (const root of structure.ordered) {
+  for (const root of structure.tasks) {
     if (index.has(root.task.id)) continue;
     const work: { id: TaskId; targets: Iterator<TaskId> }[] = [];
     const visit = (id: TaskId) => {
@@ -166,18 +126,23 @@ function components(
 export function findDependencyCycles(
   snapshot: TaskGraphSnapshot,
 ): ReadonlyMap<TaskId, readonly TaskId[]> {
-  const structure = structureOf(snapshot.tasks);
+  return dependencyCyclesIn(buildTaskRelations(snapshot.tasks));
+}
+
+/** As `findDependencyCycles`, from task relations already built. */
+export function dependencyCyclesIn(
+  structure: TaskRelations<SnapshotTask>,
+): ReadonlyMap<TaskId, readonly TaskId[]> {
   const graph = waitsForGraph(structure);
   const component = components(structure, graph);
   const cycles = new Map<TaskId, TaskId[]>();
-  for (const item of structure.ordered) {
+  for (const item of structure.tasks) {
     const id = item.task.id;
     const onCycle = [...(graph.get(id) ?? [])]
       .filter((target) => component.get(target) === component.get(id))
       .sort(
         (a, b) =>
-          (structure.byId.get(a)?.position ?? 0) -
-          (structure.byId.get(b)?.position ?? 0),
+          (structure.get(a)?.position ?? 0) - (structure.get(b)?.position ?? 0),
       );
     if (onCycle.length > 0) cycles.set(id, onCycle);
   }
@@ -185,7 +150,7 @@ export function findDependencyCycles(
 }
 
 /** The task and every descendant task of it, in note order. */
-function subtree(structure: Structure, id: TaskId): TaskId[] {
+function subtree(structure: TaskRelations<SnapshotTask>, id: TaskId): TaskId[] {
   const found: TaskId[] = [];
   const pending = [id];
   const seen = new Set<TaskId>();
@@ -194,11 +159,11 @@ function subtree(structure: Structure, id: TaskId): TaskId[] {
     if (seen.has(next)) continue;
     seen.add(next);
     found.push(next);
-    for (const child of structure.children.get(next) ?? []) {
+    for (const child of structure.childrenOf(next)) {
       pending.push(child.task.id);
     }
   }
-  const position = (task: TaskId) => structure.byId.get(task)?.position ?? 0;
+  const position = (task: TaskId) => structure.get(task)?.position ?? 0;
   return found.sort((a, b) => position(a) - position(b));
 }
 
@@ -222,10 +187,13 @@ export function dependencyTargetsThatCycle(
   snapshot: TaskGraphSnapshot,
   id: TaskId,
 ): ReadonlyMap<TaskId, DependencyCycleReason> {
-  const structure = structureOf(snapshot.tasks);
+  const structure = buildTaskRelations(snapshot.tasks);
   const marked = new Map<TaskId, DependencyCycleReason>();
-  if (!structure.byId.has(id)) return marked;
-  /** Who waits for each task directly: the waits-for graph reversed. */
+  if (!structure.get(id)) return marked;
+  /**
+   * Who waits for each task directly: the waits-for graph reversed. Not the
+   * relations' waiters: the graph also passes waiting down to descendants.
+   */
   const waitedOnBy = new Map<TaskId, TaskId[]>();
   for (const [waiting, targets] of waitsForGraph(structure)) {
     for (const target of targets) {
@@ -261,8 +229,12 @@ export function targetsThatCycle(
   id: TaskId,
   targets: readonly TaskId[],
 ): TaskId[] {
+  // A stale target left among them is never marked: it is not in the graph.
   const held = new Set(
-    snapshot.tasks.find((item) => item.task.id === id)?.task.dependencies,
+    buildTaskRelations(snapshot.tasks)
+      .waitsFor(id)
+      .filter((relation) => relation.kind === "dependency")
+      .map((relation) => relation.waitingFor),
   );
   const added = targets.filter((target) => !held.has(target));
   if (added.length === 0) return [];
@@ -291,7 +263,7 @@ export function sequentialCycle(
 ): SequentialCycle | null {
   const parent = snapshot.tasks.find((item) => item.task.id === id);
   if (!parent || parent.task.sequential) return null;
-  const after = structureOf(
+  const after = buildTaskRelations(
     snapshot.tasks.map((item) =>
       item === parent
         ? { ...item, task: { ...item.task, sequential: true } }
@@ -301,7 +273,7 @@ export function sequentialCycle(
   const component = components(after, waitsForGraph(after));
   /** The first subtask so far on each component, by component number. */
   const earliest = new Map<number | undefined, TaskId>();
-  for (const later of after.children.get(id) ?? []) {
+  for (const later of after.childrenOf(id)) {
     for (const waiting of subtree(after, later.task.id)) {
       const waitingFor = earliest.get(component.get(waiting));
       if (waitingFor !== undefined) return { waiting, waitingFor };
@@ -335,19 +307,20 @@ export function moveCycle(
   const after = movedSnapshot(snapshot, move);
   if (!after) return null;
   const before = findDependencyCycles(snapshot);
-  const afterStructure = structureOf(after.tasks);
+  const afterStructure = buildTaskRelations(after.tasks);
   const graph = waitsForGraph(afterStructure);
   const component = components(afterStructure, graph);
   const onCycleAfter = findDependencyCycles(after);
-  const made = afterStructure.ordered.find(
+  const made = afterStructure.tasks.find(
     (item) => onCycleAfter.has(item.task.id) && !before.has(item.task.id),
   );
   if (!made) return null;
   const cycle = component.get(made.task.id);
-  const members = afterStructure.ordered.filter(
+  const members = afterStructure.tasks.filter(
     (item) => component.get(item.task.id) === cycle,
   );
-  const below = (id: TaskId) => isSelfOrBelow(snapshot, id, move.id);
+  // The moved subtree is the same before and after the move.
+  const below = (id: TaskId) => isSelfOrBelow(afterStructure, id, move.id);
   const position = (id: TaskId) =>
     snapshot.tasks.find((item) => item.task.id === id)?.position ?? 0;
   const outside = members
@@ -355,10 +328,15 @@ export function moveCycle(
     .filter((id) => !below(id))
     .sort((a, b) => position(a) - position(b));
   if (outside[0] !== undefined) return { cycleWith: outside[0] };
-  const moved = afterStructure.byId.get(move.id) as SnapshotTask;
   const memberIds = new Set(members.map((item) => item.task.id));
-  for (const ancestor of selfAndAncestors(afterStructure, moved).slice(1)) {
-    if (ancestor.task.dependencies.some((id) => memberIds.has(id))) {
+  for (const ancestor of afterStructure.ancestorsOf(move.id)) {
+    const dependsOnMember = afterStructure
+      .waitsFor(ancestor.task.id)
+      .some(
+        (relation) =>
+          relation.kind === "dependency" && memberIds.has(relation.waitingFor),
+      );
+    if (dependsOnMember) {
       return { cycleWith: ancestor.task.id };
     }
   }

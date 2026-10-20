@@ -3,7 +3,10 @@
 // calls the use cases; it does not know whether it sits in a popup or a side
 // pane. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
-import type { Candidates } from "../../application/ports/task-repository";
+import type {
+  Candidates,
+  CompletionHistoryRead,
+} from "../../application/ports/task-repository";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
 import type {
@@ -20,6 +23,7 @@ import type {
   ReadTaskForPanel,
   TaskCustomProperty,
 } from "../../application/usecases/read-task";
+import type { ReadWaiters } from "../../application/usecases/read-waiters";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
@@ -51,6 +55,8 @@ import {
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
 import { ChoicesField } from "./choices-field";
+import { CompletionHistoryField } from "./completion-history-field";
+import type { OpenCompletionHistoryPopup } from "./completion-history-popup";
 import {
   type BlockRefsDeps,
   CustomPropertiesField,
@@ -75,6 +81,7 @@ import {
   SequentialField,
   StatusField,
 } from "./task-panel-fields";
+import { WaitersField } from "./waiters-field";
 
 export interface TaskPanelFormDeps {
   /** The task with its custom properties (#113). */
@@ -97,6 +104,11 @@ export interface TaskPanelFormDeps {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
+  /**
+   * The tasks it blocks (its parent task, the later subtasks under a
+   * sequential parent, its 后续任务), for the last row (#208).
+   */
+  readWaiters: ReadWaiters;
   /** The task's 所属项目 and where it comes from (#146). */
   readProjectOfTask: ReadProjectOfTask;
   /** Projects offered as the task's 所属项目 (#146). */
@@ -111,6 +123,8 @@ export interface TaskPanelFormDeps {
   openReviewPopup: OpenReviewPopup;
   /** Opens the reminder popup for the task (#107). */
   openReminderPopup: OpenReminderPopup;
+  /** Opens the completion history popup for the task (#209). */
+  openCompletionHistoryPopup: OpenCompletionHistoryPopup;
   /** The current time, for which reminders are still to come. */
   now: () => Date;
   /** Marks the task reviewed (GLOSSARY: 标记已回顾, #103). */
@@ -189,6 +203,8 @@ function Fields(props: {
   task: Task;
   /** In Orca's order; shown after the built-in fields (#113). */
   customProperties: readonly TaskCustomProperty[];
+  /** The completion history row's, last (#209). */
+  completionHistory: CompletionHistoryRead;
   today: CalendarDate;
   idPrefix: string;
   actions: ReturnType<typeof useTaskPanelActions>;
@@ -201,6 +217,8 @@ function Fields(props: {
   dependencies: React.ReactNode;
   /** The 所属项目 field (#146). */
   projectOfTask: React.ReactNode;
+  /** Read only, after the custom properties: only shown with waiters (#208). */
+  waiters: React.ReactNode;
   /** For block reference custom properties (#115). */
   blockRefs: BlockRefsDeps;
   /** Opens the recurrence rule popup (#95). */
@@ -209,6 +227,8 @@ function Fields(props: {
   onOpenReview: () => void;
   /** Opens the reminder popup (#107). */
   onOpenReminders: () => void;
+  /** Opens the completion history popup (#209). */
+  onOpenCompletionHistory: () => void;
   /** The current time, for the reminder row. */
   now: Date;
   /** Whether "Mark reviewed" shows (#103). */
@@ -370,6 +390,18 @@ function Fields(props: {
         onChange={actions.setCustomProperty}
         blockRefs={props.blockRefs}
       />
+      {/* What is read, not set, in a group of its own after the properties;
+          hidden by CSS when both rows are. */}
+      <div className="nextaction-task-panel-records">
+        {props.waiters}
+        {/* Only with an entry, or one this plugin cannot read (#209). */}
+        <CompletionHistoryField
+          labelId={id("completion-history")}
+          completionHistory={props.completionHistory}
+          today={today}
+          onOpen={props.onOpenCompletionHistory}
+        />
+      </div>
     </div>
   );
 }
@@ -420,6 +452,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
       <Fields
         task={state.task}
         customProperties={state.customProperties}
+        completionHistory={state.completionHistory}
         today={deps.today()}
         idPrefix={idPrefix}
         actions={actions}
@@ -428,6 +461,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         onOpenRecurrence={() => deps.openRecurrencePopup(state.task)}
         onOpenReview={() => deps.openReviewPopup(state.task)}
         onOpenReminders={() => deps.openReminderPopup(state.task)}
+        onOpenCompletionHistory={() => deps.openCompletionHistoryPopup(state)}
         now={now}
         canMarkReviewed={deps.canMarkReviewed(state.task)}
         blockRefs={{
@@ -486,6 +520,16 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
               taskActions.openBlockInNotes(projectId);
               props.onOpenedInNotes?.();
             }}
+            onSelectTask={props.onSelectTask}
+          />
+        }
+        waiters={
+          <WaitersField
+            readWaiters={deps.readWaiters}
+            taskId={state.task.id}
+            changes={deps.changes}
+            notify={notify}
+            labelId={`${idPrefix}-waiters`}
             onSelectTask={props.onSelectTask}
           />
         }

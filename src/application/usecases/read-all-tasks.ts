@@ -8,6 +8,7 @@ import {
   type TaskGraphEntry,
   type TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
+import type { TaskRelations } from "../../domain/blocking/task-relations";
 import {
   type ProjectProgress,
   unfinishedTaskCount,
@@ -398,12 +399,11 @@ export interface TaskTree {
  */
 function scopedTaskTree(
   tree: TaskTree,
-  snapshot: TaskGraphSnapshot,
   graph: TaskGraph,
   project: ProjectId,
 ): TaskTree {
   return {
-    topLevel: projectRootTasks(snapshot, graph, project).map((item) => ({
+    topLevel: projectRootTasks(graph, project).map((item) => ({
       kind: "task",
       item,
     })),
@@ -417,33 +417,34 @@ function scopedTaskTree(
  * order. Shared with the project board (#166).
  */
 export function projectRootTasks(
-  snapshot: TaskGraphSnapshot,
   graph: TaskGraph,
   project: ProjectId,
 ): SnapshotTask[] {
   const owned = (id: TaskId) => graph.entry(id)?.project?.id === project;
-  return [...snapshot.tasks]
-    .sort((a, b) => a.position - b.position)
-    .filter(
-      (item) =>
-        owned(item.task.id) &&
-        (item.parentId === null || !owned(item.parentId)),
-    );
+  const { relations } = graph;
+  return relations.tasks.filter((item) => {
+    if (!owned(item.task.id)) return false;
+    const parent = relations.parentOf(item.task.id);
+    return parent === undefined || !owned(parent.task.id);
+  });
 }
 
-/** Shared with the project board (#165). */
-export function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
-  const ordered = [...snapshot.tasks].sort((a, b) => a.position - b.position);
-  const ids = new Set(ordered.map((item) => item.task.id));
+/**
+ * Shared with the project board (#165); the subtasks are the task
+ * relations' (#208), which `analyzeTaskGraph` built from `snapshot`.
+ */
+export function buildTaskTree(
+  snapshot: TaskGraphSnapshot,
+  relations: TaskRelations<SnapshotTask>,
+): TaskTree {
   const projects = new Map(
     (snapshot.projects ?? []).map((item) => [item.project.id, item]),
   );
-  const children = new Map<TaskId, SnapshotTask[]>();
   const below = new Map<ProjectId, SnapshotTask[]>();
   const loose: SnapshotTask[] = [];
-  for (const item of ordered) {
+  for (const item of relations.tasks) {
     // A parent missing from the snapshot leaves the task top-level.
-    if (item.parentId === null || !ids.has(item.parentId)) {
+    if (relations.parentOf(item.task.id) === undefined) {
       // A top-level task sits under the row of its nearest project block,
       // whatever project it belongs to: the tree is the notes' structure.
       const project =
@@ -455,11 +456,7 @@ export function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
         list.push(item);
         below.set(project.project.id, list);
       } else loose.push(item);
-      continue;
     }
-    const siblings = children.get(item.parentId) ?? [];
-    siblings.push(item);
-    children.set(item.parentId, siblings);
   }
   const topLevel: { position: number; entry: TopLevel }[] = [
     ...loose.map((item) => ({
@@ -479,7 +476,7 @@ export function buildTaskTree(snapshot: TaskGraphSnapshot): TaskTree {
   topLevel.sort((a, b) => a.position - b.position);
   return {
     topLevel: topLevel.map(({ entry }) => entry),
-    childrenOf: (id) => children.get(id) ?? [],
+    childrenOf: relations.childrenOf,
   };
 }
 
@@ -874,7 +871,7 @@ export function createReadAllTasks(deps: {
     const previewDays = deps.startPreviewDays.current();
     const graph = analyzeTaskGraph(snapshot, { today, previewDays });
     const context: NodeContext = {
-      tree: buildTaskTree(snapshot),
+      tree: buildTaskTree(snapshot, graph.relations),
       graph,
       keep: options.keep,
       projects: projectNodeContext(snapshot, graph, {
@@ -897,12 +894,7 @@ export function createReadAllTasks(deps: {
         ? {
             ...context,
             scope: scoped.project.id,
-            tree: scopedTaskTree(
-              context.tree,
-              snapshot,
-              graph,
-              scoped.project.id,
-            ),
+            tree: scopedTaskTree(context.tree, graph, scoped.project.id),
           }
         : context,
       narrow,

@@ -35,6 +35,39 @@ describe("discard data this plugin cannot read", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("writes an empty completion history over one it cannot read, in one write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask(
+      { id: 1, status: "todo" },
+      { completionHistory: unreadable },
+    );
+    await createDiscardUnreadable({ repository })(1, "completionHistory");
+    expect(await repository.readCompletionHistory(1)).toEqual({
+      kind: "readable",
+      history: [],
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("writes nothing over a completion history it can read", async () => {
+    const repository = createInMemoryTaskRepository();
+    const completionHistory = {
+      kind: "readable",
+      history: [
+        {
+          at: new Date("2026-10-12T01:00:00.000Z"),
+          day: { year: 2026, month: 10, day: 12 },
+        },
+      ],
+    } as const;
+    repository.addTask({ id: 1, status: "todo" }, { completionHistory });
+    await createDiscardUnreadable({ repository })(1, "completionHistory");
+    expect(await repository.readCompletionHistory(1)).toEqual(
+      completionHistory,
+    );
+    expect(repository.writeCount()).toBe(0);
+  });
+
   it("writes nothing over data it can read", async () => {
     const repository = createInMemoryTaskRepository();
     const reminders = {

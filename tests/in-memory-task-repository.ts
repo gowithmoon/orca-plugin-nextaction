@@ -112,6 +112,12 @@ export interface InMemoryTaskRepository extends TaskRepository {
     task: Partial<Task> & { id: TaskId },
     setup?: Omit<BlockSetup, "notConvertible" | "text">,
   ): void;
+  /**
+   * Adds a mirror block of block `sourceId` (#208). Only `getTask` reads
+   * through it, returning the source's task, as the repository resolves a
+   * mirror's ID; nothing else here models mirrors.
+   */
+  addMirror(id: number, sourceId: number): void;
   /** The task tag's choices for contexts or labels (none unless set). */
   setChoices(property: ChoiceProperty, choices: readonly string[]): void;
   /**
@@ -214,6 +220,8 @@ function freshProject(id: ProjectId, created: Date): Project {
 
 export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   const blocks = new Map<number, StoredBlock>();
+  /** Mirror block IDs, each with its source block's (`addMirror`). */
+  const mirrors = new Map<number, number>();
   let failure: Error | undefined;
   let projectTagPaused = false;
   /** The task tag's choices per property. */
@@ -553,8 +561,15 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       moves.push({ id, projectEnd: project });
     },
 
+    addMirror(id, sourceId) {
+      if (blocks.has(id) || mirrors.has(id)) {
+        throw new Error(`block ${id} already exists`);
+      }
+      mirrors.set(id, sourceId);
+    },
+
     async getTask(id) {
-      const task = blocks.get(id)?.task;
+      const task = blocks.get(mirrors.get(id) ?? id)?.task;
       return task ? withCustomProperties(task) : null;
     },
 
@@ -783,6 +798,13 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
     async discardUnreadable(id, data) {
       const block = taskToWrite(id);
+      if (data === "completionHistory") {
+        if (block.completionHistory?.kind !== "unreadable") return;
+        write(() => {
+          block.completionHistory = { kind: "readable", history: [] };
+        });
+        return;
+      }
       if (block.task[data].kind !== "unreadable") return;
       // The empty value of each, as the codecs write it.
       const empty = {

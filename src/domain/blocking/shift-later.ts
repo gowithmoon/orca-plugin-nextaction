@@ -11,6 +11,7 @@ import {
   earliestStart,
   hasDateConflict,
 } from "./date-conflict";
+import type { RelatedTask, TaskRelations } from "./task-relations";
 
 /** What is read of a task for shifting. */
 export type ShiftTask = Pick<
@@ -23,6 +24,11 @@ export type ShiftTask = Pick<
   | "dependencyMode"
   | "dependencyDelay"
 >;
+
+/** A task among the task relations, as shifting reads it. */
+export type ShiftItem = RelatedTask & {
+  readonly task: ShiftTask & RelatedTask["task"];
+};
 
 /** A task's new dates; `due` stays `null` for one that has none. */
 export interface ShiftedDates {
@@ -38,7 +44,8 @@ export interface ShiftedDates {
 export type ShiftLaterPlan = (from: TaskId) => readonly ShiftedDates[];
 
 /**
- * Plans shifting later among `tasks`; only those `movable` move (the
+ * Plans shifting later among the tasks of `relations` (built from the
+ * snapshot, as the task graph holds them); only those `movable` move (the
  * project's tasks not done). From a task, follows the dependencies to the
  * tasks waiting for it, in dependency order: a task waiting for the task
  * shifted from, or for one this plan moved, is judged; in conflict, it moves
@@ -51,19 +58,22 @@ export type ShiftLaterPlan = (from: TaskId) => readonly ShiftedDates[];
  * moves.
  */
 export function shiftLaterPlanner(
-  tasks: readonly ShiftTask[],
+  relations: TaskRelations<ShiftItem>,
   movable: (task: ShiftTask) => boolean,
 ): ShiftLaterPlan {
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  /** The movable tasks waiting for each task, in note order. */
+  /** Task `id` as read for shifting, `undefined` when it is not one. */
+  const taskOf = (id: TaskId) => relations.get(id)?.task;
+  /** The movable tasks depending on each task (its 后续任务), in note order. */
   const waiting = new Map<TaskId, ShiftTask[]>();
-  for (const task of tasks) {
-    if (!movable(task)) continue;
-    for (const id of new Set(task.dependencies)) {
-      const list = waiting.get(id) ?? [];
-      list.push(task);
-      waiting.set(id, list);
-    }
+  for (const item of relations.tasks) {
+    waiting.set(
+      item.task.id,
+      relations
+        .waitersOf(item.task.id)
+        .filter((relation) => relation.kind === "dependency")
+        .map((relation) => taskOf(relation.waiting) as ShiftTask)
+        .filter(movable),
+    );
   }
   return (from) => {
     // The tasks reachable from `from`, every task before those waiting for
@@ -86,7 +96,7 @@ export function shiftLaterPlanner(
     }
     const moved = new Map<TaskId, ShiftedDates>();
     const lookup: DependencyLookup = (id) => {
-      const task = byId.get(id);
+      const task = taskOf(id);
       if (!task) return undefined;
       const dates = moved.get(id);
       return dates ? { status: task.status, due: dates.due } : task;
