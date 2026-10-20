@@ -153,6 +153,12 @@ export type NewTasksPlacement =
     }
   | { readonly kind: "journal"; readonly now: Date };
 
+/** What a move of a task's block also writes, in the same undo (#222). */
+export interface MoveTaskOptions {
+  /** The task's own 所属项目 setting is cleared too, a stale one included. */
+  readonly clearProject?: boolean;
+}
+
 /** One task `createTasks` creates. */
 export interface NewTask {
   /** Written as plain text. */
@@ -407,7 +413,26 @@ export interface TaskRepository {
    * too (`MovingBlockToSelfOrItsDescendant`, writing nothing,
    * docs/spikes/move-blocks.md), a failed write, as `moveTask`'s.
    */
-  moveTaskToProjectEnd(id: TaskId, project: ProjectId): Promise<void>;
+  moveTaskToProjectEnd(
+    id: TaskId,
+    project: ProjectId,
+    options?: MoveTaskOptions,
+  ): Promise<void>;
+
+  /**
+   * Moves the task's block, with every block below it, to the end of the
+   * journal of the calendar day `now` falls on in local time (not the
+   * logical day, ADR 0005), its last child block, creating that journal if
+   * it does not exist yet (#222). A page task stays a page and a task. The
+   * user undoes it with one undo, the setting cleared with `options`
+   * included. A mirror block's ID stands for its source block. Fails,
+   * writing nothing, when the block is not a task or the write fails.
+   */
+  moveTaskToJournal(
+    id: TaskId,
+    now: Date,
+    options?: MoveTaskOptions,
+  ): Promise<void>;
 
   /**
    * Writes a link to the task into the notes at `target`, as `plan` says

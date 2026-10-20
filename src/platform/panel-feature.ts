@@ -13,6 +13,10 @@ import {
   createMarkReviewed,
 } from "../application/usecases/mark-reviewed";
 import { createMoveTask } from "../application/usecases/move-task";
+import {
+  createMoveToArea,
+  createReadMoveToArea,
+} from "../application/usecases/move-to-area";
 import { createMoveToQuadrant } from "../application/usecases/move-to-quadrant";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
@@ -385,6 +389,10 @@ export function createPanelFeature(deps: {
       menuItems: deps.menuItems,
       stores: taskMap,
       moveTask,
+      areaDrop: {
+        readMoveToArea: createReadMoveToArea({ repository }),
+        moveToArea: createMoveToArea({ repository, clock: systemClock }),
+      },
       edits: {
         setSequential: createSetSequential({ repository }),
         setDependencyMode: createSetDependencyMode({ repository }),

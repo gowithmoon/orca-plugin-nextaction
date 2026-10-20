@@ -41,6 +41,7 @@ import { notifyActionFailure } from "../../notify";
 import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
+import { type AreaDropDeps, useAreaDrop } from "./area-drop";
 import { EndpointMarkerProvider } from "./endpoint-marker";
 import { TaskMapCanvas, taskMapBoxKeys } from "./task-map-canvas";
 import { TaskMapDragArea } from "./task-map-drag";
@@ -67,6 +68,8 @@ export interface TaskMapViewDeps {
   stores: TaskMapStores;
   /** Dragging a card onto another card or a box (#216). */
   moveTask: MoveTask;
+  /** Dragging a card onto a project box's or the no-project area's empty space (#222). */
+  areaDrop: AreaDropDeps;
   /** Sequential, the dependency mode and delay, edited on the map (#220). */
   edits: TaskMapEditsDeps;
   /** Searching and locating a task (#221). */
@@ -81,6 +84,7 @@ function TaskMapContent(props: {
   const state = useViewQuery(query);
   const actions = useTaskActions(deps.taskActions);
   const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const areaDrop = useAreaDrop(deps.areaDrop, deps.taskActions.notify);
   const { selectedTaskId, selectTask } = usePanel();
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
   const today = deps.today();
@@ -134,7 +138,7 @@ function TaskMapContent(props: {
   }
   return (
     <TaskMapEditsProvider deps={deps.edits} notify={deps.taskActions.notify}>
-      <TaskMapDragArea onMove={moveTask}>
+      <TaskMapDragArea onMove={moveTask} onAreaDrop={areaDrop.onAreaDrop}>
         <EndpointMarkerProvider deps={markerDeps}>
           <TaskMapCanvas
             read={state.data}
@@ -143,6 +147,7 @@ function TaskMapContent(props: {
           />
         </EndpointMarkerProvider>
       </TaskMapDragArea>
+      {areaDrop.window}
     </TaskMapEditsProvider>
   );
 }

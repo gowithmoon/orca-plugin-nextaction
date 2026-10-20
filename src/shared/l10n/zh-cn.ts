@@ -797,6 +797,23 @@ const zhCN: Record<string, string> = {
   "${done}/${total} done": "已完成 ${done}/${total}",
   // The task map's sequential switch and dependency badge (#220).
   "Dependency mode and delay": "依赖模式与依赖延迟",
+  // The task map's drops on a project box or the no-project area (#222).
+  "Put in this project": "放进这个项目",
+  "Move under the project block": "移动到项目块下",
+  "Set the property only": "仅设置属性，不移动当前块",
+  "Goes to the end of the project's block.": "放到项目块的末尾。",
+  "Goes to the end of the project's block. Its own project setting is cleared.":
+    "放到项目块的末尾，同时清除它自己设定的所属项目。",
+  "Sets its project; the block stays where it is.":
+    "把所属项目改成这个项目，块留在原处。",
+  'Its parent task "${task}" decides its project.':
+    "它的祖先任务「${task}」已经决定了归属。",
+  "The project's block is this task or below it.":
+    "项目块就是这个任务，或在它下面。",
+  'It would make a dependency cycle with "${task}".':
+    "会和「${task}」形成循环依赖。",
+  "Cannot put the task in this project: ${reason}":
+    "无法放进这个项目：${reason}",
   // The task map's dependencies drawn and deleted (#219).
   "Drag to a task to make it depend on this one":
     "拖到另一个任务上，让它依赖这个任务",

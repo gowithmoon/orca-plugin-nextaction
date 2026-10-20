@@ -340,6 +340,57 @@ export const taskMapCss = `
   right: -25px;
 }
 
+/* Over a project box's or the no-project area's empty space (#222). */
+.nextaction-task-map-area[data-drop-over="area"] {
+  outline: 2px dashed var(--orca-color-primary-5);
+  outline-offset: 2px;
+}
+
+/* The window asking how to put a task in a project (area-drop.tsx). */
+.nextaction-area-drop {
+  --nextaction-window-width: 24rem;
+}
+
+.nextaction-area-drop-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  padding: var(--orca-spacing-md) var(--orca-spacing-lg);
+}
+
+.nextaction-area-drop-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  border: 1px solid var(--orca-color-border);
+  border-radius: var(--orca-radius-md);
+  background-color: var(--orca-color-bg-1);
+  color: var(--orca-color-text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-area-drop-option:not(:disabled):hover,
+.nextaction-area-drop-option:focus-visible {
+  border-color: var(--orca-color-primary-5);
+}
+
+.nextaction-area-drop-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.nextaction-area-drop-option-label {
+  font-weight: 600;
+}
+
+.nextaction-area-drop-option-detail {
+  font-size: var(--orca-fontsize-sm);
+  color: var(--orca-color-text-2);
+}
+
 /*
  * Drawing a dependency (#219): a connector on a card's right edge while the
  * pointer is on the card; the preview line; the card under the pointer

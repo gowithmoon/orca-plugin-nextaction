@@ -9,6 +9,7 @@ import type {
   CompletionHistoryRead,
   ConvertToTaskResult,
   JournalSummaryPart,
+  MoveTaskOptions,
   NotConvertibleReason,
   NoteTarget,
   OutlineBlock,
@@ -131,7 +132,8 @@ export interface InMemoryTaskRepository extends TaskRepository {
   writeCount(): number;
   /**
    * The day of the journal a block was appended to with
-   * `appendTaskToJournal` or `createTasks`, or `undefined` when it was not.
+   * `appendTaskToJournal` or `createTasks`, or moved to with
+   * `moveTaskToJournal`, or `undefined` when it was not.
    */
   journalOf(id: number): CalendarDate | undefined;
   /**
@@ -235,6 +237,8 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     [];
   /** Journal days by block, for blocks appended to a journal. */
   const journalDays = new Map<number, CalendarDate>();
+  /** The journal blocks `moveTaskToJournal` moved to, by "year-month-day". */
+  const journalBlocks = new Map<string, number>();
   const journalSummaries: {
     day: CalendarDate;
     title: string;
@@ -409,12 +413,21 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
    * their order, before the target, or after the target's last block. Fails,
    * writing nothing, when the target is the block or below it.
    */
-  const moveBlock = (id: number, target: number, placement: MovePlacement) => {
+  const moveBlock = (
+    id: number,
+    target: number,
+    placement: MovePlacement,
+    options: MoveTaskOptions = {},
+  ) => {
     const targetBlock = blocks.get(target) as StoredBlock;
     if (id === target || isBelow(target, id)) {
       throw new Error(`block ${target} is block ${id} or below it`);
     }
+    // The setting cleared in the same write: one undo (#222).
     write(() => {
+      if (options.clearProject) {
+        (blocks.get(id) as StoredBlock).projectValues = [];
+      }
       const inMoved = (blockId: number) =>
         blockId === id || isBelow(blockId, id);
       const ordered = [...blocks.entries()].sort(
@@ -552,13 +565,45 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       moves.push({ id, target, placement });
     },
 
-    async moveTaskToProjectEnd(id, project) {
+    async moveTaskToProjectEnd(id, project, options) {
       taskToWrite(id);
       if (!blocks.get(project)?.project || projectTagPaused) {
         throw new Error(`block ${project} is not a project`);
       }
-      moveBlock(id, project, "lastChild");
+      moveBlock(id, project, "lastChild", options);
       moves.push({ id, projectEnd: project });
+    },
+
+    async moveTaskToJournal(id, now, options) {
+      taskToWrite(id);
+      // get-journal-block picks the journal by local date and creates a
+      // missing one, outside the write (journal-capture J2, J3).
+      const day = {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate(),
+      };
+      const key = `${day.year}-${day.month}-${day.day}`;
+      let journal = journalBlocks.get(key);
+      if (journal === undefined) {
+        journal = nextId++;
+        journalBlocks.set(key, journal);
+        store(journal, {
+          text: "",
+          created: now,
+          parentId: undefined,
+          position: positionOf(undefined),
+          notConvertible: "journal-or-orphan",
+          task: undefined,
+          completionHistory: undefined,
+          myDay: undefined,
+          page: false,
+          tags: [],
+          project: undefined,
+        });
+      }
+      moveBlock(id, journal, "lastChild", options);
+      journalDays.set(id, day);
     },
 
     addMirror(id, sourceId) {

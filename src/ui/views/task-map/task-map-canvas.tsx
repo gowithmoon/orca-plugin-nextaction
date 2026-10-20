@@ -59,7 +59,11 @@ import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
 import { EndpointMarker } from "./endpoint-marker";
 import { SequentialToggle } from "./sequential-toggle";
-import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
+import {
+  mapAreaDropAttributes,
+  mapDropAttributes,
+  useMapCardDrag,
+} from "./task-map-drag";
 import { useTaskMapEdits } from "./task-map-edits";
 import { type EndpointMarkers, endpointMarkers } from "./task-map-filter";
 import {
@@ -1111,6 +1115,11 @@ export function TaskMapCanvas(props: {
                   data-kind={area.kind}
                   data-map-key={key}
                   data-collapsed={folded || undefined}
+                  {...mapAreaDropAttributes(
+                    area.kind === "project"
+                      ? { kind: "project", project: area.project.id }
+                      : { kind: "noProject" },
+                  )}
                   style={placeStyle(placed.layout.get(key))}
                 >
                   <AreaHead area={area} look={look} />
