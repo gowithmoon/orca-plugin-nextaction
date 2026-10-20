@@ -28,6 +28,10 @@ import type { TaskActions } from "../../hooks/use-task-actions";
 import { projectStatusIcons } from "../../project-menu/project-status-icons";
 import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { useCanvasInput } from "./canvas-input";
+import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
+import { DependencyBadgeButton } from "./dependency-popover";
+import { SequentialToggle } from "./sequential-toggle";
+import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
 import type { CanvasView } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -135,6 +139,12 @@ function MapCard(props: { node: TaskMapNode; deps: CardDeps }) {
       blocked={node.blocked}
       kept={node.faded}
       keptStatusShown={false}
+      // A box's head switches sequential (#220).
+      buttons={
+        node.children.length > 0 ? (
+          <SequentialToggle task={node.task} />
+        ) : undefined
+      }
       footer={
         total > 0 ? (
           <span className="nextaction-task-map-count">
@@ -158,37 +168,59 @@ function placeStyle(box: LayoutBox | undefined): React.CSSProperties {
 function MapNode(props: {
   node: TaskMapNode;
   layout: ReadonlyMap<string, LayoutBox>;
+  badges: ReadonlyMap<TaskId, DependencyBadge>;
   deps: CardDeps;
+  /** Its parent task is sequential (#216: where a drop on it goes). */
+  inSequence?: boolean;
 }) {
-  const { node, layout, deps } = props;
+  const { node, layout, badges, deps } = props;
   const box = layout.get(taskKey(node.task.id));
+  const drag = useMapCardDrag(node.task);
+  const drop = mapDropAttributes(node.task, props.inSequence ?? false);
+  const badge = badges.get(node.task.id);
+  const badgeButton = badge && (
+    <DependencyBadgeButton node={node} badge={badge} />
+  );
   if (node.children.length === 0) {
     return (
       <div
+        {...drag}
+        {...drop}
         className="nextaction-task-map-card"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
         style={placeStyle(box)}
       >
         <MapCard node={node} deps={deps} />
+        {badgeButton}
       </div>
     );
   }
   return (
     <div
+      {...drop}
       className="nextaction-task-map-box"
       data-sequential={node.sequential || undefined}
       style={placeStyle(box)}
     >
       <div
+        {...drag}
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
       >
         <MapCard node={node} deps={deps} />
+        {badgeButton}
       </div>
       {node.children.map((child) => (
-        <MapNode key={child.task.id} node={child} layout={layout} deps={deps} />
+        <MapNode
+          key={child.task.id}
+          node={child}
+          layout={layout}
+          badges={badges}
+          deps={deps}
+          inSequence={node.sequential}
+        />
       ))}
     </div>
   );
@@ -251,7 +283,6 @@ function dependencyKind(edge: TaskMapDependencyEdge): ArrowKind {
 function Arrows(props: {
   edges: readonly TaskMapEdge[];
   dependencies: readonly TaskMapDependencyEdge[];
-  delays: ReadonlyMap<TaskId, number>;
   boxes: ReadonlyMap<string, LayoutBox>;
   heads: Sizes;
   width: number;
@@ -346,20 +377,6 @@ function Arrows(props: {
           />
         ) : null;
       })}
-      {[...props.delays].map(([id, days]) => {
-        const end = entry(id);
-        return end ? (
-          <text
-            key={`delay-${id}`}
-            className="nextaction-task-map-delay"
-            x={end.x - 10}
-            y={end.y - 6}
-            textAnchor="end"
-          >
-            {t("+${days}d", { days: String(days) })}
-          </text>
-        ) : null;
-      })}
     </svg>
   );
 }
@@ -384,6 +401,11 @@ export function TaskMapCanvas(props: {
   const world = React.useRef<HTMLDivElement | null>(null);
   const measure = React.useRef<HTMLDivElement | null>(null);
   const nodes = React.useMemo(() => allNodes(read), [read]);
+  // "Any" and "+N days" where a dependent's arrows come in (#220).
+  const badges = React.useMemo(
+    () => dependencyBadges(nodes, read.dependencyEdges),
+    [nodes, read],
+  );
   /** The cards' sizes, measured for `read`; `null` while measuring. */
   const [measured, setMeasured] = React.useState<{
     read: TaskMapRead;
@@ -424,14 +446,7 @@ export function TaskMapCanvas(props: {
       const size = sizes.get(node.task.id);
       if (node.children.length > 0 && size) heads.set(node.task.id, size);
     }
-    // "+N days" where a delayed task's dependency arrows come in.
-    const delays = new Map<TaskId, number>();
-    for (const node of nodes) {
-      if (node.dependencyDelay > 0) {
-        delays.set(node.task.id, node.dependencyDelay);
-      }
-    }
-    return { layout, boxes: worldBoxes(read, layout), root, heads, delays };
+    return { layout, boxes: worldBoxes(read, layout), root, heads };
   }, [read, sizes, nodes]);
 
   const content = React.useMemo(
@@ -487,6 +502,7 @@ export function TaskMapCanvas(props: {
                   key={node.task.id}
                   node={node}
                   layout={placed.layout}
+                  badges={badges}
                   deps={deps}
                 />
               ))}
@@ -496,7 +512,6 @@ export function TaskMapCanvas(props: {
           <Arrows
             edges={read.sequenceEdges}
             dependencies={read.dependencyEdges}
-            delays={placed.delays}
             boxes={placed.boxes}
             heads={placed.heads}
             width={placed.root.width}
