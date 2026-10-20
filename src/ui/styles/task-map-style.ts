@@ -5,8 +5,10 @@
 // the sequence and dependency arrows (#215) on an SVG layer above the
 // cards, a card on a dependency cycle outlined red; the endpoint markers
 // (#217) at a card's entry and exit; the connector, preview line and
-// selected arrow of drawing and deleting dependencies (#219). Orca's CSS
-// variables only, so both themes follow them.
+// selected arrow of drawing and deleting dependencies (#219); the selected
+// task's chain highlighted, the rest faded, and the boxes moving to a new
+// layout in a short transition (#218). Orca's CSS variables only, so both
+// themes follow them.
 import { cardWidth } from "../views/task-map/task-map-canvas";
 
 export const taskMapCss = `
@@ -548,5 +550,57 @@ export const taskMapCss = `
 
 .nextaction-task-map-endpoint-id {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A task selected (#218): its chain stays, everything else faded; the
+ * selected card outlined in the primary color.
+ */
+.nextaction-task-map [data-dim] {
+  opacity: 0.25;
+}
+
+.nextaction-task-map-arrow[data-dim] {
+  opacity: 0.12;
+}
+
+.nextaction-task-map [data-chosen] > .nextaction-task-card {
+  border-color: var(--orca-color-primary-5);
+  outline: 2px solid var(--orca-color-primary-5);
+}
+
+/* A collapsed project box shows only its head. */
+.nextaction-task-map-area-head .nextaction-task-map-collapse {
+  margin-left: -6px;
+}
+
+/* Laid out again (#218): the world shifts and the boxes move alike. */
+.nextaction-task-map-world[data-relayout],
+.nextaction-task-map-world[data-relayout] :is(
+    .nextaction-task-map-area,
+    .nextaction-task-map-box,
+    .nextaction-task-map-card
+  ) {
+  transition-duration: 240ms;
+  transition-timing-function: ease-out;
+}
+
+.nextaction-task-map-world[data-relayout] {
+  transition-property: transform;
+}
+
+.nextaction-task-map-world[data-relayout] :is(
+    .nextaction-task-map-area,
+    .nextaction-task-map-box,
+    .nextaction-task-map-card
+  ) {
+  transition-property: left, top, width, height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nextaction-task-map-world[data-relayout],
+  .nextaction-task-map-world[data-relayout] * {
+    transition: none;
+  }
 }
 `;
