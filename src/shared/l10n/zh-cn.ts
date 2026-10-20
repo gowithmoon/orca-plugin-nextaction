@@ -797,6 +797,13 @@ const zhCN: Record<string, string> = {
   "${done}/${total} done": "已完成 ${done}/${total}",
   // The task map's sequential switch and dependency badge (#220).
   "Dependency mode and delay": "依赖模式与依赖延迟",
+  // The task map's filter and endpoint markers (#217).
+  "All projects": "全部项目",
+  "Show done": "显示已完成",
+  "Show tasks with no relation": "显示无关系的任务",
+  "Depends on tasks not shown": "依赖了图上未显示的任务",
+  "Tasks not shown depend on it": "图上未显示的任务依赖它",
+  "Shown with: ${conditions}": "显示条件：${conditions}",
 };
 
 export default zhCN;

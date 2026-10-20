@@ -3,7 +3,8 @@
 // project boxes, the no-project area and the parent tasks' boxes placed
 // absolutely by the layout; fixed-width cards, their text up to two lines;
 // the sequence and dependency arrows (#215) on an SVG layer above the
-// cards, a card on a dependency cycle outlined red. Orca's CSS variables
+// cards, a card on a dependency cycle outlined red; the endpoint markers
+// (#217) at a card's entry and exit. Orca's CSS variables
 // only, so both themes follow them.
 import { cardWidth } from "../views/task-map/task-map-canvas";
 
@@ -322,5 +323,74 @@ export const taskMapCss = `
 [data-nextaction-map-drop][data-in-sequence][data-drop-over="after"]::after {
   left: auto;
   right: -25px;
+}
+
+/*
+ * The endpoint markers (#217): a dependency's end whose other end is not on
+ * the map. The entry left of the card, above the dependency badge when there
+ * is one; the exit right of it. Dashed, so it reads as an arrow cut short.
+ */
+.nextaction-task-map-endpoint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 3px;
+  height: 18px;
+  border: 1px dashed var(--orca-color-text-3);
+  border-radius: var(--orca-radius-sm);
+  background-color: var(--orca-color-bg-1);
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.nextaction-task-map-endpoint[data-side="in"] {
+  right: calc(100% + 6px);
+}
+
+.nextaction-task-map-endpoint[data-side="in"][data-badged] {
+  top: calc(50% - 20px);
+}
+
+.nextaction-task-map-endpoint[data-side="out"] {
+  left: calc(100% + 6px);
+}
+
+.nextaction-task-map-endpoint:hover {
+  color: var(--orca-color-text-1);
+  border-color: var(--orca-color-primary-5);
+}
+
+.nextaction-task-map-endpoint:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-task-map-endpoint-tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  max-width: 20em;
+}
+
+.nextaction-task-map-endpoint-tip-head,
+.nextaction-task-map-endpoint-reveal,
+.nextaction-task-map-endpoint-id {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-task-map-endpoint-reveal {
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-task-map-endpoint-id {
+  font-variant-numeric: tabular-nums;
 }
 `;

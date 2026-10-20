@@ -4,7 +4,9 @@
 // box and card is placed absolutely inside its own box, as the layout gives
 // them relative to their container. One CSS transform on the world pans and
 // zooms (canvas-input.ts); an SVG layer above the cards draws the sequence
-// and dependency arrows (#215). Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// and dependency arrows (#215); a dependency whose other end is not on the
+// map is an endpoint marker on the card instead (#217, endpoint-marker.tsx).
+// A task an endpoint marker revealed is centered once laid out. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type {
   TaskMapArea,
@@ -30,8 +32,10 @@ import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { useCanvasInput } from "./canvas-input";
 import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
+import { EndpointMarker } from "./endpoint-marker";
 import { SequentialToggle } from "./sequential-toggle";
 import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
+import { type EndpointMarkers, endpointMarkers } from "./task-map-filter";
 import type { CanvasView } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -169,17 +173,27 @@ function MapNode(props: {
   node: TaskMapNode;
   layout: ReadonlyMap<string, LayoutBox>;
   badges: ReadonlyMap<TaskId, DependencyBadge>;
+  markers: EndpointMarkers;
   deps: CardDeps;
   /** Its parent task is sequential (#216: where a drop on it goes). */
   inSequence?: boolean;
 }) {
-  const { node, layout, badges, deps } = props;
+  const { node, layout, badges, markers, deps } = props;
   const box = layout.get(taskKey(node.task.id));
   const drag = useMapCardDrag(node.task);
   const drop = mapDropAttributes(node.task, props.inSequence ?? false);
   const badge = badges.get(node.task.id);
-  const badgeButton = badge && (
-    <DependencyBadgeButton node={node} badge={badge} />
+  const marked = markers.get(node.task.id);
+  const badgeButton = (
+    <>
+      {badge && <DependencyBadgeButton node={node} badge={badge} />}
+      {marked && (
+        <>
+          <EndpointMarker side="in" endpoints={marked.in} badged={!!badge} />
+          <EndpointMarker side="out" endpoints={marked.out} />
+        </>
+      )}
+    </>
   );
   if (node.children.length === 0) {
     return (
@@ -218,6 +232,7 @@ function MapNode(props: {
           node={child}
           layout={layout}
           badges={badges}
+          markers={markers}
           deps={deps}
           inSequence={node.sequential}
         />
@@ -394,9 +409,11 @@ function allNodes(read: TaskMapRead): TaskMapNode[] {
 export function TaskMapCanvas(props: {
   read: TaskMapRead;
   store: MemoryStore<CanvasView | null>;
+  /** A task to center on once laid out; cleared when centered. */
+  locate: MemoryStore<TaskId | null>;
   deps: CardDeps;
 }) {
-  const { read, store, deps } = props;
+  const { read, store, locate, deps } = props;
   const viewport = React.useRef<HTMLElement | null>(null);
   const world = React.useRef<HTMLDivElement | null>(null);
   const measure = React.useRef<HTMLDivElement | null>(null);
@@ -406,6 +423,8 @@ export function TaskMapCanvas(props: {
     () => dependencyBadges(nodes, read.dependencyEdges),
     [nodes, read],
   );
+  // Where a dependency's other end is not on the map (#217).
+  const markers = React.useMemo(() => endpointMarkers(read.endpoints), [read]);
   /** The cards' sizes, measured for `read`; `null` while measuring. */
   const [measured, setMeasured] = React.useState<{
     read: TaskMapRead;
@@ -456,6 +475,34 @@ export function TaskMapCanvas(props: {
   );
   const input = useCanvasInput({ viewport, world, store, content });
 
+  // An endpoint marker's other end, centered once the map shows it.
+  const located = React.useSyncExternalStore(locate.subscribe, locate.current);
+  const { centerOn } = input;
+  // The map laid out when it was asked for: one read later it should show.
+  const askedOn = React.useRef<typeof placed>(null);
+  React.useLayoutEffect(() => {
+    if (located === null) {
+      askedOn.current = null;
+      return;
+    }
+    if (!placed) return;
+    const box = placed.boxes.get(taskKey(located));
+    if (!box) {
+      // Still not shown after the read that should show it: given up.
+      if (askedOn.current === null) askedOn.current = placed;
+      else if (askedOn.current !== placed) locate.set(null);
+      return;
+    }
+    const head = placed.heads.get(located);
+    centerOn({
+      x: box.x + box.width / 2,
+      y: head
+        ? box.y + boxPadding.top + head.height / 2
+        : box.y + box.height / 2,
+    });
+    locate.set(null);
+  }, [located, placed, centerOn, locate]);
+
   return (
     <section
       ref={viewport}
@@ -503,6 +550,7 @@ export function TaskMapCanvas(props: {
                   node={node}
                   layout={placed.layout}
                   badges={badges}
+                  markers={markers}
                   deps={deps}
                 />
               ))}
