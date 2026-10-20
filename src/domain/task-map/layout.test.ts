@@ -144,6 +144,41 @@ describe("task map layout", () => {
     expect(placed(layout, "q")).toMatchObject({ x: 172, y: 48 });
   });
 
+  it("layers dependencies left to right by the longest path, a shortcut edge not pulling a card back", () => {
+    // c depends on a and on b; b depends on a: c goes two layers right.
+    const layout = layoutTaskMap(box("p", [leaf("c"), leaf("b"), leaf("a")]), [
+      { from: "a", to: "c" },
+      { from: "a", to: "b" },
+      { from: "b", to: "c" },
+    ]);
+
+    expect(placed(layout, "a")).toMatchObject({ x: 8 });
+    expect(placed(layout, "b")).toMatchObject({ x: 156 });
+    expect(placed(layout, "c")).toMatchObject({ x: 304 });
+  });
+
+  it("orders boxes by the dependencies lifted from deep inside them, each pair of boxes once", () => {
+    // In the root, p holds a parent task box pa holding a; q holds b and c,
+    // both depending on a: q goes right of p.
+    const layout = layoutTaskMap(
+      box("root", [
+        box("q", [leaf("b"), leaf("c")]),
+        box("p", [box("pa", [leaf("a")])]),
+      ]),
+      [
+        { from: "a", to: "b" },
+        { from: "a", to: "c" },
+      ],
+    );
+
+    expect(placed(layout, "p")).toMatchObject({ x: 8, y: 48 });
+    // p: 8 + pa (8 + 100 + 8) + 8 = 132 wide; 8 + 132 + 48.
+    expect(placed(layout, "q")).toMatchObject({ x: 188 });
+    // Inside q, b and c share a layer: nothing between them orders them.
+    expect(placed(layout, "b")).toMatchObject({ x: 8, y: 48 });
+    expect(placed(layout, "c")).toMatchObject({ x: 8, y: 104 });
+  });
+
   it("still lays out every child of a box when its edges make a cycle", () => {
     const layout = layoutTaskMap(box("p", [leaf("a"), leaf("b"), leaf("c")]), [
       { from: "a", to: "b" },
