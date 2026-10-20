@@ -31,6 +31,7 @@ import { useCanvasInput } from "./canvas-input";
 import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
 import { SequentialToggle } from "./sequential-toggle";
+import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
 import type { CanvasView } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -169,9 +170,13 @@ function MapNode(props: {
   layout: ReadonlyMap<string, LayoutBox>;
   badges: ReadonlyMap<TaskId, DependencyBadge>;
   deps: CardDeps;
+  /** Its parent task is sequential (#216: where a drop on it goes). */
+  inSequence?: boolean;
 }) {
   const { node, layout, badges, deps } = props;
   const box = layout.get(taskKey(node.task.id));
+  const drag = useMapCardDrag(node.task);
+  const drop = mapDropAttributes(node.task, props.inSequence ?? false);
   const badge = badges.get(node.task.id);
   const badgeButton = badge && (
     <DependencyBadgeButton node={node} badge={badge} />
@@ -179,6 +184,8 @@ function MapNode(props: {
   if (node.children.length === 0) {
     return (
       <div
+        {...drag}
+        {...drop}
         className="nextaction-task-map-card"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
@@ -191,11 +198,13 @@ function MapNode(props: {
   }
   return (
     <div
+      {...drop}
       className="nextaction-task-map-box"
       data-sequential={node.sequential || undefined}
       style={placeStyle(box)}
     >
       <div
+        {...drag}
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
         data-cycle={node.cycle || undefined}
@@ -210,6 +219,7 @@ function MapNode(props: {
           layout={layout}
           badges={badges}
           deps={deps}
+          inSequence={node.sequential}
         />
       ))}
     </div>

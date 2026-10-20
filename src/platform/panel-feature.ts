@@ -362,6 +362,7 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       stores: taskMap,
+      moveTask,
       edits: {
         setSequential: createSetSequential({ repository }),
         setDependencyMode: createSetDependencyMode({ repository }),
