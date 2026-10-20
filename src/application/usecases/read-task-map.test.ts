@@ -398,12 +398,10 @@ describe("read task map, project filter", () => {
     const read = await readTaskMap({ projects: ["none"] });
 
     expect(read.areas).toEqual([]);
-    expect(read.projects.map((project) => [project.id, project.text])).toEqual(
-      [
-        [1, "Move house"],
-        [3, "Garden"],
-      ],
-    );
+    expect(read.projects.map((project) => [project.id, project.text])).toEqual([
+      [1, "Move house"],
+      [3, "Garden"],
+    ]);
   });
 });
 
@@ -428,7 +426,10 @@ describe("read task map, tasks with no relation", () => {
     const shown = await readTaskMap({ showUnrelated: true });
 
     expect(areas(hidden)).toEqual([[null, [3, 4, [5, [6]], 7]]]);
-    expect(areas(shown)).toEqual([[10, [1]], [null, [2, 3, 4, [5, [6]], 7]]]);
+    expect(areas(shown)).toEqual([
+      [10, [1]],
+      [null, [2, 3, 4, [5, [6]], 7]],
+    ]);
   });
 });
 
