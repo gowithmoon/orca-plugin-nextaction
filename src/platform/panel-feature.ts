@@ -27,6 +27,8 @@ import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
 import { createReadTaskMap } from "../application/usecases/read-task-map";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
+import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
+import { createSetSequential } from "../application/usecases/set-sequential";
 import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import { createWriteAiSummary } from "../application/usecases/write-ai-summary";
@@ -360,6 +362,12 @@ export function createPanelFeature(deps: {
       taskActions: deps.taskActions,
       menuItems: deps.menuItems,
       stores: taskMap,
+      moveTask,
+      edits: {
+        setSequential: createSetSequential({ repository }),
+        setDependencyMode: createSetDependencyMode({ repository }),
+        editTask: createEditTask({ repository }),
+      },
     }),
   );
   const readReview = createReadReview({
