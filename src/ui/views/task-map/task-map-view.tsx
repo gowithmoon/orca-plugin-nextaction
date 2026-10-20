@@ -2,11 +2,14 @@
 // project's box or the no-project area, nested by block, drawn on a canvas
 // that pans and zooms (task-map-canvas.tsx). It reads when the plugin panel
 // opens and again on every task change signal (ADR 0007). The task panel
-// opens in its popup. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// opens in its popup. The header's filter button chooses the projects and
+// the two toggles (#217), kept in the task map's stores; each change reads
+// again. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { MoveTask } from "../../../application/usecases/move-task";
 import type {
   ReadTaskMap,
+  TaskMapEndpoint,
   TaskMapRead,
 } from "../../../application/usecases/read-task-map";
 import type { CalendarDate } from "../../../domain/task/task";
@@ -33,9 +36,12 @@ import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import { type AreaDropDeps, useAreaDrop } from "./area-drop";
+import { EndpointMarkerProvider } from "./endpoint-marker";
 import { TaskMapCanvas } from "./task-map-canvas";
 import { TaskMapDragArea } from "./task-map-drag";
 import { type TaskMapEditsDeps, TaskMapEditsProvider } from "./task-map-edits";
+import { revealed } from "./task-map-filter";
+import { TaskMapFilterButton } from "./task-map-filter-button";
 import type { TaskMapStores } from "./task-map-stores";
 
 export interface TaskMapViewDeps {
@@ -48,7 +54,7 @@ export interface TaskMapViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
-  /** The pan and zoom, kept while the plugin instance lives. */
+  /** The pan and zoom and the filter, kept while the plugin instance lives. */
   stores: TaskMapStores;
   /** Dragging a card onto another card or a box (#216). */
   moveTask: MoveTask;
@@ -71,6 +77,17 @@ function TaskMapContent(props: {
   const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
   const today = deps.today();
   const menuItems = deps.menuItems();
+  const { filter, locate } = deps.stores;
+  const markerDeps = React.useMemo(
+    () => ({
+      projects: state.kind === "loaded" ? state.data.projects : [],
+      reveal: (endpoint: TaskMapEndpoint) => {
+        locate.set(endpoint.other.id);
+        filter.set(revealed(filter.current(), endpoint.reveal));
+      },
+    }),
+    [state, filter, locate],
+  );
   const cardDeps = React.useMemo(
     () => ({
       today,
@@ -97,7 +114,9 @@ function TaskMapContent(props: {
     );
   }
   if (state.data.areas.length === 0) {
-    return (
+    return filter.current().projects.length > 0 ? (
+      <ViewNotice icon="ti ti-filter" title={t("No tasks match the filter")} />
+    ) : (
       <ViewNotice
         icon="ti ti-sitemap"
         title={t("No tasks to show")}
@@ -108,11 +127,14 @@ function TaskMapContent(props: {
   return (
     <TaskMapEditsProvider deps={deps.edits} notify={deps.taskActions.notify}>
       <TaskMapDragArea onMove={moveTask} onAreaDrop={areaDrop.onAreaDrop}>
-        <TaskMapCanvas
-          read={state.data}
-          store={deps.stores.view}
-          deps={cardDeps}
-        />
+        <EndpointMarkerProvider deps={markerDeps}>
+          <TaskMapCanvas
+            read={state.data}
+            store={deps.stores.view}
+            locate={locate}
+            deps={cardDeps}
+          />
+        </EndpointMarkerProvider>
       </TaskMapDragArea>
       {areaDrop.window}
     </TaskMapEditsProvider>
@@ -120,14 +142,38 @@ function TaskMapContent(props: {
 }
 
 export function createTaskMapView(deps: TaskMapViewDeps): PanelView {
-  const query = createViewQuery(() => deps.readTaskMap(), deps.changes);
+  const { filter } = deps.stores;
+  const query = createViewQuery(
+    () => deps.readTaskMap(filter.current()),
+    deps.changes,
+  );
+  // Lives as long as the stores and the query do: the plugin instance.
+  filter.subscribe(() => query.reload());
+
+  function TaskMapHeaderFilter() {
+    const state = useViewQuery(query);
+    const current = React.useSyncExternalStore(
+      filter.subscribe,
+      filter.current,
+    );
+    // The choices from the last read; none yet while loading.
+    const projects = React.useRef<TaskMapRead["projects"]>([]);
+    if (state.kind === "loaded") projects.current = state.data.projects;
+    return (
+      <TaskMapFilterButton
+        filter={current}
+        projects={projects.current}
+        onChange={(next) => filter.set(next)}
+      />
+    );
+  }
 
   function TaskMapView() {
     // The canvas needs the width: tasks open in the task panel's popup.
     useWithoutSidePane(true);
     return (
       <div className="nextaction-task-map">
-        <ViewHeader title={t("Task map")} />
+        <ViewHeader title={t("Task map")} actions={<TaskMapHeaderFilter />} />
         <TaskMapContent query={query} deps={deps} />
       </div>
     );

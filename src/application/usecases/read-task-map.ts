@@ -11,7 +11,7 @@ import {
   analyzeTaskGraph,
   type SnapshotTask,
 } from "../../domain/blocking/task-graph";
-import type { Project } from "../../domain/project/project";
+import type { Project, ProjectId } from "../../domain/project/project";
 import type { Task, TaskId } from "../../domain/task/task";
 import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
@@ -78,6 +78,31 @@ export interface TaskMapRead {
    * (GLOSSARY: 失效依赖) has none.
    */
   readonly dependencyEdges: readonly TaskMapDependencyEdge[];
+  /**
+   * The endpoint markers (#217): a dependency with one end on the map and
+   * the other filtered out or hidden, in note order of the dependent, then
+   * of its dependencies as the notes hold them.
+   */
+  readonly endpoints: readonly TaskMapEndpoint[];
+  /** Every project in note order, for the project filter's choices. */
+  readonly projects: readonly Project[];
+}
+
+/** What shows a task kept off the map: its area chosen, or done tasks shown. */
+export type TaskMapReveal =
+  | { readonly kind: "area"; readonly area: TaskMapAreaChoice }
+  | { readonly kind: "showDone" };
+
+/** A dependency's end on the map whose other end is not. */
+export interface TaskMapEndpoint {
+  /** The task on the map the marker is drawn on. */
+  readonly at: TaskId;
+  /** `in`: it depends on the other; `out`: the other depends on it. */
+  readonly side: "in" | "out";
+  /** The task at the other end. */
+  readonly other: { readonly id: TaskId; readonly text: string };
+  /** Every change needed to show the other end. */
+  readonly reveal: readonly TaskMapReveal[];
 }
 
 /** A dependency drawn on the map. */
@@ -96,7 +121,20 @@ export interface TaskMapEdge {
   readonly to: TaskId;
 }
 
-export type ReadTaskMap = () => Promise<TaskMapRead>;
+/** An area chosen in the project filter: a project, or the no-project area. */
+export type TaskMapAreaChoice = ProjectId | "none";
+
+/** What the map shows (#217), chosen in the view. */
+export interface TaskMapInput {
+  /** The areas shown; empty: every area. */
+  readonly projects: readonly TaskMapAreaChoice[];
+  /** Done tasks shown, faded, where they are. */
+  readonly showDone: boolean;
+  /** Tasks with no relation (GLOSSARY: 无关系的任务) shown. */
+  readonly showUnrelated: boolean;
+}
+
+export type ReadTaskMap = (input: TaskMapInput) => Promise<TaskMapRead>;
 
 export function createReadTaskMap(deps: {
   repository: TaskRepository;
@@ -104,7 +142,9 @@ export function createReadTaskMap(deps: {
   dayBoundary: DayBoundarySetting;
   startPreviewDays: StartPreviewDaysSetting;
 }): ReadTaskMap {
-  return async () => {
+  return async (input) => {
+    const chosen = (area: TaskMapAreaChoice) =>
+      input.projects.length === 0 || input.projects.includes(area);
     const snapshot = await deps.repository.readTaskGraph();
     const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
     const graph = analyzeTaskGraph(snapshot, {
@@ -128,6 +168,16 @@ export function createReadTaskMap(deps: {
                 reason.source === relation.waiting,
             ),
         );
+    // A task with no relation (GLOSSARY: 无关系的任务): no dependency, no
+    // dependent, no parent task, no subtask; a stale dependency holds no
+    // relation.
+    const isDependency = (relation: { kind: string }) =>
+      relation.kind === "dependency";
+    const unrelated = (id: TaskId) =>
+      relations.parentOf(id) === undefined &&
+      relations.childrenOf(id).length === 0 &&
+      !relations.waitsFor(id).some(isDependency) &&
+      !relations.waitersOf(id).some(isDependency);
     const sequenceEdges: TaskMapEdge[] = [];
     // A subtask belongs where its parent task does (ownership.ts): a tree
     // never crosses into another area. A done task is left out, unless
@@ -135,7 +185,9 @@ export function createReadTaskMap(deps: {
     const node = (item: SnapshotTask): TaskMapNode | null => {
       const below = relations.childrenOf(item.task.id);
       const children = below.flatMap((child) => node(child) ?? []);
+      if (!input.showUnrelated && unrelated(item.task.id)) return null;
       if (
+        !input.showDone &&
         item.task.status === "done" &&
         children.length === 0 &&
         !awaitsRelease(item.task.id)
@@ -178,6 +230,7 @@ export function createReadTaskMap(deps: {
       (a, b) => a.position - b.position,
     );
     for (const { project } of projects) {
+      if (!chosen(project.id)) continue;
       const tasks = trees(projectRootTasks(graph, project.id));
       if (tasks.length > 0) areas.push({ kind: "project", project, tasks });
     }
@@ -185,6 +238,7 @@ export function createReadTaskMap(deps: {
       graph.entry(item.task.id)?.project == null;
     const loose = trees(
       relations.tasks.filter((item) => {
+        if (!chosen("none")) return false;
         if (!ownerless(item)) return false;
         const parent = relations.parentOf(item.task.id);
         return parent === undefined || !ownerless(parent);
@@ -217,6 +271,40 @@ export function createReadTaskMap(deps: {
         });
       }
     }
-    return { areas, sequenceEdges, dependencyEdges };
+    // A dependency with one end on the map and the other filtered out or
+    // hidden: a marker on the end shown, never an edge through a hidden task.
+    // The other end depends or is depended on, so it is never a task with no
+    // relation: only its area and the done toggle can keep it off the map.
+    const reveal = (id: TaskId): TaskMapReveal[] => {
+      const out: TaskMapReveal[] = [];
+      const area = graph.entry(id)?.project?.id ?? "none";
+      if (!chosen(area)) out.push({ kind: "area", area });
+      if (lookup(id)?.status === "done" && !input.showDone) {
+        out.push({ kind: "showDone" });
+      }
+      return out;
+    };
+    const other = (id: TaskId) => ({ id, text: lookup(id)?.text ?? "" });
+    const endpoints: TaskMapEndpoint[] = [];
+    for (const item of relations.tasks) {
+      const to = item.task.id;
+      for (const relation of relations.waitsFor(to)) {
+        if (relation.kind !== "dependency") continue;
+        const from = relation.waitingFor;
+        if (shown.has(to) === shown.has(from)) continue;
+        endpoints.push(
+          shown.has(to)
+            ? { at: to, side: "in", other: other(from), reveal: reveal(from) }
+            : { at: from, side: "out", other: other(to), reveal: reveal(to) },
+        );
+      }
+    }
+    return {
+      areas,
+      sequenceEdges,
+      dependencyEdges,
+      endpoints,
+      projects: projects.map((item) => item.project),
+    };
   };
 }

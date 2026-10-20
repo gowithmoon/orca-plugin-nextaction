@@ -12,6 +12,7 @@ import type {
   ReadDependencyCandidates,
 } from "../../application/usecases/read-dependency-candidates";
 import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
+import type { DependencyCycleReason } from "../../domain/blocking/dependency-cycles";
 import type { TaskId } from "../../domain/task/task";
 import type { SelectOption } from "../../orca.d.ts";
 import type { ChangeSignalSource } from "../../shared/change-signal";
@@ -24,19 +25,25 @@ import type { Notify } from "../notify";
 import { BlockRefsField } from "./block-refs-field";
 
 /**
- * Why a candidate cannot be picked, shown after its text; `null` when it can
- * (#60). Orca's `Select` documents no disabled option, so the candidate stays
- * listed with the reason, last, and picking it writes nothing.
+ * Why depending on a task would make a dependency cycle (#60); shared with
+ * the task map's dependency drag (#219), which says it in the same words.
  */
-function cycleText(candidate: DependencyCandidate): string | null {
-  switch (candidate.cycle) {
-    case null:
-      return null;
+export function dependencyCycleText(reason: DependencyCycleReason): string {
+  switch (reason) {
     case "below":
       return t("Would make a dependency cycle: it is below this task");
     case "waits":
       return t("Would make a dependency cycle: it already waits for this task");
   }
+}
+
+/**
+ * Why a candidate cannot be picked, shown after its text; `null` when it can
+ * (#60). Orca's `Select` documents no disabled option, so the candidate stays
+ * listed with the reason, last, and picking it writes nothing.
+ */
+function cycleText(candidate: DependencyCandidate): string | null {
+  return candidate.cycle === null ? null : dependencyCycleText(candidate.cycle);
 }
 
 /** Why depending on a recurring task keeps this one waiting (ADR 0021). */
