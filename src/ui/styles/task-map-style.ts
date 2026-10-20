@@ -169,7 +169,7 @@ export const taskMapCss = `
 }
 
 .nextaction-task-map-arrow[data-kind="conflict"] {
-  stroke: var(--orca-color-warning-5);
+  stroke: var(--orca-color-warning-5, #d9a400);
 }
 
 .nextaction-task-map-arrow[data-kind="cycle"] {
@@ -186,7 +186,7 @@ export const taskMapCss = `
 }
 
 .nextaction-task-map-arrow-head[data-kind="conflict"] {
-  fill: var(--orca-color-warning-5);
+  fill: var(--orca-color-warning-5, #d9a400);
 }
 
 .nextaction-task-map-arrow-head[data-kind="cycle"] {
