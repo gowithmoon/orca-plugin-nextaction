@@ -193,13 +193,90 @@ export const taskMapCss = `
   fill: var(--orca-color-dangerous-5);
 }
 
-/* "+N days" at the entry of a delayed task's dependency arrows. */
-.nextaction-task-map-delay {
+/*
+ * The dependency badge (#220): just left of a dependent's card, where its
+ * arrows come in; "Any" and "+N days" always shown, a quiet one only while
+ * the pointer is on the card (or it has focus, or its popover is open).
+ */
+.nextaction-task-map-card,
+.nextaction-task-map-head {
+  position: relative;
+}
+
+.nextaction-task-map-badge {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px;
+  height: 16px;
+  border: 1px solid var(--orca-color-border);
+  border-radius: var(--orca-radius-sm);
+  background-color: var(--orca-color-bg-1);
+  color: var(--orca-color-text-2);
+  font: inherit;
   font-size: 10px;
-  fill: var(--orca-color-text-2);
-  paint-order: stroke;
-  stroke: var(--orca-color-bg-1);
-  stroke-width: 3px;
-  stroke-linejoin: round;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.nextaction-task-map-badge:hover,
+.nextaction-task-map-badge[data-open] {
+  color: var(--orca-color-text-1);
+  border-color: var(--orca-color-primary-5);
+}
+
+.nextaction-task-map-badge:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-task-map-badge[data-quiet] {
+  padding: 0 2px;
+}
+
+@media (hover: hover) {
+  .nextaction-task-map-badge[data-quiet]:not([data-open], :focus-visible) {
+    opacity: 0;
+  }
+
+  :is(.nextaction-task-map-card, .nextaction-task-map-head):hover
+    > .nextaction-task-map-badge[data-quiet] {
+    opacity: 1;
+  }
+}
+
+/* The sequential switch on a box's head: the primary color while on. */
+.nextaction-task-map-sequential[data-on] {
+  color: var(--orca-color-primary-5);
+  opacity: 1;
+}
+
+.nextaction-task-map-dependency-popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-sm);
+  padding: var(--orca-spacing-sm) var(--orca-spacing-md);
+  min-width: 14em;
+}
+
+.nextaction-task-map-dependency-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+}
+
+.nextaction-task-map-dependency-label {
+  font-size: var(--orca-fontsize-sm);
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-task-map-dependency-popover .nextaction-delay-field > :first-child {
+  flex: 0 0 5em;
 }
 `;

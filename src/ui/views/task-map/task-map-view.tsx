@@ -31,6 +31,7 @@ import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
 import type { PanelView } from "../../panel/panel-views";
 import type { TaskMenuItems } from "../../task-menu/menu-items";
 import { TaskMapCanvas } from "./task-map-canvas";
+import { type TaskMapEditsDeps, TaskMapEditsProvider } from "./task-map-edits";
 import type { TaskMapStores } from "./task-map-stores";
 
 export interface TaskMapViewDeps {
@@ -45,6 +46,8 @@ export interface TaskMapViewDeps {
   menuItems: () => TaskMenuItems | undefined;
   /** The pan and zoom, kept while the plugin instance lives. */
   stores: TaskMapStores;
+  /** Sequential, the dependency mode and delay, edited on the map (#220). */
+  edits: TaskMapEditsDeps;
 }
 
 function TaskMapContent(props: {
@@ -93,7 +96,13 @@ function TaskMapContent(props: {
     );
   }
   return (
-    <TaskMapCanvas read={state.data} store={deps.stores.view} deps={cardDeps} />
+    <TaskMapEditsProvider deps={deps.edits} notify={deps.taskActions.notify}>
+      <TaskMapCanvas
+        read={state.data}
+        store={deps.stores.view}
+        deps={cardDeps}
+      />
+    </TaskMapEditsProvider>
   );
 }
 
