@@ -84,6 +84,8 @@ export interface TaskMapRead {
    * of its dependencies as the notes hold them.
    */
   readonly endpoints: readonly TaskMapEndpoint[];
+  /** Every project in note order, for the project filter's choices. */
+  readonly projects: readonly Project[];
 }
 
 /** What shows a task kept off the map: its area chosen, or done tasks shown. */
@@ -297,6 +299,12 @@ export function createReadTaskMap(deps: {
         );
       }
     }
-    return { areas, sequenceEdges, dependencyEdges, endpoints };
+    return {
+      areas,
+      sequenceEdges,
+      dependencyEdges,
+      endpoints,
+      projects: projects.map((item) => item.project),
+    };
   };
 }

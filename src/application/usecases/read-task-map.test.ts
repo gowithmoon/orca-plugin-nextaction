@@ -388,6 +388,23 @@ describe("read task map, project filter", () => {
       [null, [[5, [6]]]],
     ]);
   });
+
+  it("offers every project to choose from in note order, those filtered out and those with no task shown included", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addProject({ id: 1, status: "active", text: "Move house" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addProject({ id: 3, status: "done", text: "Garden" });
+
+    const read = await readTaskMap({ projects: ["none"] });
+
+    expect(read.areas).toEqual([]);
+    expect(read.projects.map((project) => [project.id, project.text])).toEqual(
+      [
+        [1, "Move house"],
+        [3, "Garden"],
+      ],
+    );
+  });
 });
 
 describe("read task map, tasks with no relation", () => {
