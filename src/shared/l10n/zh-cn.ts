@@ -803,6 +803,13 @@ const zhCN: Record<string, string> = {
   "A task cannot depend on itself": "任务不能依赖自己",
   "Already depends on this task": "已经依赖这个任务",
   "Delete dependency": "删除依赖",
+  // The task map's filter and endpoint markers (#217).
+  "All projects": "全部项目",
+  "Show done": "显示已完成",
+  "Show tasks with no relation": "显示无关系的任务",
+  "Depends on tasks not shown": "依赖了图上未显示的任务",
+  "Tasks not shown depend on it": "图上未显示的任务依赖它",
+  "Shown with: ${conditions}": "显示条件：${conditions}",
 };
 
 export default zhCN;

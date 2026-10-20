@@ -97,6 +97,8 @@ export interface CanvasInput {
   readonly worldStyle: React.CSSProperties;
   /** A point on the screen as a point on the world, for the current view. */
   toWorld(clientX: number, clientY: number): { x: number; y: number };
+  /** Pans so a point of the world is at the window's center, the zoom kept. */
+  centerOn(point: { readonly x: number; readonly y: number }): void;
 }
 
 /**
@@ -309,9 +311,25 @@ export function useCanvasInput(options: {
     [viewport],
   );
 
+  const centerOn = React.useCallback(
+    (point: { readonly x: number; readonly y: number }) => {
+      const element = viewport.current;
+      if (!element) return;
+      const { scale } = live.current;
+      show({
+        x: element.clientWidth / 2 - point.x * scale,
+        y: element.clientHeight / 2 - point.y * scale,
+        scale,
+      });
+      commit();
+    },
+    [viewport, show, commit],
+  );
+
   return {
     handlers,
     worldStyle: { transform: transformOf(live.current) },
     toWorld,
+    centerOn,
   };
 }
