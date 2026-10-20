@@ -400,8 +400,10 @@ export function createReadProjectGantt(deps: {
     const dependenciesOf = (task: Task): RowDependencies => {
       const inside: GanttDependency[] = [];
       const outside: GanttOutsideDependency[] = [];
-      for (const id of task.dependencies) {
-        // Not a task in the graph: a stale dependency, shown nowhere.
+      // A stale dependency is no relation (#208): shown nowhere.
+      for (const relation of graph.relations.waitsFor(task.id)) {
+        if (relation.kind !== "dependency") continue;
+        const id = relation.waitingFor;
         const entry = graph.entry(id);
         if (!entry) continue;
         if (entry.project?.id === scoped.project.id) {
