@@ -7,6 +7,7 @@ import type { CalendarDate, TaskId } from "../../domain/task/task";
 import type { CompletionHistoryRead } from "../ports/task-repository";
 import {
   createReadTaskMap,
+  type TaskMapInput,
   type TaskMapNode,
   type TaskMapRead,
 } from "./read-task-map";
@@ -16,12 +17,16 @@ const morning = "2026-10-09T10:00:00+08:00";
 
 function setup() {
   const repository = createInMemoryTaskRepository();
-  const readTaskMap = createReadTaskMap({
+  const read = createReadTaskMap({
     repository,
     clock: createFixedClock(morning),
     dayBoundary: createFixedDayBoundary(),
     startPreviewDays: createFixedStartPreviewDays(),
   });
+  // Every project, done tasks hidden; tasks with no relation shown unless a
+  // test says otherwise, so the other rules can be read on single tasks.
+  const readTaskMap = (input: Partial<TaskMapInput> = {}) =>
+    read({ projects: [], showDone: false, showUnrelated: true, ...input });
   return { repository, readTaskMap };
 }
 
@@ -359,5 +364,164 @@ describe("read task map, dependency edges", () => {
     const read = await readTaskMap();
 
     expect(edges(read)).toEqual([[1, 2]]);
+  });
+});
+
+describe("read task map, project filter", () => {
+  it("shows only the areas chosen, the no-project area one of them, and every area when none is chosen", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addProject({ id: 1, status: "active" });
+    repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+    repository.addProject({ id: 3, status: "active" });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 3 });
+    repository.addTask({ id: 5, status: "todo" });
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 5 });
+
+    expect(areas(await readTaskMap({ projects: [3] }))).toEqual([[3, [4]]]);
+    expect(areas(await readTaskMap({ projects: [1, "none"] }))).toEqual([
+      [1, [2]],
+      [null, [[5, [6]]]],
+    ]);
+    expect(areas(await readTaskMap({ projects: [] }))).toEqual([
+      [1, [2]],
+      [3, [4]],
+      [null, [[5, [6]]]],
+    ]);
+  });
+});
+
+describe("read task map, tasks with no relation", () => {
+  it("leaves out a task with no dependency, dependent, parent task or subtask, a stale dependency not counting, until shown", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addProject({ id: 10, status: "active" });
+    // Alone in its project's box: no relation.
+    repository.addTask({ id: 1, status: "todo" }, { parentId: 10 });
+    // Only a stale dependency: no relation.
+    repository.addTask({ id: 2, status: "todo", dependencies: [99] });
+    // Depended on, and depending.
+    repository.addTask({ id: 3, status: "todo" });
+    repository.addTask({ id: 4, status: "todo", dependencies: [3] });
+    // A parent task and its subtask; one with only a done subtask.
+    repository.addTask({ id: 5, status: "todo" });
+    repository.addTask({ id: 6, status: "todo" }, { parentId: 5 });
+    repository.addTask({ id: 7, status: "todo" });
+    repository.addTask({ id: 8, status: "done" }, { parentId: 7 });
+
+    const hidden = await readTaskMap({ showUnrelated: false });
+    const shown = await readTaskMap({ showUnrelated: true });
+
+    expect(areas(hidden)).toEqual([[null, [3, 4, [5, [6]], 7]]]);
+    expect(areas(shown)).toEqual([[10, [1]], [null, [2, 3, 4, [5, [6]], 7]]]);
+  });
+});
+
+describe("read task map, endpoint markers", () => {
+  it("marks a dependency whose other end is in a project filtered out, with that task and the area that shows it", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addProject({ id: 10, status: "active" });
+    repository.addTask(
+      { id: 1, status: "todo", text: "Pack boxes" },
+      { parentId: 10 },
+    );
+    repository.addTask({ id: 2, status: "todo", dependencies: [1] });
+    repository.addTask({ id: 3, status: "todo" });
+    repository.addTask(
+      { id: 4, status: "todo", text: "Book van", dependencies: [3] },
+      { parentId: 10 },
+    );
+
+    const read = await readTaskMap({ projects: ["none"] });
+
+    expect(edges(read)).toEqual([]);
+    // In note order of the dependent, as the edges are.
+    expect(read.endpoints).toEqual([
+      {
+        at: 2,
+        side: "in",
+        other: { id: 1, text: "Pack boxes" },
+        reveal: [{ kind: "area", area: 10 }],
+      },
+      {
+        at: 3,
+        side: "out",
+        other: { id: 4, text: "Book van" },
+        reveal: [{ kind: "area", area: 10 }],
+      },
+    ]);
+  });
+
+  it("marks a hidden done task at both ends it links instead of an edge through it, and asks for both where both hide it", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addProject({ id: 10, status: "active" });
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask(
+      { id: 2, status: "done", text: "Measure", dependencies: [1] },
+      { parentId: 10 },
+    );
+    repository.addTask({ id: 3, status: "todo", dependencies: [2] });
+    repository.addTask({ id: 4, status: "done", text: "Call" });
+    repository.addTask({ id: 5, status: "todo", dependencies: [4] });
+
+    const read = await readTaskMap({ projects: ["none"] });
+
+    expect(areas(read)).toEqual([[null, [1, 3, 5]]]);
+    expect(edges(read)).toEqual([]);
+    expect(read.endpoints).toEqual([
+      {
+        at: 1,
+        side: "out",
+        other: { id: 2, text: "Measure" },
+        reveal: [{ kind: "area", area: 10 }, { kind: "showDone" }],
+      },
+      {
+        at: 3,
+        side: "in",
+        other: { id: 2, text: "Measure" },
+        reveal: [{ kind: "area", area: 10 }, { kind: "showDone" }],
+      },
+      {
+        at: 5,
+        side: "in",
+        other: { id: 4, text: "Call" },
+        reveal: [{ kind: "showDone" }],
+      },
+    ]);
+  });
+
+  it("makes no endpoint of a task with no relation, a stale dependency included, nor of a dependency with both ends on the map", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addTask({ id: 1, status: "todo" });
+    repository.addTask({ id: 2, status: "todo", dependencies: [1, 99] });
+    repository.addTask({ id: 3, status: "todo", dependencies: [98] });
+
+    const read = await readTaskMap({ showUnrelated: false });
+
+    expect(areas(read)).toEqual([[null, [1, 2]]]);
+    expect(read.endpoints).toEqual([]);
+  });
+});
+
+describe("read task map, show done", () => {
+  it("shows done tasks in place, faded, and the done subtasks of a sequential parent task on its chain", async () => {
+    const { repository, readTaskMap } = setup();
+    repository.addTask({ id: 1, status: "todo", sequential: true });
+    repository.addTask({ id: 2, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 3, status: "done" }, { parentId: 1 });
+    repository.addTask({ id: 4, status: "todo" }, { parentId: 1 });
+    repository.addTask({ id: 5, status: "done" });
+
+    const hidden = await readTaskMap();
+    const shown = await readTaskMap({ showDone: true });
+
+    expect(areas(hidden)).toEqual([[null, [[1, [4]]]]]);
+    expect(hidden.sequenceEdges).toEqual([]);
+    expect(areas(shown)).toEqual([[null, [[1, [2, 3, 4]], 5]]]);
+    expect(shown.sequenceEdges).toEqual([
+      { from: 2, to: 3 },
+      { from: 3, to: 4 },
+    ]);
+    const [box, done] = shown.areas[0]?.tasks ?? [];
+    expect(box?.children[0]?.faded).toBe(true);
+    expect(done?.faded).toBe(true);
   });
 });
