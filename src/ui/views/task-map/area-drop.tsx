@@ -116,7 +116,7 @@ export function useAreaDrop(
     setPending(null);
     void deps.moveToArea(pending.task.id, pending.target, choice).catch(failed);
   };
-  const window =
+  const areaDropWindow =
     pending &&
     createPortal(
       <AreaDropWindow
@@ -126,7 +126,7 @@ export function useAreaDrop(
       />,
       document.body,
     );
-  return { onAreaDrop, window };
+  return { onAreaDrop, window: areaDropWindow };
 }
 
 function AreaDropWindow(props: {
