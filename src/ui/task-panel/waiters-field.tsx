@@ -1,7 +1,7 @@
 // The task panel's 阻塞 row (#208, GLOSSARY: 它阻塞的任务): the tasks not done
 // waiting for this one directly (its parent task, the later subtasks under a
 // sequential parent, its 后续任务), each with its status icon and, at the
-// row's end, how it waits; a task name switches the task panel to that task.
+// row's end, what it is to this one; a task name switches the task panel to that task.
 // Read only. Hidden when there is none. The list is the shared block
 // reference list, without remove buttons. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
@@ -20,12 +20,12 @@ import { Field } from "./task-panel-fields";
 
 function kindLabel(kind: WaiterKind): string {
   switch (kind) {
-    case "subtask":
-      return t("Subtask");
-    case "sequential":
-      return t("In sequence");
-    case "dependency":
-      return t("Dependency");
+    case "parent":
+      return t("Parent");
+    case "laterInSequence":
+      return t("Later in sequence");
+    case "dependent":
+      return t("Dependent");
   }
 }
 

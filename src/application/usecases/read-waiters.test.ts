@@ -3,14 +3,14 @@ import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repo
 import { createReadWaiters } from "./read-waiters";
 
 describe("read waiters", () => {
-  it("lists the parent task as a subtask waiter, with its text and status", async () => {
+  it("lists the parent task as the parent, with its text and status", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 1, text: "Paint the house", status: "todo" });
     repository.addTask({ id: 2, text: "Buy paint" }, { parentId: 1 });
     const readWaiters = createReadWaiters({ repository });
 
     expect(await readWaiters(2)).toEqual([
-      { id: 1, text: "Paint the house", status: "todo", kinds: ["subtask"] },
+      { id: 1, text: "Paint the house", status: "todo", kinds: ["parent"] },
     ]);
   });
 
@@ -24,14 +24,14 @@ describe("read waiters", () => {
     const readWaiters = createReadWaiters({ repository });
 
     expect(await readWaiters(3)).toEqual([
-      { id: 1, text: "Paint the house", status: "inbox", kinds: ["subtask"] },
+      { id: 1, text: "Paint the house", status: "inbox", kinds: ["parent"] },
       {
         id: 4,
         text: "Paint the walls",
         status: "inbox",
-        kinds: ["sequential"],
+        kinds: ["laterInSequence"],
       },
-      { id: 5, text: "Clean up", status: "inbox", kinds: ["sequential"] },
+      { id: 5, text: "Clean up", status: "inbox", kinds: ["laterInSequence"] },
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("read waiters", () => {
     expect((await readWaiters(2)).map((waiter) => waiter.id)).toEqual([1]);
   });
 
-  it("lists the tasks depending on it as dependency waiters", async () => {
+  it("lists the tasks depending on it as dependents", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 1, text: "Buy paint" });
     repository.addTask({
@@ -58,7 +58,7 @@ describe("read waiters", () => {
     const readWaiters = createReadWaiters({ repository });
 
     expect(await readWaiters(1)).toEqual([
-      { id: 2, text: "Paint the wall", status: "todo", kinds: ["dependency"] },
+      { id: 2, text: "Paint the wall", status: "todo", kinds: ["dependent"] },
     ]);
   });
 
@@ -80,10 +80,10 @@ describe("read waiters", () => {
     expect(
       (await readWaiters(2)).map((waiter) => [waiter.id, waiter.kinds]),
     ).toEqual([
-      [1, ["subtask"]],
-      [3, ["sequential", "dependency"]],
-      [4, ["sequential", "dependency"]],
-      [5, ["dependency"]],
+      [1, ["parent"]],
+      [3, ["laterInSequence", "dependent"]],
+      [4, ["laterInSequence", "dependent"]],
+      [5, ["dependent"]],
     ]);
   });
 
@@ -110,7 +110,7 @@ describe("read waiters", () => {
         id: 4,
         text: "Paint the fence",
         status: "someday",
-        kinds: ["dependency"],
+        kinds: ["dependent"],
       },
     ]);
   });
@@ -132,9 +132,9 @@ describe("read waiters", () => {
       expect(
         (await readWaiters(2)).map((waiter) => [waiter.id, waiter.kinds]),
       ).toEqual([
-        [1, ["subtask"]],
-        [3, ["sequential"]],
-        [4, ["dependency"]],
+        [1, ["parent"]],
+        [3, ["laterInSequence"]],
+        [4, ["dependent"]],
       ]);
     },
   );
@@ -148,8 +148,8 @@ describe("read waiters", () => {
     const readWaiters = createReadWaiters({ repository });
 
     expect(await readWaiters(50)).toEqual([
-      { id: 1, text: "Paint the house", status: "inbox", kinds: ["subtask"] },
-      { id: 3, text: "Paint the wall", status: "inbox", kinds: ["dependency"] },
+      { id: 1, text: "Paint the house", status: "inbox", kinds: ["parent"] },
+      { id: 3, text: "Paint the wall", status: "inbox", kinds: ["dependent"] },
     ]);
   });
 

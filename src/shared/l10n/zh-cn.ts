@@ -270,9 +270,9 @@ const zhCN: Record<string, string> = {
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
   Blocks: "阻塞",
-  Subtask: "子任务",
-  "In sequence": "顺序",
-  Dependency: "依赖",
+  Parent: "父任务",
+  "Later in sequence": "顺序在后",
+  Dependent: "后续任务",
   "Could not read the tasks this one blocks: ${reason}":
     "无法读取它阻塞的任务：${reason}",
   "Dependency mode": "依赖模式",

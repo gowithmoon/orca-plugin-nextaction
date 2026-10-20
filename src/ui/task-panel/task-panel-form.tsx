@@ -104,7 +104,10 @@ export interface TaskPanelFormDeps {
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
-  /** The tasks that depend on the task, for the last row (#208). */
+  /**
+   * The tasks it blocks (its parent task, the later subtasks under a
+   * sequential parent, its 后续任务), for the last row (#208).
+   */
   readWaiters: ReadWaiters;
   /** The task's 所属项目 and where it comes from (#146). */
   readProjectOfTask: ReadProjectOfTask;
