@@ -181,6 +181,7 @@ AI（`orca-ai`，ADR 0026）：
 - 插件自己的元素上，非被动的 `wheel` 监听 `preventDefault` 后，面板不滚动，Ctrl + 滚轮也不会让 Orca 整体缩放；鼠标滚轮每格约 100 像素，触控板两指滑动是带惯性的小像素值，捏合报成 Ctrl + 滚轮的小数值。
 - 指针捕获可用，拖出插件面板后仍收到移动和松开；中键 `preventDefault` 后没有自动滚动；`contextmenu` 拦得住。
 - 插件元素获得焦点时，F、+、-、=、Delete、Backspace、Esc、空格、Tab、Shift+F10 都先到达它，Orca 不先处理。Tab 没有可聚焦的下一个元素时，焦点离开到无处可见，所以插件面板里自己做的 Tab 顺序要在面板内部收住。
+- React 的 `onWheel` 是被动监听，`preventDefault` 不起作用。任务全景图的画布因此在 `ui/views/task-map/canvas-input.ts` 里直接 `addEventListener("wheel", …, { passive: false })`：挂在画布元素上，在组件 effect 中添加、在同一个 effect 的清理函数中移除（见下文"注册与清理"的例外）。架构测试"直接添加 DOM 监听"只对这一个文件开例外，`ui` 的其他文件仍不许直接添加监听。
 
 弹出层（`orca-popup-container`）：
 - `ui` 中的下拉选择、日期选择器和菜单一律用 `ui/components/popup-controls.tsx` 的 `Select`、`DatePicker`、`ContextMenu`，不直接从 `orca.components` 取。Orca 的弹出层没有容器时挂进锚点的 `offsetParent`，并在它的矩形内摆放，在插件窗口里会被窗口截断，在插件面板里会被面板截断（面板窄时子菜单显示不全）；这三个包装默认把弹出层放进窗口或插件面板的弹出层（`usePopupLayer()`），两者之外沿用 Orca 的默认摆放。插件面板的弹出层挂在 `document.body` 下：放在面板里会和面板一起被右边的面板盖住。`tests/architecture.test.ts` 检查这条规矩。

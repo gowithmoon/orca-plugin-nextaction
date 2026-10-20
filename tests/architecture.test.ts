@@ -110,6 +110,10 @@ const rules: ArchitectureRules = {
       name: "adds a DOM event listener directly",
       pattern: /\.\s*addEventListener\b/,
       forbiddenIn: ["domain", "application", "infra", "ui", "shared"],
+      // The task map's canvas needs a non-passive wheel listener on its own
+      // element, which React's onWheel is not; added in an effect, removed
+      // in its cleanup (docs/ARCHITECTURE.md §4 插件面板中的画布).
+      exceptIn: ["src/ui/views/task-map/canvas-input.ts"],
       allowed:
         "listen through platform/registry.ts so unload removes the listener",
     },
