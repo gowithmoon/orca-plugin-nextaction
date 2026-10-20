@@ -504,6 +504,7 @@ const zhCN: Record<string, string> = {
   "This task's completion history cannot be read (${reason}). It is kept as it is and cannot be changed here.":
     "这个任务的完成历史无法读取（${reason}），已原样保留，不能在这里修改。",
   "Could not delete: ${reason}": "无法删除：${reason}",
+  "Could not clear: ${reason}": "无法清除：${reason}",
   "It may have been written by a newer version of this plugin. Once discarded, this version cannot bring it back; you can undo it.":
     "这份数据可能是更新版本的插件写的，丢弃后无法用这个版本恢复；可以撤销。",
   "Could not discard: ${reason}": "无法丢弃：${reason}",

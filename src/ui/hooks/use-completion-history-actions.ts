@@ -41,16 +41,14 @@ export function useCompletionHistoryActions(
 } {
   const [busy, setBusy] = React.useState(false);
   const run = React.useCallback(
-    (write: () => Promise<void>) => {
+    (write: () => Promise<void>, failed: (reason: string) => string) => {
       if (busy) return;
       setBusy(true);
       void (async () => {
         try {
           await write();
         } catch (error) {
-          notifyActionFailure(deps.notify, error, (reason) =>
-            t("Could not delete: ${reason}", { reason }),
-          );
+          notifyActionFailure(deps.notify, error, failed);
           setBusy(false);
           return;
         }
@@ -65,11 +63,19 @@ export function useCompletionHistoryActions(
     [busy, deps, id, onWritten],
   );
   const deleteEntry = React.useCallback(
-    (key: CompletionEntryKey) => run(() => deps.deleteCompletionEntry(id, key)),
+    (key: CompletionEntryKey) =>
+      run(
+        () => deps.deleteCompletionEntry(id, key),
+        (reason) => t("Could not delete: ${reason}", { reason }),
+      ),
     [run, deps, id],
   );
   const clearAll = React.useCallback(
-    () => run(() => deps.clearCompletionHistory(id)),
+    () =>
+      run(
+        () => deps.clearCompletionHistory(id),
+        (reason) => t("Could not clear: ${reason}", { reason }),
+      ),
     [run, deps, id],
   );
   return { deleteEntry, clearAll, busy };

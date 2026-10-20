@@ -16,7 +16,9 @@ import { t } from "../../shared/l10n/l10n";
 import { entryKindText } from "../components/completion-history-text";
 import { formatClock, formatDate } from "../components/format";
 import {
+  createTaskWindow,
   PluginWindow,
+  type TaskWindowProps,
   WindowFooter,
   WindowHeader,
   WindowSpacer,
@@ -122,15 +124,11 @@ function EntryRow(props: {
   );
 }
 
-function CompletionHistoryPopup(props: {
-  read: TaskWithHistory;
-  deps: CompletionHistoryPopupDeps;
-  onClose: () => void;
-  /** Shows the popup afresh for the task as read again. */
-  onReopen: (read: TaskWithHistory) => void;
-}) {
-  const { read, deps, onClose, onReopen } = props;
-  const { task, completionHistory } = read;
+function CompletionHistoryPopup(
+  props: TaskWindowProps<CompletionHistoryPopupDeps, TaskWithHistory>,
+) {
+  const { deps, onClose, onReopen } = props;
+  const { task, completionHistory } = props.task;
   const { Button } = orca.components;
   const idPrefix = React.useId();
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -236,32 +234,10 @@ function CompletionHistoryPopup(props: {
   );
 }
 
-/**
- * The popup in `render`'s root; at most one at a time. Another task, or the
- * same one read again, starts afresh; a replaced popup's late close or
- * reopen does nothing (as `createTaskWindow`, which takes only a task).
- */
+/** The popup in `render`'s root; at most one at a time. */
 export function createCompletionHistoryPopup(options: {
   deps: CompletionHistoryPopupDeps;
   render: (node: React.ReactNode) => void;
 }): OpenCompletionHistoryPopup {
-  let shown = 0;
-  const open: OpenCompletionHistoryPopup = (read) => {
-    shown += 1;
-    const mine = shown;
-    options.render(
-      <CompletionHistoryPopup
-        key={mine}
-        read={read}
-        deps={options.deps}
-        onClose={() => {
-          if (mine === shown) options.render(null);
-        }}
-        onReopen={(again) => {
-          if (mine === shown) open(again);
-        }}
-      />,
-    );
-  };
-  return open;
+  return createTaskWindow(CompletionHistoryPopup, options);
 }
