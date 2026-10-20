@@ -269,6 +269,9 @@ const zhCN: Record<string, string> = {
   "Could not search the blocks: ${reason}": "无法搜索块：${reason}",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
+  Dependents: "后续任务",
+  "Could not read the tasks that depend on this one: ${reason}":
+    "无法读取后续任务：${reason}",
   "Dependency mode": "依赖模式",
   All: "全部",
   Any: "任一",
