@@ -61,7 +61,7 @@ describe("task map chain", () => {
 
     const read = await readTaskMap();
 
-    // 4 also waits for 1, but is neither upstream nor downstream of 3.
+    // 4 also waits for 1, but 3 neither waits for 4 nor has 4 waiting on it.
     expect(shape(taskMapChain(read, 3))).toEqual({
       tasks: [1, 2, 3],
       edges: [
@@ -86,7 +86,7 @@ describe("task map chain", () => {
     const read = await readTaskMap();
     const chain = shape(taskMapChain(read, 3));
 
-    // 1, their parent task, waits for every subtask: reached downstream.
+    // 1, their parent task, waits for every subtask: reached along the tasks waiting on 3.
     expect(chain.tasks).toEqual([1, 2, 3, 4, 5]);
     expect(chain.edges).toEqual([
       [2, 3],
@@ -95,7 +95,7 @@ describe("task map chain", () => {
     ]);
   });
 
-  it("follows a parent task back to every subtask below it, those subtasks waiting for nothing upstream", async () => {
+  it("follows a parent task back to every subtask below it, those subtasks waiting for nothing themselves", async () => {
     const { repository, readTaskMap } = setup();
     repository.addTask({ id: 1, status: "todo" });
     repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });

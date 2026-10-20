@@ -1,8 +1,8 @@
 // A task's chain on the task map (#218): what the map highlights when a card
 // is selected. From the task, along the tasks waiting for it (GLOSSARY: 它阻
 // 塞的任务) to the end, and the other way along what it waits for to the
-// end; the two walks never meet halfway, so a task downstream of one of its
-// upstream tasks is not in it. Pure, over the read map (read-task-map.ts).
+// end; the two walks never meet halfway, so a task waiting for one of the
+// tasks it waits for is not in it. Pure, over the read map (read-task-map.ts).
 import type { TaskId } from "../../domain/task/task";
 import type { TaskMapEdge, TaskMapNode, TaskMapRead } from "./read-task-map";
 
