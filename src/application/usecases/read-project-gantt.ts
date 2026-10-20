@@ -427,8 +427,8 @@ export function createReadProjectGantt(deps: {
       ...dependenciesOf(item.task),
       shiftCount: shiftPlan(item.task.id).length,
     });
-    const rows = projectRootTasks(snapshot, graph, scoped.project.id).flatMap(
-      (root) => rowsOf(tree, root, 0, kept, scoped.project, standing),
+    const rows = projectRootTasks(graph, scoped.project.id).flatMap((root) =>
+      rowsOf(tree, root, 0, kept, scoped.project, standing),
     );
     const project = projectNode(
       projectNodeContext(snapshot, graph, { today, previewDays, boundary }),

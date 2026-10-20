@@ -399,12 +399,11 @@ export interface TaskTree {
  */
 function scopedTaskTree(
   tree: TaskTree,
-  snapshot: TaskGraphSnapshot,
   graph: TaskGraph,
   project: ProjectId,
 ): TaskTree {
   return {
-    topLevel: projectRootTasks(snapshot, graph, project).map((item) => ({
+    topLevel: projectRootTasks(graph, project).map((item) => ({
       kind: "task",
       item,
     })),
@@ -418,7 +417,6 @@ function scopedTaskTree(
  * order. Shared with the project board (#166).
  */
 export function projectRootTasks(
-  snapshot: TaskGraphSnapshot,
   graph: TaskGraph,
   project: ProjectId,
 ): SnapshotTask[] {
@@ -896,12 +894,7 @@ export function createReadAllTasks(deps: {
         ? {
             ...context,
             scope: scoped.project.id,
-            tree: scopedTaskTree(
-              context.tree,
-              snapshot,
-              graph,
-              scoped.project.id,
-            ),
+            tree: scopedTaskTree(context.tree, graph, scoped.project.id),
           }
         : context,
       narrow,
