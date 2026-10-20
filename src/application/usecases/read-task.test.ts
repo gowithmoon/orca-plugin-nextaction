@@ -54,6 +54,30 @@ describe("read task for the task panel", () => {
     ]);
   });
 
+  it.each([
+    [
+      "readable",
+      {
+        kind: "readable",
+        history: [
+          {
+            at: new Date("2026-10-12T01:00:00.000Z"),
+            day: { year: 2026, month: 10, day: 12 },
+          },
+        ],
+      },
+    ],
+    ["unreadable", { kind: "unreadable", reason: "unknown version 2" }],
+  ] as const)("reads the task's completion history, %s", async (_, completionHistory) => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 40, status: "todo" }, { completionHistory });
+    const readTaskForPanel = createReadTaskForPanel({ repository });
+
+    expect((await readTaskForPanel(40))?.completionHistory).toEqual(
+      completionHistory,
+    );
+  });
+
   it("reads a block that is not a task as null", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addBlock(41);

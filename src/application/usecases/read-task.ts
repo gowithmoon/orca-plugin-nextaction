@@ -6,7 +6,10 @@ import {
   emptyCustomPropertyValue,
 } from "../../domain/task/custom-property";
 import type { Task, TaskId } from "../../domain/task/task";
-import type { TaskRepository } from "../ports/task-repository";
+import type {
+  CompletionHistoryRead,
+  TaskRepository,
+} from "../ports/task-repository";
 
 /** The task `id`, or `null` when the block is not a task. Errors are thrown as they are. */
 export type ReadTask = (id: TaskId) => Promise<Task | null>;
@@ -44,6 +47,8 @@ export interface TaskForPanel {
    * Orca's order, each with this task's value.
    */
   readonly customProperties: readonly TaskCustomProperty[];
+  /** Its completion history (GLOSSARY: 完成历史, #209). */
+  readonly completionHistory: CompletionHistoryRead;
 }
 
 /**
@@ -56,8 +61,12 @@ export function createReadTaskForPanel(deps: {
   repository: TaskRepository;
 }): ReadTaskForPanel {
   return async (id) => {
-    // One read of the definitions for both the values and the rows.
-    const read = await deps.repository.getTaskWithDefinitions(id);
+    // One read of the definitions for both the values and the rows; the
+    // completion history alongside (a block that is not a task reads empty).
+    const [read, completionHistory] = await Promise.all([
+      deps.repository.getTaskWithDefinitions(id),
+      deps.repository.readCompletionHistory(id),
+    ]);
     if (!read) return null;
     const { task, definitions } = read;
     const values = definitions.map((definition) => {
@@ -84,6 +93,7 @@ export function createReadTaskForPanel(deps: {
         : new Map<number, string>();
     return {
       task,
+      completionHistory,
       customProperties: values.map((property) =>
         property.value.kind === "blockRefs"
           ? {
