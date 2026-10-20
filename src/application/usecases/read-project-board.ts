@@ -265,7 +265,7 @@ export function createReadProjectBoard(deps: {
     );
     if (!scoped) return { kind: "noProject" };
     const allRoots = projectRootTasks(snapshot, graph, scoped.project.id);
-    const tree = buildTaskTree(snapshot);
+    const tree = buildTaskTree(snapshot, graph.relations);
     const compare = comparator(
       options.sort ?? "score",
       options.direction ?? "ascending",

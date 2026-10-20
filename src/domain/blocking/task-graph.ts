@@ -22,7 +22,7 @@ import type {
 } from "../task/task";
 import { addDays, compareDays } from "../time/calendar-days";
 import { dependencyCyclesIn } from "./dependency-cycles";
-import { buildTaskRelations } from "./task-relations";
+import { buildTaskRelations, type TaskRelations } from "./task-relations";
 
 /** A task with where it sits among the others (ADR 0003). */
 export interface SnapshotTask {
@@ -234,6 +234,11 @@ export interface TaskGraph {
   readonly nextActions: readonly TaskGraphEntry[];
   /** What the graph says about a task, `undefined` when it is not one. */
   entry(id: TaskId): TaskGraphEntry | undefined;
+  /**
+   * The task relations it was judged by (#208): readers that also walk the
+   * tasks' structure take them from here, not building them again.
+   */
+  readonly relations: TaskRelations<SnapshotTask>;
 }
 
 /**
@@ -463,5 +468,6 @@ export function analyzeTaskGraph(
   return {
     nextActions: all.filter((entry) => entry.nextAction),
     entry: (id) => entries.get(id),
+    relations,
   };
 }

@@ -379,7 +379,7 @@ export function createReadProjectGantt(deps: {
     if (!scoped) return { kind: "noProject" };
     // A project root task's descendant tasks are all the project's: the
     // parent task's ownership decides (domain/project/ownership.ts).
-    const tree = buildTaskTree(snapshot);
+    const tree = buildTaskTree(snapshot, graph.relations);
     const narrow = narrowing(options);
     const narrowed = narrows(narrow);
     /**
