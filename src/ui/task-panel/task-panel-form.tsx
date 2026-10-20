@@ -390,14 +390,18 @@ function Fields(props: {
         onChange={actions.setCustomProperty}
         blockRefs={props.blockRefs}
       />
-      {props.waiters}
-      {/* Only with an entry, or one this plugin cannot read (#209). */}
-      <CompletionHistoryField
-        labelId={id("completion-history")}
-        completionHistory={props.completionHistory}
-        today={today}
-        onOpen={props.onOpenCompletionHistory}
-      />
+      {/* What is read, not set, in a group of its own after the properties;
+          hidden by CSS when both rows are. */}
+      <div className="nextaction-task-panel-records">
+        {props.waiters}
+        {/* Only with an entry, or one this plugin cannot read (#209). */}
+        <CompletionHistoryField
+          labelId={id("completion-history")}
+          completionHistory={props.completionHistory}
+          today={today}
+          onOpen={props.onOpenCompletionHistory}
+        />
+      </div>
     </div>
   );
 }

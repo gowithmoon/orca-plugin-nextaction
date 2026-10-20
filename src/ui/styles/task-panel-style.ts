@@ -116,6 +116,20 @@ export const taskPanelCss = `
   border-top: 1px solid var(--orca-color-border);
 }
 
+/* 阻塞 and 完成历史 (#208, #209): read, not set, so set apart from the
+   properties as the custom properties are; nothing when both rows are hidden. */
+.nextaction-task-panel-records {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-md);
+  padding-top: var(--orca-spacing-md);
+  border-top: 1px solid var(--orca-color-border);
+}
+
+.nextaction-task-panel-records:empty {
+  display: none;
+}
+
 .nextaction-custom-properties-heading {
   color: var(--orca-color-text-2);
   font-size: var(--orca-fontsize-sm);
@@ -484,6 +498,13 @@ span.nextaction-block-ref-target {
 
 button.nextaction-block-ref-target:hover {
   text-decoration: underline;
+}
+
+/* One line each, the rest cut off (阻塞, #208); the whole text on hover. */
+.nextaction-block-refs[data-single-line] .nextaction-block-ref-target {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .nextaction-block-ref-target[data-empty] {

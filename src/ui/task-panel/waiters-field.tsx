@@ -60,6 +60,7 @@ export function WaitersField(props: {
           ),
         }))}
         onOpen={props.onSelectTask}
+        singleLine
       />
     </Field>
   );

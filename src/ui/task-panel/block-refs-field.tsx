@@ -40,12 +40,18 @@ export function BlockRefsList(props: {
   /** The remove button's label. */
   removeLabel?: string;
   onRemove?: (id: number) => void;
+  /** Each text on one line, cut off with an ellipsis; the whole on hover. */
+  singleLine?: boolean;
 }) {
   const { Button, Tooltip } = orca.components;
   const { onRemove } = props;
   if (props.items.length === 0) return null;
   return (
-    <ul className="nextaction-block-refs" aria-labelledby={props.labelId}>
+    <ul
+      className="nextaction-block-refs"
+      aria-labelledby={props.labelId}
+      data-single-line={props.singleLine || undefined}
+    >
       {props.items.map((item) => {
         const text =
           item.text === null ? undefined : shownText({ text: item.text });
@@ -61,6 +67,7 @@ export function BlockRefsList(props: {
                 type="button"
                 className="nextaction-block-ref-target"
                 data-empty={text.empty || undefined}
+                title={props.singleLine ? text.text : undefined}
                 onClick={() => props.onOpen(item.id)}
               >
                 {text.text}
