@@ -123,9 +123,7 @@ describe("task relations: subtasks and sequential order", () => {
       task(3, { parent: 1 }),
     ]);
 
-    expect(relations.previousSiblingOf(3)?.task.id).toBe(2);
     expect(relations.nextSiblingOf(2)?.task.id).toBe(3);
-    expect(relations.previousSiblingOf(2)).toBeUndefined();
     expect(relations.waitsFor(3)).toEqual([]);
   });
 

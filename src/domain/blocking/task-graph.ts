@@ -298,11 +298,20 @@ export function analyzeTaskGraph(
    * and none is listed then.
    */
   const unmetDependencies = (item: SnapshotTask): TaskId[] => {
-    const unmet = item.task.dependencies.filter((target) => {
-      const dependency = relations.get(target);
-      return dependency !== undefined && dependency.task.status !== "done";
-    });
-    const someMet = unmet.length < item.task.dependencies.length;
+    // A stale dependency is no relation, so only the targets that are tasks.
+    const unmet = relations
+      .waitsFor(item.task.id)
+      .filter(
+        (relation) =>
+          relation.kind === "dependency" &&
+          relations.get(relation.waitingFor)?.task.status !== "done",
+      )
+      .map((relation) => relation.waitingFor);
+    // Whether one is met, stale ones included: needs the dependencies as held.
+    const unmetIds = new Set(unmet);
+    const someMet = item.task.dependencies.some(
+      (target) => !unmetIds.has(target),
+    );
     return item.task.dependencyMode === "any" && someMet ? [] : unmet;
   };
 

@@ -419,7 +419,7 @@ export function createReadProjectGantt(deps: {
       }
       return { dependencies: inside, outsideDependencies: outside };
     };
-    const shiftPlan = projectShiftPlanner(snapshot, graph, scoped.project.id);
+    const shiftPlan = projectShiftPlanner(graph, scoped.project.id);
     const standing = (item: SnapshotTask): RowStanding => ({
       overdue: isOverdue(item.task, today),
       blocked: marksBlocked(graph.entry(item.task.id)),

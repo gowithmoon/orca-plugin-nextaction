@@ -50,8 +50,6 @@ export interface TaskRelations<T extends RelatedTask = RelatedTask> {
    * only guards against bad input).
    */
   ancestorsOf(id: TaskId): readonly T[];
-  /** The sibling subtask just before it, whether or not the parent is sequential. */
-  previousSiblingOf(id: TaskId): T | undefined;
   /** The sibling subtask just after it, whether or not the parent is sequential. */
   nextSiblingOf(id: TaskId): T | undefined;
   /**
@@ -153,7 +151,6 @@ export function buildTaskRelations<T extends RelatedTask>(
       }
       return chain;
     },
-    previousSiblingOf: (id) => previous.get(id),
     nextSiblingOf: (id) => next.get(id),
     waitsFor: (id) => waitsFor.get(id) ?? [],
     waitersOf: (id) => waiters.get(id) ?? [],
