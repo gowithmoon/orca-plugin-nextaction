@@ -4,11 +4,7 @@
 // end; the two walks never meet halfway, so a task downstream of one of its
 // upstream tasks is not in it. Pure, over the read map (read-task-map.ts).
 import type { TaskId } from "../../domain/task/task";
-import type {
-  TaskMapEdge,
-  TaskMapNode,
-  TaskMapRead,
-} from "./read-task-map";
+import type { TaskMapEdge, TaskMapNode, TaskMapRead } from "./read-task-map";
 
 export interface TaskMapChain {
   /** The task and every task reached, either way. */

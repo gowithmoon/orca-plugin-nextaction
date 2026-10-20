@@ -9,12 +9,16 @@ import { type TaskMapChain, taskMapChain } from "./task-map-chain";
 
 function setup() {
   const repository = createInMemoryTaskRepository();
-  const readTaskMap = createReadTaskMap({
+  const read = createReadTaskMap({
     repository,
     clock: createFixedClock("2026-10-09T10:00:00+08:00"),
     dayBoundary: createFixedDayBoundary(),
     startPreviewDays: createFixedStartPreviewDays(),
   });
+  // Every area, done tasks hidden, tasks with no relation shown: what the
+  // chain walks over is all there.
+  const readTaskMap = () =>
+    read({ projects: [], showDone: false, showUnrelated: true });
   return { repository, readTaskMap };
 }
 

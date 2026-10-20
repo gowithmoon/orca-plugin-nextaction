@@ -95,6 +95,10 @@ export interface CanvasInput {
   readonly handlers: React.HTMLAttributes<HTMLElement>;
   /** The world's style: its transform for the current view. */
   readonly worldStyle: React.CSSProperties;
+  /** A point on the screen as a point on the world, for the current view. */
+  toWorld(clientX: number, clientY: number): { x: number; y: number };
+  /** Pans so a point of the world is at the window's center, the zoom kept. */
+  centerOn(point: { readonly x: number; readonly y: number }): void;
   /**
    * Moves the view by `dx`, `dy` in world units (#218: a card kept where it
    * is on screen when the map is laid out again).
@@ -300,6 +304,33 @@ export function useCanvasInput(options: {
     },
   };
 
+  const toWorld = React.useCallback(
+    (clientX: number, clientY: number) => {
+      const box = viewport.current?.getBoundingClientRect();
+      const view = live.current;
+      return {
+        x: (clientX - (box?.left ?? 0) - view.x) / view.scale,
+        y: (clientY - (box?.top ?? 0) - view.y) / view.scale,
+      };
+    },
+    [viewport],
+  );
+
+  const centerOn = React.useCallback(
+    (point: { readonly x: number; readonly y: number }) => {
+      const element = viewport.current;
+      if (!element) return;
+      const { scale } = live.current;
+      show({
+        x: element.clientWidth / 2 - point.x * scale,
+        y: element.clientHeight / 2 - point.y * scale,
+        scale,
+      });
+      commit();
+    },
+    [viewport, show, commit],
+  );
+
   const shift = React.useCallback(
     (dx: number, dy: number) => {
       const view = live.current;
@@ -316,6 +347,8 @@ export function useCanvasInput(options: {
   return {
     handlers,
     worldStyle: { transform: transformOf(live.current) },
+    toWorld,
+    centerOn,
     shift,
   };
 }

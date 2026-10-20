@@ -4,7 +4,12 @@
 // box and card is placed absolutely inside its own box, as the layout gives
 // them relative to their container. One CSS transform on the world pans and
 // zooms (canvas-input.ts); an SVG layer above the cards draws the sequence
-// and dependency arrows (#215).
+// and dependency arrows (#215); a dependency whose other end is not on the
+// map is an endpoint marker on the card instead (#217, endpoint-marker.tsx).
+// A task an endpoint marker revealed is centered once laid out. A dependency
+// is drawn from a card's connector (task-map-links.tsx) and selected by a
+// click on its arrow, deleted with Delete or from its right-click menu
+// (#219).
 //
 // A click on a card's blank space (not its text, which opens the task panel,
 // nor its buttons) selects it: its chain (task-map-chain.ts) is highlighted,
@@ -32,6 +37,8 @@ import {
   layoutTaskMap,
 } from "../../../domain/task-map/layout";
 import { t } from "../../../shared/l10n/l10n";
+import { createMemoryStore } from "../../components/memory-store";
+import { ContextMenu } from "../../components/popup-controls";
 import { projectStatusLabel } from "../../components/project-status-label";
 import { selectsText } from "../../components/selects-text";
 import { TaskCard } from "../../components/task-card";
@@ -41,8 +48,18 @@ import type { TaskMenuItems, TaskMenuPlace } from "../../task-menu/menu-items";
 import { useCanvasInput } from "./canvas-input";
 import { type DependencyBadge, dependencyBadges } from "./dependency-badge";
 import { DependencyBadgeButton } from "./dependency-popover";
+import { EndpointMarker } from "./endpoint-marker";
 import { SequentialToggle } from "./sequential-toggle";
 import { mapDropAttributes, useMapCardDrag } from "./task-map-drag";
+import { useTaskMapEdits } from "./task-map-edits";
+import { type EndpointMarkers, endpointMarkers } from "./task-map-filter";
+import {
+  LinkAreaProvider,
+  LinkConnector,
+  type LinkDrag,
+  LinkPreview,
+  linkTargetAttributes,
+} from "./task-map-links";
 import type { TaskMapStores } from "./task-map-stores";
 
 /** Every card's width (#213: fixed, the text up to two lines). */
@@ -271,12 +288,13 @@ function MapNode(props: {
   node: TaskMapNode;
   layout: ReadonlyMap<string, LayoutBox>;
   badges: ReadonlyMap<TaskId, DependencyBadge>;
+  markers: EndpointMarkers;
   deps: CardDeps;
   look: Look;
   /** Its parent task is sequential (#216: where a drop on it goes). */
   inSequence?: boolean;
 }) {
-  const { node, layout, badges, deps, look } = props;
+  const { node, layout, badges, markers, deps, look } = props;
   const key = taskKey(node.task.id);
   const box = layout.get(key);
   const drag = useMapCardDrag(node.task);
@@ -284,14 +302,24 @@ function MapNode(props: {
   const chosen = look.selected === node.task.id || undefined;
   const drop = mapDropAttributes(node.task, props.inSequence ?? false);
   const badge = badges.get(node.task.id);
-  const badgeButton = badge && (
-    <DependencyBadgeButton node={node} badge={badge} />
+  const marked = markers.get(node.task.id);
+  const badgeButton = (
+    <>
+      {badge && <DependencyBadgeButton node={node} badge={badge} />}
+      {marked && (
+        <>
+          <EndpointMarker side="in" endpoints={marked.in} badged={!!badge} />
+          <EndpointMarker side="out" endpoints={marked.out} />
+        </>
+      )}
+    </>
   );
   if (node.children.length === 0) {
     return (
       <div
         {...drag}
         {...drop}
+        {...linkTargetAttributes(node.task)}
         onClickCapture={onClickCapture}
         className="nextaction-task-map-card"
         data-map-key={key}
@@ -303,6 +331,7 @@ function MapNode(props: {
       >
         <MapCard node={node} deps={deps} />
         {badgeButton}
+        <LinkConnector task={node.task} />
       </div>
     );
   }
@@ -318,6 +347,7 @@ function MapNode(props: {
     >
       <div
         {...drag}
+        {...linkTargetAttributes(node.task)}
         onClickCapture={onClickCapture}
         className="nextaction-task-map-head"
         data-next-action={node.nextAction || undefined}
@@ -331,6 +361,7 @@ function MapNode(props: {
           collapse={{ collapsed, onToggle: () => look.toggle(key) }}
         />
         {badgeButton}
+        <LinkConnector task={node.task} />
       </div>
       {!collapsed &&
         node.children.map((child) => (
@@ -339,6 +370,7 @@ function MapNode(props: {
             node={child}
             layout={layout}
             badges={badges}
+            markers={markers}
             deps={deps}
             look={look}
             inSequence={node.sequential}
@@ -404,50 +436,89 @@ function dependencyKind(edge: TaskMapDependencyEdge): ArrowKind {
   return edge.conflict ? "conflict" : "dependency";
 }
 
+/** Where arrows meet the nodes on the world: level with their cards. */
+interface Anchors {
+  /** Where an arrow out of the node starts: just right of it. */
+  exit(id: TaskId): { x: number; y: number } | null;
+  /** Where an arrow into the node ends: just left of it. */
+  entry(id: TaskId): { x: number; y: number } | null;
+  /** Both tasks are hidden in the same collapsed box: no arrow (#218). */
+  joined(from: TaskId, to: TaskId): boolean;
+}
+
+/**
+ * The anchors on the boxes laid out; a task hidden in a collapsed box
+ * (#218) is met on that box (`shownAs`), level with its head.
+ */
+function anchorsOf(
+  boxes: ReadonlyMap<string, LayoutBox>,
+  heads: Sizes,
+  shownAs: (key: string) => string = (key) => key,
+): Anchors {
+  const at = (id: TaskId) => {
+    const key = shownAs(taskKey(id));
+    const box = boxes.get(key);
+    if (!box) return null;
+    const head = key.startsWith("task:")
+      ? heads.get(Number(key.slice(5)))
+      : undefined;
+    const y = head
+      ? box.y + boxPadding.top + head.height / 2
+      : box.y + box.height / 2;
+    return { box, y };
+  };
+  return {
+    exit(id) {
+      const end = at(id);
+      return end ? { x: end.box.x + end.box.width + 4, y: end.y } : null;
+    },
+    entry(id) {
+      const end = at(id);
+      return end ? { x: end.box.x - 4, y: end.y } : null;
+    },
+    joined: (from, to) => shownAs(taskKey(from)) === shownAs(taskKey(to)),
+  };
+}
+
+/** A dependency, by its two ends. */
+export interface EdgeKey {
+  readonly from: TaskId;
+  readonly to: TaskId;
+}
+
+const sameEdge = (a: EdgeKey | null, b: EdgeKey | null) =>
+  a === b || (!!a && !!b && a.from === b.from && a.to === b.to);
+
 /**
  * The arrows, from a node's right side to the next one's left: the sequence
  * arrows thin and faint, then the dependencies (#215), those in a date
- * conflict and on a cycle last so no plain line covers them.
+ * conflict and on a cycle last so no plain line covers them. Under each
+ * dependency a wide transparent line takes its clicks (#219): a click
+ * selects it, a right-click opens its menu.
  */
 function Arrows(props: {
   edges: readonly TaskMapEdge[];
   dependencies: readonly TaskMapDependencyEdge[];
-  boxes: ReadonlyMap<string, LayoutBox>;
-  heads: Sizes;
+  anchors: Anchors;
   width: number;
   height: number;
-  /** Where a task's arrows meet: its node, or the collapsed box hiding it. */
-  shownAs: (key: string) => string;
-  /** While highlighting, the edges of the chain; `null` when not. */
+  selected: EdgeKey | null;
+  onSelect: (edge: EdgeKey) => void;
+  onDelete: (edge: EdgeKey) => void;
+  /** While a task is selected, the edges of its chain (#218); `null` when not. */
   lit: ReadonlySet<TaskMapEdge> | null;
 }) {
-  const { shownAs, lit } = props;
-  /** The node an arrow meets for task `id`: its key and its task, if one. */
-  const end = (id: TaskId) => {
-    const key = shownAs(taskKey(id));
-    const box = props.boxes.get(key);
-    const task = key.startsWith("task:") ? Number(key.slice(5)) : undefined;
-    return box ? { box, task } : null;
-  };
+  const { lit } = props;
   const dim = (edge: TaskMapEdge) => (lit && !lit.has(edge) ? "" : undefined);
   const prefix = `nextaction-task-map-arrow-${React.useId().replace(/:/g, "")}`;
-  /** Where on a node's side an arrow meets it: level with its card. */
-  const level = (at: { box: LayoutBox; task: TaskId | undefined }) => {
-    const head = at.task === undefined ? undefined : props.heads.get(at.task);
-    return head
-      ? at.box.y + boxPadding.top + head.height / 2
-      : at.box.y + at.box.height / 2;
-  };
+  const { MenuText } = orca.components;
   const path = (edge: TaskMapEdge) => {
-    const from = end(edge.from);
-    const to = end(edge.to);
-    // Both ends hidden in one collapsed box: no arrow.
-    if (!from || !to || from.box === to.box) return null;
-    const x0 = from.box.x + from.box.width + 4;
-    const y0 = level(from);
-    // Just left of the node it goes into, level with its card.
-    const x3 = to.box.x - 4;
-    const y3 = level(to);
+    if (props.anchors.joined(edge.from, edge.to)) return null;
+    const start = props.anchors.exit(edge.from);
+    const end = props.anchors.entry(edge.to);
+    if (!start || !end) return null;
+    const { x: x0, y: y0 } = start;
+    const { x: x3, y: y3 } = end;
     const ctrl = Math.min(
       150,
       Math.max(20, Math.hypot(x3 - x0, y3 - y0) * 0.42),
@@ -463,7 +534,7 @@ function Arrows(props: {
   const dependencies = [...props.dependencies].sort(
     (a, b) => rank[dependencyKind(a)] - rank[dependencyKind(b)],
   );
-  return (
+  const svg = (openMenu?: (event: React.MouseEvent, edge: EdgeKey) => void) => (
     <svg
       className="nextaction-task-map-edges"
       width={props.width}
@@ -507,19 +578,59 @@ function Arrows(props: {
       {dependencies.map((edge) => {
         const d = path(edge);
         const kind = dependencyKind(edge);
-        return d ? (
-          <path
-            key={`dependency-${edge.from}-${edge.to}`}
-            className="nextaction-task-map-arrow"
-            data-kind={kind}
-            data-any={edge.any || undefined}
-            data-dim={dim(edge)}
-            d={d}
-            markerEnd={`url(#${prefix}-${kind})`}
-          />
-        ) : null;
+        if (!d) return null;
+        const key = { from: edge.from, to: edge.to };
+        return (
+          <g key={`dependency-${edge.from}-${edge.to}`}>
+            <path
+              className="nextaction-task-map-arrow"
+              data-kind={kind}
+              data-any={edge.any || undefined}
+              data-selected={sameEdge(props.selected, key) || undefined}
+              data-dim={dim(edge)}
+              d={d}
+              markerEnd={`url(#${prefix}-${kind})`}
+            />
+            {openMenu && (
+              // The pointer's way to an arrow; the dependency is also edited
+              // in the task panel, by keyboard too.
+              // biome-ignore lint/a11y/noStaticElementInteractions: see above
+              <path
+                className="nextaction-task-map-arrow-hit"
+                d={d}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onSelect(key);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onSelect(key);
+                  openMenu(event, key);
+                }}
+              />
+            )}
+          </g>
+        );
       })}
     </svg>
+  );
+  return (
+    <ContextMenu
+      menu={(close, edge?: EdgeKey) => (
+        <MenuText
+          title={t("Delete dependency")}
+          preIcon="ti ti-trash"
+          dangerous
+          onClick={() => {
+            close();
+            if (edge) props.onDelete(edge);
+          }}
+        />
+      )}
+    >
+      {(open) => svg((event, edge) => open(event, edge))}
+    </ContextMenu>
   );
 }
 
@@ -552,10 +663,12 @@ export function taskMapBoxKeys(read: TaskMapRead): string[] {
 
 export function TaskMapCanvas(props: {
   read: TaskMapRead;
+  /** The view, a task to center on once laid out, the collapse and selection. */
   stores: TaskMapStores;
   deps: CardDeps;
 }) {
   const { read, stores, deps } = props;
+  const { view: store, locate } = stores;
   const viewport = React.useRef<HTMLElement | null>(null);
   const world = React.useRef<HTMLDivElement | null>(null);
   const measure = React.useRef<HTMLDivElement | null>(null);
@@ -565,6 +678,8 @@ export function TaskMapCanvas(props: {
     () => dependencyBadges(nodes, read.dependencyEdges),
     [nodes, read],
   );
+  // Where a dependency's other end is not on the map (#217).
+  const markers = React.useMemo(() => endpointMarkers(read.endpoints), [read]);
   const collapsed = React.useSyncExternalStore(
     stores.collapsed.subscribe,
     stores.collapsed.current,
@@ -655,12 +770,11 @@ export function TaskMapCanvas(props: {
       placed ? { width: placed.root.width, height: placed.root.height } : null,
     [placed],
   );
-  const input = useCanvasInput({
-    viewport,
-    world,
-    store: stores.view,
-    content,
-  });
+  const input = useCanvasInput({ viewport, world, store, content });
+  const anchors = React.useMemo(
+    () => placed && anchorsOf(placed.boxes, placed.heads, placed.shownAs),
+    [placed],
+  );
 
   // Laid out again (#218): the card last pressed, or else the one selected,
   // stays where it is on screen, the view shifted by as much as it moved;
@@ -693,9 +807,60 @@ export function TaskMapCanvas(props: {
     return () => clearTimeout(timer);
   }, [placed, shift]);
 
+  // Drawing a dependency (#219): the drag in a store, so a move renders the
+  // preview only.
+  const [linkDrag] = React.useState(() =>
+    createMemoryStore<LinkDrag | null>(null),
+  );
+  const tasks = React.useMemo(
+    () => new Map(nodes.map((node) => [node.task.id, node.task])),
+    [nodes],
+  );
+  const { toWorld } = input;
+  const linkArea = React.useMemo(
+    () => ({ drag: linkDrag, viewport, toWorld, tasks }),
+    [linkDrag, toWorld, tasks],
+  );
+
+  // The dependency selected by a click on its arrow (#219): Delete removes it.
+  const edits = useTaskMapEdits();
+  const [selectedEdge, setSelectedEdge] = React.useState<EdgeKey | null>(null);
+  const deleteEdge = React.useCallback(
+    (edge: EdgeKey) => {
+      const dependent = tasks.get(edge.to);
+      if (!edits || !dependent) return;
+      setSelectedEdge(null);
+      void edits.removeDependency(dependent, edge.from);
+    },
+    [edits, tasks],
+  );
+  const selectEdge = React.useCallback((edge: EdgeKey) => {
+    setSelectedEdge(edge);
+    viewport.current?.focus({ preventScroll: true });
+  }, []);
+  // A selected dependency gone from the map (deleted, or in the notes).
+  const shownEdge =
+    selectedEdge &&
+    read.dependencyEdges.some((edge) => sameEdge(edge, selectedEdge))
+      ? selectedEdge
+      : null;
   const handlers: React.HTMLAttributes<HTMLElement> = {
     ...input.handlers,
+    onPointerDown(event) {
+      // A press anywhere but on an arrow lets go of the arrow selected.
+      if (
+        event.button === 0 &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(".nextaction-task-map-arrow-hit")
+        )
+      ) {
+        setSelectedEdge(null);
+      }
+      input.handlers.onPointerDown?.(event);
+    },
     onPointerDownCapture(event) {
+      // The card or box pressed: kept in place if the map is laid out again.
       const { target } = event;
       const key =
         target instanceof Element
@@ -704,14 +869,14 @@ export function TaskMapCanvas(props: {
       pressed.current = key ?? null;
     },
     onClick(event) {
-      // A click on blank canvas clears the selection; a click in a portal
-      // (a menu, a popover) is not on the canvas.
+      // A click on blank canvas clears the task selected (#218); a click in
+      // a portal (a menu, a popover) is not on the canvas.
       const { target } = event;
       if (!(target instanceof Element)) return;
       if (!event.currentTarget.contains(target)) return;
       if (
         target.closest(
-          ".nextaction-task-map-card, .nextaction-task-map-head, .nextaction-task-map-area-head",
+          ".nextaction-task-map-card, .nextaction-task-map-head, .nextaction-task-map-area-head, .nextaction-task-map-arrow-hit",
         )
       ) {
         return;
@@ -719,15 +884,54 @@ export function TaskMapCanvas(props: {
       stores.selected.set(null);
     },
     onKeyDown(event) {
-      if (event.key === "Escape" && stores.selected.current() !== null) {
-        if (!event.currentTarget.contains(event.target as Node)) return;
-        event.preventDefault();
+      if (
+        event.key === "Escape" &&
+        stores.selected.current() !== null &&
+        event.currentTarget.contains(event.target as Node)
+      ) {
         stores.selected.set(null);
+      }
+      if (
+        shownEdge &&
+        (event.key === "Delete" || event.key === "Backspace") &&
+        event.target === event.currentTarget
+      ) {
+        event.preventDefault();
+        deleteEdge(shownEdge);
         return;
       }
+      if (shownEdge && event.key === "Escape") setSelectedEdge(null);
       input.handlers.onKeyDown?.(event);
     },
   };
+
+  // An endpoint marker's other end, centered once the map shows it.
+  const located = React.useSyncExternalStore(locate.subscribe, locate.current);
+  const { centerOn } = input;
+  // The map laid out when it was asked for: one read later it should show.
+  const askedOn = React.useRef<typeof placed>(null);
+  React.useLayoutEffect(() => {
+    if (located === null) {
+      askedOn.current = null;
+      return;
+    }
+    if (!placed) return;
+    const box = placed.boxes.get(placed.shownAs(taskKey(located)));
+    if (!box) {
+      // Still not shown after the read that should show it: given up.
+      if (askedOn.current === null) askedOn.current = placed;
+      else if (askedOn.current !== placed) locate.set(null);
+      return;
+    }
+    const head = placed.heads.get(located);
+    centerOn({
+      x: box.x + box.width / 2,
+      y: head
+        ? box.y + boxPadding.top + head.height / 2
+        : box.y + box.height / 2,
+    });
+    locate.set(null);
+  }, [located, placed, centerOn, locate]);
 
   return (
     <section
@@ -756,53 +960,65 @@ export function TaskMapCanvas(props: {
           ))}
         </div>
       )}
-      <div
-        ref={world}
-        className="nextaction-task-map-world"
-        data-highlighting={look.highlighting || undefined}
-        style={input.worldStyle}
-      >
-        {placed &&
-          read.areas.map((area) => {
-            const key = areaKey(area);
-            const folded = look.isCollapsed(key);
-            return (
-              <section
-                key={key}
-                className="nextaction-task-map-area"
-                data-kind={area.kind}
-                data-map-key={key}
-                data-collapsed={folded || undefined}
-                style={placeStyle(placed.layout.get(key))}
-              >
-                <AreaHead area={area} look={look} />
-                {!folded &&
-                  area.tasks.map((node) => (
-                    <MapNode
-                      key={node.task.id}
-                      node={node}
-                      layout={placed.layout}
-                      badges={badges}
-                      deps={deps}
-                      look={look}
-                    />
-                  ))}
-              </section>
-            );
-          })}
-        {placed && (
-          <Arrows
-            edges={read.sequenceEdges}
-            dependencies={read.dependencyEdges}
-            boxes={placed.boxes}
-            heads={placed.heads}
-            width={placed.root.width}
-            height={placed.root.height}
-            shownAs={placed.shownAs}
-            lit={litEdges}
-          />
-        )}
-      </div>
+      <LinkAreaProvider value={linkArea}>
+        <div
+          ref={world}
+          className="nextaction-task-map-world"
+          data-highlighting={look.highlighting || undefined}
+          style={input.worldStyle}
+        >
+          {placed &&
+            read.areas.map((area) => {
+              const key = areaKey(area);
+              const folded = look.isCollapsed(key);
+              return (
+                <section
+                  key={key}
+                  className="nextaction-task-map-area"
+                  data-kind={area.kind}
+                  data-map-key={key}
+                  data-collapsed={folded || undefined}
+                  style={placeStyle(placed.layout.get(key))}
+                >
+                  <AreaHead area={area} look={look} />
+                  {!folded &&
+                    area.tasks.map((node) => (
+                      <MapNode
+                        key={node.task.id}
+                        node={node}
+                        layout={placed.layout}
+                        badges={badges}
+                        markers={markers}
+                        deps={deps}
+                        look={look}
+                      />
+                    ))}
+                </section>
+              );
+            })}
+          {placed && anchors && (
+            <Arrows
+              edges={read.sequenceEdges}
+              dependencies={read.dependencyEdges}
+              anchors={anchors}
+              width={placed.root.width}
+              height={placed.root.height}
+              selected={shownEdge}
+              onSelect={selectEdge}
+              onDelete={deleteEdge}
+              lit={litEdges}
+            />
+          )}
+          {placed && anchors && (
+            <LinkPreview
+              drag={linkDrag}
+              anchor={anchors.exit}
+              width={placed.root.width}
+              height={placed.root.height}
+            />
+          )}
+        </div>
+      </LinkAreaProvider>
     </section>
   );
 }

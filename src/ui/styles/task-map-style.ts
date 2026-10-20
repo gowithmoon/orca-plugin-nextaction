@@ -3,10 +3,12 @@
 // project boxes, the no-project area and the parent tasks' boxes placed
 // absolutely by the layout; fixed-width cards, their text up to two lines;
 // the sequence and dependency arrows (#215) on an SVG layer above the
-// cards, a card on a dependency cycle outlined red; the selected task's
-// chain highlighted, the rest faded, and the boxes moving to a new layout
-// in a short transition (#218). Orca's CSS variables only, so both themes
-// follow them.
+// cards, a card on a dependency cycle outlined red; the endpoint markers
+// (#217) at a card's entry and exit; the connector, preview line and
+// selected arrow of drawing and deleting dependencies (#219); the selected
+// task's chain highlighted, the rest faded, and the boxes moving to a new
+// layout in a short transition (#218). Orca's CSS variables only, so both
+// themes follow them.
 import { cardWidth } from "../views/task-map/task-map-canvas";
 
 export const taskMapCss = `
@@ -324,6 +326,179 @@ export const taskMapCss = `
 [data-nextaction-map-drop][data-in-sequence][data-drop-over="after"]::after {
   left: auto;
   right: -25px;
+}
+
+/*
+ * Drawing a dependency (#219): a connector on a card's right edge while the
+ * pointer is on the card; the preview line; the card under the pointer
+ * outlined, the danger color when it cannot depend on the one dragged from,
+ * and why beside the pointer.
+ */
+.nextaction-task-map-connector {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  box-sizing: border-box;
+  border: 2px solid var(--orca-color-primary-5);
+  border-radius: 50%;
+  background-color: var(--orca-color-bg-1);
+  cursor: crosshair;
+  opacity: 0;
+  outline: none;
+  z-index: 2;
+  touch-action: none;
+}
+
+:is(.nextaction-task-map-card, .nextaction-task-map-head):hover
+  > .nextaction-task-map-connector,
+.nextaction-task-map-connector:focus {
+  opacity: 1;
+}
+
+.nextaction-task-map-connector:hover {
+  background-color: var(--orca-color-primary-5);
+}
+
+/* While drawing: no card hover, the arrows not hit, a crosshair. */
+.nextaction-task-map-viewport[data-linking],
+.nextaction-task-map-viewport[data-linking] * {
+  cursor: crosshair !important;
+  user-select: none !important;
+}
+
+.nextaction-task-map-viewport[data-linking] .nextaction-task-map-arrow-hit {
+  pointer-events: none;
+}
+
+[data-nextaction-map-link][data-link-over] > .nextaction-task-card {
+  outline: 2px solid var(--orca-color-primary-5);
+  outline-offset: 2px;
+}
+
+[data-nextaction-map-link][data-link-over="refused"] > .nextaction-task-card {
+  outline-color: var(--orca-color-dangerous-5);
+  cursor: not-allowed !important;
+}
+
+.nextaction-task-map-link-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.nextaction-task-map-link-preview path {
+  fill: none;
+  stroke: var(--orca-color-primary-5);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+}
+
+.nextaction-task-map-link-preview path[data-refused] {
+  stroke: var(--orca-color-dangerous-5);
+}
+
+.nextaction-task-map-link-reason {
+  position: absolute;
+  max-width: 18em;
+  padding: 2px 6px;
+  border: 1px solid var(--orca-color-dangerous-5);
+  border-radius: var(--orca-radius-sm);
+  background-color: var(--orca-color-bg-1);
+  color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-sm);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/*
+ * Selecting a dependency (#219): a wide transparent line under each arrow
+ * takes its clicks; the arrow selected is drawn wider in the primary color.
+ */
+.nextaction-task-map-arrow-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.nextaction-task-map-arrow[data-selected] {
+  stroke: var(--orca-color-primary-5);
+  stroke-width: 2.6;
+}
+
+/*
+ * The endpoint markers (#217): a dependency's end whose other end is not on
+ * the map. The entry left of the card, above the dependency badge when there
+ * is one; the exit right of it. Dashed, so it reads as an arrow cut short.
+ */
+.nextaction-task-map-endpoint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 3px;
+  height: 18px;
+  border: 1px dashed var(--orca-color-text-3);
+  border-radius: var(--orca-radius-sm);
+  background-color: var(--orca-color-bg-1);
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.nextaction-task-map-endpoint[data-side="in"] {
+  right: calc(100% + 6px);
+}
+
+.nextaction-task-map-endpoint[data-side="in"][data-badged] {
+  top: calc(50% - 20px);
+}
+
+.nextaction-task-map-endpoint[data-side="out"] {
+  left: calc(100% + 6px);
+}
+
+.nextaction-task-map-endpoint:hover {
+  color: var(--orca-color-text-1);
+  border-color: var(--orca-color-primary-5);
+}
+
+.nextaction-task-map-endpoint:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-task-map-endpoint-tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--orca-spacing-xs);
+  max-width: 20em;
+}
+
+.nextaction-task-map-endpoint-tip-head,
+.nextaction-task-map-endpoint-reveal,
+.nextaction-task-map-endpoint-id {
+  color: var(--orca-color-text-2);
+}
+
+.nextaction-task-map-endpoint-reveal {
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-task-map-endpoint-id {
+  font-variant-numeric: tabular-nums;
 }
 
 /*
