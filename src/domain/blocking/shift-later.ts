@@ -11,6 +11,7 @@ import {
   earliestStart,
   hasDateConflict,
 } from "./date-conflict";
+import { buildTaskRelations } from "./task-relations";
 
 /** What is read of a task for shifting. */
 export type ShiftTask = Pick<
@@ -55,15 +56,26 @@ export function shiftLaterPlanner(
   movable: (task: ShiftTask) => boolean,
 ): ShiftLaterPlan {
   const byId = new Map(tasks.map((task) => [task.id, task]));
-  /** The movable tasks waiting for each task, in note order. */
+  // Only the dependencies count here, so the tasks are related without
+  // their parent tasks, in the order given.
+  const relations = buildTaskRelations(
+    tasks.map((task, position) => ({
+      task: { id: task.id, sequential: false, dependencies: task.dependencies },
+      parentId: null,
+      position,
+    })),
+  );
+  /** The movable tasks depending on each task (its 后续任务), in order. */
   const waiting = new Map<TaskId, ShiftTask[]>();
   for (const task of tasks) {
-    if (!movable(task)) continue;
-    for (const id of new Set(task.dependencies)) {
-      const list = waiting.get(id) ?? [];
-      list.push(task);
-      waiting.set(id, list);
-    }
+    waiting.set(
+      task.id,
+      relations
+        .waitersOf(task.id)
+        .filter((relation) => relation.kind === "dependency")
+        .map((relation) => byId.get(relation.waiting) as ShiftTask)
+        .filter(movable),
+    );
   }
   return (from) => {
     // The tasks reachable from `from`, every task before those waiting for
