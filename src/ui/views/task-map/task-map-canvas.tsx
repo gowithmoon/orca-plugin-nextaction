@@ -73,6 +73,7 @@ import {
   LinkPreview,
   linkTargetAttributes,
 } from "./task-map-links";
+import { type Roving, useCardRoving } from "./task-map-roving";
 import {
   boxKey,
   type TaskMapBoxKey,
@@ -96,9 +97,6 @@ export function placeBoxKeys(place: TaskMapPlace): TaskMapBoxKey[] {
   ];
 }
 
-/** What the header's controls are, for Tab past the cards' ends. */
-const focusable =
-  'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 export function areaKey(area: TaskMapArea): TaskMapBoxKey {
   return area.kind === "project"
     ? boxKey("project", area.project.id)
@@ -182,9 +180,6 @@ interface CardDeps {
   selectTask: (id: TaskId) => void;
   selectedTaskId: TaskId | undefined;
 }
-
-/** Which card is in the Tab order (#221): the one the keyboard is on. */
-type Roving = (id: TaskId) => boolean;
 
 /** The highlight and the collapsed boxes, as the map shows them (#218). */
 interface Look {
@@ -905,6 +900,14 @@ export function TaskMapCanvas(props: {
     read.dependencyEdges.some((edge) => sameEdge(edge, selectedEdge))
       ? selectedEdge
       : null;
+  // The cards the keyboard moves through (#221).
+  const { roving, setKeyed, onCardFocus, onCardKey } = useCardRoving({
+    nodes,
+    placed,
+    viewport,
+    bringIntoView: input.bringIntoView,
+  });
+
   const handlers: React.HTMLAttributes<HTMLElement> = {
     ...input.handlers,
     onPointerDown(event) {
@@ -944,14 +947,7 @@ export function TaskMapCanvas(props: {
       }
       stores.selected.set(null);
     },
-    onFocus(event) {
-      // A card focused, by click or by keyboard, is the one Tab goes on from;
-      // by keyboard it is panned into the window (#221).
-      const id = cardTask(event.target);
-      if (id === null) return;
-      setKeyed(id);
-      if ((event.target as Element).matches(":focus-visible")) showCard(id);
-    },
+    onFocus: onCardFocus,
     onKeyDown(event) {
       if (onCardKey(event)) return;
       if (
@@ -973,75 +969,6 @@ export function TaskMapCanvas(props: {
       if (shownEdge && event.key === "Escape") setSelectedEdge(null);
       input.handlers.onKeyDown?.(event);
     },
-  };
-
-  // The cards the keyboard moves through (#221): those shown, not hidden in
-  // a collapsed box, in note order; the one in the Tab order.
-  const order = React.useMemo(() => {
-    if (!placed) return [];
-    return nodes
-      .filter((node) => {
-        const key = taskKey(node.task.id);
-        return placed.shownAs(key) === key && placed.boxes.has(key);
-      })
-      .sort((a, b) => a.position - b.position)
-      .map((node) => node.task.id);
-  }, [nodes, placed]);
-  const [keyed, setKeyed] = React.useState<TaskId | null>(null);
-  const current =
-    keyed !== null && order.includes(keyed) ? keyed : (order[0] ?? null);
-  const roving = React.useCallback<Roving>((id) => id === current, [current]);
-  const { bringIntoView } = input;
-  /** The card of task `id` on the canvas, the head's for a box. */
-  const cardOf = (id: TaskId) =>
-    viewport.current?.querySelector<HTMLElement>(
-      `.nextaction-task-map-world [data-map-key="${taskKey(id)}"] .nextaction-task-card`,
-    ) ?? null;
-  const showCard = (id: TaskId) => {
-    const box = placed?.boxes.get(taskKey(id));
-    if (box) bringIntoView(box);
-  };
-  /** The task whose card `target` is, or `null`. */
-  const cardTask = (target: EventTarget | null): TaskId | null => {
-    if (!(target instanceof Element)) return null;
-    if (!target.classList.contains("nextaction-task-card")) return null;
-    if (!target.closest(".nextaction-task-map-world")) return null;
-    const key = target.closest<HTMLElement>("[data-map-key]")?.dataset.mapKey;
-    return key?.startsWith("task:") ? Number(key.slice(5)) : null;
-  };
-  /**
-   * Tab past the last card, or Shift+Tab before the first: to the view's
-   * header controls (the first, or the last), never out of the plugin panel.
-   */
-  const leaveCards = (back: boolean): boolean => {
-    const header = viewport.current
-      ?.closest(".nextaction-task-map")
-      ?.querySelector(".nextaction-view-header");
-    const controls = [
-      ...(header?.querySelectorAll<HTMLElement>(focusable) ?? []),
-    ].filter((element) => element.getClientRects().length > 0);
-    const to = back ? controls.at(-1) : controls[0];
-    if (!to) return false;
-    to.focus();
-    return true;
-  };
-  const onCardKey = (event: React.KeyboardEvent<HTMLElement>): boolean => {
-    if (event.key !== "Tab" || event.ctrlKey || event.altKey || event.metaKey) {
-      return false;
-    }
-    const id = cardTask(event.target);
-    if (id === null) return false;
-    const at = order.indexOf(id);
-    const next = order[at + (event.shiftKey ? -1 : 1)];
-    if (at >= 0 && next !== undefined) {
-      event.preventDefault();
-      setKeyed(next);
-      // Focusable now: tabbable or not, a card with onOpen takes the focus.
-      cardOf(next)?.focus({ preventScroll: true });
-      return true;
-    }
-    if (leaveCards(event.shiftKey)) event.preventDefault();
-    return true;
   };
 
   // An endpoint marker's other end, centered once the map shows it.
@@ -1074,7 +1001,7 @@ export function TaskMapCanvas(props: {
       setKeyed(located);
     }
     locate.set(null);
-  }, [located, placed, centerOn, locate]);
+  }, [located, placed, centerOn, locate, setKeyed]);
 
   return (
     <section
