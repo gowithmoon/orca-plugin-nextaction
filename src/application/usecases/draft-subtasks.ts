@@ -2,6 +2,7 @@
 // #202). The AI may ask once first; what it gives is a draft for the user
 // to edit in the window, nothing is written here (ADR 0026).
 
+import { buildTaskRelations } from "../../domain/blocking/task-relations";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
 import {
   type AiStart,
@@ -113,14 +114,12 @@ export function createDraftSubtasks(deps: {
     const self = tasks.find((item) => item.task.id === id);
     if (!self) throw new Error(`block ${id} is not a task`);
     const outline = await deps.repository.readOutline(id);
-    const parent = tasks.find((item) => item.task.id === self.parentId);
-    const subtasks = tasks
-      .filter((item) => item.parentId === id)
-      .sort((a, b) => a.position - b.position)
-      .map((item) => ({
-        text: item.task.text,
-        status: statusText[item.task.status],
-      }));
+    const relations = buildTaskRelations(tasks);
+    const parent = relations.parentOf(id);
+    const subtasks = relations.childrenOf(id).map((item) => ({
+      text: item.task.text,
+      status: statusText[item.task.status],
+    }));
     const { project } = await readProjectOfTask(id);
     const goal =
       project && (await deps.repository.getProject(project.id))?.goal;
