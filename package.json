@@ -2,6 +2,7 @@
   "name": "orca-plugin-nextaction",
   "version": "0.0.0",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "packageManager": "pnpm@12.6.0",
   "scripts": {
@@ -10,6 +11,7 @@
     "build:dev": "NODE_ENV=development vite build --mode development",
     "deploy:local": "pnpm build && node --env-file-if-exists=.env.local scripts/deploy-local.ts",
     "deploy:local:dev": "pnpm build:dev && node --env-file-if-exists=.env.local scripts/deploy-local.ts",
+    "package": "pnpm build && node scripts/package.ts",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "lint": "biome check",

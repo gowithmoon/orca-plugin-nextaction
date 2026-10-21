@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>NextAction</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B8EEA"/>
+      <stop offset="1" stop-color="#1C5FC7"/>
+    </linearGradient>
+    <clipPath id="sun">
+      <path d="M68 188 A60 60 0 0 1 188 188 Z"/>
+    </clipPath>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <path d="M54.7 161.3 L35.9 154.5 M201.3 161.3 L220.1 154.5" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+  <path d="M68 188 A60 60 0 0 1 188 188 Z" fill="#fff"/>
+  <path d="M40 188 H216" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+  <g fill="none" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M58 118 L96 156 L186 66" stroke="#fff"/>
+    <path d="M136 66 L186 66 L186 116" stroke="#fff"/>
+    <path d="M58 118 L96 156 L186 66" stroke="url(#bg)" clip-path="url(#sun)"/>
+  </g>
+</svg>

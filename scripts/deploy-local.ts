@@ -34,7 +34,9 @@ mkdirSync(target, { recursive: true });
 // Replace dist wholesale so files dropped from the build do not linger.
 rmSync(join(target, "dist"), { recursive: true, force: true });
 cpSync("dist", join(target, "dist"), { recursive: true });
-cpSync("icon.png", join(target, "icon.png"));
+cpSync("icon.svg", join(target, "icon.svg"));
+// Folders deployed before the icon became an SVG still hold the old PNG.
+rmSync(join(target, "icon.png"), { force: true });
 cpSync("package.json", join(target, "package.json"));
 
 console.log(`Deployed ${name} to ${target}`);

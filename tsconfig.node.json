@@ -17,6 +17,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "scripts/deploy-local.ts",
+    "scripts/package.ts",
     "tests/source-checks.ts",
     "tests/architecture.test.ts",
     "tests/translations.test.ts"
