@@ -3,20 +3,14 @@
 // it, the interface only drawing it. The rows are the project's tasks in
 // note order; collapsing them is the interface's.
 import { dependencyConflicts } from "../../domain/blocking/date-conflict";
-import {
-  analyzeTaskGraph,
-  type SnapshotTask,
-  type TaskGraphEntry,
+import type {
+  SnapshotTask,
+  TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
 import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import { addDays, compareDays } from "../../domain/time/calendar-days";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 import { projectNode, projectNodeContext } from "./project-nodes";
 import {
   type AllTasksFilter,
@@ -30,6 +24,10 @@ import {
   type TaskTree,
 } from "./read-all-tasks";
 import { projectShiftPlanner } from "./shift-later";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /**
  * What a row draws on the time axis, told apart by `kind`: a bar, a bracket,
@@ -361,18 +359,12 @@ function bracketOver(rows: readonly GanttRow[], depth: number): GanttBar {
   return { kind: "bracket", start, due };
 }
 
-export function createReadProjectGantt(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadProjectGantt {
+export function createReadProjectGantt(
+  deps: TaskGraphReading,
+): ReadProjectGantt {
   return async (options) => {
-    const snapshot = await deps.repository.readTaskGraph();
-    const boundary = deps.dayBoundary.current();
-    const today = logicalDay(deps.clock.now(), boundary);
-    const previewDays = deps.startPreviewDays.current();
-    const graph = analyzeTaskGraph(snapshot, { today, previewDays });
+    const read = await readTodaysTaskGraph(deps);
+    const { snapshot, graph, today } = read;
     const scoped = (snapshot.projects ?? []).find(
       (item) => item.project.id === options.project,
     );
@@ -430,11 +422,7 @@ export function createReadProjectGantt(deps: {
     const rows = projectRootTasks(graph, scoped.project.id).flatMap((root) =>
       rowsOf(tree, root, 0, kept, scoped.project, standing),
     );
-    const project = projectNode(
-      projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
-      scoped.project,
-      [],
-    );
+    const project = projectNode(projectNodeContext(read), scoped.project, []);
     return {
       kind: "project",
       project,

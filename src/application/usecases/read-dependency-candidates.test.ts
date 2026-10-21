@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
+import { readTaskPanelPart } from "../../../tests/task-panel-relations";
 import { matchesSearch } from "../../domain/task/task-search";
-import { createReadDependencyCandidates } from "./read-dependency-candidates";
 
 describe("read dependency candidates", () => {
   it("offers every task not done, other than the task itself, with its text", async () => {
@@ -15,9 +15,10 @@ describe("read dependency candidates", () => {
       status: "someday",
     });
     repository.addBlock(5, { text: "Not a task" });
-    const readDependencyCandidates = createReadDependencyCandidates({
+    const readDependencyCandidates = readTaskPanelPart(
       repository,
-    });
+      "dependencyCandidates",
+    );
 
     expect(await readDependencyCandidates(1)).toEqual([
       {
@@ -43,9 +44,10 @@ describe("read dependency candidates", () => {
     repository.addTask({ id: 2, text: "Pack" }, { parentId: 1 });
     repository.addTask({ id: 3, text: "Book a van", dependencies: [1] });
     repository.addTask({ id: 4, text: "Tell the bank" });
-    const readDependencyCandidates = createReadDependencyCandidates({
+    const readDependencyCandidates = readTaskPanelPart(
       repository,
-    });
+      "dependencyCandidates",
+    );
 
     const candidates = await readDependencyCandidates(1);
 
@@ -68,9 +70,10 @@ describe("read dependency candidates", () => {
       },
     });
     repository.addTask({ id: 3, text: "Draft the report" });
-    const readDependencyCandidates = createReadDependencyCandidates({
+    const readDependencyCandidates = readTaskPanelPart(
       repository,
-    });
+      "dependencyCandidates",
+    );
 
     const candidates = await readDependencyCandidates(1);
 
@@ -90,9 +93,10 @@ describe("read dependency candidates", () => {
     });
     repository.addTask({ id: 3, text: "Ask Zhang for the report" });
     repository.addTask({ id: 4, text: "Book a van" });
-    const readDependencyCandidates = createReadDependencyCandidates({
+    const readDependencyCandidates = readTaskPanelPart(
       repository,
-    });
+      "dependencyCandidates",
+    );
 
     const found = (await readDependencyCandidates(1)).filter((candidate) =>
       matchesSearch("zhang report", candidate),

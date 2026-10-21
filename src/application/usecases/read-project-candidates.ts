@@ -2,6 +2,7 @@
 // every project not done, with its project status for its icon, matched by
 // the words searched for. The task panel offers them; quick capture (#151)
 // offers the same.
+import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { ProjectId, ProjectStatus } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
 import { matchesSearch } from "../../domain/task/task-search";
@@ -30,21 +31,28 @@ export type ReadProjectCandidates = (
 export function createReadProjectCandidates(deps: {
   repository: TaskRepository;
 }): ReadProjectCandidates {
-  return async (id, include) => {
-    const snapshot = await deps.repository.readTaskGraph();
-    return [...(snapshot.projects ?? [])]
-      .filter(
-        (item) =>
-          (item.project.status !== "done" || item.project.id === include) &&
-          item.project.id !== id,
-      )
-      .sort((a, b) => a.position - b.position)
-      .map(({ project }) => ({
-        id: project.id,
-        text: project.text,
-        status: project.status,
-      }));
-  };
+  return async (id, include) =>
+    projectCandidatesIn(await deps.repository.readTaskGraph(), id, include);
+}
+
+/** The project candidates in `snapshot`, as `ReadProjectCandidates` gives them. */
+export function projectCandidatesIn(
+  snapshot: TaskGraphSnapshot,
+  id?: TaskId,
+  include?: ProjectId,
+): ProjectCandidate[] {
+  return [...(snapshot.projects ?? [])]
+    .filter(
+      (item) =>
+        (item.project.status !== "done" || item.project.id === include) &&
+        item.project.id !== id,
+    )
+    .sort((a, b) => a.position - b.position)
+    .map(({ project }) => ({
+      id: project.id,
+      text: project.text,
+      status: project.status,
+    }));
 }
 
 /**

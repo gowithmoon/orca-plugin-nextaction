@@ -11,18 +11,15 @@
 import {
   isProjectReason,
   type NotNextActionReason,
-  type ReadNotNextActionReasons,
+  type NotNextActionReasonsRead,
   type RelatedTask,
 } from "../../application/usecases/read-not-next-action-reasons";
 import type { ProjectId } from "../../domain/project/project";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import { daysBetween } from "../../domain/time/calendar-days";
-import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate, shownText } from "../components/format";
 import { projectStatusLabel } from "../components/project-status-label";
-import { useNotNextActionReasons } from "../hooks/use-not-next-action-reasons";
-import type { Notify } from "../notify";
 import { Field } from "./task-panel-fields";
 
 /**
@@ -99,10 +96,9 @@ function waitsForRecurring(
 }
 
 export function NotNextActionReasonsField(props: {
-  readNotNextActionReasons: ReadNotNextActionReasons;
+  /** The reasons as last read with the panel's relations. */
+  read: NotNextActionReasonsRead;
   taskId: TaskId;
-  changes: ChangeSignalSource;
-  notify: Notify;
   labelId: string;
   /**
    * The current logical day, for the days a dependency delay has left and
@@ -114,12 +110,7 @@ export function NotNextActionReasonsField(props: {
   /** Opens project `projectId` in the notes (#143): a project is no task. */
   onOpenProject: (projectId: ProjectId) => void;
 }) {
-  const { reasons, tasks, projects } = useNotNextActionReasons(
-    props.readNotNextActionReasons,
-    props.taskId,
-    props.changes,
-    props.notify,
-  );
+  const { reasons, tasks, projects } = props.read;
   if (reasons.length === 0) return null;
   /** A task named in a reason, as a button that switches to it. */
   const taskButton = (id: TaskId) => {

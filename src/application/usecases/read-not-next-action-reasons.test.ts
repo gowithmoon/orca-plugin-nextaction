@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createFixedClock } from "../../../tests/fixed-clock";
-import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
 import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
-import { createReadNotNextActionReasons } from "./read-not-next-action-reasons";
+import { readTaskPanelPart } from "../../../tests/task-panel-relations";
 
 const weekly = {
   kind: "rule",
@@ -13,12 +11,11 @@ const weekly = {
 function setup() {
   const repository = createInMemoryTaskRepository();
   const startPreviewDays = createFixedStartPreviewDays();
-  const readNotNextActionReasons = createReadNotNextActionReasons({
+  const readNotNextActionReasons = readTaskPanelPart(
     repository,
-    clock: createFixedClock("2026-10-09T10:00:00+08:00"),
-    dayBoundary: createFixedDayBoundary(),
+    "reasons",
     startPreviewDays,
-  });
+  );
   return { repository, startPreviewDays, readNotNextActionReasons };
 }
 

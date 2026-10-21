@@ -1,12 +1,11 @@
 // Use case: the task panel's 阻塞 row (#208, GLOSSARY: 它阻塞的任务): the
 // tasks waiting for a task directly, from the task relations (#211).
 import type { SnapshotTask } from "../../domain/blocking/task-graph";
-import {
-  buildTaskRelations,
-  type TaskRelationKind,
+import type {
+  TaskRelationKind,
+  TaskRelations,
 } from "../../domain/blocking/task-relations";
 import type { TaskId, TaskStatus } from "../../domain/task/task";
-import type { TaskRepository } from "../ports/task-repository";
 
 /**
  * What a listed task is to the task: `parent`, its parent task (子任务阻塞);
@@ -25,66 +24,55 @@ export interface Waiter {
   readonly kinds: readonly WaiterKind[];
 }
 
-/** Reads the waiters of task `id`. Errors are thrown as they are. */
-export type ReadWaiters = (id: TaskId) => Promise<Waiter[]>;
-
-export function createReadWaiters(deps: {
-  repository: TaskRepository;
-}): ReadWaiters {
-  return async (id) => {
-    const snapshot = await deps.repository.readTaskGraph();
-    const relations = buildTaskRelations(snapshot.tasks);
-    // The graph holds source blocks only: an ID not among its tasks may be a
-    // mirror's, read as its source's (ARCHITECTURE: mirrors resolve at the
-    // repository). Most reads stop at the one graph read.
-    const source = relations.get(id)
-      ? id
-      : (await deps.repository.getTask(id))?.id;
-    // A block that is not a task waits for nothing and blocks nothing.
-    if (source === undefined || !relations.get(source)) return [];
-    const found: { item: SnapshotTask; kind: WaiterKind }[] = [];
-    /** The tasks waiting for task `of` directly in the `kind` way. */
-    const waitingOn = (of: TaskId, kind: TaskRelationKind) =>
-      relations
-        .waitersOf(of)
-        .filter((relation) => relation.kind === kind)
-        .map((relation) => relations.get(relation.waiting) as SnapshotTask);
-    for (const parent of waitingOn(source, "subtask")) {
-      found.push({ item: parent, kind: "parent" });
-    }
-    // Every later subtask, link by link along the sequential relations: each
-    // waits for the one just before it. The block tree cannot loop, but a
-    // task is visited once all the same.
-    const seen = new Set<TaskId>([source]);
-    for (
-      let later = waitingOn(source, "sequential")[0];
-      later && !seen.has(later.task.id);
-      later = waitingOn(later.task.id, "sequential")[0]
-    ) {
-      seen.add(later.task.id);
-      found.push({ item: later, kind: "laterInSequence" });
-    }
-    // Its 后续任务, in note order.
-    for (const dependent of waitingOn(source, "dependency")) {
-      found.push({ item: dependent, kind: "dependent" });
-    }
-    // A task waiting in two ways is listed once, where it comes first.
-    const merged = new Map<
-      TaskId,
-      { item: SnapshotTask; kinds: WaiterKind[] }
-    >();
-    for (const { item, kind } of found) {
-      // Someday and waiting ones count: only done ones no longer wait.
-      if (item.task.status === "done") continue;
-      const entry = merged.get(item.task.id);
-      if (entry) entry.kinds.push(kind);
-      else merged.set(item.task.id, { item, kinds: [kind] });
-    }
-    return [...merged.values()].map(({ item, kinds }) => ({
-      id: item.task.id,
-      text: item.task.text,
-      status: item.task.status,
-      kinds,
-    }));
-  };
+/**
+ * The waiters of task `source` (a source block's ID), from the task
+ * relations; none when it is not a task.
+ */
+export function waitersIn(
+  relations: TaskRelations<SnapshotTask>,
+  source: TaskId,
+): Waiter[] {
+  // A block that is not a task waits for nothing and blocks nothing.
+  if (!relations.get(source)) return [];
+  const found: { item: SnapshotTask; kind: WaiterKind }[] = [];
+  /** The tasks waiting for task `of` directly in the `kind` way. */
+  const waitingOn = (of: TaskId, kind: TaskRelationKind) =>
+    relations
+      .waitersOf(of)
+      .filter((relation) => relation.kind === kind)
+      .map((relation) => relations.get(relation.waiting) as SnapshotTask);
+  for (const parent of waitingOn(source, "subtask")) {
+    found.push({ item: parent, kind: "parent" });
+  }
+  // Every later subtask, link by link along the sequential relations: each
+  // waits for the one just before it. The block tree cannot loop, but a
+  // task is visited once all the same.
+  const seen = new Set<TaskId>([source]);
+  for (
+    let later = waitingOn(source, "sequential")[0];
+    later && !seen.has(later.task.id);
+    later = waitingOn(later.task.id, "sequential")[0]
+  ) {
+    seen.add(later.task.id);
+    found.push({ item: later, kind: "laterInSequence" });
+  }
+  // Its 后续任务, in note order.
+  for (const dependent of waitingOn(source, "dependency")) {
+    found.push({ item: dependent, kind: "dependent" });
+  }
+  // A task waiting in two ways is listed once, where it comes first.
+  const merged = new Map<TaskId, { item: SnapshotTask; kinds: WaiterKind[] }>();
+  for (const { item, kind } of found) {
+    // Someday and waiting ones count: only done ones no longer wait.
+    if (item.task.status === "done") continue;
+    const entry = merged.get(item.task.id);
+    if (entry) entry.kinds.push(kind);
+    else merged.set(item.task.id, { item, kinds: [kind] });
+  }
+  return [...merged.values()].map(({ item, kinds }) => ({
+    id: item.task.id,
+    text: item.task.text,
+    status: item.task.status,
+    kinds,
+  }));
 }

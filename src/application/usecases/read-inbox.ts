@@ -1,12 +1,9 @@
-// Use case: read the inbox (GLOSSARY: 收集箱), for the inbox view.
-import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import type { Project } from "../../domain/project/project";
 import type { Task, TaskId } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 export interface ReadInboxOptions {
   /**
@@ -39,21 +36,12 @@ function byCapture(a: InboxItem, b: InboxItem): number {
   );
 }
 
-export function createReadInbox(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadInbox {
+export function createReadInbox(deps: TaskGraphReading): ReadInbox {
   return async (options = {}) => {
     // Every task is read and filtered here: a task whose status is empty or
     // unknown reads as inbox (inbox-anomalous-status). The graph works out
     // the project each belongs to (GLOSSARY: 所属项目).
-    const snapshot = await deps.repository.readTaskGraph();
-    const graph = analyzeTaskGraph(snapshot, {
-      today: logicalDay(deps.clock.now(), deps.dayBoundary.current()),
-      previewDays: deps.startPreviewDays.current(),
-    });
+    const { snapshot, graph } = await readTodaysTaskGraph(deps);
     return snapshot.tasks
       .filter(({ task }) => task.status === "inbox" || task.id === options.keep)
       .map(({ task }) => ({

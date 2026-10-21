@@ -6,17 +6,13 @@ import {
   type ShiftLaterPlan,
   shiftLaterPlanner,
 } from "../../domain/blocking/shift-later";
-import {
-  analyzeTaskGraph,
-  type TaskGraph,
-} from "../../domain/blocking/task-graph";
+import type { TaskGraph } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /**
  * Shifts later the tasks after task `id` that conflict, in one undo: those
@@ -42,19 +38,9 @@ export function projectShiftPlanner(
   );
 }
 
-export function createShiftLater(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ShiftLater {
+export function createShiftLater(deps: TaskGraphReading): ShiftLater {
   return async (id) => {
-    const snapshot = await deps.repository.readTaskGraph();
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const graph = analyzeTaskGraph(snapshot, {
-      today,
-      previewDays: deps.startPreviewDays.current(),
-    });
+    const { graph } = await readTodaysTaskGraph(deps);
     const project = graph.entry(id)?.project;
     if (!project) return 0;
     const plan = projectShiftPlanner(graph, project.id)(id);

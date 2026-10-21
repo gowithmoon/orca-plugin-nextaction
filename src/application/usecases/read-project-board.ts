@@ -1,18 +1,10 @@
 // Use case: read a project's board (GLOSSARY: 布局, 分列方式, #166), for
 // the project details' board layout: the whole board as the layout shows
 // it, the interface only rendering it.
-import {
-  analyzeTaskGraph,
-  type SnapshotTask,
-} from "../../domain/blocking/task-graph";
+import type { SnapshotTask } from "../../domain/blocking/task-graph";
 import type { ProjectId } from "../../domain/project/project";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import { taskStatuses } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 import { projectNode, projectNodeContext } from "./project-nodes";
 import {
   type AllTasksFilter,
@@ -31,6 +23,10 @@ import {
   type TaskTree,
   taskSorted,
 } from "./read-all-tasks";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /**
  * A card on the board (GLOSSARY: 任务卡片): a task with what its card shows.
@@ -248,18 +244,12 @@ function descendantCounts(rows: readonly BoardRow[]): BoardCard["descendants"] {
   };
 }
 
-export function createReadProjectBoard(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadProjectBoard {
+export function createReadProjectBoard(
+  deps: TaskGraphReading,
+): ReadProjectBoard {
   return async (options) => {
-    const snapshot = await deps.repository.readTaskGraph();
-    const boundary = deps.dayBoundary.current();
-    const today = logicalDay(deps.clock.now(), boundary);
-    const previewDays = deps.startPreviewDays.current();
-    const graph = analyzeTaskGraph(snapshot, { today, previewDays });
+    const read = await readTodaysTaskGraph(deps);
+    const { snapshot, graph, today } = read;
     const scoped = (snapshot.projects ?? []).find(
       (item) => item.project.id === options.project,
     );
@@ -338,11 +328,7 @@ export function createReadProjectBoard(deps: {
       return cards;
     };
     const roots = allRoots.filter(visible);
-    const project = projectNode(
-      projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
-      scoped.project,
-      [],
-    );
+    const project = projectNode(projectNodeContext(read), scoped.project, []);
     if (options.grouping === "root") {
       // A project root task's descendant tasks are all the project's: the
       // parent task's ownership decides (domain/project/ownership.ts).

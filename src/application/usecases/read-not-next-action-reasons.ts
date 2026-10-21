@@ -3,9 +3,9 @@
 // gives (GLOSSARY: 阻塞) together with what else keeps the task out, and the
 // text of every task they name, so the panel can show and link them.
 import {
-  analyzeTaskGraph,
   type BlockingReason,
   statusAllowsNextAction,
+  type TaskGraph,
   type TaskGraphEntry,
 } from "../../domain/blocking/task-graph";
 import {
@@ -15,11 +15,6 @@ import {
 } from "../../domain/project/project";
 import { recurs } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 
 /**
  * Why a task to do or in progress is not a next action (#78), one entry per
@@ -215,67 +210,52 @@ export interface DependencyRead {
   readonly recurring: boolean;
 }
 
-/**
- * Reads why task `id` is not a next action. Errors are thrown as they are.
- */
-export type ReadNotNextActionReasons = (
+/** Why task `id` is not a next action, as `graph` judges it. */
+export function notNextActionReasonsIn(
+  graph: TaskGraph,
   id: TaskId,
-) => Promise<NotNextActionReasonsRead>;
-
-export function createReadNotNextActionReasons(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadNotNextActionReasons {
-  return async (id) => {
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const graph = analyzeTaskGraph(await deps.repository.readTaskGraph(), {
-      today,
-      previewDays: deps.startPreviewDays.current(),
-    });
-    const entry = graph.entry(id);
-    const reasons = entry ? reasonsOf(entry) : [];
-    const tasks = new Map<TaskId, RelatedTask>();
-    const projects = new Map<ProjectId, RelatedProject>();
-    for (const reason of reasons) {
-      if (isProjectReason(reason)) {
-        // The reason names the task's own project.
-        const project = entry?.project;
-        if (project) {
-          projects.set(project.id, { id: project.id, text: project.text });
-        }
-        continue;
+): NotNextActionReasonsRead {
+  const entry = graph.entry(id);
+  const reasons = entry ? reasonsOf(entry) : [];
+  const tasks = new Map<TaskId, RelatedTask>();
+  const projects = new Map<ProjectId, RelatedProject>();
+  for (const reason of reasons) {
+    if (isProjectReason(reason)) {
+      // The reason names the task's own project.
+      const project = entry?.project;
+      if (project) {
+        projects.set(project.id, { id: project.id, text: project.text });
       }
-      const named = [reason.source, ...reason.waitingFor];
-      // A dependency delay names the dependency it counts from (#77).
-      if (reason.kind === "dependencyDelay") named.push(reason.countedFrom);
-      for (const related of named) {
-        const entry = graph.entry(related);
-        if (entry) {
-          tasks.set(related, {
-            id: related,
-            text: entry.task.text,
-            recurring: recurs(entry.task.recurrence),
-          });
-        }
+      continue;
+    }
+    const named = [reason.source, ...reason.waitingFor];
+    // A dependency delay names the dependency it counts from (#77).
+    if (reason.kind === "dependencyDelay") named.push(reason.countedFrom);
+    for (const related of named) {
+      const entry = graph.entry(related);
+      if (entry) {
+        tasks.set(related, {
+          id: related,
+          text: entry.task.text,
+          recurring: recurs(entry.task.recurrence),
+        });
       }
     }
-    // A target not among the snapshot's tasks is stale, as the task graph
-    // judges it; nothing is written (ADR 0016).
-    const dependencies = (graph.entry(id)?.task.dependencies ?? []).map(
-      (target): DependencyRead => {
-        const entry = graph.entry(target);
-        return entry
-          ? {
-              id: target,
-              text: entry.task.text,
-              stale: false,
-              recurring: recurs(entry.task.recurrence),
-            }
-          : { id: target, text: null, stale: true, recurring: false };
-      },
-    );
-    return { reasons, tasks, projects, dependencies };
-  };
+  }
+  // A target not among the snapshot's tasks is stale, as the task graph
+  // judges it; nothing is written (ADR 0016).
+  const dependencies = (graph.entry(id)?.task.dependencies ?? []).map(
+    (target): DependencyRead => {
+      const entry = graph.entry(target);
+      return entry
+        ? {
+            id: target,
+            text: entry.task.text,
+            stale: false,
+            recurring: recurs(entry.task.recurrence),
+          }
+        : { id: target, text: null, stale: true, recurring: false };
+    },
+  );
+  return { reasons, tasks, projects, dependencies };
 }

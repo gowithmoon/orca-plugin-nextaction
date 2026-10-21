@@ -6,9 +6,9 @@ import {
   type DependencyCycleReason,
   dependencyTargetsThatCycle,
 } from "../../domain/blocking/dependency-cycles";
+import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import { recurs } from "../../domain/recurrence/recurrence";
 import type { TaskId } from "../../domain/task/task";
-import type { TaskRepository } from "../ports/task-repository";
 
 /** A task that can be picked as a dependency. */
 export interface DependencyCandidate {
@@ -32,29 +32,20 @@ export interface DependencyCandidate {
   readonly recurring: boolean;
 }
 
-/**
- * The dependency candidates for task `id`, in no particular order, from one
- * read. Errors are thrown as they are.
- */
-export type ReadDependencyCandidates = (
+/** The dependency candidates for task `id`, in no particular order. */
+export function dependencyCandidatesIn(
+  snapshot: TaskGraphSnapshot,
   id: TaskId,
-) => Promise<DependencyCandidate[]>;
-
-export function createReadDependencyCandidates(deps: {
-  repository: TaskRepository;
-}): ReadDependencyCandidates {
-  return async (id) => {
-    const snapshot = await deps.repository.readTaskGraph();
-    const cycles = dependencyTargetsThatCycle(snapshot, id);
-    return snapshot.tasks
-      .map((item) => item.task)
-      .filter((task) => task.id !== id && task.status !== "done")
-      .map((task) => ({
-        id: task.id,
-        text: task.text,
-        searchText: task.searchText,
-        cycle: cycles.get(task.id) ?? null,
-        recurring: recurs(task.recurrence),
-      }));
-  };
+): DependencyCandidate[] {
+  const cycles = dependencyTargetsThatCycle(snapshot, id);
+  return snapshot.tasks
+    .map((item) => item.task)
+    .filter((task) => task.id !== id && task.status !== "done")
+    .map((task) => ({
+      id: task.id,
+      text: task.text,
+      searchText: task.searchText,
+      cycle: cycles.get(task.id) ?? null,
+      recurring: recurs(task.recurrence),
+    }));
 }

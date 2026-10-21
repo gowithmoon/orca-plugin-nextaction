@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
-import { createReadWaiters } from "./read-waiters";
+import { readTaskPanelPart } from "../../../tests/task-panel-relations";
 
 describe("read waiters", () => {
   it("lists the parent task as the parent, with its text and status", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 1, text: "Paint the house", status: "todo" });
     repository.addTask({ id: 2, text: "Buy paint" }, { parentId: 1 });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(await readWaiters(2)).toEqual([
       { id: 1, text: "Paint the house", status: "todo", kinds: ["parent"] },
@@ -21,7 +21,7 @@ describe("read waiters", () => {
     repository.addTask({ id: 3, text: "Tape the edges" }, { parentId: 1 });
     repository.addTask({ id: 4, text: "Paint the walls" }, { parentId: 1 });
     repository.addTask({ id: 5, text: "Clean up" }, { parentId: 1 });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(await readWaiters(3)).toEqual([
       { id: 1, text: "Paint the house", status: "inbox", kinds: ["parent"] },
@@ -40,7 +40,7 @@ describe("read waiters", () => {
     repository.addTask({ id: 1, text: "Paint the house" });
     repository.addTask({ id: 2, text: "Buy paint" }, { parentId: 1 });
     repository.addTask({ id: 3, text: "Paint the walls" }, { parentId: 1 });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect((await readWaiters(2)).map((waiter) => waiter.id)).toEqual([1]);
   });
@@ -55,7 +55,7 @@ describe("read waiters", () => {
       dependencies: [1],
     });
     repository.addTask({ id: 3, text: "Water the plants" });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(await readWaiters(1)).toEqual([
       { id: 2, text: "Paint the wall", status: "todo", kinds: ["dependent"] },
@@ -75,7 +75,7 @@ describe("read waiters", () => {
       { parentId: 1 },
     );
     repository.addTask({ id: 5, text: "Hang the pictures", dependencies: [2] });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(
       (await readWaiters(2)).map((waiter) => [waiter.id, waiter.kinds]),
@@ -103,7 +103,7 @@ describe("read waiters", () => {
       status: "someday",
       dependencies: [2],
     });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(await readWaiters(2)).toEqual([
       {
@@ -127,7 +127,7 @@ describe("read waiters", () => {
         text: "Hang the pictures",
         dependencies: [2],
       });
-      const readWaiters = createReadWaiters({ repository });
+      const readWaiters = readTaskPanelPart(repository, "waiters");
 
       expect(
         (await readWaiters(2)).map((waiter) => [waiter.id, waiter.kinds]),
@@ -145,7 +145,7 @@ describe("read waiters", () => {
     repository.addTask({ id: 2, text: "Buy paint" }, { parentId: 1 });
     repository.addTask({ id: 3, text: "Paint the wall", dependencies: [2] });
     repository.addMirror(50, 2);
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(await readWaiters(50)).toEqual([
       { id: 1, text: "Paint the house", status: "inbox", kinds: ["parent"] },
@@ -167,7 +167,7 @@ describe("read waiters", () => {
     repository.addTask({ id: 7, text: "Paint the fence", dependencies: [3] });
     repository.addTask({ id: 8, text: "Fix the gate", dependencies: [7] });
     repository.addTask({ id: 9, text: "Clean the brushes", dependencies: [2] });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect((await readWaiters(3)).map((waiter) => waiter.id)).toEqual([
       2, 5, 7,
@@ -204,7 +204,7 @@ describe("read waiters", () => {
       { id: 11, text: "Paint the fence", dependencies: [2] },
       { position: 7 },
     );
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect((await readWaiters(2)).map((waiter) => waiter.id)).toEqual([
       1, 3, 4, 10, 11, 12,
@@ -220,7 +220,7 @@ describe("read waiters", () => {
       text: "Paint the wall",
       dependencies: [9, 1],
     });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect((await readWaiters(1)).map((waiter) => waiter.id)).toEqual([2]);
     // A block that is no longer a task blocks nothing.
@@ -231,7 +231,7 @@ describe("read waiters", () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask({ id: 1, text: "Buy paint" });
     repository.addTask({ id: 2, text: "Paint the wall" });
-    const readWaiters = createReadWaiters({ repository });
+    const readWaiters = readTaskPanelPart(repository, "waiters");
 
     expect(await readWaiters(1)).toEqual([]);
   });

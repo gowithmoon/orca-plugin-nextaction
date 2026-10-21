@@ -247,8 +247,6 @@ const zhCN: Record<string, string> = {
   "In a dependency cycle": "处于循环依赖",
   "${kind}: ": "${kind}：",
   ", ": "、",
-  "Could not read why the task is not a next action: ${reason}":
-    "无法读取阻塞原因：${reason}",
   Sequential: "顺序执行",
   "Subtasks one at a time, in note order": "子任务按笔记中的先后顺序逐个进行",
   Dependencies: "依赖",
@@ -265,14 +263,14 @@ const zhCN: Record<string, string> = {
   "Add a dependency": "添加依赖",
   "(Deleted block)": "（已删除的块）",
   "Could not search the blocks: ${reason}": "无法搜索块：${reason}",
+  "Could not read the task's dependencies, blocking and project: ${reason}":
+    "无法读取任务的依赖、阻塞和所属项目：${reason}",
   "Could not read the tasks to depend on: ${reason}":
     "无法读取可依赖的任务：${reason}",
   Blocks: "阻塞",
   Parent: "父任务",
   "Later in sequence": "顺序在后",
   Dependent: "后续任务",
-  "Could not read the tasks this one blocks: ${reason}":
-    "无法读取它阻塞的任务：${reason}",
   "Dependency mode": "依赖模式",
   All: "全部",
   Any: "任一",
@@ -646,8 +644,6 @@ const zhCN: Record<string, string> = {
   "Search projects": "搜索项目",
   "Set a project": "设定所属项目",
   "Change project": "改设所属项目",
-  "Could not read the project of the task: ${reason}":
-    "无法读取任务的所属项目：${reason}",
   // Quick capture's 所属项目 (#151).
   "No project": "无所属项目",
   "Could not read the projects: ${reason}": "无法读取项目：${reason}",

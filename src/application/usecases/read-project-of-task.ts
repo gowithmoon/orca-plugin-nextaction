@@ -3,8 +3,14 @@
 // the task's own setting when it does not count (overridden by a parent task,
 // or stale). Nothing is written: a stale setting is cleared only by the next
 // edit (ADR 0016).
-import type { SnapshotTask } from "../../domain/blocking/task-graph";
-import { buildTaskRelations } from "../../domain/blocking/task-relations";
+import type {
+  SnapshotTask,
+  TaskGraphSnapshot,
+} from "../../domain/blocking/task-graph";
+import {
+  buildTaskRelations,
+  type TaskRelations,
+} from "../../domain/blocking/task-relations";
 import {
   ownershipDecision,
   settingCounts,
@@ -69,53 +75,61 @@ export function createReadProjectOfTask(deps: {
 }): ReadProjectOfTask {
   return async (id) => {
     const snapshot = await deps.repository.readTaskGraph();
-    if (snapshot.projectsPaused) {
-      return {
-        project: null,
-        source: null,
-        ownSetting: null,
-        projectsPaused: true,
-      };
-    }
-    const relations = buildTaskRelations(snapshot.tasks);
-    const projects = new Map(
-      (snapshot.projects ?? []).map(({ project }) => [
-        project.id,
-        { id: project.id, text: project.text, status: project.status },
-      ]),
-    );
-    const isProject = (target: ProjectId) => projects.has(target);
-    const self = relations.get(id);
-    if (!self) return { project: null, source: null, ownSetting: null };
-    // The task and its ancestor tasks, nearest first.
-    const chain: SnapshotTask[] = [self, ...relations.ancestorsOf(id)];
-    const decision = ownershipDecision(chain, isProject);
-    const project =
-      decision === null ? null : (projects.get(decision.project) ?? null);
-    let source: ProjectOfTaskSource | null = null;
-    if (decision !== null) {
-      const decider = chain[decision.link];
-      // An ancestor task decides even when it is by a project block the task
-      // sits in too: the task's own setting would not count (US18, US90).
-      source =
-        decision.link === 0
-          ? { kind: decision.by === "setting" ? "own" : "location" }
-          : {
-              kind: "parentTask",
-              task: {
-                id: decider?.task.id ?? id,
-                text: decider?.task.text ?? "",
-              },
-            };
-    }
-    let ownSetting: OwnSettingShown | null = null;
-    const target = self.projectSetting?.target ?? null;
-    if (self.projectSetting && !settingCounts(self, isProject)) {
-      ownSetting = { kind: "stale" };
-    } else if (target !== null && source?.kind === "parentTask") {
-      const overridden = projects.get(target);
-      if (overridden) ownSetting = { kind: "overridden", project: overridden };
-    }
-    return { project, source, ownSetting };
+    return projectOfTaskIn(snapshot, buildTaskRelations(snapshot.tasks), id);
   };
+}
+
+/** The 所属项目 of task `id` in `snapshot`, related as `relations`. */
+export function projectOfTaskIn(
+  snapshot: TaskGraphSnapshot,
+  relations: TaskRelations<SnapshotTask>,
+  id: TaskId,
+): ProjectOfTaskRead {
+  if (snapshot.projectsPaused) {
+    return {
+      project: null,
+      source: null,
+      ownSetting: null,
+      projectsPaused: true,
+    };
+  }
+  const projects = new Map(
+    (snapshot.projects ?? []).map(({ project }) => [
+      project.id,
+      { id: project.id, text: project.text, status: project.status },
+    ]),
+  );
+  const isProject = (target: ProjectId) => projects.has(target);
+  const self = relations.get(id);
+  if (!self) return { project: null, source: null, ownSetting: null };
+  // The task and its ancestor tasks, nearest first.
+  const chain: SnapshotTask[] = [self, ...relations.ancestorsOf(id)];
+  const decision = ownershipDecision(chain, isProject);
+  const project =
+    decision === null ? null : (projects.get(decision.project) ?? null);
+  let source: ProjectOfTaskSource | null = null;
+  if (decision !== null) {
+    const decider = chain[decision.link];
+    // An ancestor task decides even when it is by a project block the task
+    // sits in too: the task's own setting would not count (US18, US90).
+    source =
+      decision.link === 0
+        ? { kind: decision.by === "setting" ? "own" : "location" }
+        : {
+            kind: "parentTask",
+            task: {
+              id: decider?.task.id ?? id,
+              text: decider?.task.text ?? "",
+            },
+          };
+  }
+  let ownSetting: OwnSettingShown | null = null;
+  const target = self.projectSetting?.target ?? null;
+  if (self.projectSetting && !settingCounts(self, isProject)) {
+    ownSetting = { kind: "stale" };
+  } else if (target !== null && source?.kind === "parentTask") {
+    const overridden = projects.get(target);
+    if (overridden) ownSetting = { kind: "overridden", project: overridden };
+  }
+  return { project, source, ownSetting };
 }

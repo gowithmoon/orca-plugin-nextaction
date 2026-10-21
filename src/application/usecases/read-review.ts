@@ -3,10 +3,7 @@
 // waiting, someday (#99) and the tasks due for review (#98), and the
 // summary's numbers with the moment the last full review was completed
 // (#101). Later issues append the other steps to `steps`.
-import {
-  analyzeTaskGraph,
-  type TaskGraphEntry,
-} from "../../domain/blocking/task-graph";
+import type { TaskGraphEntry } from "../../domain/blocking/task-graph";
 import type { Project, ProjectId } from "../../domain/project/project";
 import { isDueSoon } from "../../domain/review/due-steps";
 import {
@@ -20,14 +17,14 @@ import { isOverdue } from "../../domain/task/overdue";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import { compareDays, daysBetween } from "../../domain/time/calendar-days";
 import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { LastFullReviewStore } from "../ports/last-full-review";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 import { projectNodeContext, projectNodesInNoteOrder } from "./project-nodes";
 import type { ProjectNode } from "./read-all-tasks";
 import { groupProjects, type ProjectGroup } from "./read-project-list";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /** The review's steps that list tasks (GLOSSARY: 回顾), by key. */
 export type ReviewStepKey = keyof ReadReviewResult["steps"];
@@ -249,25 +246,16 @@ function byCapture(a: Task, b: Task): number {
   return a.created.getTime() - b.created.getTime() || a.id - b.id;
 }
 
-export function createReadReview(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-  lastFullReview: LastFullReviewStore;
-}): ReadReview {
+export function createReadReview(
+  deps: TaskGraphReading & { lastFullReview: LastFullReviewStore },
+): ReadReview {
   return async (options = {}) => {
-    const boundary = deps.dayBoundary.current();
-    const today = logicalDay(deps.clock.now(), boundary);
-    const [snapshot, lastFullReviewAt] = await Promise.all([
-      deps.repository.readTaskGraph(),
+    const [read, lastFullReviewAt] = await Promise.all([
+      readTodaysTaskGraph(deps),
       deps.lastFullReview.read(),
     ]);
+    const { snapshot, graph, today, boundary } = read;
     const { tasks } = snapshot;
-    const graph = analyzeTaskGraph(snapshot, {
-      today,
-      previewDays: deps.startPreviewDays.current(),
-    });
     const keep = options.keep;
     /** The project `task` belongs to, for its card. */
     const projectOf = (task: Task): Project | null =>
@@ -384,11 +372,7 @@ export function createReadReview(deps: {
         return { read: { kind: "paused" }, nodes: [] };
       const kept: ReadonlySet<ProjectId> =
         keep?.step === "projects" ? keep.projects : new Set();
-      const context = projectNodeContext(snapshot, graph, {
-        today,
-        previewDays: deps.startPreviewDays.current(),
-        boundary,
-      });
+      const context = projectNodeContext(read);
       const belongs = (node: ProjectNode) =>
         node.project.status !== "done" || node.unfinished > 0;
       // Only projects in the snapshot: a block that is no longer a project

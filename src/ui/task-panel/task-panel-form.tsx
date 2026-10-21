@@ -16,15 +16,11 @@ import type {
 } from "../../application/usecases/mark-reviewed";
 import type { ReadBlockRefCandidates } from "../../application/usecases/read-block-ref-candidates";
 import type { ReadCandidates } from "../../application/usecases/read-candidates";
-import type { ReadDependencyCandidates } from "../../application/usecases/read-dependency-candidates";
-import type { ReadNotNextActionReasons } from "../../application/usecases/read-not-next-action-reasons";
-import type { ReadProjectCandidates } from "../../application/usecases/read-project-candidates";
-import type { ReadProjectOfTask } from "../../application/usecases/read-project-of-task";
 import type {
   ReadTaskForPanel,
   TaskCustomProperty,
 } from "../../application/usecases/read-task";
-import type { ReadWaiters } from "../../application/usecases/read-waiters";
+import type { ReadTaskPanelRelations } from "../../application/usecases/read-task-panel-relations";
 import type { RepairNotAdvanced } from "../../application/usecases/repair-not-advanced";
 import type { SetCustomProperty } from "../../application/usecases/set-custom-property";
 import type { SetDependencies } from "../../application/usecases/set-dependencies";
@@ -56,6 +52,7 @@ import {
   useTaskActions,
 } from "../hooks/use-task-actions";
 import { useTaskPanelActions } from "../hooks/use-task-panel-actions";
+import { useTaskPanelRelations } from "../hooks/use-task-panel-relations";
 import { ChoicesField } from "./choices-field";
 import { CompletionHistoryField } from "./completion-history-field";
 import type { OpenCompletionHistoryPopup } from "./completion-history-popup";
@@ -98,25 +95,18 @@ export interface TaskPanelFormDeps {
   dropTask: DropTask;
   /** Values offered for contexts. */
   readCandidates: ReadCandidates;
-  /** Why the task is not a next action, for the row of that name (#78). */
-  readNotNextActionReasons: ReadNotNextActionReasons;
+  /**
+   * In one read: why the task is not a next action (#78), the tasks offered
+   * as dependencies (#57), the tasks it blocks (#208), its 所属项目 and the
+   * projects offered for it (#146).
+   */
+  readTaskPanelRelations: ReadTaskPanelRelations;
   /** Switches sequential on or off (#59). */
   setSequential: SetSequential;
-  /** Tasks offered to add as dependencies (#57). */
-  readDependencyCandidates: ReadDependencyCandidates;
   /** Replaces the task's dependencies (#57). */
   setDependencies: SetDependencies;
   /** Chooses how the task's dependencies are met (#58). */
   setDependencyMode: SetDependencyMode;
-  /**
-   * The tasks it blocks (its parent task, the later subtasks under a
-   * sequential parent, its 后续任务), for the last row (#208).
-   */
-  readWaiters: ReadWaiters;
-  /** The task's 所属项目 and where it comes from (#146). */
-  readProjectOfTask: ReadProjectOfTask;
-  /** Projects offered as the task's 所属项目 (#146). */
-  readProjectCandidates: ReadProjectCandidates;
   /** Sets, changes or clears the task's own 所属项目 (#146). */
   setProjectOfTask: SetProjectOfTask;
   /** Opens the recurrence rule popup for the task (#95). */
@@ -429,6 +419,13 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
   const taskActions = useTaskActions(deps.actions);
   const { notify } = deps.actions;
   const candidates = useCandidates(deps.readCandidates, deps.changes, notify);
+  // Shown once the task is (the form needs its ID); `null` until read.
+  const relations = useTaskPanelRelations(
+    deps.readTaskPanelRelations,
+    taskId,
+    deps.changes,
+    notify,
+  );
   /** Set once the task is going away, so nothing more is written or told. */
   const leaving = React.useRef(false);
   // Leaving writes the note unless the task went away or the plugin is
@@ -485,29 +482,27 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         notNextActionReasons={
           // Only a task to do or in progress gets reasons (#78); the use
           // case returns none for the rest, so the row stays hidden.
-          <NotNextActionReasonsField
-            readNotNextActionReasons={deps.readNotNextActionReasons}
-            taskId={state.task.id}
-            changes={deps.changes}
-            notify={notify}
-            labelId={`${idPrefix}-not-next-action`}
-            today={deps.today()}
-            onSelectTask={props.onSelectTask}
-            onOpenProject={(projectId) => {
-              // Failures are told by the shared action (#39).
-              taskActions.openBlockInNotes(projectId);
-              props.onOpenedInNotes?.();
-            }}
-          />
+          relations && (
+            <NotNextActionReasonsField
+              read={relations.reasons}
+              taskId={state.task.id}
+              labelId={`${idPrefix}-not-next-action`}
+              today={deps.today()}
+              onSelectTask={props.onSelectTask}
+              onOpenProject={(projectId) => {
+                // Failures are told by the shared action (#39).
+                taskActions.openBlockInNotes(projectId);
+                props.onOpenedInNotes?.();
+              }}
+            />
+          )
         }
         dependencies={
           <DependenciesField
             labelId={`${idPrefix}-dependencies`}
-            taskId={state.task.id}
             dependencies={state.task.dependencies}
-            readNotNextActionReasons={deps.readNotNextActionReasons}
-            readDependencyCandidates={deps.readDependencyCandidates}
-            changes={deps.changes}
+            shown={relations?.reasons.dependencies ?? []}
+            candidates={relations?.dependencyCandidates ?? []}
             notify={notify}
             onChange={(dependencies) =>
               void actions.setDependencies(dependencies)
@@ -516,31 +511,29 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
           />
         }
         projectOfTask={
-          <ProjectOfTaskField
-            labelId={`${idPrefix}-project`}
-            taskId={state.task.id}
-            readProjectOfTask={deps.readProjectOfTask}
-            readProjectCandidates={deps.readProjectCandidates}
-            changes={deps.changes}
-            notify={notify}
-            onChange={(project) => void actions.setProjectOfTask(project)}
-            onOpenProject={(projectId) => {
-              // Failures are told by the shared action (#39).
-              taskActions.openBlockInNotes(projectId);
-              props.onOpenedInNotes?.();
-            }}
-            onSelectTask={props.onSelectTask}
-          />
+          relations && (
+            <ProjectOfTaskField
+              labelId={`${idPrefix}-project`}
+              read={relations.projectOfTask}
+              candidates={relations.projectCandidates}
+              onChange={(project) => void actions.setProjectOfTask(project)}
+              onOpenProject={(projectId) => {
+                // Failures are told by the shared action (#39).
+                taskActions.openBlockInNotes(projectId);
+                props.onOpenedInNotes?.();
+              }}
+              onSelectTask={props.onSelectTask}
+            />
+          )
         }
         waiters={
-          <WaitersField
-            readWaiters={deps.readWaiters}
-            taskId={state.task.id}
-            changes={deps.changes}
-            notify={notify}
-            labelId={`${idPrefix}-waiters`}
-            onSelectTask={props.onSelectTask}
-          />
+          relations && (
+            <WaitersField
+              waiters={relations.waiters}
+              labelId={`${idPrefix}-waiters`}
+              onSelectTask={props.onSelectTask}
+            />
+          )
         }
       />
     );

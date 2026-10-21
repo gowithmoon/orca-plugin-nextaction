@@ -16,9 +16,10 @@ import type { Project, ProjectId } from "../../domain/project/project";
 import { recurs } from "../../domain/recurrence/recurrence";
 import type { CompletionEntry } from "../../domain/task/completion-history";
 import type { CalendarDate } from "../../domain/task/task";
-import { addDays, compareDays } from "../../domain/time/calendar-days";
+import { compareDays } from "../../domain/time/calendar-days";
 import type { DayBoundary } from "../../domain/time/logical-day";
 import type { AllTasksNode, ProjectNode } from "./read-all-tasks";
+import type { TodaysTaskGraph } from "./todays-task-graph";
 
 /** What the tasks that belong to a project say about it. */
 export interface ProjectSummary {
@@ -85,21 +86,13 @@ export interface ProjectNodeContext {
   readonly boundary: DayBoundary;
 }
 
-/** The context of `projectNode` for `snapshot`, analyzed as `graph`. */
-export function projectNodeContext(
-  snapshot: TaskGraphSnapshot,
-  graph: TaskGraph,
-  days: {
-    readonly today: CalendarDate;
-    readonly previewDays: number;
-    readonly boundary: DayBoundary;
-  },
-): ProjectNodeContext {
+/** The context of `projectNode` for today's task graph. */
+export function projectNodeContext(read: TodaysTaskGraph): ProjectNodeContext {
   return {
-    summaries: summarizeProjects(snapshot, graph),
-    today: days.today,
-    startsBy: addDays(days.today, days.previewDays),
-    boundary: days.boundary,
+    summaries: summarizeProjects(read.snapshot, read.graph),
+    today: read.today,
+    startsBy: read.startsBy,
+    boundary: read.boundary,
   };
 }
 
