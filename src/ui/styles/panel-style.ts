@@ -68,12 +68,34 @@ export const panelCss = `
 }
 
 .nextaction-panel-nav {
+  /* Holds the measuring row (panel-navigation.tsx). */
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--orca-spacing-xs);
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+}
+
+/* The items' widths, measured out of sight to pick how far the navigation
+   folds (#225). */
+.nextaction-panel-nav-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.nextaction-panel-nav-measure > .nextaction-panel-nav-item {
+  flex: 0 0 auto;
+}
+
+.nextaction-panel-nav-measure > [data-measure="named"] {
+  font-weight: var(--orca-fontweight-lg);
 }
 
 /* Pills (#48): the current view filled and bold, the others plain text. */
@@ -135,11 +157,29 @@ export const panelCss = `
   font-variant-numeric: tabular-nums;
 }
 
-/* Narrow: icons only, the current view too; the view header names it. */
-.nextaction-panel[data-tier="narrow"]
-  .nextaction-panel-nav-item
-  :is(.nextaction-panel-nav-label, .nextaction-panel-nav-count) {
+/* Folded to its icon (#225): the name a tooltip, the count a small badge
+   at the top right, inside the item so the navigation does not clip it.
+   Opaque, so it reads over the icon's corner. */
+.nextaction-panel-nav-item[data-icon-only] {
+  position: relative;
+}
+
+.nextaction-panel-nav-item[data-icon-only] .nextaction-panel-nav-label {
   display: none;
+}
+
+.nextaction-panel-nav-item[data-icon-only] .nextaction-panel-nav-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: calc(var(--orca-fontsize-xs) * 1.3);
+  padding: 0 2px;
+  background-color: color-mix(
+    in srgb,
+    var(--orca-color-text-2) 20%,
+    var(--orca-color-bg-1)
+  );
+  font-size: calc(var(--orca-fontsize-xs) * 0.85);
 }
 
 .nextaction-panel-actions {
@@ -199,7 +239,7 @@ export const panelCss = `
   line-height: var(--orca-lineheight-sm);
 }
 
-/* Narrow tier only, where the navigation shows no counts. */
+/* Narrow tier only, unless filtered (view-header.tsx). */
 .nextaction-view-count {
   flex: 0 0 auto;
   color: var(--orca-color-text-2);
