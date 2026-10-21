@@ -30,10 +30,6 @@ import type {
   ProjectStatus,
 } from "../../../domain/project/project";
 import {
-  lastCompletion as lastCompletionIn,
-  lastSkip as lastSkipIn,
-} from "../../../domain/task/completion-history";
-import {
   type CustomPropertyDefinition,
   type CustomPropertyValue,
   checkCustomPropertyValue,
@@ -64,7 +60,7 @@ import {
   planDependencyWrite,
   planProjectWrite,
 } from "../codec/dependency-write";
-import { planMyDayWrite, readMyDay } from "../codec/my-day-codec";
+import { planMyDayWrite } from "../codec/my-day-codec";
 import { type PropertyKey, propertyName } from "../codec/names";
 import {
   type PluginPropertyWrite,
@@ -125,11 +121,8 @@ import { choiceName } from "../schema/startup-plan";
 import type { PropertyDefinition } from "../schema/tag-schema";
 import type { ProjectTagState, TaskTagState } from "../schema/tag-state";
 import { readOutline } from "./outline";
-import {
-  type HierarchyBlock,
-  missingParents,
-  placeTasks,
-} from "./task-hierarchy";
+import { myDayOf, taskGraphSnapshot } from "./task-graph-snapshot";
+import { type HierarchyBlock, missingParents } from "./task-hierarchy";
 
 type ReadyTag = Extract<TaskTagState, { kind: "ready" }>;
 type ChoiceKey = Extract<PropertyKey, "context">;
@@ -404,18 +397,6 @@ const discardPlans = {
   reminders: planRemindersDiscard,
   completionHistory: planCompletionHistoryDiscard,
 } satisfies Record<DiscardableData, unknown>;
-
-/**
- * A block's My Day entries as the port reads them; `undefined` when it holds
- * none, so a snapshot task carries nothing.
- */
-function myDayOf(block: Block): MyDayRead | undefined {
-  const read = readMyDay(block);
-  if (read.kind === "unreadable") {
-    return { kind: "unreadable", reason: read.reason };
-  }
-  return read.entries.length > 0 ? read : undefined;
-}
 
 /**
  * The block reference values to write when a project is dropped (#150): for
@@ -774,21 +755,8 @@ export function createOrcaTaskRepository(
     const projectRead = readProjects();
     const ids = blockIdsFromQueryResult(await invokeBackend("query", query));
     const projectsRead = await projectRead;
-    if (ids.length === 0) {
-      return {
-        tasks: [],
-        projects: projectsRead.projects.map((project) => ({
-          project,
-          position: 0,
-          ...(projectsRead.blocks.get(project.id)?.aliases.length && {
-            page: true,
-          }),
-        })),
-        ...(projectsRead.paused && { projectsPaused: true }),
-      };
-    }
     const [blocks, context] = await Promise.all([
-      getBlocks(ids),
+      ids.length > 0 ? getBlocks(ids) : new Map<number, Block>(),
       readingTag(state, definitions),
     ]);
     const tasks: Task[] = [];
@@ -811,7 +779,6 @@ export function createOrcaTaskRepository(
     // Mirrors among the dependency targets read as their sources, so the
     // task graph sees a dependency on a mirror as one on its task (#57).
     const resolved = await withResolvedDependencies(tasks, new Set(ids));
-    tasks.splice(0, tasks.length, ...resolved);
     const hierarchy = new Map<number, HierarchyBlock>(blocks);
     for (const [id, block] of projectsRead.blocks) hierarchy.set(id, block);
     const asked = new Set<number>([...ids, ...projectsRead.blocks.keys()]);
@@ -823,73 +790,15 @@ export function createOrcaTaskRepository(
       for (const [id, block] of await getBlocks(layer))
         hierarchy.set(id, block);
     }
-    const places = placeTasks(
-      tasks.map((task) => task.id),
+    return taskGraphSnapshot({
+      tasks: resolved,
+      taskBlocks: blocks,
+      projects: projectsRead.projects,
+      projectBlocks: projectsRead.blocks,
       hierarchy,
-      projectsRead.projects.map((project) => project.id),
-    );
-    return {
+      projectSettings,
       ...(projectsRead.paused && { projectsPaused: true }),
-      projects: projectsRead.projects.map((project) => {
-        const block = projectsRead.blocks.get(project.id);
-        const place = places.get(project.id);
-        return {
-          project,
-          position: place?.position ?? Number.MAX_SAFE_INTEGER,
-          ...(block && block.aliases.length > 0 && { page: true }),
-          // A project block may sit below a task (ADR 0025, #170).
-          ...(place?.parentId != null && { parentId: place.parentId }),
-          ...(place?.projectBlock !== undefined && {
-            projectBlock: place.projectBlock,
-          }),
-        };
-      }),
-      tasks: tasks.map((task) => {
-        const place = places.get(task.id);
-        // The last completion (skips passed over, #91), from the block already
-        // read. An unreadable history reads as none here, without a warning
-        // on every read; it is reported where it is read for writing
-        // (readCompletionHistory).
-        const block = blocks.get(task.id);
-        const history = block ? readCompletionHistory(block) : undefined;
-        const lastCompletion =
-          history?.kind === "readable"
-            ? lastCompletionIn(history.history)
-            : undefined;
-        const lastSkip =
-          history?.kind === "readable"
-            ? lastSkipIn(history.history)
-            : undefined;
-        // The My Day entries, from the same block. Unreadable ones are marked
-        // so, without a warning on every read; readMyDay warns when they are
-        // read by ID.
-        const myDay = block ? myDayOf(block) : undefined;
-        return {
-          task,
-          parentId: place?.parentId ?? null,
-          position: place?.position ?? Number.MAX_SAFE_INTEGER,
-          ...(lastCompletion && { lastCompletion }),
-          ...(lastSkip && { lastSkip }),
-          // The whole history, for the review's look back (#102).
-          ...(history?.kind === "readable" &&
-            history.history.length > 0 && {
-              completionHistory: history.history,
-            }),
-          ...(myDay && { myDay }),
-          // A page has an alias; with no parent block it sits at the top of
-          // the notes, where only pages are tasks (ADR 0013, move-blocks P2).
-          ...(block && block.aliases.length > 0 && { page: true }),
-          ...(block && block.parent == null && { root: true }),
-          ...(place?.projectBlock !== undefined && {
-            projectBlock: place.projectBlock,
-          }),
-          // Stale or not, as read; the task graph decides whether it counts.
-          ...(projectSettings.has(task.id) && {
-            projectSetting: projectSettings.get(task.id),
-          }),
-        };
-      }),
-    };
+    });
   };
 
   /**
