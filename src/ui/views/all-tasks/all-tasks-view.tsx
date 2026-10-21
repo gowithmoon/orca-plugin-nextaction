@@ -90,7 +90,7 @@ export interface AllTasksViewDeps {
   sort: AllTasksSortStore;
   /** The done section's state, kept in the plugin instance's memory (#66). */
   doneSection: DoneSectionStore;
-  /** The filter's contexts and labels to offer: the task panel's (#69). */
+  /** The filter's contexts and tags to offer (#69, #224). */
   readCandidates: ReadCandidates;
   /**
    * The filter and search text, kept in the plugin instance's memory apart

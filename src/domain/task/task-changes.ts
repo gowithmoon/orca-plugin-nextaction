@@ -20,7 +20,6 @@ export interface TaskChanges {
   readonly start?: CalendarDate | null;
   readonly due?: CalendarDate | null;
   readonly contexts?: readonly string[];
-  readonly labels?: readonly string[];
   readonly note?: string | null;
   readonly sequential?: boolean;
   /**

@@ -107,6 +107,26 @@ export const taskPanelCss = `
   min-width: 0;
 }
 
+/* Tags (#224): read only, the card's pills; the popup has no component style. */
+.nextaction-task-tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--orca-spacing-sm);
+  min-height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
+}
+
+.nextaction-task-tags .nextaction-property-chip {
+  display: inline-block;
+  padding: 0 var(--orca-spacing-md);
+  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
+  background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
+  color: var(--orca-color-text-1);
+  font-size: var(--orca-fontsize-sm);
+}
+
 /* Custom properties (#113): their own group after the built-in fields. */
 .nextaction-custom-properties {
   display: flex;

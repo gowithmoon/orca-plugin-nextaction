@@ -246,7 +246,7 @@ export function planCustomPropertyWrite(
     case "single":
       return { name, value: value.value };
     case "multi":
-      // An empty list clears with null, as contexts and labels do.
+      // An empty list clears with null, as contexts do.
       return { name, value: value.value.length > 0 ? [...value.value] : null };
   }
 }

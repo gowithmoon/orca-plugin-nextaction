@@ -81,11 +81,6 @@ const structure: readonly {
     type: PropType.TextChoices,
     typeArgs: () => ({ subType: "multi", choices: [] }),
   },
-  {
-    key: "label",
-    type: PropType.TextChoices,
-    typeArgs: () => ({ subType: "multi", choices: [] }),
-  },
   // Text takes no type arguments (tag-operations spike writes it bare).
   { key: "note", type: PropType.Text },
   // Unchecked by default; without the default a tagged block holds no value
@@ -104,7 +99,7 @@ const structure: readonly {
     typeArgs: (_, tagName) => ({ scope: tagName }),
   },
   // Single choice, "all" by default (#58). No fixed colors: choices carry
-  // `c: ""` as the plugin adds context and label choices
+  // `c: ""` as the plugin adds context choices
   // (multi-choices-created).
   {
     key: "dependencyMode",

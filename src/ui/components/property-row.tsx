@@ -1,7 +1,7 @@
 // The row of a task's properties under its text (#45 "任务卡片的属性行", which
 // changes two rules of #35), in this order: the new status of a task that left
 // the view, the blocked mark (#65), an unrecognized status, due (red with "overdue" when overdue),
-// contexts, labels, importance, urgency (#79), effort. The start date never
+// contexts, tags (#224), importance, urgency (#79), effort. The start date never
 // shows on a card. Importance, urgency and effort always show, as an icon and
 // the level's name: faded at the default, importance and urgency bold from
 // "high" up, the full wording as tooltip and accessible name. The others only show with a value. Items are told apart by
@@ -21,6 +21,7 @@ import {
   effortName,
   formatContext,
   formatDate,
+  formatTag,
   importanceName,
   urgencyName,
 } from "./format";
@@ -191,12 +192,12 @@ export function PropertyRow(props: {
           {formatContext(context)}
         </span>
       ))}
-      {task.labels.map((label) => (
+      {task.tags.map((tag) => (
         <span
-          key={`label:${label}`}
-          className="nextaction-property nextaction-property-chip nextaction-property-label"
+          key={`tag:${tag}`}
+          className="nextaction-property nextaction-property-chip nextaction-property-tag"
         >
-          {label}
+          {formatTag(tag)}
         </span>
       ))}
       <RatingProperty

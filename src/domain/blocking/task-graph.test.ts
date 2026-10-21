@@ -42,7 +42,7 @@ function task(
     start: setup.start ?? null,
     due: null,
     contexts: [],
-    labels: [],
+    tags: [],
     note: null,
     sequential: setup.sequential ?? false,
     dependencies: setup.dependencies ?? [],

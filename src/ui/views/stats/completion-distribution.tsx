@@ -1,5 +1,5 @@
 // The stats view's distribution of completions (GLOSSARY: 统计视图, #136): the
-// period's completions by context, label or importance as horizontal bars,
+// period's completions by context, tag or importance as horizontal bars,
 // switched with a segmented control, context first. The control is plain
 // buttons, so the keyboard reaches and presses them. Each bar reads as its
 // name and count, in its tooltip and to a screen reader. Only Orca's theme
@@ -11,11 +11,15 @@ import type {
   Distributions,
 } from "../../../domain/stats/distributions";
 import { t } from "../../../shared/l10n/l10n";
-import { formatContext, importanceName } from "../../components/format";
+import {
+  formatContext,
+  formatTag,
+  importanceName,
+} from "../../components/format";
 
 const dimensions: readonly DistributionDimension[] = [
   "context",
-  "label",
+  "tag",
   "importance",
 ];
 
@@ -23,8 +27,8 @@ function dimensionName(dimension: DistributionDimension): string {
   switch (dimension) {
     case "context":
       return t("Context");
-    case "label":
-      return t("Label");
+    case "tag":
+      return t("Tag");
     case "importance":
       return t("Importance");
   }
@@ -37,8 +41,8 @@ function itemName(item: DistributionItem): string {
       return importanceName(item.value);
     case "context":
       return item.value === null ? t("Not set") : formatContext(item.value);
-    case "label":
-      return item.value === null ? t("Not set") : item.value;
+    case "tag":
+      return item.value === null ? t("Not set") : formatTag(item.value);
   }
 }
 

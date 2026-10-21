@@ -39,7 +39,7 @@ export type DiscardableData =
   | "reminders"
   | "completionHistory";
 
-/** Values a multi-value property (contexts, labels) must or must not hold. */
+/** Values a multi-value property (contexts) must or must not hold. */
 export interface ValuesFilter {
   /** The task holds every one of these. */
   includes?: readonly string[];
@@ -55,10 +55,15 @@ export interface BlockCandidate {
 }
 
 /** The multi-value properties whose values the user picks from candidates. */
-export type ChoiceProperty = "contexts" | "labels";
+export type ChoiceProperty = "contexts";
 
-/** The values offered for each multi-value property. */
-export type Candidates = Record<ChoiceProperty, string[]>;
+/**
+ * The values offered: for each multi-value property, and the tags tasks
+ * hold (GLOSSARY: 标签), offered by the filters only (#224).
+ */
+export type Candidates = Record<ChoiceProperty, string[]> & {
+  tags: string[];
+};
 
 /**
  * Which tasks a query matches. Every given condition must hold; an empty
@@ -72,7 +77,6 @@ export interface TaskFilter {
    */
   statuses?: readonly [TaskStatus, ...TaskStatus[]];
   contexts?: ValuesFilter;
-  labels?: ValuesFilter;
   /** The task is somewhere below this block, at any depth. */
   underBlockId?: number;
 }
@@ -258,17 +262,17 @@ export interface TaskRepository {
   readTaskGraph(): Promise<TaskGraphSnapshot>;
 
   /**
-   * The values to offer for contexts and labels, each once per property, in
-   * no particular order: the task tag's choices for that property, and the
-   * values tasks already hold. An invalidated property has none. Both come
-   * from one read of the tasks.
+   * The values to offer, each once, in no particular order: for contexts, the
+   * task tag's choices and the values tasks already hold (an invalidated
+   * property has none); for tags, the tags tasks hold (#224). All come from
+   * one read of the tasks.
    */
   readCandidates(): Promise<Candidates>;
 
   /**
    * Writes the task as `write` says (`TaskWrite`), leaving what it leaves
-   * out as it is. Contexts and labels written are made choices of the task
-   * tag first, so they show in the notes and become candidates. The user
+   * out as it is. Contexts written are made choices of the task tag first,
+   * so they show in the notes and become candidates. The user
    * undoes the whole write with one undo. Fails, writing nothing, when the
    * block is not a task, a property is invalidated, or a plugin block
    * property to be replaced reads as unreadable. A mirror block's ID writes

@@ -79,25 +79,17 @@ describe("encodeTaskChanges", () => {
     ]);
   });
 
-  it("writes effort, start and labels, one item per property", () => {
+  it("writes effort and start, one item per property", () => {
     const en: TaskWriteContext = { language: "en", invalidated: [] };
     const items = encodeTaskChanges(
       {
         effort: 2,
         start: { year: 2026, month: 10, day: 7 },
-        labels: ["house"],
       },
       en,
     );
-    expect(items.map((item) => item.name).sort()).toEqual([
-      "Effort",
-      "Label",
-      "Start",
-    ]);
+    expect(items.map((item) => item.name).sort()).toEqual(["Effort", "Start"]);
     expect(items.find((item) => item.name === "Effort")?.value).toBe(2);
-    expect(items.find((item) => item.name === "Label")?.value).toEqual([
-      "house",
-    ]);
     const start = items.find((item) => item.name === "Start");
     expect(start?.type).toBe(5);
     expect(instantOf(start?.value)).toBe("2026-10-06T16:00:00.000Z");

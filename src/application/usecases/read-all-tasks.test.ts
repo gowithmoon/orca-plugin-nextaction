@@ -831,19 +831,19 @@ describe("read all tasks, filtered and searched", () => {
     ]);
   });
 
-  it("by contexts, labels and importance lets through any choice within a dimension, (None) for no value, and needs every dimension", async () => {
+  it("by contexts, tags and importance lets through any choice within a dimension, (None) for no value, and needs every dimension", async () => {
     const { repository, readAllTasks } = setup();
-    repository.addTask({ id: 1, contexts: ["home"], labels: ["q4"] });
-    repository.addTask({ id: 2, contexts: [], labels: ["q4"] });
-    repository.addTask({ id: 3, contexts: ["office"], labels: ["q4"] });
-    repository.addTask({ id: 4, contexts: ["home"], labels: [] });
-    repository.addTask({ id: 5, contexts: ["home"], labels: ["q4"] });
+    repository.addTask({ id: 1, contexts: ["home"], tags: ["q4"] });
+    repository.addTask({ id: 2, contexts: [], tags: ["q4"] });
+    repository.addTask({ id: 3, contexts: ["office"], tags: ["q4"] });
+    repository.addTask({ id: 4, contexts: ["home"], tags: [] });
+    repository.addTask({ id: 5, contexts: ["home"], tags: ["q4"] });
     repository.addTask({ id: 6, contexts: ["home"], importance: 6 });
 
     const read = await readAllTasks({
       filter: {
         contexts: { values: ["home"], none: true },
-        labels: { values: ["q4"], none: false },
+        tags: { values: ["q4"], none: false },
         importance: [4],
       },
     });

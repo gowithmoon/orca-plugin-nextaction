@@ -1,7 +1,7 @@
 // The all tasks view's filter (#69): a filter button in the toolbar, after
 // the view controls, opening a panel of a multiple choice of the five
 // statuses a task not done can have and the next action view's contexts,
-// labels, importance and urgency fields; and the search box for the task
+// tags, importance and urgency fields; and the search box for the task
 // text, at the toolbar's start. The candidates are the task panel's.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import type * as React from "react";
@@ -17,7 +17,7 @@ import {
   UrgencySelect,
   ValuesSelect,
 } from "../../components/filter-selects";
-import { formatContext } from "../../components/format";
+import { formatContext, formatTag } from "../../components/format";
 import { Select } from "../../components/popup-controls";
 import { statusLabel } from "../../components/status-label";
 import {
@@ -132,12 +132,12 @@ export function AllTasksFilterButton(props: {
         onChange={(contexts) => setFilter({ ...filter, contexts })}
       />
       <ValuesSelect
-        label={t("Label")}
-        placeholder={t("Any label")}
-        choice={filter.labels}
-        candidates={candidates.labels}
-        display={(label) => label}
-        onChange={(labels) => setFilter({ ...filter, labels })}
+        label={t("Tag")}
+        placeholder={t("Any tag")}
+        choice={filter.tags}
+        candidates={candidates.tags}
+        display={formatTag}
+        onChange={(tags) => setFilter({ ...filter, tags })}
       />
       <ImportanceSelect
         chosen={filter.importance}

@@ -167,7 +167,7 @@ function CustomPropertyControl(props: {
         />
       );
     case "multi":
-      // As contexts and labels; options typed in are added (#114).
+      // As contexts; options typed in are added (#114).
       return (
         <ChoicesField
           labelId={props.labelId}

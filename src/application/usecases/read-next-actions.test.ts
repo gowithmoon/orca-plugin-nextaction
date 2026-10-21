@@ -214,31 +214,46 @@ describe("read next actions", () => {
       expect(ids(read)).toEqual([1, 2]);
     });
 
-    it("by contexts and labels together: a task both let through", async () => {
+    it("by contexts and tags together: a task both let through", async () => {
       const { repository, readNextActions } = setup();
       repository.addTask({
         id: 1,
         status: "todo",
         contexts: ["office"],
-        labels: ["work"],
+        tags: ["work"],
       });
       repository.addTask({ id: 2, status: "todo", contexts: ["office"] });
-      repository.addTask({ id: 3, status: "todo", labels: ["work"] });
+      repository.addTask({ id: 3, status: "todo", tags: ["work"] });
       repository.addTask({
         id: 4,
         status: "todo",
         contexts: ["office"],
-        labels: ["errand"],
+        tags: ["errand"],
       });
 
       const read = await readNextActions({
         filter: {
           contexts: { values: ["office"], none: false },
-          labels: { values: ["work"], none: true },
+          tags: { values: ["work"], none: true },
         },
       });
 
       expect(ids(read)).toEqual([1, 2]);
+    });
+
+    it("by tags: only a task tagged itself, not a subtask of a tagged task (#224)", async () => {
+      const { repository, readNextActions } = setup();
+      // 2 is the next action under the tagged 1; it holds no tag itself.
+      repository.addTask({ id: 1, status: "todo", tags: ["客户A"] });
+      repository.addTask({ id: 2, status: "todo" }, { parentId: 1 });
+      repository.addTask({ id: 3, status: "todo", tags: ["客户A", "写作"] });
+      repository.addTask({ id: 4, status: "todo", tags: ["写作"] });
+
+      const read = await readNextActions({
+        filter: { tags: { values: ["客户A"], none: false } },
+      });
+
+      expect(ids(read)).toEqual([3]);
     });
 
     it("by importance: a task at any one of the chosen levels", async () => {
@@ -301,13 +316,13 @@ describe("read next actions", () => {
     it("with nothing chosen in any dimension: every next action", async () => {
       const { repository, readNextActions } = setup();
       repository.addTask({ id: 1, status: "todo", contexts: ["office"] });
-      repository.addTask({ id: 2, status: "todo", labels: ["work"] });
+      repository.addTask({ id: 2, status: "todo", tags: ["work"] });
       repository.addTask({ id: 3, status: "todo" });
 
       const read = await readNextActions({
         filter: {
           contexts: { values: [], none: false },
-          labels: { values: [], none: false },
+          tags: { values: [], none: false },
           importance: [],
           urgency: [],
         },

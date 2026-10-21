@@ -1,5 +1,5 @@
 // The next action view's filter (#55): a filter button at the end of the
-// view's title row, opening a panel of contexts and labels, each a multiple
+// view's title row, opening a panel of contexts and tags, each a multiple
 // choice with "(None)" for a task holding no value, and the seven importance
 // and urgency levels (#74). The candidates are the task panel's. Verified by
 // hand in Orca (docs/ARCHITECTURE.md §5).
@@ -12,7 +12,7 @@ import {
   UrgencySelect,
   ValuesSelect,
 } from "../../components/filter-selects";
-import { formatContext } from "../../components/format";
+import { formatContext, formatTag } from "../../components/format";
 import type { FullNextActionFilter } from "./next-action-filter-store";
 
 export function NextActionFilterButton(props: {
@@ -36,12 +36,12 @@ export function NextActionFilterButton(props: {
         onChange={(contexts) => onChange({ ...filter, contexts })}
       />
       <ValuesSelect
-        label={t("Label")}
-        placeholder={t("Any label")}
-        choice={filter.labels}
-        candidates={candidates.labels}
-        display={(label) => label}
-        onChange={(labels) => onChange({ ...filter, labels })}
+        label={t("Tag")}
+        placeholder={t("Any tag")}
+        choice={filter.tags}
+        candidates={candidates.tags}
+        display={formatTag}
+        onChange={(tags) => onChange({ ...filter, tags })}
       />
       <ImportanceSelect
         chosen={filter.importance}

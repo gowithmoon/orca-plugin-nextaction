@@ -23,7 +23,7 @@ describe("planning the choices to add to a multiple choice property", () => {
 
   it("appends only the missing values, in the order of the list, as object choices", () => {
     const property = {
-      name: "标记",
+      name: "上下文",
       type: 6,
       pos: 6,
       typeArgs: { subType: "multi", choices: [{ n: "writing", c: "" }] },
@@ -35,7 +35,7 @@ describe("planning the choices to add to a multiple choice property", () => {
       kind: "add",
       added: ["reading", "admin"],
       definition: {
-        name: "标记",
+        name: "上下文",
         type: 6,
         pos: 6,
         typeArgs: {
@@ -57,7 +57,7 @@ describe("planning the choices to add to a multiple choice property", () => {
       typeArgs: { subType: "multi", choices: [] },
     };
     const moved = {
-      name: "Label",
+      name: "Context",
       type: 6,
       pos: 2,
       typeArgs: { subType: "multi", choices: [] },
@@ -67,7 +67,7 @@ describe("planning the choices to add to a multiple choice property", () => {
       definition: { name: "Context", pos: 5 },
     });
     expect(planChoiceAdditions(moved, ["urgent"])).toMatchObject({
-      definition: { name: "Label", pos: 2 },
+      definition: { name: "Context", pos: 2 },
     });
   });
 
@@ -105,7 +105,7 @@ describe("planning the choices to add to a multiple choice property", () => {
 
   it("changes nothing for an empty list", () => {
     const property = {
-      name: "标记",
+      name: "上下文",
       type: 6,
       pos: 6,
       typeArgs: { subType: "multi", choices: [] },
@@ -116,7 +116,7 @@ describe("planning the choices to add to a multiple choice property", () => {
 
   it("adds every value to a property without choices", () => {
     const property = {
-      name: "Label",
+      name: "Context",
       type: 6,
       pos: 6,
       typeArgs: { subType: "multi" },
@@ -126,7 +126,7 @@ describe("planning the choices to add to a multiple choice property", () => {
       kind: "add",
       added: ["urgent", "later"],
       definition: {
-        name: "Label",
+        name: "Context",
         type: 6,
         pos: 6,
         typeArgs: {

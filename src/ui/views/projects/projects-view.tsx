@@ -123,7 +123,7 @@ export interface ProjectsViewDeps {
   openProject: OpenProjectStore;
   /** The task menu's registrations, for a right-click on a card (#157). */
   menuItems: () => TaskMenuItems | undefined;
-  /** The filter's contexts and labels to offer: the task panel's. */
+  /** The filter's contexts and tags to offer. */
   readCandidates: ReadCandidates;
   /** Dragging a card onto another or into a gap moves its block. */
   moveTask: MoveTask;

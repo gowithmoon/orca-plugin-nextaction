@@ -100,7 +100,7 @@ describe("whether the task menu offers Mark reviewed", () => {
     start: null,
     due: null,
     contexts: [],
-    labels: [],
+    tags: [],
     note: null,
     sequential: false,
     dependencies: [],

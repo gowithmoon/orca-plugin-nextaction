@@ -15,7 +15,6 @@ const propertyTable = [
   ["start", "开始日期", "Start"],
   ["due", "截止日期", "Due"],
   ["context", "上下文", "Context"],
-  ["label", "标记", "Label"],
   ["note", "备注", "Notes"],
   ["urgency", "紧急度", "Urgency"],
 ] as const;

@@ -1,6 +1,7 @@
 // Block → Task decoding. Values come from the task block's reference to the
 // task tag block (tag-operations): `refs[]` with `type === 2` and `to` equal
-// to the tag block ID, its `data` holding one item per property.
+// to the tag block ID, its `data` holding one item per property. The block's
+// other `type === 2` references are its plain tags (GLOSSARY: 标签, #224).
 
 import type { ProjectSetting } from "../../../domain/project/ownership";
 import type { CustomPropertyDefinition } from "../../../domain/task/custom-property";
@@ -25,6 +26,11 @@ import { reviewOf } from "./review-codec";
 /** What the codec needs to know about the task tag. */
 export interface TaskTagContext {
   tagBlockId: number;
+  /**
+   * The project tag's block, left out of the task's tags like the task tag
+   * (#224); none when the project tag does not exist.
+   */
+  projectTagBlockId?: number;
   /** Plugin properties whose definition conflicts; they read as empty (#19). */
   invalidated: readonly PropertyKey[];
   /** The task tag's custom property definitions; none when absent (#113). */
@@ -69,6 +75,8 @@ export interface RawBlock {
     id: number;
     type: number;
     to: number;
+    /** The tag's current name on a tag reference (tag-operations, #224). */
+    alias?: string | null;
     data?: readonly { name: string; value?: unknown }[] | null;
   }[];
 }
@@ -150,7 +158,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       start: dateValue(values.get("start")),
       due: dateValue(values.get("due")),
       contexts: choicesValue(values.get("context")),
-      labels: choicesValue(values.get("label")),
+      tags: tagsOf(block.refs, tag),
       note: textValue(values.get("note")),
       sequential: booleanValue(values.get("sequential")),
       dependencies: refDataTargets(block.refs, values.get("dependencies")),
@@ -167,6 +175,25 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       ),
     }),
   };
+}
+
+/**
+ * The block's plain tags (tag-operations, #224): every tag reference but those
+ * to the task tag and the project tag, compared by block so a renamed tag is
+ * still left out, by the reference's `alias`, which follows a rename (the
+ * block's `text` keeps the old name), in order, each once.
+ */
+function tagsOf(
+  refs: RawBlock["refs"],
+  tag: Pick<TaskTagContext, "tagBlockId" | "projectTagBlockId">,
+): string[] {
+  const names = new Set<string>();
+  for (const ref of refs) {
+    if (ref.type !== RefType.Property) continue;
+    if (ref.to === tag.tagBlockId || ref.to === tag.projectTagBlockId) continue;
+    if (typeof ref.alias === "string" && ref.alias !== "") names.add(ref.alias);
+  }
+  return [...names];
 }
 
 /**

@@ -121,36 +121,6 @@ describe("buildTaskQuery", () => {
     });
   });
 
-  it("filters labels the same way as contexts, on the label property", () => {
-    expect(
-      buildTaskQuery(
-        { labels: { includes: ["work"], excludes: ["blocked"] } },
-        zhTag,
-      ).q,
-    ).toEqual({
-      kind: 100,
-      conditions: [
-        {
-          kind: 4,
-          name: "任务",
-          properties: [{ name: "标记", op: 3, value: ["work"] }],
-        },
-        notOrphan,
-        {
-          kind: 100,
-          negate: true,
-          conditions: [
-            {
-              kind: 4,
-              name: "任务",
-              properties: [{ name: "标记", op: 3, value: "blocked" }],
-            },
-          ],
-        },
-      ],
-    });
-  });
-
   it("matches tasks at any depth below a block with an ancestor group", () => {
     expect(buildTaskQuery({ underBlockId: 42 }, zhTag).q).toEqual({
       kind: 100,
@@ -173,7 +143,6 @@ describe("buildTaskQuery", () => {
         {
           statuses: ["waiting", "someday"],
           contexts: { includes: ["@home"], excludes: ["@car"] },
-          labels: { includes: ["work"] },
           underBlockId: 7,
         },
         enTag,
@@ -185,10 +154,7 @@ describe("buildTaskQuery", () => {
           {
             kind: 4,
             name: "Task",
-            properties: [
-              { name: "Context", op: 3, value: ["@home"] },
-              { name: "Label", op: 3, value: ["work"] },
-            ],
+            properties: [{ name: "Context", op: 3, value: ["@home"] }],
           },
           notOrphan,
           {
@@ -229,14 +195,13 @@ describe("buildTaskQuery", () => {
     // could never agree with reading; it fails instead of running.
     const tag: TaskTagNames = {
       ...zhTag,
-      invalidated: ["status", "context", "label"],
+      invalidated: ["status", "context"],
     };
 
     it.each([
       ["status", { statuses: ["inbox"] as const }],
       ["contexts it includes", { contexts: { includes: ["@home"] } }],
       ["contexts it excludes", { contexts: { excludes: ["@home"] } }],
-      ["labels", { labels: { includes: ["house"] } }],
     ])("refuses to filter by %s", (_, filter) => {
       expect(() => buildTaskQuery(filter, tag)).toThrow(OrcaError);
     });

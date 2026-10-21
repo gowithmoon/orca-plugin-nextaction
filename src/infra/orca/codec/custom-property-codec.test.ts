@@ -67,15 +67,32 @@ const added = [
   },
 ];
 
+/**
+ * The task tags as the plugin creates them since #224: the samples were
+ * recorded before, when they still defined 标记 / Label.
+ */
+const ownTag = {
+  zh: tagBlocks.zh.properties.filter((p) => p.name !== "标记"),
+  en: tagBlocks.en.properties.filter((p) => p.name !== "Label"),
+};
+
 const onTag = (...extra: readonly unknown[]) =>
-  [...tagBlocks.zh.properties, ...extra] as Parameters<
-    typeof customPropertyDefinitions
-  >[0];
+  [...ownTag.zh, ...extra] as Parameters<typeof customPropertyDefinitions>[0];
 
 describe("customPropertyDefinitions", () => {
   it("reads the plugin's own task tag as having no custom properties", () => {
-    expect(customPropertyDefinitions(tagBlocks.zh.properties)).toEqual([]);
-    expect(customPropertyDefinitions(tagBlocks.en.properties)).toEqual([]);
+    expect(customPropertyDefinitions(ownTag.zh)).toEqual([]);
+    expect(customPropertyDefinitions(ownTag.en)).toEqual([]);
+  });
+
+  it("reads the old 标记 / Label as a multiple choice custom property (#224)", () => {
+    // No longer built in, so it is the user's property (ADR 0023, 0028).
+    expect(customPropertyDefinitions(tagBlocks.zh.properties)).toEqual([
+      { name: "标记", kind: "multi", choices: [] },
+    ]);
+    expect(customPropertyDefinitions(tagBlocks.en.properties)).toEqual([
+      { name: "Label", kind: "multi", choices: [] },
+    ]);
   });
 
   it("maps each of the nine kinds, nulls in pos ordered by name", () => {
@@ -112,7 +129,7 @@ describe("customPropertyDefinitions", () => {
     ).toEqual([]);
     expect(
       customPropertyDefinitions([
-        ...tagBlocks.en.properties,
+        ...ownTag.en,
         { name: "备注", type: 3, pos: null },
       ]),
     ).toEqual([]);
@@ -120,7 +137,7 @@ describe("customPropertyDefinitions", () => {
 
   it("does not take an invalidated built-in property, its type changed, for a custom one", () => {
     // The note changed to a number in Orca (ADR 0008).
-    const properties = tagBlocks.zh.properties.map((p) =>
+    const properties = ownTag.zh.map((p) =>
       p.name === "备注" ? { ...p, type: 3 } : p,
     );
     expect(customPropertyDefinitions(properties)).toEqual([]);

@@ -75,6 +75,11 @@ export function formatContext(context: string): string {
   return context.startsWith("@") ? context : `@${context}`;
 }
 
+/** A tag as Orca shows one (GLOSSARY: 标签, #224): `#` and its name. */
+export function formatTag(tag: string): string {
+  return `#${tag}`;
+}
+
 /** The name of an importance level (GLOSSARY: 重要性). */
 export function importanceName(level: Rating): string {
   switch (level) {

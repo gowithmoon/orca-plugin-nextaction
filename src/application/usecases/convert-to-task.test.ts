@@ -29,7 +29,7 @@ describe("convert to task", () => {
       start: null,
       due: null,
       contexts: [],
-      labels: [],
+      tags: [],
       note: null,
       // Sequential is off by default (#59).
       sequential: false,

@@ -26,7 +26,7 @@ export interface SelectedEntry<T> {
   readonly at: Date;
 }
 
-type PickedTask = Pick<Task, "contexts" | "labels" | "importance">;
+type PickedTask = Pick<Task, "contexts" | "tags" | "importance">;
 
 /** A task with what it counts for. */
 export interface SelectableTask<T extends PickedTask> {
@@ -44,8 +44,8 @@ function belongs(task: PickedTask, pick: DistributionPick): boolean {
     case "importance":
       return task.importance === pick.value;
     case "context":
-    case "label": {
-      const values = pick.dimension === "context" ? task.contexts : task.labels;
+    case "tag": {
+      const values = pick.dimension === "context" ? task.contexts : task.tags;
       return pick.value === null
         ? values.length === 0
         : values.includes(pick.value);

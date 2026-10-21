@@ -1,4 +1,4 @@
-// The task panel's contexts and labels field (#35 "任务属性面板", #41): Orca's
+// The task panel's contexts field (#35 "任务属性面板", #41): Orca's
 // Select with multiple selection and search, the candidates from "read
 // candidate values". A keyword nothing matches is offered as "Add …"; picking
 // it writes the keyword as a new value. Verified by hand in Orca

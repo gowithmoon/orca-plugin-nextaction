@@ -1,5 +1,5 @@
 // The filter fields both filter panels share (filter-panel.tsx): contexts and
-// labels, each a multiple choice with "(None)" for a task holding no value,
+// tags, each a multiple choice with "(None)" for a task holding no value,
 // and the seven importance levels and the seven urgency levels (#55, #69,
 // #74). Each is a row: its name, then its select. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).

@@ -1,4 +1,4 @@
-// The plan for adding choices (#35 "补选项的计划"): before contexts or labels
+// The plan for adding choices (#35 "补选项的计划"): before contexts
 // are written, the values missing from the task tag's choices are added, or
 // Orca stores them without showing them (multi-choices-created). Pure;
 // executing it lives in the task repository.

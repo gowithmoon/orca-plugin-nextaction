@@ -16,7 +16,7 @@ function task(set: Partial<Task> = {}): Task {
     start: null,
     due: null,
     contexts: [],
-    labels: [],
+    tags: [],
     note: null,
     sequential: false,
     dependencies: [],
@@ -38,7 +38,7 @@ describe("filterChoosesAny", () => {
     expect(
       filterChoosesAny({
         contexts: nothing,
-        labels: nothing,
+        tags: nothing,
         importance: [],
         urgency: [],
       }),
@@ -49,7 +49,7 @@ describe("filterChoosesAny", () => {
     expect(
       filterChoosesAny({ contexts: { values: ["home"], none: false } }),
     ).toBe(true);
-    expect(filterChoosesAny({ labels: { values: [], none: true } })).toBe(true);
+    expect(filterChoosesAny({ tags: { values: [], none: true } })).toBe(true);
     expect(filterChoosesAny({ importance: [7] })).toBe(true);
     expect(filterChoosesAny({ urgency: [1] })).toBe(true);
   });
@@ -61,7 +61,7 @@ describe("chosenDimensions", () => {
     expect(
       chosenDimensions({
         contexts: nothing,
-        labels: nothing,
+        tags: nothing,
         importance: [],
         urgency: [],
       }),
@@ -75,11 +75,28 @@ describe("chosenDimensions", () => {
     expect(
       chosenDimensions({
         contexts: { values: [], none: true },
-        labels: { values: ["writing"], none: false },
+        tags: { values: ["writing"], none: false },
         importance: [1],
         urgency: [7],
       }),
     ).toBe(4);
+  });
+});
+
+describe("filterLets by tags", () => {
+  it("lets through a task holding any one of the chosen tags", () => {
+    const filter = { tags: { values: ["客户A", "写作"], none: false } };
+    expect(filterLets(filter, task({ tags: ["写作", "急"] }))).toBe(true);
+    expect(filterLets(filter, task({ tags: ["客户A"] }))).toBe(true);
+    expect(filterLets(filter, task({ tags: ["急"] }))).toBe(false);
+    expect(filterLets(filter, task({ tags: [] }))).toBe(false);
+  });
+
+  it("lets through a task with no tag for (None), along with the chosen ones", () => {
+    const filter = { tags: { values: ["写作"], none: true } };
+    expect(filterLets(filter, task({ tags: [] }))).toBe(true);
+    expect(filterLets(filter, task({ tags: ["写作"] }))).toBe(true);
+    expect(filterLets(filter, task({ tags: ["急"] }))).toBe(false);
   });
 });
 
@@ -97,16 +114,16 @@ describe("filterLets by urgency", () => {
     expect(filterLets({}, task({ urgency: 1 }))).toBe(true);
   });
 
-  it("needs contexts, labels and importance to let the task through as well", () => {
+  it("needs contexts, tags and importance to let the task through as well", () => {
     const filter = {
       contexts: { values: ["office"], none: false },
-      labels: { values: ["q4"], none: false },
+      tags: { values: ["q4"], none: false },
       importance: [6] as const,
       urgency: [6] as const,
     };
     const fits = {
       contexts: ["office"],
-      labels: ["q4"],
+      tags: ["q4"],
       importance: 6,
       urgency: 6,
     } as const;
@@ -115,7 +132,7 @@ describe("filterLets by urgency", () => {
     expect(filterLets(filter, task({ ...fits, contexts: ["home"] }))).toBe(
       false,
     );
-    expect(filterLets(filter, task({ ...fits, labels: [] }))).toBe(false);
+    expect(filterLets(filter, task({ ...fits, tags: [] }))).toBe(false);
     expect(filterLets(filter, task({ ...fits, importance: 7 }))).toBe(false);
   });
 });

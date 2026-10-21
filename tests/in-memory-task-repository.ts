@@ -119,7 +119,7 @@ export interface InMemoryTaskRepository extends TaskRepository {
    * mirror's ID; nothing else here models mirrors.
    */
   addMirror(id: number, sourceId: number): void;
-  /** The task tag's choices for contexts or labels (none unless set). */
+  /** The task tag's choices for contexts (none unless set). */
   setChoices(property: ChoiceProperty, choices: readonly string[]): void;
   /**
    * Pauses the project tag (#143), `false` resuming it: the task graph then
@@ -180,7 +180,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     start: null,
     due: null,
     contexts: [],
-    labels: [],
+    tags: [],
     note: null,
     sequential: false,
     dependencies: [],
@@ -229,7 +229,6 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   /** The task tag's choices per property. */
   const choices: Record<ChoiceProperty, string[]> = {
     contexts: [],
-    labels: [],
   };
   let writes = 0;
   const moves: TaskMove[] = [];
@@ -328,9 +327,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     taskWrite: Omit<TaskWrite, "id">,
   ) => {
     const changes = taskWrite.changes ?? {};
-    // Written contexts and labels become choices of the task tag, as in
-    // Orca (multi-choices-created), so they stay candidates.
-    for (const property of ["contexts", "labels"] as const) {
+    // Written contexts become choices of the task tag, as in Orca
+    // (multi-choices-created), so they stay candidates.
+    for (const property of ["contexts"] as const) {
       for (const value of changes[property] ?? []) {
         if (!choices[property].includes(value)) {
           choices[property].push(value);
@@ -704,7 +703,6 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           continue;
         }
         if (!matchesValues(task.contexts, filter.contexts)) continue;
-        if (!matchesValues(task.labels, filter.labels)) continue;
         if (
           filter.underBlockId !== undefined &&
           !isBelow(id, filter.underBlockId)
@@ -824,7 +822,12 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         }
         return [...values];
       };
-      return { contexts: read("contexts"), labels: read("labels") };
+      // Tags: only those tasks hold (#224); the task tag has no choices.
+      const tags = new Set<string>();
+      for (const block of blocks.values()) {
+        for (const tag of block.task?.tags ?? []) tags.add(tag);
+      }
+      return { contexts: read("contexts"), tags: [...tags] };
     },
 
     async readCompletionHistory(id) {

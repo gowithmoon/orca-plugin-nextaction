@@ -44,32 +44,27 @@ const zhDefinitions = [
     pos: 5,
     typeArgs: { subType: "multi", choices: [] },
   },
-  {
-    name: "标记",
-    type: 6,
-    pos: 6,
-    typeArgs: { subType: "multi", choices: [] },
-  },
+  // No 标记 since #224 (ADR 0028): the properties after it moved up one.
   // Text has no type arguments; written without typeArgs as in the
   // tag-operations spike.
-  { name: "备注", type: 1, pos: 7 },
+  { name: "备注", type: 1, pos: 6 },
   // Boolean, unchecked by default (next-action-hierarchy-boolean-deps).
   {
     name: "顺序执行",
     type: 4,
-    pos: 8,
+    pos: 7,
     typeArgs: { defaultEnabled: true, default: false },
   },
   // Block references (#57): the values are reference IDs (tag-operations
   // A2). The search scope is the task tag's name, which Orca keeps up to date
   // when the tag is renamed (blockrefs-scope spike).
-  { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } },
+  { name: "依赖", type: 2, pos: 8, typeArgs: { scope: "任务" } },
   // Single choice, "全部" by default (#58); choices without a color, as the
-  // plugin adds context and label choices (multi-choices-created).
+  // plugin adds context choices (multi-choices-created).
   {
     name: "依赖模式",
     type: 6,
-    pos: 10,
+    pos: 9,
     typeArgs: {
       subType: "single",
       defaultEnabled: true,
@@ -84,15 +79,15 @@ const zhDefinitions = [
   {
     name: "紧急度",
     type: 3,
-    pos: 11,
+    pos: 10,
     typeArgs: { defaultEnabled: true, default: 4 },
   },
   // A number with no default (#77): empty reads as 0 days. Written bare,
   // as numbers were in the tag-operations spike.
-  { name: "依赖延迟", type: 3, pos: 12 },
+  { name: "依赖延迟", type: 3, pos: 11 },
   // A block reference (#145). `taskTagSchema` knows no project tag, so no
   // scope; see "search scope of the project" for the one with it.
-  { name: "所属项目", type: 2, pos: 13 },
+  { name: "所属项目", type: 2, pos: 12 },
 ];
 
 const enDefinitions = [
@@ -134,24 +129,18 @@ const enDefinitions = [
     pos: 5,
     typeArgs: { subType: "multi", choices: [] },
   },
-  {
-    name: "Label",
-    type: 6,
-    pos: 6,
-    typeArgs: { subType: "multi", choices: [] },
-  },
-  { name: "Notes", type: 1, pos: 7 },
+  { name: "Notes", type: 1, pos: 6 },
   {
     name: "Sequential",
     type: 4,
-    pos: 8,
+    pos: 7,
     typeArgs: { defaultEnabled: true, default: false },
   },
-  { name: "Dependencies", type: 2, pos: 9, typeArgs: { scope: "Task" } },
+  { name: "Dependencies", type: 2, pos: 8, typeArgs: { scope: "Task" } },
   {
     name: "Dependency mode",
     type: 6,
-    pos: 10,
+    pos: 9,
     typeArgs: {
       subType: "single",
       defaultEnabled: true,
@@ -165,11 +154,26 @@ const enDefinitions = [
   {
     name: "Urgency",
     type: 3,
-    pos: 11,
+    pos: 10,
     typeArgs: { defaultEnabled: true, default: 4 },
   },
-  { name: "Dependency delay", type: 3, pos: 12 },
-  { name: "Project", type: 2, pos: 13 },
+  { name: "Dependency delay", type: 3, pos: 11 },
+  { name: "Project", type: 2, pos: 12 },
+];
+
+/**
+ * A Chinese task tag created before #224: 标记 at 6, the properties after it
+ * one further on. Alignment adds only (ADR 0008), so it stays as it is.
+ */
+const zhDefinitionsWithLabel = [
+  ...zhDefinitions.slice(0, 6),
+  {
+    name: "标记",
+    type: 6,
+    pos: 6,
+    typeArgs: { subType: "multi", choices: [] },
+  },
+  ...zhDefinitions.slice(6).map((d) => ({ ...d, pos: d.pos + 1 })),
 ];
 
 /**
@@ -256,7 +260,7 @@ describe("startup plan", () => {
     expect(
       planStartup(taskTagSchema, {
         tagName: "任务",
-        tagBlock: tagBlock(readBack(without(["标记"]))),
+        tagBlock: tagBlock(readBack(without(["上下文"]))),
         cache: takenOver,
         uiLanguage: "zh",
       }),
@@ -264,12 +268,40 @@ describe("startup plan", () => {
       action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
       writes: [
         {
-          name: "标记",
+          name: "上下文",
           type: 6,
-          pos: 6,
+          pos: 5,
           typeArgs: { subType: "multi", choices: [] },
         },
       ],
+    });
+  });
+
+  it("leaves the 标记 of a tag from before #224 alone, the positions too, with no conflict", () => {
+    expect(
+      planStartup(taskTagSchema, {
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(zhDefinitionsWithLabel)),
+        cache: takenOver,
+        uiLanguage: "zh",
+      }),
+    ).toEqual({
+      action: { kind: "use", tagBlockId: 211, invalidated: [], language: "zh" },
+      writes: [],
+    });
+    // A first takeover refuses no tag over it either.
+    expect(
+      planStartup(taskTagSchema, {
+        tagName: "任务",
+        tagBlock: tagBlock(readBack(zhDefinitionsWithLabel)),
+        cache: undefined,
+        uiLanguage: "zh",
+      }).action,
+    ).toEqual({
+      kind: "use",
+      tagBlockId: 211,
+      invalidated: [],
+      language: "zh",
     });
   });
 
@@ -288,7 +320,7 @@ describe("startup plan", () => {
         {
           name: "顺序执行",
           type: 4,
-          pos: 8,
+          pos: 7,
           typeArgs: { defaultEnabled: true, default: false },
         },
       ],
@@ -381,7 +413,7 @@ describe("startup plan", () => {
         cache: takenOver,
         uiLanguage: "en",
       }).writes,
-    ).toEqual([{ name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } }]);
+    ).toEqual([{ name: "依赖", type: 2, pos: 8, typeArgs: { scope: "任务" } }]);
   });
 
   describe("search scope of the dependencies", () => {
@@ -402,7 +434,7 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         }).writes,
       ).toEqual([
-        { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } },
+        { name: "依赖", type: 2, pos: 8, typeArgs: { scope: "任务" } },
       ]);
     });
 
@@ -435,7 +467,7 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         }).writes,
       ).toEqual([
-        { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "GTD" } },
+        { name: "依赖", type: 2, pos: 8, typeArgs: { scope: "GTD" } },
       ]);
     });
 
@@ -457,7 +489,7 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         }).writes,
       ).toEqual([
-        { name: "依赖", type: 2, pos: 9, typeArgs: { scope: "任务" } },
+        { name: "依赖", type: 2, pos: 8, typeArgs: { scope: "任务" } },
       ]);
     });
 
@@ -493,7 +525,7 @@ describe("startup plan", () => {
       expect(project).toEqual({
         name: "所属项目",
         type: 2,
-        pos: 13,
+        pos: 12,
         typeArgs: { scope: "项目" },
       });
     });
@@ -507,7 +539,7 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         }).writes,
       ).toEqual([
-        { name: "所属项目", type: 2, pos: 13, typeArgs: { scope: "项目" } },
+        { name: "所属项目", type: 2, pos: 12, typeArgs: { scope: "项目" } },
       ]);
     });
 
@@ -520,7 +552,7 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         }).writes;
       expect(plan({})).toEqual([
-        { name: "所属项目", type: 2, pos: 13, typeArgs: { scope: "项目" } },
+        { name: "所属项目", type: 2, pos: 12, typeArgs: { scope: "项目" } },
       ]);
       expect(plan({ scope: "书" })).toEqual([]);
     });
@@ -568,7 +600,7 @@ describe("startup plan", () => {
       {
         name: "依赖模式",
         type: 6,
-        pos: 10,
+        pos: 9,
         typeArgs: {
           subType: "single",
           defaultEnabled: true,
@@ -597,7 +629,7 @@ describe("startup plan", () => {
         {
           name: "紧急度",
           type: 3,
-          pos: 11,
+          pos: 10,
           typeArgs: { defaultEnabled: true, default: 4 },
         },
       ],
@@ -612,7 +644,7 @@ describe("startup plan", () => {
         cache: takenOver,
         uiLanguage: "en",
       }).writes,
-    ).toEqual([{ name: "依赖延迟", type: 3, pos: 12 }]);
+    ).toEqual([{ name: "依赖延迟", type: 3, pos: 11 }]);
   });
 
   it("leaves a dependency delay the user gave a default as it is", () => {
@@ -680,7 +712,7 @@ describe("startup plan", () => {
         cache: takenOver,
         uiLanguage: "en",
       }).writes,
-    ).toEqual([{ name: "备注", type: 1, pos: 7 }]);
+    ).toEqual([{ name: "备注", type: 1, pos: 6 }]);
   });
 
   it("keeps the position of a property the user moved when aligning it", () => {
@@ -760,7 +792,7 @@ describe("startup plan", () => {
         cache: takenOver,
         uiLanguage: "en",
       }).writes,
-    ).toEqual([{ name: "备注", type: 1, pos: 7 }]);
+    ).toEqual([{ name: "备注", type: 1, pos: 6 }]);
   });
 
   it("plans nothing more once its writes are applied", () => {
@@ -841,7 +873,7 @@ describe("startup plan", () => {
     });
 
     it("invalidates only the conflicting property of a tag already taken over", () => {
-      // The user turned "重要性" into a single choice and deleted "标记".
+      // The user turned "重要性" into a single choice and deleted "上下文".
       const singleChoiceImportance = {
         name: "重要性",
         type: 6,
@@ -855,7 +887,7 @@ describe("startup plan", () => {
           tagName: "任务",
           tagBlock: tagBlock([
             singleChoiceImportance,
-            ...readBack(without(["重要性", "标记"])),
+            ...readBack(without(["重要性", "上下文"])),
           ]),
           cache: takenOver,
           uiLanguage: "zh",
@@ -869,9 +901,9 @@ describe("startup plan", () => {
         },
         writes: [
           {
-            name: "标记",
+            name: "上下文",
             type: 6,
-            pos: 6,
+            pos: 5,
             typeArgs: { subType: "multi", choices: [] },
           },
         ],
@@ -996,7 +1028,7 @@ describe("startup plan", () => {
           uiLanguage: "zh",
         });
         expect(plan.action.kind).toBe("revert");
-        expect(plan.writes).toEqual([{ name: "备注", type: 1, pos: 7 }]);
+        expect(plan.writes).toEqual([{ name: "备注", type: 1, pos: 6 }]);
       });
 
       it("goes by the name when the cached block is no longer the tag", () => {

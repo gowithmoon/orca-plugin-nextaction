@@ -133,7 +133,7 @@ tests/
 - 块引用属性（依赖、所属项目）的值是引用 ID：先 `createRef(任务块, 目标块, 3)`，再写入引用 ID。任何时候都不写原始块 ID。`insertTag` 带块引用值时会把块 ID 原样存下、不建引用，所以打标签时不带块引用值，之后再按上面的方式写（`project-tag`）。
 - 依赖方从被依赖块 `backRefs` 中 `type: 3` 的引用找到，并以依赖方"依赖"值中含有该引用 ID 为准；行内引用是 `type: 1`，不算依赖（`next-action-hierarchy-boolean-deps`）。
 - 布尔属性的值项一律带 `type: 4`。`insertTag` 传不带 `type` 的 `true` / `false` 时，标签整个打不上，也不报错（`next-action-hierarchy-boolean-deps`）。
-- 多选属性（上下文、标记）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
+- 多选属性（上下文）的值不在任务标签的 `choices` 里时，能存进笔记，但界面上不显示，Orca 也不会自动补上。写入时，在同一个 `invokeGroup` 中先把缺少的值补进 `choices`，再写值；一次撤销撤回两步（`multi-choices-created`）。
 - 用户在 Orca 界面加的属性（自定义属性，ADR 0023）：`pos` 为 `null`，按名字排在后面；选项可能是字符串数组而不是 `{ n, c }`，读选项名一律经过 `choiceName`；文本属性的值可能是 number，读作字符串；日期类有 `date`、`datetime`、`time` 三种子类型。删掉定义时 Orca 一并删掉各任务上的值（`custom-properties`）。
 - 块 ID 和引用 ID 都会被回收再用，不能在删除操作之后继续持有。
 - 放弃任务时，在同一个 `invokeGroup` 中移除任务标签，并删除全部 `nextaction.*` 块属性。

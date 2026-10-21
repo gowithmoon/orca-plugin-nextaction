@@ -33,7 +33,6 @@ function filteredProperties(filter: TaskFilter): PropertyKey[] {
   const keys: PropertyKey[] = [];
   if ((filter.statuses ?? []).length > 0) keys.push("status");
   if (used(filter.contexts)) keys.push("context");
-  if (used(filter.labels)) keys.push("label");
   return keys;
 }
 
@@ -101,10 +100,7 @@ export function buildTaskQuery(
       ),
     });
   }
-  const multiValue = [
-    ["context", filter.contexts],
-    ["label", filter.labels],
-  ] as const;
+  const multiValue = [["context", filter.contexts]] as const;
   for (const [key, values] of multiValue) {
     const name = propertyName(key, tag.language);
     if (values?.includes && values.includes.length > 0) {

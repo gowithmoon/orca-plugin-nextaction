@@ -202,7 +202,7 @@ export type SortDirection = "ascending" | "descending";
 export type OpenStatus = Exclude<TaskStatus, "done">;
 
 /**
- * The all tasks view's filter (#69): the next action view's contexts, labels,
+ * The all tasks view's filter (#69): the next action view's contexts, tags,
  * importance and urgency (same rules), and statuses. Within a dimension any choice
  * is enough ("or"); every dimension given must let the task through ("and").
  */

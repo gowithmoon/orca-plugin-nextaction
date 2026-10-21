@@ -55,7 +55,7 @@ export interface NextActionViewDeps {
   taskActions: TaskActionsDeps;
   /** The task menu's registrations, for a right-click on a card. */
   menuItems: () => TaskMenuItems | undefined;
-  /** The filter's contexts and labels to offer: the task panel's (#55). */
+  /** The filter's contexts and tags to offer (#55, #224). */
   readCandidates: ReadCandidates;
   /** The filter, kept in the plugin instance's memory (#55). */
   filter: NextActionFilterStore;

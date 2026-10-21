@@ -13,7 +13,7 @@ describe("edit task", () => {
       start: { year: 2026, month: 10, day: 1 },
       due: { year: 2026, month: 10, day: 20 },
       contexts: ["@home"],
-      labels: ["writing"],
+      tags: ["writing"],
       note: "old note",
     });
     const editTask = createEditTask({ repository });
@@ -27,7 +27,7 @@ describe("edit task", () => {
       start: { year: 2026, month: 10, day: 1 },
       due: { year: 2026, month: 10, day: 20 },
       contexts: ["@home"],
-      labels: ["writing"],
+      tags: ["writing"],
       note: "call first",
     });
     expect(repository.writeCount()).toBe(1);
@@ -104,22 +104,18 @@ describe("edit task", () => {
     expect(repository.writeCount()).toBe(2);
   });
 
-  it("writes contexts and labels as they are, and clears them", async () => {
+  it("writes contexts as they are, and clears them", async () => {
     const repository = createInMemoryTaskRepository();
-    repository.addTask({ id: 44, contexts: ["@home"], labels: [] });
+    repository.addTask({ id: 44, contexts: ["@home"] });
     const editTask = createEditTask({ repository });
 
-    await editTask(44, { contexts: ["@home", "电话"], labels: ["写作"] });
+    await editTask(44, { contexts: ["@home", "电话"] });
     expect(await repository.getTask(44)).toMatchObject({
       contexts: ["@home", "电话"],
-      labels: ["写作"],
     });
 
-    await editTask(44, { contexts: [], labels: [] });
-    expect(await repository.getTask(44)).toMatchObject({
-      contexts: [],
-      labels: [],
-    });
+    await editTask(44, { contexts: [] });
+    expect(await repository.getTask(44)).toMatchObject({ contexts: [] });
     expect(repository.writeCount()).toBe(2);
   });
 

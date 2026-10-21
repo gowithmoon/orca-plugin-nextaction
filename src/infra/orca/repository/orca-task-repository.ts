@@ -128,12 +128,11 @@ import {
 } from "./task-hierarchy";
 
 type ReadyTag = Extract<TaskTagState, { kind: "ready" }>;
-type ChoiceKey = Extract<PropertyKey, "context" | "label">;
+type ChoiceKey = Extract<PropertyKey, "context">;
 
 /** The property each multi-value task field is stored in. */
 const choiceKeyOf: Record<ChoiceProperty, ChoiceKey> = {
   contexts: "context",
-  labels: "label",
 };
 const choiceFields = Object.entries(choiceKeyOf) as [
   ChoiceProperty,
@@ -505,9 +504,23 @@ export function createOrcaTaskRepository(
     }
     return state;
   };
+  /**
+   * The project tag's block, left out of a task's tags (#224); none while
+   * the project tag is not ready.
+   */
+  const projectTagBlockId = (): { projectTagBlockId?: number } => {
+    const project = projectTagState();
+    return project.kind === "ready"
+      ? { projectTagBlockId: project.tagBlockId }
+      : {};
+  };
   const currentTag = (): TaskTagContext => {
     const state = readyTag();
-    return { tagBlockId: state.tagBlockId, invalidated: state.invalidated };
+    return {
+      tagBlockId: state.tagBlockId,
+      invalidated: state.invalidated,
+      ...projectTagBlockId(),
+    };
   };
 
   /**
@@ -555,6 +568,7 @@ export function createOrcaTaskRepository(
   ): Promise<TaskTagContext> => ({
     tagBlockId: state.tagBlockId,
     invalidated: state.invalidated,
+    ...projectTagBlockId(),
     customProperties: await definitions,
   });
 
@@ -884,7 +898,7 @@ export function createOrcaTaskRepository(
   };
 
   /**
-   * The task tag's current definition of contexts or labels, read from the
+   * The task tag's current definition of contexts, read from the
    * tag block (never from the copies in `ref.data`, tag-operations), or
    * `undefined` when the tag has no such property.
    */
@@ -896,7 +910,7 @@ export function createOrcaTaskRepository(
     return tag.properties.find((p) => p.name === name);
   };
 
-  /** The definitions to write so every context and label in `changes` is a choice. */
+  /** The definitions to write so every context in `changes` is a choice. */
   const planChoiceWrites = async (
     state: ReadyTag,
     changes: TaskChanges,
@@ -1219,12 +1233,11 @@ export function createOrcaTaskRepository(
 
     async readCandidates(): Promise<Candidates> {
       const state = readyTag();
-      const candidates: Candidates = { contexts: [], labels: [] };
+      const candidates: Candidates = { contexts: [], tags: [] };
       const live = choiceFields.filter(
         // An invalidated property reads as empty everywhere (ADR 0008).
         ([, key]) => !state.invalidated.includes(key),
       );
-      if (live.length === 0) return candidates;
       const values = new Map<ChoiceProperty, Set<string>>();
       for (const [field, key] of live) {
         const property = await tagProperty(state, key);
@@ -1239,14 +1252,18 @@ export function createOrcaTaskRepository(
         values.set(field, names);
       }
       // Values tasks hold without a choice (e.g. written before #41) count
-      // too. Every task is read once for both: about 70 ms for 1000 tasks
-      // (ADR 0007).
+      // too, and tags are only those tasks hold (#224), not every tag in
+      // the notes. Every task is read once for all: about 70 ms for 1000
+      // tasks (ADR 0007).
+      const tags = new Set<string>();
       for (const task of await queryTasks({})) {
         for (const [field, names] of values) {
           for (const value of task[field]) names.add(value);
         }
+        for (const tag of task.tags) tags.add(tag);
       }
       for (const [field, names] of values) candidates[field] = [...names];
+      candidates.tags = [...tags];
       return candidates;
     },
 

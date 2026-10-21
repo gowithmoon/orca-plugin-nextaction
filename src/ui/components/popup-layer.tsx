@@ -1,5 +1,5 @@
 // Where the plugin's windows and the plugin panel put the popups of their
-// controls (the date picker, the context and label menus). Verified by hand
+// controls (the date picker, the context menu). Verified by hand
 // in Orca (docs/ARCHITECTURE.md §5).
 //
 // Orca's popups go into `menuContainer` (`container`), or else into their

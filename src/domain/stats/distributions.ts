@@ -1,20 +1,20 @@
 // The distributions of the stats view (GLOSSARY: 统计视图, #136): a period's
-// completions sorted by their task's contexts, labels and importance as they
+// completions sorted by their task's contexts, tags and importance as they
 // are now. Pure.
 import type { Importance, Task } from "../task/task";
 import type { CountedEntry } from "./counted-completions";
 
 /** What a distribution sorts the completions by. */
-export type DistributionDimension = "context" | "label" | "importance";
+export type DistributionDimension = "context" | "tag" | "importance";
 
 /**
  * One item of a distribution: a dimension and a value, which is what a
- * selection of the item holds (#137). For contexts and labels `null` is
+ * selection of the item holds (#137). For contexts and tags `null` is
  * "not set", one value like the others; importance is always set.
  */
 export type DistributionPick =
   | {
-      readonly dimension: "context" | "label";
+      readonly dimension: "context" | "tag";
       readonly value: string | null;
     }
   | { readonly dimension: "importance"; readonly value: Importance };
@@ -27,15 +27,15 @@ export type DistributionItem = DistributionPick & {
 export interface Distributions {
   /** By context, the most first; "not set" last. */
   readonly context: readonly DistributionItem[];
-  /** By label, the most first; "not set" last. */
-  readonly label: readonly DistributionItem[];
+  /** By tag, the most first; "not set" last. */
+  readonly tag: readonly DistributionItem[];
   /** All seven importance levels, the lowest first. */
   readonly importance: readonly DistributionItem[];
 }
 
 /** A task with what it counts for in the period. */
 export interface CountedTask {
-  readonly task: Pick<Task, "contexts" | "labels" | "importance">;
+  readonly task: Pick<Task, "contexts" | "tags" | "importance">;
   readonly entries: readonly CountedEntry[];
 }
 
@@ -52,7 +52,7 @@ function completionsOf(entries: readonly CountedEntry[]): number {
  * the tasks with none are "not set", last.
  */
 function byValues(
-  dimension: "context" | "label",
+  dimension: "context" | "tag",
   tasks: readonly CountedTask[],
   values: (task: CountedTask["task"]) => readonly string[],
 ): DistributionItem[] {
@@ -81,7 +81,7 @@ function byValues(
 export function distributions(tasks: readonly CountedTask[]): Distributions {
   return {
     context: byValues("context", tasks, (task) => task.contexts),
-    label: byValues("label", tasks, (task) => task.labels),
+    tag: byValues("tag", tasks, (task) => task.tags),
     // The task's own importance, not the one its score inherits.
     importance: importanceLevels.map((value) => ({
       dimension: "importance",

@@ -49,7 +49,7 @@ describe("decodeTask", () => {
       start: null,
       due: { year: 2026, month: 10, day: 20 },
       contexts: ["@home"],
-      labels: [],
+      tags: [],
       note: null,
       sequential: false,
       dependencies: [],
@@ -76,7 +76,7 @@ describe("decodeTask", () => {
       start: { year: 2026, month: 10, day: 7 },
       due: null,
       contexts: ["@phone", "@home"],
-      labels: ["house"],
+      tags: [],
       note: "after 9am",
       sequential: true,
       dependencies: [],
@@ -104,7 +104,7 @@ describe("decodeTask", () => {
       start: null,
       due: null,
       contexts: [],
-      labels: [],
+      tags: [],
       note: null,
       sequential: false,
       dependencies: [],
@@ -131,7 +131,7 @@ describe("decodeTask", () => {
       start: null,
       due: null,
       contexts: [],
-      labels: [],
+      tags: [],
       note: null,
       sequential: false,
       dependencies: [],
@@ -252,10 +252,66 @@ describe("decodeTask", () => {
     expect(task.start).toBeNull();
   });
 
-  it("reads empty multi-select arrays as no contexts and no labels", () => {
+  describe("tags", () => {
+    const projectTagId = 500;
+    /** A plain tag reference as Orca keeps it (tag-operations, #224). */
+    const plainTag = (id: number, to: number, alias: string) => ({
+      id,
+      type: 2,
+      to,
+      alias,
+      data: [],
+    });
+    const withRefs = (refs: ReturnType<typeof plainTag>[]) => ({
+      ...blocks.zhWithOtherTag,
+      refs: [...blocks.zhWithOtherTag.refs, ...refs],
+    });
+
+    it("reads the block's plain tags by their names, in the order of the block", () => {
+      expect(decodedTask(blocks.zhWithOtherTag).tags).toEqual(["Reminder"]);
+      const task = decodedTask(
+        withRefs([plainTag(901, 902, "客户A"), plainTag(903, 904, "写作")]),
+      );
+      expect(task.tags).toEqual(["Reminder", "客户A", "写作"]);
+    });
+
+    it("reads no tags when the block holds only the task tag", () => {
+      expect(decodedTask(blocks.zhFilled).tags).toEqual([]);
+    });
+
+    it("leaves out the task tag and the project tag by block, whatever their names", () => {
+      const task = decodedTask(
+        withRefs([
+          plainTag(901, projectTagId, "改过名的项目"),
+          plainTag(905, tagBlocks.zh.id, "改过名的任务"),
+        ]),
+        { ...zhTag, projectTagBlockId: projectTagId },
+      );
+      expect(task.tags).toEqual(["Reminder"]);
+    });
+
+    it("reads a tag referenced twice once", () => {
+      const task = decodedTask(withRefs([plainTag(901, 400, "Reminder")]));
+      expect(task.tags).toEqual(["Reminder"]);
+    });
+
+    it("does not take block references (dependencies) for tags", () => {
+      expect(decodedTask(blocks.zhOneDependency).tags).toEqual([]);
+    });
+
+    it("reads a page task's tags", () => {
+      const page = {
+        ...withRefs([plainTag(901, 902, "客户A")]),
+        parent: null,
+        aliases: ["NA页面任务"],
+      };
+      expect(decodedTask(page).tags).toEqual(["Reminder", "客户A"]);
+    });
+  });
+
+  it("reads empty multi-select arrays as no contexts", () => {
     const task = decodedTask(blocks.zhAbnormal);
     expect(task.contexts).toEqual([]);
-    expect(task.labels).toEqual([]);
   });
 
   describe("sequential", () => {
@@ -659,7 +715,6 @@ describe("decodeTask with values of the wrong kind", () => {
         { name: "开始日期", type: 1, value: "next week" },
         { name: "截止日期", type: 3, value: 20261020 },
         { name: "上下文", type: 1, value: "@home" },
-        { name: "标记", type: 6, value: [3, "house"] },
         { name: "备注", type: 3, value: [42] },
       ]),
     );
@@ -674,7 +729,7 @@ describe("decodeTask with values of the wrong kind", () => {
       start: null,
       due: null,
       contexts: [],
-      labels: ["house"],
+      tags: [],
       note: null,
       sequential: false,
       dependencies: [],
@@ -710,6 +765,24 @@ describe("decodeTask with values of the wrong kind", () => {
       合同号: { kind: "text", value: "222" },
       已报销: { kind: "boolean", value: true },
       预算: { kind: "number", value: null },
+    });
+  });
+
+  it("reads an old 标记 value as a custom property, not on the task (#224)", () => {
+    const result = decodeTask(
+      withData([
+        { name: "状态", type: 6, value: "待开始" },
+        { name: "标记", type: 6, value: ["house"] },
+      ]),
+      {
+        ...zhTag,
+        customProperties: [{ name: "标记", kind: "multi", choices: ["house"] }],
+      },
+    );
+    if (result.kind !== "task") throw new Error("expected a task");
+    expect(result.task.tags).toEqual([]);
+    expect(result.task.customProperties).toEqual({
+      标记: { kind: "multi", value: ["house"] },
     });
   });
 

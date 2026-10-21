@@ -645,18 +645,18 @@ describe("read stats", () => {
       ]);
     });
 
-    it("counts the labels the same way: each one, by completions then name, not set last", async () => {
+    it("counts the tags the same way: each one, by completions then name, not set last", async () => {
       const { repository, readStats } = setup();
       repository.addTask(
-        { id: 1, status: "done", labels: ["writing", "admin"] },
+        { id: 1, status: "done", tags: ["writing", "admin"] },
         history(recorded("2026-10-12T10:00:00", 12)),
       );
       repository.addTask(
-        { id: 2, status: "done", labels: ["writing"] },
+        { id: 2, status: "done", tags: ["writing"] },
         history(recorded("2026-10-13T10:00:00", 13)),
       );
       repository.addTask(
-        { id: 3, status: "done", labels: ["chores"] },
+        { id: 3, status: "done", tags: ["chores"] },
         history(recorded("2026-10-13T10:00:00", 13)),
       );
       repository.addTask(
@@ -666,11 +666,11 @@ describe("read stats", () => {
 
       const read = await readStats({ scale: "week" });
 
-      expect(read.distributions.label).toEqual([
-        { dimension: "label", value: "writing", completions: 2 },
-        { dimension: "label", value: "admin", completions: 1 },
-        { dimension: "label", value: "chores", completions: 1 },
-        { dimension: "label", value: null, completions: 1 },
+      expect(read.distributions.tag).toEqual([
+        { dimension: "tag", value: "writing", completions: 2 },
+        { dimension: "tag", value: "admin", completions: 1 },
+        { dimension: "tag", value: "chores", completions: 1 },
+        { dimension: "tag", value: null, completions: 1 },
       ]);
     });
 
@@ -912,7 +912,7 @@ describe("read stats", () => {
     it('lists the completions of the tasks without a label for "not set"', async () => {
       const { repository, readStats } = setup();
       repository.addTask(
-        { id: 1, status: "done", labels: ["writing"] },
+        { id: 1, status: "done", tags: ["writing"] },
         history(recorded("2026-10-12T10:00:00", 12)),
       );
       repository.addTask(
@@ -922,7 +922,7 @@ describe("read stats", () => {
 
       const read = await readStats({
         scale: "week",
-        selection: { kind: "distribution", dimension: "label", value: null },
+        selection: { kind: "distribution", dimension: "tag", value: null },
       });
 
       expect(read.selected.map((entry) => entry.task.id)).toEqual([2]);

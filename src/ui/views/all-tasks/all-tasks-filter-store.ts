@@ -21,7 +21,7 @@ export const noAllTasksFilter: AllTasksFilterState = {
   filter: {
     statuses: [],
     contexts: { values: [], none: false },
-    labels: { values: [], none: false },
+    tags: { values: [], none: false },
     importance: [],
     urgency: [],
   },

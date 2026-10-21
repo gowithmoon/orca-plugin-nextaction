@@ -10,7 +10,7 @@ export type FullNextActionFilter = Required<NextActionFilter>;
 
 export const noFilter: FullNextActionFilter = {
   contexts: { values: [], none: false },
-  labels: { values: [], none: false },
+  tags: { values: [], none: false },
   importance: [],
   urgency: [],
 };

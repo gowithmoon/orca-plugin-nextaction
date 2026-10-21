@@ -74,7 +74,12 @@ export interface Task {
   readonly start: CalendarDate | null;
   readonly due: CalendarDate | null;
   readonly contexts: readonly string[];
-  readonly labels: readonly string[];
+  /**
+   * The Orca tags put on the block itself (GLOSSARY: 标签), by name, in the
+   * order of the block, each once; never the task tag or the project tag.
+   * Read-only: tags are put on and taken off in Orca (ADR 0028).
+   */
+  readonly tags: readonly string[];
   readonly note: string | null;
   /**
    * Its subtasks are done one after another, in note order (GLOSSARY:
@@ -146,7 +151,7 @@ export interface TaskInNotes {
   start: CalendarDate | null;
   due: CalendarDate | null;
   contexts: readonly string[];
-  labels: readonly string[];
+  tags: readonly string[];
   note: string | null;
   sequential: boolean;
   dependencies: readonly TaskId[];
@@ -206,7 +211,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     start: input.start,
     due: input.due,
     contexts: [...input.contexts],
-    labels: [...input.labels],
+    tags: [...input.tags],
     note: input.note,
     sequential: input.sequential,
     dependencies: [...input.dependencies],

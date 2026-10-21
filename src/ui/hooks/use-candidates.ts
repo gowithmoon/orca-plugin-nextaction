@@ -1,4 +1,4 @@
-// The candidate values of contexts and labels for the task panel (#35 "读取候选
+// The candidate values of contexts and tags for the task panel and the filters (#35 "读取候选
 // 值"): read when the panel shows and again on every task change signal
 // (ADR 0007), so a value just added is offered at once. One read serves both
 // fields. Verified by hand in Orca (docs/ARCHITECTURE.md §5).
@@ -11,7 +11,7 @@ import { t } from "../../shared/l10n/l10n";
 import type { Notify } from "../notify";
 import { createLatestRead } from "./latest-read";
 
-const none: Candidates = { contexts: [], labels: [] };
+const none: Candidates = { contexts: [], tags: [] };
 
 /**
  * The candidates, empty until the first read ends. A failed read is told

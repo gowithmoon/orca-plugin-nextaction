@@ -8,7 +8,7 @@ describe("all tasks filter store", () => {
       filter: {
         statuses: ["todo", "waiting"],
         contexts: { values: ["home"], none: true },
-        labels: { values: ["errand"], none: false },
+        tags: { values: ["errand"], none: false },
         importance: [7],
         urgency: [1],
       },
@@ -21,7 +21,7 @@ describe("all tasks filter store", () => {
       filter: {
         statuses: ["waiting"],
         contexts: { values: [], none: false },
-        labels: { values: [], none: false },
+        tags: { values: [], none: false },
         importance: [],
         urgency: [],
       },

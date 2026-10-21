@@ -1,10 +1,10 @@
-// Matching a task against the contexts, labels, importance and urgency (#74)
+// Matching a task against the contexts, tags, importance and urgency (#74)
 // chosen in a view's filter (#55), shared by the next action view and the all tasks view
 // (#69) so the two never drift apart. Pure.
 import type { Importance, Rating, Task, Urgency } from "./task";
 
 /**
- * What one multi-value dimension (contexts, labels) lets through: a task
+ * What one multi-value dimension (contexts, tags) lets through: a task
  * holding any of `values`, or, with `none`, a task holding no value at all.
  */
 export interface ValuesChoice {
@@ -13,12 +13,12 @@ export interface ValuesChoice {
 }
 
 /**
- * Contexts, labels, importance and urgency as chosen. Within a dimension any choice is
+ * Contexts, tags, importance and urgency as chosen. Within a dimension any choice is
  * enough ("or"); every dimension given must let the task through ("and").
  */
 export interface TaskFilter {
   readonly contexts?: ValuesChoice;
-  readonly labels?: ValuesChoice;
+  readonly tags?: ValuesChoice;
   /** The importance levels let through. */
   readonly importance?: readonly Importance[];
   /** The urgency levels let through: the task's own, not inherited. */
@@ -51,7 +51,7 @@ function choosesAny(choice: ValuesChoice | undefined): boolean {
 export function chosenDimensions(filter: TaskFilter): number {
   return [
     choosesAny(filter.contexts),
-    choosesAny(filter.labels),
+    choosesAny(filter.tags),
     (filter.importance?.length ?? 0) > 0,
     (filter.urgency?.length ?? 0) > 0,
   ].filter(Boolean).length;
@@ -65,7 +65,7 @@ export function filterChoosesAny(filter: TaskFilter): boolean {
 export function filterLets(filter: TaskFilter, task: Task): boolean {
   return (
     choiceLets(filter.contexts, task.contexts) &&
-    choiceLets(filter.labels, task.labels) &&
+    choiceLets(filter.tags, task.tags) &&
     levelLets(filter.importance, task.importance) &&
     levelLets(filter.urgency, task.urgency)
   );

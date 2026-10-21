@@ -88,12 +88,6 @@ export function encodeTaskChanges(
       value: choicesValue(changes.contexts),
     });
   }
-  if (changes.labels !== undefined) {
-    items.push({
-      name: propertyName("label", tag.language),
-      value: choicesValue(changes.labels),
-    });
-  }
   if (changes.note !== undefined) {
     items.push({
       name: propertyName("note", tag.language),
@@ -174,7 +168,6 @@ const changeFieldOf: Record<PropertyKey, keyof TaskChanges> = {
   start: "start",
   due: "due",
   context: "contexts",
-  label: "labels",
   note: "note",
   sequential: "sequential",
   // Checked here like the others, but written apart: references come first

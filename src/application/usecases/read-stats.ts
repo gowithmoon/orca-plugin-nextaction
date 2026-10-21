@@ -66,7 +66,7 @@ export interface ReadStatsResult {
   /** The header's numbers: how things stand now, whatever the period. */
   readonly now: NowCounts;
   /**
-   * The period's completions by their task's contexts, labels and
+   * The period's completions by their task's contexts, tags and
    * importance as they are now; skips are left out (#136).
    */
   readonly distributions: Distributions;

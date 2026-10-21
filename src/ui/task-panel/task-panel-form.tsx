@@ -38,6 +38,7 @@ import { t } from "../../shared/l10n/l10n";
 import {
   effortName,
   formatContext,
+  formatTag,
   importanceName,
   shownText,
   urgencyName,
@@ -92,7 +93,7 @@ export interface TaskPanelFormDeps {
   readBlockRefCandidates: ReadBlockRefCandidates;
   editTask: EditTask;
   dropTask: DropTask;
-  /** Values offered for contexts and labels. */
+  /** Values offered for contexts. */
   readCandidates: ReadCandidates;
   /** Why the task is not a next action, for the row of that name (#78). */
   readNotNextActionReasons: ReadNotNextActionReasons;
@@ -330,15 +331,19 @@ function Fields(props: {
           onChange={(contexts) => void actions.edit({ contexts })}
         />
       </Field>
-      <Field label={t("Label")} labelId={id("labels")}>
-        <ChoicesField
-          labelId={id("labels")}
-          values={task.labels}
-          candidates={props.candidates.labels}
-          display={(label) => label}
-          placeholder={t("No label")}
-          onChange={(labels) => void actions.edit({ labels })}
-        />
+      {/* Read only (ADR 0028): tags are put on and taken off in Orca. The
+          row stays without tags, empty, so it shows tags can be here. */}
+      <Field label={t("Tag")} labelId={id("tags")}>
+        <ul className="nextaction-task-tags" aria-labelledby={id("tags")}>
+          {task.tags.map((tag) => (
+            <li
+              key={tag}
+              className="nextaction-property-chip nextaction-property-tag"
+            >
+              {formatTag(tag)}
+            </li>
+          ))}
+        </ul>
       </Field>
       <Field label={t("Note")} labelId={id("note")}>
         <NoteField
