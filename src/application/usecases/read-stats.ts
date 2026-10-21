@@ -1,10 +1,3 @@
-// Use case: read the stats (GLOSSARY: 统计视图, 统计周期), for the stats view:
-// one read of the task graph gives the period of the scale (week, month or
-// year) holding the anchor, its cells with their completions and skips and
-// its paging (#132, #135); the period's distributions of completions
-// (#136); the selection's completions and skips (#137); and the header's
-// numbers on how things stand now (#134).
-import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import type { Project } from "../../domain/project/project";
 import { countedEntries } from "../../domain/stats/counted-completions";
 import {
@@ -29,11 +22,10 @@ import {
   selectedEntries,
 } from "../../domain/stats/stats-selection";
 import type { CalendarDate, Task } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 export interface ReadStatsOptions {
   /** How long the period is. */
@@ -89,25 +81,14 @@ export interface SelectedRead extends SelectedEntry<Task> {
 /** Reads the stats. Errors are thrown as they are. */
 export type ReadStats = (options: ReadStatsOptions) => Promise<ReadStatsResult>;
 
-export function createReadStats(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadStats {
+export function createReadStats(deps: TaskGraphReading): ReadStats {
   return async (options) => {
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const snapshot = await deps.repository.readTaskGraph();
+    const { snapshot, graph, today } = await readTodaysTaskGraph(deps);
     const { tasks } = snapshot;
     /** The entries with the project each one's task belongs to. */
     const withProjects = (
       selected: readonly SelectedEntry<Task>[],
     ): SelectedRead[] => {
-      if (selected.length === 0) return [];
-      const graph = analyzeTaskGraph(snapshot, {
-        today,
-        previewDays: deps.startPreviewDays.current(),
-      });
       return selected.map((entry) => ({
         ...entry,
         project: graph.entry(entry.task.id)?.project ?? null,
@@ -137,10 +118,7 @@ export function createReadStats(deps: {
         skips: cellReads.reduce((sum, cell) => sum + cell.skips, 0),
       },
       paging: statsPaging(period, today),
-      now: nowCounts(snapshot, {
-        today,
-        previewDays: deps.startPreviewDays.current(),
-      }),
+      now: nowCounts(snapshot, graph, today),
       distributions: distributions(
         tasks.map((item) => ({
           task: item.task,

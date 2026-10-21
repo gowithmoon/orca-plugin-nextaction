@@ -6,15 +6,12 @@
 // reference list, without remove buttons. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import type {
-  ReadWaiters,
+  Waiter,
   WaiterKind,
 } from "../../application/usecases/read-waiters";
 import type { TaskId } from "../../domain/task/task";
-import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
 import { StatusIcon } from "../components/status-icon";
-import { useWaiters } from "../hooks/use-waiters";
-import type { Notify } from "../notify";
 import { BlockRefsList } from "./block-refs-field";
 import { Field } from "./task-panel-fields";
 
@@ -30,20 +27,13 @@ function kindLabel(kind: WaiterKind): string {
 }
 
 export function WaitersField(props: {
-  readWaiters: ReadWaiters;
-  taskId: TaskId;
-  changes: ChangeSignalSource;
-  notify: Notify;
+  /** The waiters as last read with the panel's relations. */
+  waiters: readonly Waiter[];
   labelId: string;
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
 }) {
-  const waiters = useWaiters(
-    props.readWaiters,
-    props.taskId,
-    props.changes,
-    props.notify,
-  );
+  const { waiters } = props;
   if (waiters.length === 0) return null;
   return (
     <Field label={t("Blocks")} labelId={props.labelId}>

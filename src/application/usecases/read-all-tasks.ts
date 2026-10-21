@@ -1,12 +1,11 @@
 // Use case: read all tasks (GLOSSARY: 全部任务视图), for the all tasks view
 // (#65): the task tree.
-import {
-  analyzeTaskGraph,
-  type SnapshotProject,
-  type SnapshotTask,
-  type TaskGraph,
-  type TaskGraphEntry,
-  type TaskGraphSnapshot,
+import type {
+  SnapshotProject,
+  SnapshotTask,
+  TaskGraph,
+  TaskGraphEntry,
+  TaskGraphSnapshot,
 } from "../../domain/blocking/task-graph";
 import type { TaskRelations } from "../../domain/blocking/task-relations";
 import {
@@ -29,16 +28,15 @@ import {
 } from "../../domain/task/task-filter";
 import { matchesSearch } from "../../domain/task/task-search";
 import { addDays, compareDays } from "../../domain/time/calendar-days";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 import {
   type ProjectNodeContext,
   projectNode,
   projectNodeContext,
 } from "./project-nodes";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /**
  * Why a node is faded:
@@ -850,12 +848,7 @@ export function byLastCompletion<T>(
   };
 }
 
-export function createReadAllTasks(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadAllTasks {
+export function createReadAllTasks(deps: TaskGraphReading): ReadAllTasks {
   function readAllTasks(
     options?: ReadAllTasksOptions & { readonly project?: undefined },
   ): Promise<AllTasksRead>;
@@ -865,20 +858,13 @@ export function createReadAllTasks(deps: {
   async function readAllTasks(
     options: ReadAllTasksOptions & { readonly project?: ProjectId } = {},
   ): Promise<AllTasksRead | ProjectScopeRead> {
-    const snapshot = await deps.repository.readTaskGraph();
-    const boundary = deps.dayBoundary.current();
-    const today = logicalDay(deps.clock.now(), boundary);
-    const previewDays = deps.startPreviewDays.current();
-    const graph = analyzeTaskGraph(snapshot, { today, previewDays });
+    const todays = await readTodaysTaskGraph(deps);
+    const { snapshot, graph, today } = todays;
     const context: NodeContext = {
       tree: buildTaskTree(snapshot, graph.relations),
       graph,
       keep: options.keep,
-      projects: projectNodeContext(snapshot, graph, {
-        today,
-        previewDays,
-        boundary,
-      }),
+      projects: projectNodeContext(todays),
       scope: null,
     };
     const scoped =

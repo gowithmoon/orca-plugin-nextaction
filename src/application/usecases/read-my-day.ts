@@ -1,9 +1,6 @@
 // Use case: read today's My Day (GLOSSARY: 我的一天), for the My Day view
 // (#83): the tasks with an entry on the current logical day.
-import {
-  analyzeTaskGraph,
-  type TaskGraphEntry,
-} from "../../domain/blocking/task-graph";
+import type { TaskGraphEntry } from "../../domain/blocking/task-graph";
 import type { Project } from "../../domain/project/project";
 import { rankByScore } from "../../domain/scoring/score";
 import {
@@ -16,13 +13,12 @@ import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import { compareDays } from "../../domain/time/calendar-days";
 import {
   type LogicalDayRange,
-  logicalDay,
   logicalDayRange,
 } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /** A task in today's My Day. */
 export interface MyDayItem {
@@ -80,24 +76,13 @@ export interface TodaysMyDay {
 /** Reads today's My Day. Errors are thrown as they are. */
 export type ReadMyDay = () => Promise<TodaysMyDay>;
 
-export function createReadMyDay(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadMyDay {
+export function createReadMyDay(deps: TaskGraphReading): ReadMyDay {
   return async () => {
-    const now = deps.clock.now();
-    const boundary = deps.dayBoundary.current();
-    const today = logicalDay(now, boundary);
-    const range = logicalDayRange(today, boundary);
-    const snapshot = await deps.repository.readTaskGraph();
     // The graph gives what the score needs: the effective start and the
     // ancestor tasks' ratings (ADR 0015, 0019).
-    const graph = analyzeTaskGraph(snapshot, {
-      today,
-      previewDays: deps.startPreviewDays.current(),
-    });
+    const { snapshot, graph, now, today, boundary } =
+      await readTodaysTaskGraph(deps);
+    const range = logicalDayRange(today, boundary);
     const inToday: TaskGraphEntry[] = [];
     const schedules = new Map<TaskId, MyDaySchedule>();
     const done = new Set<TaskId>();

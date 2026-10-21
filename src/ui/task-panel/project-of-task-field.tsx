@@ -11,21 +11,18 @@
 // in Orca (docs/ARCHITECTURE.md §5).
 import {
   matchingProjectCandidates,
-  type ReadProjectCandidates,
+  type ProjectCandidate,
 } from "../../application/usecases/read-project-candidates";
 import type {
+  ProjectOfTaskRead,
   ProjectShown,
-  ReadProjectOfTask,
 } from "../../application/usecases/read-project-of-task";
 import type { ProjectId } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
 import type { SelectOption } from "../../orca.d.ts";
-import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
 import { projectStatusLabel } from "../components/project-status-label";
-import { useProjectOfTask } from "../hooks/use-project-of-task";
-import type { Notify } from "../notify";
 import { projectStatusIcons } from "../project-menu/project-status-icons";
 import { BlockRefsField, type BlockRefsFieldItem } from "./block-refs-field";
 
@@ -44,11 +41,10 @@ function StatusIconOf(props: { project: ProjectShown }) {
 
 export function ProjectOfTaskField(props: {
   labelId: string;
-  taskId: TaskId;
-  readProjectOfTask: ReadProjectOfTask;
-  readProjectCandidates: ReadProjectCandidates;
-  changes: ChangeSignalSource;
-  notify: Notify;
+  /** The 所属项目 as last read with the panel's relations. */
+  read: ProjectOfTaskRead;
+  /** The projects offered, as last read with the panel's relations. */
+  candidates: readonly ProjectCandidate[];
   /** Writes the task's own setting, `null` clearing it. */
   onChange: (project: ProjectId | null) => void;
   /** Opens the project in the notes. */
@@ -56,14 +52,7 @@ export function ProjectOfTaskField(props: {
   /** Switches the task panel to task `taskId`. */
   onSelectTask: (taskId: TaskId) => void;
 }) {
-  const { read, candidates } = useProjectOfTask(
-    props.readProjectOfTask,
-    props.readProjectCandidates,
-    props.taskId,
-    props.changes,
-    props.notify,
-  );
-  if (read === null) return null;
+  const { read, candidates } = props;
   const { project, source, ownSetting } = read;
   const items: BlockRefsFieldItem[] = [];
   if (project && source) {

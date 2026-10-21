@@ -1,20 +1,15 @@
-// Use case: read the project list (GLOSSARY: 项目视图, #155): every project,
-// grouped by project status in `projectListOrder`, each with what the
-// project row shows (GLOSSARY: 项目行).
-import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import {
   type ProjectStatus,
   projectListOrder,
 } from "../../domain/project/project";
 import { projectScore } from "../../domain/scoring/score";
 import type { CalendarDate } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 import { projectNodeContext, projectNodesInNoteOrder } from "./project-nodes";
 import type { ProjectNode } from "./read-all-tasks";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /** The projects of one project status. */
 export interface ProjectGroup {
@@ -38,24 +33,15 @@ export type ProjectListRead =
 /** Reads the project list. Errors are thrown as they are. */
 export type ReadProjectList = () => Promise<ProjectListRead>;
 
-export function createReadProjectList(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadProjectList {
+export function createReadProjectList(deps: TaskGraphReading): ReadProjectList {
   return async () => {
-    const snapshot = await deps.repository.readTaskGraph();
-    if (snapshot.projectsPaused) return { kind: "paused" };
-    const boundary = deps.dayBoundary.current();
-    const today = logicalDay(deps.clock.now(), boundary);
-    const previewDays = deps.startPreviewDays.current();
-    const graph = analyzeTaskGraph(snapshot, { today, previewDays });
+    const read = await readTodaysTaskGraph(deps);
+    if (read.snapshot.projectsPaused) return { kind: "paused" };
     const nodes = projectNodesInNoteOrder(
-      projectNodeContext(snapshot, graph, { today, previewDays, boundary }),
-      snapshot,
+      projectNodeContext(read),
+      read.snapshot,
     );
-    return { kind: "projects", groups: groupProjects(nodes, today) };
+    return { kind: "projects", groups: groupProjects(nodes, read.today) };
   };
 }
 

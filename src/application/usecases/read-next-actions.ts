@@ -1,15 +1,11 @@
-// Use case: read the next actions (GLOSSARY: 下一步行动), for the next action
-// view, highest score first (#53).
-import { analyzeTaskGraph } from "../../domain/blocking/task-graph";
 import type { Project } from "../../domain/project/project";
 import { rankByScore } from "../../domain/scoring/score";
 import type { Task, TaskId } from "../../domain/task/task";
 import { filterLets, type TaskFilter } from "../../domain/task/task-filter";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /** The next action view's filter (#55); the rules are shared (task-filter). */
 export type NextActionFilter = TaskFilter;
@@ -58,18 +54,9 @@ export type ReadNextActions = (
   options?: ReadNextActionsOptions,
 ) => Promise<NextActionsRead>;
 
-export function createReadNextActions(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadNextActions {
+export function createReadNextActions(deps: TaskGraphReading): ReadNextActions {
   return async (options = {}) => {
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const graph = analyzeTaskGraph(await deps.repository.readTaskGraph(), {
-      today,
-      previewDays: deps.startPreviewDays.current(),
-    });
+    const { graph, today } = await readTodaysTaskGraph(deps);
     const filter = options.filter ?? {};
     const shown = graph.nextActions.filter((entry) =>
       filterLets(filter, entry.task),

@@ -7,18 +7,14 @@
 
 import { dependencyConflicts } from "../../domain/blocking/date-conflict";
 import { dependencyCyclesIn } from "../../domain/blocking/dependency-cycles";
-import {
-  analyzeTaskGraph,
-  type SnapshotTask,
-} from "../../domain/blocking/task-graph";
+import type { SnapshotTask } from "../../domain/blocking/task-graph";
 import type { Project, ProjectId } from "../../domain/project/project";
 import type { Task, TaskId } from "../../domain/task/task";
-import { logicalDay } from "../../domain/time/logical-day";
-import type { Clock } from "../ports/clock";
-import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { StartPreviewDaysSetting } from "../ports/start-preview-days-setting";
-import type { TaskRepository } from "../ports/task-repository";
 import { marksBlocked, projectRootTasks } from "./read-all-tasks";
+import {
+  readTodaysTaskGraph,
+  type TaskGraphReading,
+} from "./todays-task-graph";
 
 /** A task on the map: a card, or a box headed by its card when it has children. */
 export interface TaskMapNode {
@@ -138,21 +134,11 @@ export interface TaskMapInput {
 
 export type ReadTaskMap = (input: TaskMapInput) => Promise<TaskMapRead>;
 
-export function createReadTaskMap(deps: {
-  repository: TaskRepository;
-  clock: Clock;
-  dayBoundary: DayBoundarySetting;
-  startPreviewDays: StartPreviewDaysSetting;
-}): ReadTaskMap {
+export function createReadTaskMap(deps: TaskGraphReading): ReadTaskMap {
   return async (input) => {
     const chosen = (area: TaskMapAreaChoice) =>
       input.projects.length === 0 || input.projects.includes(area);
-    const snapshot = await deps.repository.readTaskGraph();
-    const today = logicalDay(deps.clock.now(), deps.dayBoundary.current());
-    const graph = analyzeTaskGraph(snapshot, {
-      today,
-      previewDays: deps.startPreviewDays.current(),
-    });
+    const { snapshot, graph } = await readTodaysTaskGraph(deps);
     const { relations } = graph;
     const cycles = dependencyCyclesIn(relations);
     // A done task is still shown while a task depending on it waits for

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
-import { createReadDependencyCandidates } from "./read-dependency-candidates";
+import { readTaskPanelPart } from "../../../tests/task-panel-relations";
 import { createReadDependentRefusals } from "./read-dependent-refusals";
 
 describe("read dependent refusals", () => {
@@ -72,9 +72,10 @@ describe("read dependent refusals", () => {
     repository.addTask({ id: 8, text: "List it online" }, { parentId: 7 });
     repository.addTask({ id: 9, text: "Clean", dependencies: [3, 8] });
     const readDependentRefusals = createReadDependentRefusals({ repository });
-    const readDependencyCandidates = createReadDependencyCandidates({
+    const readDependencyCandidates = readTaskPanelPart(
       repository,
-    });
+      "dependencyCandidates",
+    );
     const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
     for (const dependedOn of ids) {
