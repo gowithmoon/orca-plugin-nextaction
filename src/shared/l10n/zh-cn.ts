@@ -788,6 +788,53 @@ const zhCN: Record<string, string> = {
   "The AI summary was written to today's journal": "AI 小结已写进今天日记",
   "Could not write the AI summary to the journal: ${reason}":
     "没能把 AI 小结写进日记：${reason}",
+  // The task map (#213).
+  "Task map": "任务全景图",
+  "Could not read the task map: ${reason}": "无法读取任务全景图：${reason}",
+  "No tasks to show": "没有可显示的任务",
+  "Tasks not done appear here with how they relate.":
+    "未完成的任务会连同它们之间的关系显示在这里。",
+  "${done}/${total} done": "已完成 ${done}/${total}",
+  "Widen the panel to see more of the map": "拉宽插件面板可以看到更多",
+  // The task map's sequential switch and dependency badge (#220).
+  "Dependency mode and delay": "依赖模式与依赖延迟",
+  // The task map's drops on a project box or the no-project area (#222).
+  "Put in this project": "放进这个项目",
+  "Move under the project block": "移动到项目块下",
+  "Set the property only": "仅设置属性，不移动当前块",
+  "Goes to the end of the project's block.": "放到项目块的末尾。",
+  "Goes to the end of the project's block. Its own project setting is cleared.":
+    "放到项目块的末尾，同时清除它自己设定的所属项目。",
+  "Sets its project; the block stays where it is.":
+    "把所属项目改成这个项目，块留在原处。",
+  'Its parent task "${task}" decides its project.':
+    "它的祖先任务「${task}」已经决定了归属。",
+  "The project's block is this task or below it.":
+    "项目块就是这个任务，或在它下面。",
+  'It would make a dependency cycle with "${task}".':
+    "会和「${task}」形成循环依赖。",
+  "Cannot put the task in this project: ${reason}":
+    "无法放进这个项目：${reason}",
+  // The task map's dependencies drawn and deleted (#219).
+  "Drag to a task to make it depend on this one":
+    "拖到另一个任务上，让它依赖这个任务",
+  "A task cannot depend on itself": "任务不能依赖自己",
+  "Already depends on this task": "已经依赖这个任务",
+  "Delete dependency": "删除依赖",
+  // The task map's filter and endpoint markers (#217).
+  "All projects": "全部项目",
+  "Show done": "显示已完成",
+  "Show tasks with no relation": "显示无关系的任务",
+  "Depends on tasks not shown": "依赖了图上未显示的任务",
+  "Tasks not shown depend on it": "图上未显示的任务依赖它",
+  "Shown with: ${conditions}": "显示条件：${conditions}",
+  // The task map's search and "Show in task map" (#221).
+  "None found": "没有找到",
+  "${at}/${count}": "${at}/${count}",
+  "Could not search the task map: ${reason}": "无法搜索任务全景图：${reason}",
+  "Show in task map": "在任务全景图中查看",
+  "Could not show the task in the task map: ${reason}":
+    "无法在任务全景图中查看这个任务：${reason}",
 };
 
 export default zhCN;

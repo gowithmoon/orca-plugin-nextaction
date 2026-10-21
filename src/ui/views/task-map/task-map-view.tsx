@@ -1,0 +1,328 @@
+// The task map (GLOSSARY: 任务全景图, #213): every task not done, in its
+// project's box or the no-project area, nested by block, drawn on a canvas
+// that pans and zooms (task-map-canvas.tsx). It reads when the plugin panel
+// opens and again on every task change signal (ADR 0007). The task panel
+// opens in its popup. The header's filter button chooses the projects and
+// the two toggles (#217), kept in the task map's stores; each change reads
+// again; "Collapse all" and "Expand all" fold and unfold every box (#218).
+// The search box (#221) finds tasks as the all tasks view does; Enter goes
+// to the next one found, selected and centered, its boxes expanded and the
+// filter relaxed for now (task-map-locate.ts), put back on leaving the view.
+// In the narrow tier the layout keeps its direction, the map seen whole by
+// zooming and panning; a line under the header says the panel can be
+// widened (#212).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+import * as React from "react";
+import type { FindOnTaskMap } from "../../../application/usecases/find-on-task-map";
+import type { MoveTask } from "../../../application/usecases/move-task";
+import type {
+  ReadTaskMap,
+  TaskMapEndpoint,
+  TaskMapRead,
+} from "../../../application/usecases/read-task-map";
+import type { CalendarDate, TaskId } from "../../../domain/task/task";
+import type { ChangeSignalSource } from "../../../shared/change-signal";
+import { t } from "../../../shared/l10n/l10n";
+import { TaskListPlaceholder } from "../../components/loading-placeholder";
+import { ViewHeader } from "../../components/view-header";
+import {
+  FailedNotice,
+  PausedNotice,
+  ViewNotice,
+} from "../../components/view-notice";
+import { useMoveTask } from "../../hooks/use-move-task";
+import {
+  type TaskActionsDeps,
+  useTaskActions,
+} from "../../hooks/use-task-actions";
+import {
+  createViewQuery,
+  useViewQuery,
+  type ViewQuery,
+} from "../../hooks/use-view-query";
+import { notifyActionFailure } from "../../notify";
+import { usePanel, useWithoutSidePane } from "../../panel/panel-context";
+import type { PanelView } from "../../panel/panel-views";
+import type { TaskMenuItems } from "../../task-menu/menu-items";
+import { type AreaDropDeps, useAreaDrop } from "./area-drop";
+import { EndpointMarkerProvider } from "./endpoint-marker";
+import { TaskMapCanvas, taskMapBoxKeys } from "./task-map-canvas";
+import { TaskMapDragArea } from "./task-map-drag";
+import { type TaskMapEditsDeps, TaskMapEditsProvider } from "./task-map-edits";
+import { revealed } from "./task-map-filter";
+import { TaskMapFilterButton } from "./task-map-filter-button";
+import { leftTaskMap, revealOnTaskMap } from "./task-map-locate";
+import { noBoxes, type TaskMapStores } from "./task-map-stores";
+
+export interface TaskMapViewDeps {
+  readTaskMap: ReadTaskMap;
+  /** The current logical day, for dates and overdue. */
+  today: () => CalendarDate;
+  /** Tasks may have changed: the map is read again. */
+  changes: ChangeSignalSource;
+  /** The cards' status menu and "open in notes". */
+  taskActions: TaskActionsDeps;
+  /** The task menu's registrations, for a right-click on a card. */
+  menuItems: () => TaskMenuItems | undefined;
+  /**
+   * The pan and zoom, the filter, the collapsed boxes and the selection,
+   * kept while the plugin instance lives.
+   */
+  stores: TaskMapStores;
+  /** Dragging a card onto another card or a box (#216). */
+  moveTask: MoveTask;
+  /** Dragging a card onto a project box's or the no-project area's empty space (#222). */
+  areaDrop: AreaDropDeps;
+  /** Sequential, the dependency mode and delay, edited on the map (#220). */
+  edits: TaskMapEditsDeps;
+  /** Searching and locating a task (#221). */
+  find: FindOnTaskMap;
+}
+
+function TaskMapContent(props: {
+  query: ViewQuery<TaskMapRead>;
+  deps: TaskMapViewDeps;
+}) {
+  const { query, deps } = props;
+  const state = useViewQuery(query);
+  const actions = useTaskActions(deps.taskActions);
+  const moveTask = useMoveTask(deps.moveTask, deps.taskActions.notify);
+  const areaDrop = useAreaDrop(deps.areaDrop, deps.taskActions.notify);
+  const { selectedTaskId, selectTask } = usePanel();
+  const menuPlace = React.useMemo(() => ({ selectTask }), [selectTask]);
+  const today = deps.today();
+  const menuItems = deps.menuItems();
+  const { filter, locate } = deps.stores;
+  const markerDeps = React.useMemo(
+    () => ({
+      projects: state.kind === "loaded" ? state.data.projects : [],
+      reveal: (endpoint: TaskMapEndpoint) => {
+        locate.set(endpoint.other.id);
+        filter.set(revealed(filter.current(), endpoint.reveal));
+      },
+    }),
+    [state, filter, locate],
+  );
+  const cardDeps = React.useMemo(
+    () => ({
+      today,
+      actions,
+      menuItems,
+      menuPlace,
+      selectTask,
+      selectedTaskId,
+    }),
+    [today, actions, menuItems, menuPlace, selectTask, selectedTaskId],
+  );
+
+  if (state.kind === "loading") return <TaskListPlaceholder />;
+  if (state.kind === "paused") return <PausedNotice />;
+  if (state.kind === "failed") {
+    return (
+      <FailedNotice
+        error={state.error}
+        message={(reason) =>
+          t("Could not read the task map: ${reason}", { reason })
+        }
+        onRetry={() => query.reset()}
+      />
+    );
+  }
+  if (state.data.areas.length === 0) {
+    return filter.current().projects.length > 0 ? (
+      <ViewNotice icon="ti ti-filter" title={t("No tasks match the filter")} />
+    ) : (
+      <ViewNotice
+        icon="ti ti-sitemap"
+        title={t("No tasks to show")}
+        detail={t("Tasks not done appear here with how they relate.")}
+      />
+    );
+  }
+  return (
+    <TaskMapEditsProvider deps={deps.edits} notify={deps.taskActions.notify}>
+      <TaskMapDragArea onMove={moveTask} onAreaDrop={areaDrop.onAreaDrop}>
+        <EndpointMarkerProvider deps={markerDeps}>
+          <TaskMapCanvas
+            read={state.data}
+            stores={deps.stores}
+            deps={cardDeps}
+          />
+        </EndpointMarkerProvider>
+      </TaskMapDragArea>
+      {areaDrop.window}
+    </TaskMapEditsProvider>
+  );
+}
+
+/** "Collapse all" and "Expand all" (#218), once the map is read. */
+function CollapseButtons(props: {
+  query: ViewQuery<TaskMapRead>;
+  stores: TaskMapStores;
+}) {
+  const { query, stores } = props;
+  const state = useViewQuery(query);
+  const { Button, Tooltip } = orca.components;
+  if (state.kind !== "loaded") return null;
+  const keys = taskMapBoxKeys(state.data);
+  if (keys.length === 0) return null;
+  const button = (label: string, icon: string, on: boolean) => (
+    <Tooltip text={label}>
+      <Button
+        variant="plain"
+        className="nextaction-toolbar-button"
+        aria-label={label}
+        onClick={() => {
+          stores.expanded.set(noBoxes);
+          stores.collapsed.setAll(keys, on);
+        }}
+      >
+        <i className={icon} aria-hidden="true" />
+      </Button>
+    </Tooltip>
+  );
+  return (
+    <>
+      {button(t("Collapse all"), "ti ti-fold", true)}
+      {button(t("Expand all"), "ti ti-fold-down", false)}
+    </>
+  );
+}
+
+/**
+ * The search box (#221): Enter shows the next task found after the one shown
+ * last, from the first again past the last; it says how many are found.
+ */
+function TaskMapSearch(props: {
+  find: FindOnTaskMap;
+  stores: TaskMapStores;
+  notify: TaskActionsDeps["notify"];
+}) {
+  const { find, stores, notify } = props;
+  const { CompositionInput } = orca.components;
+  const [text, setText] = React.useState("");
+  /** The tasks found for `text`, and the one shown; `null` before Enter. */
+  const [found, setFound] = React.useState<{
+    text: string;
+    ids: readonly TaskId[];
+    at: number;
+  } | null>(null);
+  const next = async () => {
+    try {
+      const ids = found?.text === text ? found.ids : await find.search(text);
+      const at =
+        found?.text === text && ids.length > 0
+          ? (found.at + 1) % ids.length
+          : 0;
+      setFound({ text, ids, at });
+      const id = ids[at];
+      if (id !== undefined) await revealOnTaskMap(find, stores, id);
+    } catch (error) {
+      notifyActionFailure(notify, error, (reason) =>
+        t("Could not search the task map: ${reason}", { reason }),
+      );
+    }
+  };
+  const shown = found?.text === text && text.trim() !== "" ? found : null;
+  return (
+    <div className="nextaction-filter-search nextaction-task-map-search">
+      <CompositionInput
+        aria-label={t("Search tasks")}
+        placeholder={t("Search tasks")}
+        value={text}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setText(e.target.value)
+        }
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+          e.preventDefault();
+          void next();
+        }}
+        pre={<i className="ti ti-search" aria-hidden="true" />}
+        post={
+          shown ? (
+            <span
+              className="nextaction-task-map-search-count"
+              aria-live="polite"
+            >
+              {shown.ids.length === 0
+                ? t("None found")
+                : t("${at}/${count}", {
+                    at: String(shown.at + 1),
+                    count: String(shown.ids.length),
+                  })}
+            </span>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+export function createTaskMapView(deps: TaskMapViewDeps): PanelView {
+  const { filter } = deps.stores;
+  const query = createViewQuery(
+    () => deps.readTaskMap(filter.current()),
+    deps.changes,
+  );
+  // Lives as long as the stores and the query do: the plugin instance.
+  filter.subscribe(() => query.reload());
+
+  function TaskMapHeaderFilter() {
+    const state = useViewQuery(query);
+    const current = React.useSyncExternalStore(
+      filter.subscribe,
+      filter.current,
+    );
+    // The choices from the last read; none yet while loading.
+    const projects = React.useRef<TaskMapRead["projects"]>([]);
+    if (state.kind === "loaded") projects.current = state.data.projects;
+    return (
+      <TaskMapFilterButton
+        filter={current}
+        projects={projects.current}
+        onChange={(next) => filter.set(next)}
+      />
+    );
+  }
+
+  function TaskMapView() {
+    // The canvas needs the width: tasks open in the task panel's popup.
+    useWithoutSidePane(true);
+    // Leaving the map puts back what showing a task relaxed (#221).
+    React.useEffect(() => () => leftTaskMap(deps.stores), []);
+    const narrow = usePanel().tier === "narrow";
+    return (
+      <div className="nextaction-task-map">
+        <ViewHeader
+          title={t("Task map")}
+          actions={
+            <>
+              <TaskMapSearch
+                find={deps.find}
+                stores={deps.stores}
+                notify={deps.taskActions.notify}
+              />
+              <CollapseButtons query={query} stores={deps.stores} />
+              <TaskMapHeaderFilter />
+            </>
+          }
+        />
+        {narrow && (
+          <p className="nextaction-task-map-narrow-hint">
+            {t("Widen the panel to see more of the map")}
+          </p>
+        )}
+        <TaskMapContent query={query} deps={deps} />
+      </div>
+    );
+  }
+
+  return {
+    id: "task-map",
+    order: 27,
+    icon: "ti ti-sitemap",
+    label: () => t("Task map"),
+    component: TaskMapView,
+  };
+}

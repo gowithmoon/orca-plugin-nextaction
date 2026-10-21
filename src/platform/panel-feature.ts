@@ -6,15 +6,21 @@ import { createAddToMyDay } from "../application/usecases/add-to-my-day";
 import { createCompleteFullReview } from "../application/usecases/complete-full-review";
 import { createDropTask } from "../application/usecases/drop-task";
 import { createEditTask } from "../application/usecases/edit-task";
+import { createFindOnTaskMap } from "../application/usecases/find-on-task-map";
 import { createLinkTaskInNote } from "../application/usecases/link-task-in-note";
 import {
   createCanMarkReviewed,
   createMarkReviewed,
 } from "../application/usecases/mark-reviewed";
 import { createMoveTask } from "../application/usecases/move-task";
+import {
+  createMoveToArea,
+  createReadMoveToArea,
+} from "../application/usecases/move-to-area";
 import { createMoveToQuadrant } from "../application/usecases/move-to-quadrant";
 import { createReadAllTasks } from "../application/usecases/read-all-tasks";
 import { createReadCandidates } from "../application/usecases/read-candidates";
+import { createReadDependentRefusals } from "../application/usecases/read-dependent-refusals";
 import { createReadInbox } from "../application/usecases/read-inbox";
 import { createReadMoveCrossing } from "../application/usecases/read-move-crossing";
 import { createReadMyDay } from "../application/usecases/read-my-day";
@@ -25,12 +31,16 @@ import { createReadProjectGantt } from "../application/usecases/read-project-gan
 import { createReadProjectList } from "../application/usecases/read-project-list";
 import { createReadReview } from "../application/usecases/read-review";
 import { createReadStats } from "../application/usecases/read-stats";
+import { createReadTaskMap } from "../application/usecases/read-task-map";
 import { createScheduleInMyDay } from "../application/usecases/schedule-in-my-day";
+import { createSetDependencies } from "../application/usecases/set-dependencies";
+import { createSetDependencyMode } from "../application/usecases/set-dependency-mode";
+import { createSetSequential } from "../application/usecases/set-sequential";
 import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import { createWriteAiSummary } from "../application/usecases/write-ai-summary";
 import { createWriteSummaryToJournal } from "../application/usecases/write-summary-to-journal";
-import type { CalendarDate } from "../domain/task/task";
+import type { CalendarDate, TaskId } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
 import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
 import { createOrcaAiChat } from "../infra/orca/orca-ai-chat";
@@ -40,6 +50,7 @@ import { t } from "../shared/l10n/l10n";
 import type { OpenQuickCapture } from "../ui/capture/quick-capture-popup";
 import { formatDate } from "../ui/components/format";
 import type { LayoutStore } from "../ui/components/layout-store";
+import { createMemoryStore } from "../ui/components/memory-store";
 import { handleCardDragAltKey } from "../ui/drag/card-drag";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import type { EditorHost } from "../ui/panel/hidden-editor";
@@ -62,6 +73,7 @@ import { statsPeriodCss } from "../ui/styles/stats-period-style";
 import { statsSelectionCss } from "../ui/styles/stats-selection-style";
 import { statsCss } from "../ui/styles/stats-style";
 import { taskDragCss } from "../ui/styles/task-drag-style";
+import { taskMapCss } from "../ui/styles/task-map-style";
 import type { TaskMenuItems } from "../ui/task-menu/menu-items";
 import type { OpenReviewPopup } from "../ui/task-panel/review-popup";
 import type { TaskPanelFormDeps } from "../ui/task-panel/task-panel-form";
@@ -86,6 +98,9 @@ import { createReviewPageStore } from "../ui/views/review/review-page-store";
 import { createReviewView } from "../ui/views/review/review-view";
 import { createStatsScaleStore } from "../ui/views/stats/stats-scale-store";
 import { createStatsView } from "../ui/views/stats/stats-view";
+import { revealOnTaskMap } from "../ui/views/task-map/task-map-locate";
+import { createTaskMapStores } from "../ui/views/task-map/task-map-stores";
+import { createTaskMapView } from "../ui/views/task-map/task-map-view";
 import type { FeatureModule } from "./bootstrap";
 import { createPanelPlacement } from "./panel-placement";
 
@@ -157,7 +172,17 @@ export function createPanelFeature(deps: {
   editorHost: EditorHost;
   /** What every AI request is given (#201), for the review's AI summary (#205). */
   promptContext: ReadPromptContext;
-}): { feature: FeatureModule; views: PanelViews } {
+}): {
+  feature: FeatureModule;
+  views: PanelViews;
+  /**
+   * "Show in task map" (#221): the task shown on the task map, the plugin
+   * panel opened first when closed (from the active panel). Rejects when
+   * Orca does not open it; does nothing for a block that is no task, or
+   * while not loaded.
+   */
+  showInTaskMap: (taskId: TaskId) => Promise<void>;
+} {
   const { repository, changes, taskPanel } = deps;
   const views = createPanelViews();
   // The next action view's filter (#55): in memory only, so it outlives the
@@ -191,6 +216,12 @@ export function createPanelFeature(deps: {
   const reviewProjectGroups = createProjectGroupsStore();
   // The stats view's scale (#135): in memory only, likewise.
   const statsScale = createStatsScaleStore();
+  // The task map's pan and zoom (#213): in memory only, likewise.
+  const taskMap = createTaskMapStores();
+  // A view asked for from outside the plugin panel (#221), shown once it is.
+  const viewRequest = createMemoryStore<string | null>(null);
+  /** Opens the plugin panel unless open; set while loaded. */
+  let showPanel: (() => void) | undefined;
   // When the last full review was completed (#101), in `plugins.setData`
   // under the current load's name.
   let loadedPluginName: string | undefined;
@@ -341,6 +372,36 @@ export function createPanelFeature(deps: {
       }),
     }),
   );
+  const readTaskMap = createReadTaskMap({
+    repository,
+    clock: systemClock,
+    dayBoundary: deps.dayBoundary,
+    startPreviewDays: deps.startPreviewDays,
+  });
+  const findOnTaskMap = createFindOnTaskMap(readTaskMap);
+  views.register(
+    createTaskMapView({
+      readTaskMap,
+      find: findOnTaskMap,
+      today: deps.today,
+      changes,
+      taskActions: deps.taskActions,
+      menuItems: deps.menuItems,
+      stores: taskMap,
+      moveTask,
+      areaDrop: {
+        readMoveToArea: createReadMoveToArea({ repository }),
+        moveToArea: createMoveToArea({ repository, clock: systemClock }),
+      },
+      edits: {
+        setSequential: createSetSequential({ repository }),
+        setDependencyMode: createSetDependencyMode({ repository }),
+        editTask: createEditTask({ repository }),
+        setDependencies: createSetDependencies({ repository }),
+        readDependentRefusals: createReadDependentRefusals({ repository }),
+      },
+    }),
+  );
   const readReview = createReadReview({
     ...myDayDeps,
     startPreviewDays: deps.startPreviewDays,
@@ -419,6 +480,7 @@ export function createPanelFeature(deps: {
     onRefresh: refresh,
     editorHost: deps.editorHost,
     noteCursors: orcaNoteCursorSource,
+    viewRequest,
     // Changes made elsewhere without a hook (e.g. sync) show on return.
     onActivated: refresh,
   });
@@ -459,6 +521,8 @@ export function createPanelFeature(deps: {
       reviewProjectGroups.clear,
     );
     registry.add(`${pluginName}.statsScale`, statsScale.clear);
+    registry.add(`${pluginName}.taskMapStores`, taskMap.clear);
+    registry.add(`${pluginName}.viewRequest`, () => viewRequest.set(null));
     registry.css("panelStyle", panelCss);
     registry.css("componentStyle", componentCss);
     registry.css("taskDragStyle", taskDragCss);
@@ -468,6 +532,7 @@ export function createPanelFeature(deps: {
     registry.css("ganttDependenciesStyle", ganttDependenciesCss);
     registry.css("ganttShiftLaterStyle", ganttShiftLaterCss);
     registry.css("dragToPanStyle", dragToPanCss);
+    registry.css("taskMapStyle", taskMapCss);
     // Alt going down or up switches a card drag under way between a
     // reference and a mirror (#126). Capturing, so the notes' editor cannot
     // keep the key from it; nothing is prevented.
@@ -503,10 +568,21 @@ export function createPanelFeature(deps: {
     registry.panel("panel", panelRenderer, {
       closePanel: placement.close,
     });
+    showPanel = () => placement.show(orca.state.activePanel);
+    registry.add(`${pluginName}.showPanel`, () => {
+      showPanel = undefined;
+    });
     registry.editorSidetool(
       "panelButton",
       createPanelButton(placement.toggle, pluginName),
     );
   };
-  return { feature, views };
+  const showInTaskMap = async (taskId: TaskId) => {
+    const open = showPanel;
+    if (!open) return;
+    if (!(await revealOnTaskMap(findOnTaskMap, taskMap, taskId))) return;
+    viewRequest.set("task-map");
+    open();
+  };
+  return { feature, views, showInTaskMap };
 }

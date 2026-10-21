@@ -7,6 +7,7 @@ import {
   type DiscardableData,
   type InitialProperties,
   type JournalSummaryPart,
+  type MoveTaskOptions,
   type NewTask,
   type NewTasksPlacement,
   type NoteTarget,
@@ -1049,6 +1050,19 @@ export function createOrcaTaskRepository(
   };
 
   /**
+   * The write clearing task `id`'s own 所属项目 setting when `options` asks
+   * for it, planned before anything is written, to run inside a move's
+   * group (#222); `undefined` when there is nothing to write.
+   */
+  const planProjectClear = async (
+    id: TaskId,
+    options: MoveTaskOptions,
+  ): Promise<{ run: () => Promise<void> } | undefined> =>
+    options.clearProject
+      ? planTaskWrite(readyTag(), { id, changes: { project: null } })
+      : undefined;
+
+  /**
    * Runs a block reference write (dependencies #57, a block reference custom
    * property #115) inside a write: a reference created with
    * `createRef(task, target, 3)` for each new target, then the value written
@@ -1607,17 +1621,48 @@ export function createOrcaTaskRepository(
       );
     },
 
-    async moveTaskToProjectEnd(id: TaskId, project: ProjectId): Promise<void> {
+    async moveTaskToProjectEnd(
+      id: TaskId,
+      project: ProjectId,
+      options: MoveTaskOptions = {},
+    ): Promise<void> {
       // A mirror resolves to its source block; the project's block is a
       // source block itself (projectBlock).
       const block = await taskBlockToWrite(id, currentTag());
       const read = await projectBlock(project);
       if (!read) throw new OrcaError(`block ${project} is not a project`);
+      const clear = await planProjectClear(id, options);
       // The project block's last child block, page or block alike
       // (project-board A1–A3); moveBlocks fetches it first (move-blocks 64e).
-      await writeTo(block, () =>
-        moveBlocks(block.id, read.block.id, "lastChild"),
-      );
+      // The setting cleared in the same group: one undo (move-blocks U2,
+      // multi-block-undo; the pair checked by hand in Orca, #222).
+      await writeTo(block, async () => {
+        await clear?.run();
+        await moveBlocks(block.id, read.block.id, "lastChild");
+      });
+    },
+
+    async moveTaskToJournal(
+      id: TaskId,
+      now: Date,
+      options: MoveTaskOptions = {},
+    ): Promise<void> {
+      // A mirror resolves to its source block.
+      const block = await taskBlockToWrite(id, currentTag());
+      const clear = await planProjectClear(id, options);
+      // As appendTaskToJournal: the journal by local date, created when
+      // missing (journal-capture J2, J3), outside the group below, so a
+      // journal it creates is not removed by the one undo.
+      const journal = await journalBlock(now);
+      // Its last child block; moveBlocks puts the journal in the cache first
+      // when it is not there, else the block would land at the root
+      // (move-blocks 64d, 64e). The children go with it (64a U1); a page
+      // stays a page and a task (64a P1). One group with the setting
+      // cleared: one undo (64a U2, multi-block-undo; checked by hand, #222).
+      await writeTo(block, async () => {
+        await clear?.run();
+        await moveBlocks(block.id, journal.id, "lastChild");
+      });
     },
 
     async linkTaskInNote(
