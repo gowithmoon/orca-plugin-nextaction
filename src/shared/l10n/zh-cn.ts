@@ -5,23 +5,23 @@ const zhCN: Record<string, string> = {
   "Failed to unload: ${reason}": "卸载失败：${reason}",
   "Task tag name": "任务标签名",
   "The Orca tag that marks a block as a task. Changing it renames the tag; existing tasks keep it.":
-    "用来把块标记为任务的 Orca 标签。修改后会重命名这个标签，已有任务不受影响。",
+    "用来把块标记为任务。修改后会重命名，已有任务不受影响。",
   "Day boundary": "日界线",
   "A day starts at this time. Usually set in the early morning.":
     "一天从这个时刻开始，一般设在凌晨。",
-  "Reminder default time": "提醒默认时刻",
+  "Reminder default time": "默认提醒时间",
   "The time of day the quick reminder options fall at, such as on the due date or 3 days before it.":
-    "提醒快捷选项（如截止日期当天、前 3 天）所用的时刻。",
+    "提醒快捷选项（如截止日期当天、前 3 天）所用的时间。",
   "Start preview days": "开始日期预览天数",
   "Tasks that start within this many days show in the next actions already, with a slightly lower score. A whole number from 0 to 14; 0 shows only tasks that can start today.":
-    "开始日期在这么多天之内的任务会提前出现在下一步行动里，评分略低。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
+    "距离开始日期在这么多天以内的任务会提前出现在下一步行动里。填 0 到 14 的整数；填 0 时只显示今天就能开始的任务。",
   "AI instructions block": "AI 说明块",
   "The ID of a block in your notes, or ((ID)), telling the AI about you and your habits. The block and everything below it go with every AI request, to the AI service set up in Orca. Leave it empty for none.":
-    "填笔记里一个块的编号（也可以写成 ((编号))），在这个块里向 AI 介绍你的情况和习惯。每次请求 AI 时，这个块和它下面的所有内容都会一起发给你在 Orca 里配置的 AI 服务。不需要就留空。",
+    "填笔记里一个块的 ID，在这个块里向 AI 介绍你的情况和习惯。每次请求 AI 时，这个块和它子块的所有内容都会一起发给 AI 服务。不需要就留空。",
   'The task tag name cannot be empty. It was set back to "${name}".':
     "任务标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the task tag was not renamed. The name was set back to "${name}".':
-    "“${requested}”已被其他页面或块使用，任务标签没有改名，名称已改回“${name}”。",
+    "“${requested}”已被其他块使用，任务标签没有改名，名称已改回“${name}”。",
   'Could not rename the task tag "${name}": ${reason}':
     "无法重命名任务标签“${name}”：${reason}",
   'Could not set up the task tag "${name}": ${reason}':
@@ -29,16 +29,16 @@ const zhCN: Record<string, string> = {
   "A feature could not follow the change of the task tag: ${reason}":
     "有功能未能跟上任务标签的变化：${reason}",
   'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Task features are paused. Choose another task tag name in the plugin settings.':
-    "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。任务功能已暂停，请在插件设置中换一个任务标签名。",
+    "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。任务功能暂不可用，请在插件设置中换一个任务标签名。",
   'The properties ${properties} of the task tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "任务标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
   "Project tag name": "项目标签名",
   "The Orca tag that marks a page or block as a project. Changing it renames the tag; existing projects keep it.":
-    "用来把页面或块标记为项目的 Orca 标签。修改后会重命名这个标签，已有项目不受影响。",
+    "用来把块标记为项目。修改后会重命名，已有项目不受影响。",
   'The project tag name cannot be empty. It was set back to "${name}".':
     "项目标签名不能为空，已改回“${name}”。",
   '"${requested}" is already used by another page or block, so the project tag was not renamed. The name was set back to "${name}".':
-    "“${requested}”已被其他页面或块使用，项目标签没有改名，名称已改回“${name}”。",
+    "“${requested}”已被其他块使用，项目标签没有改名，名称已改回“${name}”。",
   'Could not rename the project tag "${name}": ${reason}':
     "无法重命名项目标签“${name}”：${reason}",
   'Could not set up the project tag "${name}": ${reason}':
@@ -46,7 +46,7 @@ const zhCN: Record<string, string> = {
   "A feature could not follow the change of the project tag: ${reason}":
     "有功能未能跟上项目标签的变化：${reason}",
   'A tag named "${name}" already exists and its properties ${properties} have a different type than the plugin needs. Projects are paused: every task reads as belonging to no project. Choose another project tag name in the plugin settings.':
-    "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。项目功能已暂停，所有任务都视为不属于项目。请在插件设置中换一个项目标签名。",
+    "已经有一个名为“${name}”的标签，它的属性 ${properties} 与插件需要的类型不同。项目功能暂不可用，所有任务都视为不属于项目。请在插件设置中换一个项目标签名。",
   'The properties ${properties} of the project tag "${name}" were changed to a different type. The plugin reads them as empty and will not write them until their type is changed back.':
     "项目标签“${name}”的属性 ${properties} 被改成了其他类型。在类型改回之前，插件把它们读作空值，也不会写入它们。",
   "Project ": "所属项目 ",
@@ -62,7 +62,7 @@ const zhCN: Record<string, string> = {
   "Put the cursor in a block to convert it to a task.":
     "请把光标放在要转为任务的块中。",
   "Task features are paused, so the block was not converted. See the plugin's earlier notice or its task tag setting.":
-    "任务功能已暂停，块没有转为任务。请查看插件之前的通知或任务标签设置。",
+    "任务功能暂不可用，块没有转为任务。请查看任务标签设置是否有问题。",
   "Create task": "创建任务",
   "Task name": "任务名称",
   "Task name, press Enter to create": "输入任务名称，按 Enter 快速创建任务",
@@ -71,7 +71,7 @@ const zhCN: Record<string, string> = {
   Create: "创建",
   "Task created and added to today's journal": "任务创建成功，已加入今日日记",
   "Task features are paused, so the task was not created. See the plugin's earlier notice or its task tag setting.":
-    "任务功能已暂停，任务没有创建。请查看插件之前的通知或任务标签设置。",
+    "任务功能暂不可用，任务没有创建。请查看插件任务标签设置是否有问题。",
   "Could not create the task: ${reason}": "无法创建任务：${reason}",
   "New subtask": "新建子任务",
   "Create subtask": "创建子任务",
@@ -93,7 +93,7 @@ const zhCN: Record<string, string> = {
     "无法设为已完成：任务的完成历史无法读取，已原样保留。",
   "Could not open the task menu: ${reason}": "无法打开任务操作菜单：${reason}",
   "Task features are paused. See the plugin's earlier notice or its task tag setting.":
-    "任务功能已暂停。请查看插件之前的通知或任务标签设置。",
+    "任务功能暂不可用。请查看插件任务标签设置是否有问题。",
   NextAction: "今天干点啥",
   "Could not open or close the plugin panel: ${reason}":
     "无法打开或关闭插件面板：${reason}",
@@ -257,9 +257,9 @@ const zhCN: Record<string, string> = {
   Stale: "已失效",
   "Recurring task": "重复任务",
   "A recurring task advances to its next occurrence each time it is completed; the dependency is met only once it no longer recurs and is done at last.":
-    "重复任务完成后会自动排到下一次，只有取消重复并完成后，这条依赖才算满足",
+    "重复任务完成后会自动排到下一次，只有停止重复并完成后，这条依赖才算满足",
   "A recurring task advances to its next occurrence each time it is completed, so it holds back the subtasks after it until it no longer recurs.":
-    "重复任务完成后会自动排到下一次。在它取消重复并完成之前，后面的子任务会一直等着",
+    "重复任务完成后会自动排到下一次。在它停止重复并完成之前，后面的子任务会一直等着",
   "Remove dependency": "移除依赖",
   "Search tasks": "搜索任务",
   "Clear search": "清除搜索",
@@ -306,7 +306,7 @@ const zhCN: Record<string, string> = {
   "Could not move the task: ${reason}": "无法移动任务：${reason}",
   // A project details move across the project block (#157).
   '"${task}" will go under the block of project "${project}". You can undo it.':
-    "「${task}」会挪到项目「${project}」的块下。可以撤销。",
+    "「${task}」会挪到项目「${project}」下，成为它的子块。可以撤销。",
   '"${task}" will leave the block of project "${project}" and still belong to it. You can undo it.':
     "「${task}」会移出项目「${project}」的块，仍属于这个项目。可以撤销。",
   '"${task}" will leave the block of project "${project}", belong to no project and go from here. You can undo it.':
@@ -444,7 +444,7 @@ const zhCN: Record<string, string> = {
   "Not skipped: its recurrence is paused.": "无法跳过：重复已暂停。",
   "Not skipped: the task is done.": "无法跳过：任务已经完成。",
   "Not skipped: this is the last time. To stop repeating, remove the rule.":
-    "无法跳过：这是最后一次。不想再重复的话，去掉重复规则就行。",
+    "无法跳过：这是最后一次。不想再重复请移除重复规则。",
   "Could not skip: its recurrence rule cannot be read (${reason}) and is kept as it is.":
     "无法跳过：重复规则读取失败（${reason}），规则没有改动。",
   "Could not skip: its completion history cannot be read and is kept as it is.":
@@ -655,7 +655,7 @@ const zhCN: Record<string, string> = {
   "Could not read the projects: ${reason}": "无法读取项目：${reason}",
   // The projects view (#155).
   Projects: "项目",
-  "Projects are paused": "项目功能已暂停",
+  "Projects are paused": "项目功能暂不可用",
   "The project tag could not be set up. Check the project tag name in the plugin settings.":
     "项目标签无法设置。请在插件设置中检查项目标签名。",
   "No projects yet": "还没有项目",
