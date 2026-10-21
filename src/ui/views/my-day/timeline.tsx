@@ -161,7 +161,12 @@ export function TimelineCard(props: {
       <div className="nextaction-timeline-card-body">
         {!compact && (
           <div className="nextaction-timeline-card-status">
-            <StatusButton task={task} actions={card.actions} />
+            <StatusButton
+              task={task}
+              actions={card.actions}
+              menuItems={card.menuItems}
+              menuPlace={card.menuPlace}
+            />
           </div>
         )}
         <div className="nextaction-timeline-card-main">

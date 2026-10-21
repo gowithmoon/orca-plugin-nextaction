@@ -4,7 +4,7 @@
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ReadTask } from "../../application/usecases/read-task";
-import type { Task, TaskId } from "../../domain/task/task";
+import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type {
   Block,
   BlockMenuCommand,
@@ -12,8 +12,10 @@ import type {
   TagMenuCommand,
 } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
+import { markedStatus, StatusMenu } from "../components/status-menu";
 import { useTask } from "../hooks/use-task";
 import { createNotify, notifyActionFailure } from "../notify";
+import { taskMenuGroups } from "./builtin-items";
 import type {
   ResolvedTaskMenuEntry,
   ResolvedTaskMenuItem,
@@ -114,12 +116,17 @@ function TaskMenuEntries(props: {
   close: () => void;
   /** The plugin panel the menu is in; absent in Orca's own menus. */
   place?: TaskMenuPlace;
+  /** A group left out, e.g. the statuses where they show already. */
+  omitGroup?: number;
 }) {
-  const { items, task, close, place } = props;
+  const { items, task, close, place, omitGroup } = props;
   const { Menu, MenuText } = orca.components;
+  const groups = items
+    .arrange(task)
+    .filter((group) => group.group !== omitGroup);
   return (
     <>
-      {items.arrange(task).map((group) => {
+      {groups.map((group) => {
         const entries = group.items.map((item) =>
           itemEntry(item, task, close, place),
         );
@@ -151,6 +158,45 @@ export function TaskMenu(props: {
   place?: TaskMenuPlace;
 }) {
   return <TaskMenuEntries {...props} />;
+}
+
+/**
+ * What a click on a status icon opens, in the notes and in the plugin panel:
+ * the six statuses and, below a separator, the rest of the task menu (its
+ * status submenu left out, the statuses being above). Only the statuses
+ * without `items`. A `ContextMenu`'s `menu`, as `TaskMenu`.
+ */
+export function StatusAndTaskMenu(props: {
+  task: Task;
+  /** Called with a status other than the current one, after the menu closes. */
+  onChoose: (status: TaskStatus) => void;
+  close: () => void;
+  items?: TaskMenuItems;
+  place?: TaskMenuPlace;
+}) {
+  const { task, onChoose, close, items, place } = props;
+  const { MenuSeparator } = orca.components;
+  return (
+    <>
+      <StatusMenu
+        current={markedStatus(task)}
+        onChoose={onChoose}
+        close={close}
+      />
+      {items && (
+        <>
+          <MenuSeparator />
+          <TaskMenuEntries
+            items={items}
+            task={task}
+            close={close}
+            place={place}
+            omitGroup={taskMenuGroups.status}
+          />
+        </>
+      )}
+    </>
+  );
 }
 
 /** Reads the task, then shows its entries; nothing for a block that is not a task. */

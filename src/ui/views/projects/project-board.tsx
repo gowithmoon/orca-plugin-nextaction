@@ -122,7 +122,12 @@ function Row(props: { row: BoardRow; cards: BoardCards }) {
         })
       }
     >
-      <StatusButton task={row.task} actions={cards.actions} />
+      <StatusButton
+        task={row.task}
+        actions={cards.actions}
+        menuItems={cards.menuItems}
+        menuPlace={cards.menuPlace}
+      />
       <span
         className="nextaction-board-row-text"
         data-empty={text.empty || undefined}
@@ -467,7 +472,12 @@ function RootHead(props: {
       className="nextaction-board-column-head"
       onContextMenu={onContextMenu}
     >
-      <StatusButton task={head.task} actions={cards.actions} />
+      <StatusButton
+        task={head.task}
+        actions={cards.actions}
+        menuItems={cards.menuItems}
+        menuPlace={cards.menuPlace}
+      />
       <button
         type="button"
         className="nextaction-board-root-name"

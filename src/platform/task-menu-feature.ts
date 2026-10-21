@@ -129,6 +129,7 @@ export function createTaskMenuFeature(deps: {
     const openStatusMenu = createNoteStatusMenu({
       readTask: menuDeps.readTask,
       changeStatus,
+      items,
       pluginName,
       render: statusMenuRoot.render,
     });

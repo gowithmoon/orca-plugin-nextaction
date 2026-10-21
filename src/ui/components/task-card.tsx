@@ -12,14 +12,13 @@ import { t } from "../../shared/l10n/l10n";
 import type { TaskActions } from "../hooks/use-task-actions";
 import { projectStatusIcons } from "../project-menu/project-status-icons";
 import type { TaskMenuItems, TaskMenuPlace } from "../task-menu/menu-items";
-import { TaskMenu } from "../task-menu/task-menu";
+import { StatusAndTaskMenu, TaskMenu } from "../task-menu/task-menu";
 import { shownText } from "./format";
 import { ContextMenu } from "./popup-controls";
 import { projectStatusLabel } from "./project-status-label";
 import { PropertyRow } from "./property-row";
 import { selectsText } from "./selects-text";
 import { StatusIcon } from "./status-icon";
-import { markedStatus, StatusMenu } from "./status-menu";
 
 export interface TaskCardProps {
   task: Task;
@@ -97,16 +96,24 @@ export interface TaskCardProps {
 }
 
 /**
- * The status icon that opens the status menu; shared with My Day's timeline
+ * The status icon that opens the status menu, with the rest of the task
+ * menu below it when `menuItems` is given; shared with My Day's timeline
  * cards and the board's subtask rows.
  */
-export function StatusButton(props: { task: Task; actions: TaskActions }) {
-  const { task, actions } = props;
+export function StatusButton(props: {
+  task: Task;
+  actions: TaskActions;
+  menuItems?: TaskMenuItems;
+  menuPlace?: TaskMenuPlace;
+}) {
+  const { task, actions, menuItems, menuPlace } = props;
   return (
     <ContextMenu
       menu={(close) => (
-        <StatusMenu
-          current={markedStatus(task)}
+        <StatusAndTaskMenu
+          task={task}
+          items={menuItems}
+          place={menuPlace}
           onChoose={(status) => actions.changeStatus(task, status)}
           close={close}
         />
@@ -303,7 +310,12 @@ export function TaskCard(props: TaskCardProps) {
     >
       <div className="nextaction-task-card-status">
         {actions ? (
-          <StatusButton task={task} actions={actions} />
+          <StatusButton
+            task={task}
+            actions={actions}
+            menuItems={menuItems}
+            menuPlace={menuPlace}
+          />
         ) : (
           <span className="nextaction-task-card-status-mark">
             <StatusIcon status={task.status} />
