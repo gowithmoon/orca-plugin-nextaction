@@ -1,11 +1,12 @@
 // A block reference custom property in the task panel (#115), shaped like
-// dependencies: the target blocks as a list, a click opens one in the notes,
-// × removes it, "Add" searches under the property's scope. A name nothing
-// found reads as is offered as "Add …", which adds a new page of that name,
-// as Orca's own property input does (custom-properties). A deleted target
-// reads "(Deleted block)" and can be removed; it is never cleared on its own.
-// No cycle or recurring hints: a target that is a task is not a dependency.
-// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
+// contexts: Orca's Select with multiple selection, the target blocks as chips
+// in the box, a click on a chip opens its block in the notes. Typing searches
+// under the property's scope; a name nothing found reads as is offered as
+// "Add …", which adds a new page of that name, as Orca's own property input
+// does (custom-properties). A deleted target reads "(Deleted block)" and can
+// be taken out; it is never cleared on its own. No cycle or recurring hints:
+// a target that is a task is not a dependency. Verified by hand in Orca
+// (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { BlockCandidate } from "../../application/ports/task-repository";
 import type { ReadBlockRefCandidates } from "../../application/usecases/read-block-ref-candidates";
@@ -13,23 +14,18 @@ import type { BlockRefTarget } from "../../application/usecases/read-task";
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
+import { Select } from "../components/popup-controls";
 import { useBlockRefSearch } from "../hooks/use-block-ref-search";
 import type { Notify } from "../notify";
-import { BlockRefsField } from "./block-refs-field";
 
-const noOptions: SelectOption[] = [];
+/** Marks the "Add …" option's value; block IDs are plain numbers. */
+const newValuePrefix = "new:";
 
-/** The candidates as options, those already held left out. */
-function optionsOf(
-  candidates: readonly BlockCandidate[],
-  current: readonly number[],
-): SelectOption[] {
-  return candidates
-    .filter((candidate) => !current.includes(candidate.id))
-    .map((candidate) => ({
-      value: String(candidate.id),
-      label: shownText(candidate).text,
-    }));
+/** A target's chip text. */
+function targetLabel(target: BlockRefTarget): string {
+  return target.deleted || target.text === null
+    ? t("(Deleted block)")
+    : shownText({ text: target.text }).text;
 }
 
 export function BlockRefPropertyField(props: {
@@ -45,45 +41,115 @@ export function BlockRefPropertyField(props: {
   onAddNew: (text: string) => void;
   onOpen: (blockId: number) => void;
 }) {
+  const { targets, onOpen } = props;
   const search = useBlockRefSearch(
     props.readBlockRefCandidates,
     props.name,
     props.notify,
   );
-  const current = props.targets.map((target) => target.id);
-  const held = React.useRef(current);
-  held.current = current;
+  const current = targets.map((target) => target.id);
+  const heldTargets = React.useRef(targets);
+  heldTargets.current = targets;
+
+  // The targets as options, so each chip has its text and opens its block.
+  // A new list only when the targets change: Orca's Select shows its
+  // options again, dropping what the filter returned, whenever they change
+  // (select-filter).
+  // `onOpen` is new on every render of the form: called through a ref so it
+  // does not rebuild the options.
+  const open = React.useRef(onOpen);
+  open.current = onOpen;
+  const targetsKey = JSON.stringify(targets);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rebuilt by content, not by reference
+  const options = React.useMemo<SelectOption[]>(
+    () =>
+      targets.map((target) => ({
+        value: String(target.id),
+        label: targetLabel(target),
+        onClick: target.deleted ? undefined : () => open.current(target.id),
+      })),
+    [targetsKey],
+  );
+
+  const heldOptions = React.useRef(options);
+  heldOptions.current = options;
+  /** Texts of blocks found, so a chip just picked shows its text. */
+  const foundLabels = React.useRef(new Map<string, string>());
+
   // The same function across renders: Orca's Select filters again whenever
   // it changes, which here would ask Orca again (select-filter).
   const filterFunction = React.useCallback(
-    async (keyword: string) => optionsOf(await search(keyword), held.current),
+    async (keyword: string): Promise<SelectOption[]> => {
+      const held = heldOptions.current;
+      const found = (await search(keyword))
+        .map((candidate: BlockCandidate) => ({
+          value: String(candidate.id),
+          label: shownText(candidate).text,
+        }))
+        .filter((option) => !held.some((h) => h.value === option.value));
+      for (const option of found) {
+        foundLabels.current.set(option.value, option.label);
+      }
+      const text = keyword.trim();
+      // Nothing typed: the targets held, so each can be taken out (a
+      // deleted one too), then what the scope offers.
+      if (text === "") return [...held, ...found];
+      // A block found or already held under that text is the one meant:
+      // picked or kept, not added a second time.
+      if (
+        found.some((option) => option.label === text) ||
+        heldTargets.current.some((target) => target.text?.trim() === text)
+      ) {
+        return found;
+      }
+      return [
+        ...found,
+        {
+          value: `${newValuePrefix}${text}`,
+          label: t("Add ${value}", { value: text }),
+          icon: "ti ti-plus",
+        },
+      ];
+    },
     [search],
   );
 
   return (
-    <BlockRefsField
-      labelId={props.labelId}
-      items={props.targets.map((target) => ({
-        id: target.id,
-        text: target.deleted ? null : target.text,
-        struck: target.deleted,
-      }))}
-      missingText={t("(Deleted block)")}
-      onOpen={props.onOpen}
-      removeLabel={t("Remove")}
-      onRemove={(id) => props.onChange(current.filter((c) => c !== id))}
-      // Always the same empty list: Orca's Select shows its options again,
-      // dropping what the filter returned, whenever they change
-      // (select-filter). What is found only ever comes from the filter.
-      options={noOptions}
-      // Every keyword asks Orca; the scope is applied there.
-      filterFunction={filterFunction}
-      filterPlaceholder={t("Search blocks")}
-      placeholder={t("Add")}
-      onPick={(picked) => {
-        if (!current.includes(picked)) props.onChange([...current, picked]);
-      }}
-      onAddNew={props.onAddNew}
-    />
+    <fieldset
+      className="nextaction-choices-field"
+      aria-labelledby={props.labelId}
+    >
+      <Select
+        selected={current.map(String)}
+        options={options}
+        multiSelection={true}
+        filter={true}
+        filterPlaceholder={t("Search or add")}
+        filterFunction={filterFunction}
+        placeholder={t("Not set")}
+        // A target just picked has no option until the task is read again.
+        formatter={(value) =>
+          value.startsWith(newValuePrefix)
+            ? value.slice(newValuePrefix.length)
+            : (foundLabels.current.get(value) ?? "")
+        }
+        width="100%"
+        alignment="left"
+        onChange={(selected) => {
+          const added = selected.find((v) => v.startsWith(newValuePrefix));
+          if (added !== undefined) {
+            props.onAddNew(added.slice(newValuePrefix.length));
+            return;
+          }
+          const next = selected
+            .map(Number)
+            .filter((id) => Number.isInteger(id));
+          const same =
+            next.length === current.length &&
+            next.every((id, i) => id === current[i]);
+          if (!same) props.onChange(next);
+        }}
+      />
+    </fieldset>
   );
 }

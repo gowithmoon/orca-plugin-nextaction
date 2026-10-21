@@ -4,14 +4,10 @@
 // what is particular to each (cycles, recurring tasks, what a click opens)
 // comes in through the props. Verified by hand in Orca (docs/ARCHITECTURE.md
 // §5).
-import * as React from "react";
+import type * as React from "react";
 import type { SelectOption } from "../../orca.d.ts";
-import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
 import { Select } from "../components/popup-controls";
-
-/** Marks the "Add …" option's value; block IDs are plain numbers. */
-const newValuePrefix = "new:";
 
 /** One target block as the field lists it. */
 export interface BlockRefsFieldItem {
@@ -124,44 +120,7 @@ export function BlockRefsField(props: {
   placeholder: string;
   /** A block was picked from the search. */
   onPick: (id: number) => void;
-  /**
-   * A keyword no option reads as exactly is offered as "Add …", as in the
-   * choices field; picking it calls this with the keyword, trimmed. Without
-   * it only blocks found can be picked.
-   */
-  onAddNew?: (text: string) => void;
 }) {
-  const { filterFunction, onAddNew } = props;
-  const addsNew = onAddNew !== undefined;
-  const items = React.useRef(props.items);
-  items.current = props.items;
-  // Kept the same while `filterFunction` is: Orca's Select filters again
-  // whenever the function changes (select-filter).
-  const filter = React.useCallback<typeof filterFunction>(
-    async (keyword, options) => {
-      const found = await filterFunction(keyword, options);
-      const text = keyword.trim();
-      // A block found or already held under that text is the one meant:
-      // picked or kept, not added a second time.
-      if (
-        !addsNew ||
-        text === "" ||
-        found.some((o) => o.label === text) ||
-        items.current.some((item) => item.text?.trim() === text)
-      ) {
-        return found;
-      }
-      return [
-        ...found,
-        {
-          value: `${newValuePrefix}${text}`,
-          label: t("Add ${value}", { value: text }),
-          icon: "ti ti-plus",
-        },
-      ];
-    },
-    [filterFunction, addsNew],
-  );
   return (
     <div className="nextaction-block-refs-field">
       <BlockRefsList
@@ -178,19 +137,14 @@ export function BlockRefsField(props: {
           selected={[]}
           options={props.options}
           filter={true}
-          filterFunction={filter}
+          filterFunction={props.filterFunction}
           filterPlaceholder={props.filterPlaceholder}
           placeholder={props.placeholder}
           width="100%"
           alignment="left"
           onChange={(selected) => {
-            const value = selected[0] ?? "";
-            if (onAddNew && value.startsWith(newValuePrefix)) {
-              onAddNew(value.slice(newValuePrefix.length));
-              return;
-            }
-            const picked = Number(value);
-            if (value !== "" && Number.isInteger(picked)) props.onPick(picked);
+            const picked = Number(selected[0]);
+            if (Number.isInteger(picked)) props.onPick(picked);
           }}
         />
       )}
