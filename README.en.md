@@ -138,6 +138,12 @@ ORCA_PLUGINS_DIR=/path/to/Documents/orca/plugins
 
 Then run `pnpm deploy:local` to copy the build into the `orca-plugin-nextaction/` folder there.
 
+### Releasing a new version
+
+1. Bump `version` in `package.json`, commit and push to main.
+2. Push a matching tag, e.g. `git tag v1.0.1 && git push origin v1.0.1`. GitHub Actions checks that the tag matches the version, runs `pnpm check`, and publishes the zip from `pnpm package` to Releases.
+3. In [awesome-orcanote](https://github.com/sethyuan/awesome-orcanote), update this plugin's `version`, `updated` and `zip` in `plugins.json` and open a PR.
+
 ## License
 
 [GPL-3.0-or-later](LICENSE)

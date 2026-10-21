@@ -1,0 +1,44 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # pnpm version comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6.1.0
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The tag must match package.json, or the zip name and the
+      # marketplace version would disagree with the tag.
+      - name: Check tag matches package.json version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - run: pnpm check
+
+      - run: pnpm package
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "release/orca-plugin-nextaction-$GITHUB_REF_NAME.zip" --title "$GITHUB_REF_NAME" --generate-notes

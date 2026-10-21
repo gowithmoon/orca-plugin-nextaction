@@ -138,6 +138,12 @@ ORCA_PLUGINS_DIR=/path/to/Documents/orca/plugins
 
 然后运行 `pnpm deploy:local`，构建结果会复制到 `orca-plugin-nextaction/` 文件夹中。
 
+### 发布新版本
+
+1. 改 `package.json` 的 `version`，提交并推到 main。
+2. 打同名 tag 并推送，例如 `git tag v1.0.1 && git push origin v1.0.1`。GitHub Actions 会检查 tag 与版本号一致，跑一遍 `pnpm check`，再把 `pnpm package` 打出的 zip 发到 Releases。
+3. 在 [awesome-orcanote](https://github.com/sethyuan/awesome-orcanote) 的 `plugins.json` 里更新本插件的 `version`、`updated` 和 `zip`，提 PR。
+
 ## 许可证
 
 [GPL-3.0-or-later](LICENSE)

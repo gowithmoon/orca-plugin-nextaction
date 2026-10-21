@@ -284,6 +284,7 @@ AI 只经 Orca 的 `orca.ai` 起草，使用用户在 Orca 中配置的 AI 对�
 ## 第十八步：发布准备
 
 - 用户文档（包括"只在插件设置中修改任务标签名"的说明）、中英文 README、插件市场素材、打包与发布流程。
+- 首个公开版本 1.0.0。README 就是用户文档，不加截图。市场条目 `id` 用 `orca-plugin-nextaction`（与插件目录名一致），作者 `gowithmoon`，删掉旧的 `litcu / task-planner` 条目。推 tag 自动发 Release（`.github/workflows/release.yml`）。
 
 ## 待排期的想法
 
