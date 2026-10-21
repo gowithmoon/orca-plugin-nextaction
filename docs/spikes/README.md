@@ -4,7 +4,7 @@
 
 | 文件 | Issue | 主题 | 影响的步骤 |
 |---|---|---|---|
-| [tag-operations.md](./tag-operations.md) | #5 | 打标签、改值、改名、移除标签、撤销、删除块与孤立块 | 第二、三、六步 |
+| [tag-operations.md](./tag-operations.md) | #5、#224 | 打标签、改值、改名、移除标签、撤销、删除块与孤立块；没有属性定义的普通标签在块上的形态与改名（#224 补测） | 第二、三、六步；标签（ADR 0028） |
 | [block-properties-json.md](./block-properties-json.md) | #6 | 插件块属性中的 JSON，复制、移动、镜像块 | 第二、三、八、九步 |
 | [editor-sidetool-panel.md](./editor-sidetool-panel.md) | #7 | 编辑器工具按钮、插件面板的打开、覆盖与恢复（ADR 0011） | 第一、四步 |
 | [status-icon-task-menu.md](./status-icon-task-menu.md) | #8 | 状态图标与任务操作菜单 | 第三步 |
