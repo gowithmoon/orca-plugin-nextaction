@@ -4,6 +4,18 @@
 // components follows their own width (container queries), not the window's
 // or the panel tier's (#35 "档位与灵活布局").
 
+/**
+ * The property chip's look, also worn by the task panel's tags (#224): the
+ * popup that holds the panel does not load this style sheet.
+ */
+export const propertyChipDeclarations = `
+  display: inline-block;
+  padding: 0 var(--orca-spacing-md);
+  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
+  background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
+  color: var(--orca-color-text-1);
+`;
+
 export const componentCss = `
 .nextaction-task-list {
   container: nextaction-task-list / inline-size;
@@ -416,11 +428,7 @@ export const componentCss = `
 
 /* A pill tinted from the text colour, so it shows on a selected card's ground too. */
 .nextaction-property-chip {
-  display: inline-block;
-  padding: 0 var(--orca-spacing-md);
-  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
-  background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
-  color: var(--orca-color-text-1);
+${propertyChipDeclarations}
 }
 
 /* Overdue: the whole due item turns red and carries an "overdue" tag. */

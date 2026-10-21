@@ -424,16 +424,13 @@ function myDayOf(block: Block): MyDayRead | undefined {
  */
 function planDropProjectClears(
   state: ReadyTag,
+  context: TaskTagContext,
   holders: ReadonlyMap<number, Block>,
   refs: {
     dependencyRefs: ReadonlyMap<number, ReadonlySet<number>>;
     settingRefs: ReadonlyMap<number, ReadonlySet<number>>;
   },
 ): { ref: Block["refs"][number]; items: RefDataItem[] }[] {
-  const context = {
-    tagBlockId: state.tagBlockId,
-    invalidated: state.invalidated,
-  };
   const tag = { language: state.language };
   const clears: { ref: Block["refs"][number]; items: RefDataItem[] }[] = [];
   for (const [holderId, holder] of holders) {
@@ -505,23 +502,22 @@ export function createOrcaTaskRepository(
     return state;
   };
   /**
-   * The project tag's block, left out of a task's tags (#224); none while
-   * the project tag is not ready.
+   * The project tag's block, left out of a task's tags (#224). While the
+   * project tag is starting or failed, the block last known as it, if any;
+   * none when refused: that tag was never the plugin's.
    */
   const projectTagBlockId = (): { projectTagBlockId?: number } => {
     const project = projectTagState();
-    return project.kind === "ready"
-      ? { projectTagBlockId: project.tagBlockId }
-      : {};
+    const id = "tagBlockId" in project ? project.tagBlockId : undefined;
+    return id === undefined ? {} : { projectTagBlockId: id };
   };
-  const currentTag = (): TaskTagContext => {
-    const state = readyTag();
-    return {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-      ...projectTagBlockId(),
-    };
-  };
+  /** What every decode of a task is given, so each leaves out both tags. */
+  const tagContext = (state: ReadyTag): TaskTagContext => ({
+    tagBlockId: state.tagBlockId,
+    invalidated: state.invalidated,
+    ...projectTagBlockId(),
+  });
+  const currentTag = (): TaskTagContext => tagContext(readyTag());
 
   /**
    * The task tag's custom property definitions as the tag block holds them
@@ -566,9 +562,7 @@ export function createOrcaTaskRepository(
     state: ReadyTag,
     definitions: Promise<CustomPropertyDefinition[]>,
   ): Promise<TaskTagContext> => ({
-    tagBlockId: state.tagBlockId,
-    invalidated: state.invalidated,
-    ...projectTagBlockId(),
+    ...tagContext(state),
     customProperties: await definitions,
   });
 
@@ -604,10 +598,7 @@ export function createOrcaTaskRepository(
     if (state.invalidated.includes("dependencies")) return [];
     const dependents = dependentsOf(block);
     if (dependents.size === 0) return [];
-    const context: TaskTagContext = {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-    };
+    const context = tagContext(state);
     const blocks = await getBlocks([...dependents.keys()]);
     const clears: { ref: Block["refs"][number]; refIds: number[] }[] = [];
     for (const [dependentId, refIds] of dependents) {
@@ -946,10 +937,7 @@ export function createOrcaTaskRepository(
       language: state.language,
       invalidated: state.invalidated,
     });
-    const block = await taskBlockToWrite(write.id, {
-      tagBlockId: state.tagBlockId,
-      invalidated: state.invalidated,
-    });
+    const block = await taskBlockToWrite(write.id, tagContext(state));
     // The completion history is planned before anything is written: a
     // value this plugin cannot read fails the whole write.
     const properties = [
@@ -1364,10 +1352,7 @@ export function createOrcaTaskRepository(
       if (!block) throw new OrcaError(`no block ${id} to convert`);
       // Decided before any call into Orca: insertTag on a journal block
       // fails inside Orca (page-task P1).
-      const plan = planConversion(block, {
-        tagBlockId: state.tagBlockId,
-        invalidated: state.invalidated,
-      });
+      const plan = planConversion(block, tagContext(state));
       switch (plan.kind) {
         case "already-task":
           return { kind: "already-task", id: block.id };
@@ -1402,10 +1387,7 @@ export function createOrcaTaskRepository(
 
     async dropTask(id: TaskId): Promise<void> {
       const state = readyTag();
-      const block = await taskBlockToWrite(id, {
-        tagBlockId: state.tagBlockId,
-        invalidated: state.invalidated,
-      });
+      const block = await taskBlockToWrite(id, tagContext(state));
       const pluginProperties = block.properties
         .map((p) => p.name)
         .filter((name) => name.startsWith(pluginPropertyPrefix));
@@ -1877,10 +1859,7 @@ export function createOrcaTaskRepository(
       }
       const read = await projectBlock(id);
       if (!read) throw new OrcaError(`block ${id} is not a project`);
-      const context: TaskTagContext = {
-        tagBlockId: state.tagBlockId,
-        invalidated: state.invalidated,
-      };
+      const context = tagContext(state);
       // The IDs come from the task graph: source blocks carrying the task tag.
       const taskBlocks = await getBlocks(taskIds);
       const dropped: Block[] = [];
@@ -1912,7 +1891,7 @@ export function createOrcaTaskRepository(
       const holders = await getBlocks([
         ...new Set([...dependencyRefs.keys(), ...settingRefs.keys()]),
       ]);
-      const clears = planDropProjectClears(state, holders, {
+      const clears = planDropProjectClears(state, context, holders, {
         dependencyRefs,
         settingRefs,
       });

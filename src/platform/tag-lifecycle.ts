@@ -97,7 +97,9 @@ export function createTagLifecycle<K extends string>(
     { pluginName, settings }: FeatureContext,
     uiLanguage: NoteLanguage,
   ) => {
-    state = { kind: "paused", reason: "starting" };
+    // The block last known as the tag stays known while paused (#224).
+    const previousId = "tagBlockId" in state ? state.tagBlockId : undefined;
+    state = { kind: "paused", reason: "starting", tagBlockId: previousId };
     stateChanged(pluginName);
     const setting = settings()[settingKey];
     const cache = await readTagCache(pluginName, cacheKey);
@@ -116,7 +118,11 @@ export function createTagLifecycle<K extends string>(
       stateChanged(pluginName);
       reverted = outcome.reverted;
     } catch (error) {
-      state = { kind: "paused", reason: "failed" };
+      state = {
+        kind: "paused",
+        reason: "failed",
+        tagBlockId: previousId ?? cache?.tagBlockId,
+      };
       stateChanged(pluginName);
       orca.notify(
         "error",

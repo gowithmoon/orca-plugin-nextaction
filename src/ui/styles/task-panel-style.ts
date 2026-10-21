@@ -16,6 +16,8 @@
 // like inputs (dates, repeat, reminders, review) fill the row, ending where
 // context, label and note do.
 
+import { propertyChipDeclarations } from "./component-style";
+
 /** Labels to the left from `minWidth`, for the fields inside `container`. */
 const wideFieldsCss = (container: string, minWidth: string) => `
 @container ${container} (min-width: ${minWidth}) {
@@ -119,11 +121,7 @@ export const taskPanelCss = `
 }
 
 .nextaction-task-tags .nextaction-property-chip {
-  display: inline-block;
-  padding: 0 var(--orca-spacing-md);
-  border-radius: calc(var(--orca-fontsize-xs) * var(--orca-lineheight-sm));
-  background-color: color-mix(in srgb, var(--orca-color-text-2) 12%, transparent);
-  color: var(--orca-color-text-1);
+${propertyChipDeclarations}
   font-size: var(--orca-fontsize-sm);
 }
 

@@ -12,7 +12,10 @@ import type { ProjectPropertyKey } from "../codec/project-names";
  * - `paused`: the tag's features are paused; nothing may read or write its
  *   blocks. `starting` until startup finishes; `refused` when a tag of that
  *   name exists, was never taken over here and has conflicting properties;
- *   `failed` when setting up the tag failed.
+ *   `failed` when setting up the tag failed. While starting or failed,
+ *   `tagBlockId` is the block last known as the tag (in use before, or in
+ *   this repo's cache), if any; only for telling it apart, never for reading
+ *   or writing tagged blocks.
  */
 export type TagState<K extends string> =
   | {
@@ -22,7 +25,7 @@ export type TagState<K extends string> =
       language: NoteLanguage;
       invalidated: readonly K[];
     }
-  | { kind: "paused"; reason: "starting" | "failed" }
+  | { kind: "paused"; reason: "starting" | "failed"; tagBlockId?: number }
   | {
       kind: "paused";
       reason: "refused";

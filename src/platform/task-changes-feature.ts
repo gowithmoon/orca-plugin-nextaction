@@ -23,6 +23,12 @@ const editCommands = [
   "core.editor.setProperties",
   "core.editor.deleteBlocks",
   "core.editor.moveBlocks",
+  // A tag's name is its block's alias, and views show task tags by name
+  // (ADR 0028). Whether Orca's own rename in the UI goes through these
+  // commands is not yet verified by hand in Orca.
+  "core.editor.createAlias",
+  "core.editor.deleteAlias",
+  "core.editor.renameAlias",
 ];
 /** Commands whose effect lands after they return (tag-operations). */
 const lateCommands = ["core.editor.undo", "core.editor.redo"];
