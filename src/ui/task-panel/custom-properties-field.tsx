@@ -78,6 +78,11 @@ export function CustomPropertiesField(props: {
 /** What block reference properties need beyond the value (#115). */
 export interface BlockRefsDeps {
   readBlockRefCandidates: ReadBlockRefCandidates;
+  /**
+   * Adds a new page named `text` to property `name`; resolves to whether
+   * the write succeeded.
+   */
+  addNew: (name: string, text: string) => Promise<boolean>;
   notify: Notify;
   /** Opens a target block in the notes. */
   onOpen: (blockId: number) => void;
@@ -191,6 +196,9 @@ function CustomPropertyControl(props: {
           onOpen={props.blockRefs.onOpen}
           onChange={(targets) =>
             void onChange({ kind: "blockRefs", value: targets })
+          }
+          onAddNew={(text) =>
+            void props.blockRefs?.addNew(props.definition.name, text)
           }
         />
       ) : null;

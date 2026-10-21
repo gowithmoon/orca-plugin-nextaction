@@ -649,6 +649,49 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       return found;
     },
 
+    async addNewBlockRefTarget(id, name, text) {
+      const block = taskToWrite(id);
+      const definition = checkCustomPropertyValue(customDefinitions, name, {
+        kind: "blockRefs",
+        value: [],
+      });
+      const scope = definition.kind === "blockRefs" ? definition.scope : null;
+      // A page already named so is added instead; pages are found by text.
+      const owner = [...blocks.entries()].find(
+        ([, other]) => other.page && other.text === text,
+      )?.[0];
+      const target = owner ?? nextId++;
+      write(() => {
+        if (owner === undefined) {
+          store(target, {
+            text,
+            created: new Date(),
+            parentId: undefined,
+            position: positionOf(undefined),
+            notConvertible: undefined,
+            task: undefined,
+            completionHistory: undefined,
+            myDay: undefined,
+            page: true,
+            tags: scope === null ? [] : [scope],
+            project: undefined,
+          });
+        }
+        const held = block.task.customProperties[name];
+        const current = held?.kind === "blockRefs" ? held.value : [];
+        block.task = {
+          ...block.task,
+          customProperties: {
+            ...block.task.customProperties,
+            [name]: {
+              kind: "blockRefs",
+              value: [...new Set([...current, target])],
+            },
+          },
+        };
+      });
+    },
+
     async readBlockTexts(ids) {
       const texts = new Map<number, string>();
       for (const id of ids) {

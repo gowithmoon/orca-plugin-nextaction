@@ -492,6 +492,19 @@ export interface TaskRepository {
   ): Promise<readonly BlockCandidate[]>;
 
   /**
+   * Adds a new block as the last target of the block reference custom
+   * property `name` of task `id`, as Orca's own property input does for a
+   * name it does not find (custom-properties, "块引用新建目标"): a page whose
+   * alias and text are `text`, carrying the property's scope tag when it has
+   * one. A page already holding the alias `text` is added instead, left as
+   * it is. The user undoes it with one undo. Fails, writing nothing, with
+   * `CustomPropertyChangedError` when `name` is no longer a block reference
+   * property, or when the block is not a task or the write fails. A mirror
+   * block's ID writes to its source block.
+   */
+  addNewBlockRefTarget(id: TaskId, name: string, text: string): Promise<void>;
+
+  /**
    * Writes one custom property value of a task, an empty value clearing it;
    * the task's other properties are left as they are. A single or multiple
    * choice value's options missing from the property's choices are added to

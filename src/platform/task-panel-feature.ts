@@ -2,6 +2,7 @@ import type { DayBoundarySetting } from "../application/ports/day-boundary-setti
 import type { ReminderDefaultTimeSetting } from "../application/ports/reminder-default-time-setting";
 import type { StartPreviewDaysSetting } from "../application/ports/start-preview-days-setting";
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createAddNewBlockRefTarget } from "../application/usecases/add-new-block-ref-target";
 import {
   createClearCompletionHistory,
   createDeleteCompletionEntry,
@@ -148,6 +149,7 @@ export function createTaskPanelFeature(deps: {
       repository,
       clock: systemClock,
     }),
+    addNewBlockRefTarget: createAddNewBlockRefTarget({ repository }),
     editTask: createEditTask({ repository }),
     dropTask: createDropTask({ repository }),
     readCandidates: createReadCandidates({ repository }),

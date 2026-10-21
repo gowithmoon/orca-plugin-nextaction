@@ -7,6 +7,7 @@ import type {
   Candidates,
   CompletionHistoryRead,
 } from "../../application/ports/task-repository";
+import type { AddNewBlockRefTarget } from "../../application/usecases/add-new-block-ref-target";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask } from "../../application/usecases/edit-task";
 import type {
@@ -89,6 +90,8 @@ export interface TaskPanelFormDeps {
   readTaskForPanel: ReadTaskForPanel;
   /** Writes one custom property (#113). */
   setCustomProperty: SetCustomProperty;
+  /** Adds a new page to a block reference custom property. */
+  addNewBlockRefTarget: AddNewBlockRefTarget;
   /** Blocks offered to a block reference custom property (#115). */
   readBlockRefCandidates: ReadBlockRefCandidates;
   editTask: EditTask;
@@ -471,6 +474,7 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
         canMarkReviewed={deps.canMarkReviewed(state.task)}
         blockRefs={{
           readBlockRefCandidates: deps.readBlockRefCandidates,
+          addNew: actions.addNewBlockRefTarget,
           notify,
           onOpen: (blockId) => {
             // Failures are told by the shared action (#39).

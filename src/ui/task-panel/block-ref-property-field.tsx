@@ -1,6 +1,8 @@
 // A block reference custom property in the task panel (#115), shaped like
 // dependencies: the target blocks as a list, a click opens one in the notes,
-// × removes it, "Add" searches under the property's scope. A deleted target
+// × removes it, "Add" searches under the property's scope. A name nothing
+// found reads as is offered as "Add …", which adds a new page of that name,
+// as Orca's own property input does (custom-properties). A deleted target
 // reads "(Deleted block)" and can be removed; it is never cleared on its own.
 // No cycle or recurring hints: a target that is a task is not a dependency.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
@@ -24,6 +26,8 @@ export function BlockRefPropertyField(props: {
   notify: Notify;
   /** Writes the whole new list of target block IDs. */
   onChange: (targets: number[]) => void;
+  /** Adds a new page named `text` as the last target. */
+  onAddNew: (text: string) => void;
   onOpen: (blockId: number) => void;
 }) {
   const search = useBlockRefSearch(
@@ -66,6 +70,7 @@ export function BlockRefPropertyField(props: {
       onPick={(picked) => {
         if (!current.includes(picked)) props.onChange([...current, picked]);
       }}
+      onAddNew={props.onAddNew}
     />
   );
 }

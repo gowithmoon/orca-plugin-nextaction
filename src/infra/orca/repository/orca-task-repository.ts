@@ -33,14 +33,16 @@ import {
   lastCompletion as lastCompletionIn,
   lastSkip as lastSkipIn,
 } from "../../../domain/task/completion-history";
-import type {
-  CustomPropertyDefinition,
-  CustomPropertyValue,
+import {
+  type CustomPropertyDefinition,
+  type CustomPropertyValue,
+  checkCustomPropertyValue,
 } from "../../../domain/task/custom-property";
 import type { MyDayRead } from "../../../domain/task/my-day";
 import type { Task, TaskId } from "../../../domain/task/task";
 import type { TaskChanges } from "../../../domain/task/task-changes";
 import type { Block, CursorData } from "../../../orca.d.ts";
+import { describeError } from "../../../shared/describe-error";
 import {
   planCompletionHistoryDiscard,
   planCompletionHistoryWrite,
@@ -88,6 +90,7 @@ import {
   isOrphan,
   mirrorSourceId,
   projectSettingOf,
+  refDataTargets,
   resolveDependencyTargets,
   type TaskTagContext,
   taskText,
@@ -102,6 +105,7 @@ import {
 import { fromNoteCaret } from "../note-cursor-source";
 import {
   cachedBlock,
+  findAliasOwner,
   invokeBackend,
   invokeEditorCommand,
   invokeEditorCommandAt,
@@ -1183,6 +1187,52 @@ export function createOrcaTaskRepository(
     );
   };
 
+  /**
+   * Creates a page named `text`, carrying the tag `scope` when given, as
+   * Orca's own block reference input does (custom-properties, "块引用新建目
+   * 标"); called inside the write's group, so one undo takes it back. When a
+   * step after `insertBlock` fails, the block is deleted again, so no root
+   * block without an alias is left behind (tag-operations), as for the tag
+   * block (run-startup-plan).
+   */
+  const createPage = async (text: string, scope: string | null) => {
+    const id = await invokeEditorCommand(
+      "core.editor.insertBlock",
+      null,
+      null,
+      [{ t: "t", v: text }],
+    );
+    if (typeof id !== "number") {
+      throw new OrcaError(`insertBlock returned ${JSON.stringify(id)}`);
+    }
+    try {
+      // Succeeds with "" (tag-operations); an error object when taken.
+      const aliasError = await invokeEditorCommand(
+        "core.editor.createAlias",
+        text,
+        id,
+      );
+      if (aliasError) {
+        throw new OrcaError(
+          `createAlias "${text}" failed: ${JSON.stringify(aliasError)}`,
+        );
+      }
+      if (scope !== null) {
+        await invokeEditorCommand("core.editor.insertTag", id, scope);
+      }
+    } catch (error) {
+      try {
+        await invokeEditorCommand("core.editor.deleteBlocks", [id]);
+      } catch (cleanup) {
+        throw new OrcaError(
+          `${describeError(error)}; deleting the new block ${id} also failed: ${describeError(cleanup)}`,
+        );
+      }
+      throw error;
+    }
+    return id;
+  };
+
   return {
     async readBlockTexts(ids) {
       const texts = new Map<number, string>();
@@ -1778,6 +1828,39 @@ export function createOrcaTaskRepository(
 
     async readCustomPropertyDefinitions() {
       return readDefinitions(readyTag());
+    },
+
+    async addNewBlockRefTarget(id, name, text) {
+      const state = readyTag();
+      const definitions = await readDefinitions(state);
+      // Checked before anything is created: a property just deleted or
+      // changed in Orca fails, writing nothing.
+      const definition = checkCustomPropertyValue(definitions, name, {
+        kind: "blockRefs",
+        value: [],
+      });
+      const scope = definition.kind === "blockRefs" ? definition.scope : null;
+      const block = await taskBlockToWrite(id, currentTag());
+      const held = findTaskTagRef(block.refs, state.tagBlockId)?.data?.find(
+        (d) => d.name === name,
+      )?.value;
+      const current = refDataTargets(block.refs, held);
+      // The name is taken (e.g. a page outside the scope, so not offered):
+      // that page is the one meant, left as it is.
+      const owner = await findAliasOwner(text);
+      await writeTo(block, async () => {
+        const target = owner ?? (await createPage(text, scope));
+        const plan = planBlockRefsWrite(
+          definitions,
+          block,
+          state.tagBlockId,
+          name,
+          [...current, target],
+        );
+        await runRefDataWrite(block, state.tagBlockId, plan, (ids) =>
+          encodeBlockRefs(name, ids),
+        );
+      });
     },
 
     async writeCustomProperty(

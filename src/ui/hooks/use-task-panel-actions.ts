@@ -3,6 +3,7 @@
 // same notices as the task menu. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { AddNewBlockRefTarget } from "../../application/usecases/add-new-block-ref-target";
 import type { DropTask } from "../../application/usecases/drop-task";
 import type { EditTask, TaskEdits } from "../../application/usecases/edit-task";
 import type { MarkReviewed } from "../../application/usecases/mark-reviewed";
@@ -44,6 +45,8 @@ export interface TaskPanelWrites {
   markReviewed: MarkReviewed;
   /** Writes one custom property (GLOSSARY: 自定义属性, #113). */
   setCustomProperty: SetCustomProperty;
+  /** Adds a new page to a block reference custom property. */
+  addNewBlockRefTarget: AddNewBlockRefTarget;
   /** The plugin panel's status change and notices (#39). */
   actions: TaskActionsDeps;
 }
@@ -69,6 +72,7 @@ export function useTaskPanelActions(
   repairNotAdvanced(): Promise<boolean>;
   markReviewed(): Promise<boolean>;
   setCustomProperty(name: string, value: CustomPropertyValue): Promise<boolean>;
+  addNewBlockRefTarget(name: string, text: string): Promise<boolean>;
 } {
   const failed = React.useRef(onFailed);
   failed.current = onFailed;
@@ -127,6 +131,11 @@ export function useTaskPanelActions(
       setCustomProperty: (name, value) =>
         run(
           () => writes.setCustomProperty(id, name, value),
+          (reason) => t("Could not save the change: ${reason}", { reason }),
+        ),
+      addNewBlockRefTarget: (name, text) =>
+        run(
+          () => writes.addNewBlockRefTarget(id, name, text),
           (reason) => t("Could not save the change: ${reason}", { reason }),
         ),
       // Its icon shows todo again, so the next occurrence is told (#93).
