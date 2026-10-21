@@ -17,6 +17,21 @@ import { useBlockRefSearch } from "../hooks/use-block-ref-search";
 import type { Notify } from "../notify";
 import { BlockRefsField } from "./block-refs-field";
 
+const noOptions: SelectOption[] = [];
+
+/** The candidates as options, those already held left out. */
+function optionsOf(
+  candidates: readonly BlockCandidate[],
+  current: readonly number[],
+): SelectOption[] {
+  return candidates
+    .filter((candidate) => !current.includes(candidate.id))
+    .map((candidate) => ({
+      value: String(candidate.id),
+      label: shownText(candidate).text,
+    }));
+}
+
 export function BlockRefPropertyField(props: {
   labelId: string;
   name: string;
@@ -36,15 +51,14 @@ export function BlockRefPropertyField(props: {
     props.notify,
   );
   const current = props.targets.map((target) => target.id);
-  // The last search's results, so a picked option is known.
-  const [found, setFound] = React.useState<readonly BlockCandidate[]>([]);
-  const optionsOf = (candidates: readonly BlockCandidate[]): SelectOption[] =>
-    candidates
-      .filter((candidate) => !current.includes(candidate.id))
-      .map((candidate) => ({
-        value: String(candidate.id),
-        label: shownText(candidate).text,
-      }));
+  const held = React.useRef(current);
+  held.current = current;
+  // The same function across renders: Orca's Select filters again whenever
+  // it changes, which here would ask Orca again (select-filter).
+  const filterFunction = React.useCallback(
+    async (keyword: string) => optionsOf(await search(keyword), held.current),
+    [search],
+  );
 
   return (
     <BlockRefsField
@@ -58,13 +72,12 @@ export function BlockRefPropertyField(props: {
       onOpen={props.onOpen}
       removeLabel={t("Remove")}
       onRemove={(id) => props.onChange(current.filter((c) => c !== id))}
-      options={optionsOf(found)}
+      // Always the same empty list: Orca's Select shows its options again,
+      // dropping what the filter returned, whenever they change
+      // (select-filter). What is found only ever comes from the filter.
+      options={noOptions}
       // Every keyword asks Orca; the scope is applied there.
-      filterFunction={async (keyword) => {
-        const candidates = await search(keyword);
-        setFound(candidates);
-        return optionsOf(candidates);
-      }}
+      filterFunction={filterFunction}
       filterPlaceholder={t("Search blocks")}
       placeholder={t("Add")}
       onPick={(picked) => {

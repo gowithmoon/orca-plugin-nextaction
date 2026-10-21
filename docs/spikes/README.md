@@ -37,4 +37,6 @@
 | [task-map-canvas.md](./task-map-canvas.md) | #213、#221 | 插件面板里的画布：滚轮与触控板、Ctrl + 滚轮是否缩放 Orca、指针捕获与拖出面板、中键与右键、快捷键能否到达、Tab 的去向（第十七步开工前） | 第十七步的任务全景图 |
 | [orca-ai.md](./orca-ai.md) | #201 | Orca 的三条官方 AI 途径（读源码）；`orca.ai` 带插件工具的返回、Orca 自带工具的调用与"不可用"、多轮、流式与中止、出错；块转 Markdown 丢层级和任务标签，逐块转换各类块的输出、行内引用要求目标在缓存中；倒序插入多个任务一次撤销、`insertBlock` 不需要缓存、同一份父块对象连续 `lastChild` 顺序会反；`batchInsertText` 不提取标签；块菜单多选（第十六步开工前） | 第十六步的 AI 功能 |
 
+后来补测的专题（如 `select-filter.md`：Orca Select 的 `filterFunction` 与额外选项）直接放在本目录，不再逐一列进上表。
+
 验证脚本放在 `.scratch/spikes/`，不纳入版本管理；每份文档里记录了脚本的要点和实际返回。需要新的实测时，按 `CLAUDE.md` 的要求，把验证代码交给用户运行，结论补进这里。
