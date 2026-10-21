@@ -432,8 +432,15 @@ describe("what would make a cycle agrees with what reading finds", () => {
     }
     return tasks;
   }
-  const onAnyCycle = (tasks: SnapshotTask[]) =>
-    tasks.some((item) => cycleOf(tasks, item.task.id) !== undefined);
+  /** Whether reading finds any task on a cycle, from one analysis. */
+  const onAnyCycle = (tasks: SnapshotTask[]) => {
+    const graph = analyze(tasks);
+    return tasks.some((item) =>
+      graph
+        .entry(item.task.id)
+        ?.blockedBy.some((reason) => reason.kind === "cycle"),
+    );
+  };
   const withTask = (
     tasks: SnapshotTask[],
     id: TaskId,
