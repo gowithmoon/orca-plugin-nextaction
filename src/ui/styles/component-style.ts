@@ -800,32 +800,53 @@ ${propertyChipDeclarations}
   text-underline-offset: 2px;
 }
 
-.nextaction-project-attr-chips {
+/* The chips line and the goal are each a button opening the project panel (#234). */
+.nextaction-project-attr-chips,
+.nextaction-project-attr-goal {
+  display: flex;
+  min-width: 0;
+  padding: 0 0 0 calc(22px + var(--orca-spacing-sm));
+  border: none;
+  border-radius: var(--orca-radius-sm);
+  background: none;
+  color: var(--orca-color-text-2);
+  font: inherit;
+  font-size: var(--orca-fontsize-xs);
+  line-height: var(--orca-lineheight-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nextaction-project-attr-chips:hover,
+.nextaction-project-attr-goal:hover {
+  background-color: var(--orca-color-bg-2);
+}
+
+.nextaction-project-attr-chips:focus-visible,
+.nextaction-project-attr-goal:focus-visible {
+  outline: var(--orca-border-box);
+  outline-offset: 1px;
+}
+
+.nextaction-project-attr-chips-items {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 3px var(--orca-spacing-lg);
   min-width: 0;
-  padding-left: calc(22px + var(--orca-spacing-sm));
-  color: var(--orca-color-text-2);
-  font-size: var(--orca-fontsize-xs);
-  line-height: var(--orca-lineheight-sm);
 }
 
 .nextaction-project-attr-goal {
-  display: flex;
-  align-items: baseline;
-  gap: var(--orca-spacing-sm);
   width: 100%;
   margin-top: 3px;
-  padding: 0 0 0 calc(22px + var(--orca-spacing-sm));
-  border: none;
-  background: none;
-  color: var(--orca-color-text-2);
-  font: inherit;
-  font-size: var(--orca-fontsize-xs);
-  text-align: left;
-  cursor: pointer;
+}
+
+.nextaction-project-attr-goal-content {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--orca-spacing-sm);
+  min-width: 0;
 }
 
 .nextaction-project-attr-goal-label {
@@ -839,16 +860,6 @@ ${propertyChipDeclarations}
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--orca-color-text-1);
-}
-
-.nextaction-project-attr-goal[aria-expanded="true"] .nextaction-project-attr-goal-text {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.nextaction-project-attr-goal > i {
-  flex: none;
-  align-self: center;
 }
 
 .nextaction-project-attr-bar {

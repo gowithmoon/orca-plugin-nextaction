@@ -219,6 +219,7 @@ export function createNextActionPlugin(): Plugin {
     taskActions: taskActions.taskActions,
     menuItems: taskMenu.items,
     projectMenuItems: projectMenu.items,
+    openProjectPanel: projectPanel.open,
     taskPanel: { openPopup: taskPanel.open, formDeps: taskPanel.formDeps },
     openReviewPopup: taskPanel.openReviewPopup,
     openQuickCapture: taskTag.openQuickCapture,

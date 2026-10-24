@@ -117,6 +117,8 @@ export interface ProjectsViewDeps {
   taskActions: TaskActionsDeps;
   /** The project menu's registrations, for the rows' status icon and right-click. */
   projectMenuItems: () => ProjectMenuItems | undefined;
+  /** The project details' attribute area opens the project panel (#234). */
+  openProjectPanel: (projectId: ProjectId) => void;
   /** The collapsed groups, kept in the plugin instance's memory. */
   groups: ProjectGroupsStore;
   /** The project open, `null` for the list; in the plugin instance's memory. */
@@ -347,6 +349,7 @@ function DetailsContent<
         today={today}
         menuItems={deps.projectMenuItems()}
         onOpenInNotes={() => actions.openBlockInNotes(read.project.project.id)}
+        onOpenPanel={() => deps.openProjectPanel(read.project.project.id)}
       />
       {props.render(read, actions)}
     </>
