@@ -7,6 +7,7 @@ import {
   customPropertyDefinitions,
   decodeCustomPropertyValues,
   encodeBlockRefs,
+  isProjectBuiltInProperty,
   isTaskBuiltInProperty,
   planBlockRefsWrite,
   planCustomChoiceAdditions,
@@ -225,6 +226,43 @@ describe("customPropertyDefinitions", () => {
         isTaskBuiltInProperty,
       ).map((d) => d.name),
     ).toEqual(["y", "z", "a", "b"]);
+  });
+});
+
+describe("customPropertyDefinitions of the project tag", () => {
+  it("leaves out the project's built-in properties in either language, keeping the task's 工作量", () => {
+    expect(
+      customPropertyDefinitions(
+        [
+          { name: "项目状态", type: 6, pos: 0 },
+          { name: "Goal", type: 1, pos: 1 },
+          { name: "开始日期", type: 5, pos: 2 },
+          { name: "Due", type: 5, pos: 3 },
+          { name: "重要性", type: 3, pos: 4 },
+          { name: "Urgency", type: 3, pos: 5 },
+          { name: "工作量", type: 3, pos: 6 },
+          { name: "Status", type: 1, pos: 7 },
+        ],
+        isProjectBuiltInProperty,
+      ),
+    ).toEqual([
+      { name: "工作量", kind: "number" },
+      { name: "Status", kind: "text" },
+    ]);
+  });
+
+  it("leaves out system properties, JSON and computed properties", () => {
+    expect(
+      customPropertyDefinitions(
+        [
+          { name: "_repr", type: 1, pos: null },
+          { name: "结构", type: 0, pos: null },
+          { name: "合计", type: 7, pos: null },
+          { name: "负责人", type: 2, pos: null, typeArgs: { scope: "人" } },
+        ],
+        isProjectBuiltInProperty,
+      ),
+    ).toEqual([{ name: "负责人", kind: "blockRefs", scope: "人" }]);
   });
 });
 

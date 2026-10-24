@@ -30,6 +30,7 @@ import {
 import {
   type CustomPropertyDefinition,
   type CustomPropertyValue,
+  type CustomPropertyValues,
   checkCustomPropertyValue,
   emptyCustomPropertyValue,
 } from "../src/domain/task/custom-property";
@@ -62,6 +63,11 @@ interface StoredBlock {
   tags: readonly string[];
   /** Present while the block carries the project tag (ADR 0025). */
   project: Project | undefined;
+  /**
+   * The project's custom property values (GLOSSARY: 自定义属性), held on the
+   * project tag apart from the task tag's; absent for none.
+   */
+  projectCustomProperties?: CustomPropertyValues;
   /**
    * The task's 所属项目 values in order, as reference IDs with the blocks
    * they point at (`null`: no such reference); absent for none.
@@ -106,7 +112,10 @@ export interface InMemoryTaskRepository extends TaskRepository {
    */
   addProject(
     project: Partial<Project> & { id: ProjectId },
-    setup?: Pick<BlockSetup, "parentId" | "position" | "page">,
+    setup?: Pick<BlockSetup, "parentId" | "position" | "page"> & {
+      /** Its custom property values on the project tag. */
+      customProperties?: CustomPropertyValues;
+    },
   ): void;
   /** Adds a task; unspecified values are those of a freshly tagged task. */
   addTask(
@@ -159,6 +168,10 @@ export interface InMemoryTaskRepository extends TaskRepository {
    * stop reading, as Orca deletes them (custom-properties).
    */
   setCustomPropertyDefinitions(
+    definitions: readonly CustomPropertyDefinition[],
+  ): void;
+  /** As `setCustomPropertyDefinitions`, for the project tag's. */
+  setProjectCustomPropertyDefinitions(
     definitions: readonly CustomPropertyDefinition[],
   ): void;
 }
@@ -256,21 +269,87 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
 
   /** The task tag's custom property definitions. */
   let customDefinitions: CustomPropertyDefinition[] = [];
+  /** The project tag's, apart from the task tag's (ADR 0023). */
+  let projectCustomDefinitions: CustomPropertyDefinition[] = [];
   /**
-   * The task with a value for every custom property defined, an empty one
-   * where none is stored, and none for properties no longer defined, as
-   * decoding reads it.
+   * A value for every custom property of `definitions`, an empty one where
+   * none is stored or the stored one is of another kind, and none for
+   * properties no longer defined, as decoding reads it.
    */
-  const withCustomProperties = (task: Task): Task => {
+  const definedValues = (
+    stored: CustomPropertyValues,
+    definitions: readonly CustomPropertyDefinition[],
+  ): CustomPropertyValues => {
     const values: Record<string, CustomPropertyValue> = {};
-    for (const definition of customDefinitions) {
-      const stored = task.customProperties[definition.name];
+    for (const definition of definitions) {
+      const value = stored[definition.name];
       values[definition.name] =
-        stored?.kind === definition.kind
-          ? stored
+        value?.kind === definition.kind
+          ? value
           : emptyCustomPropertyValue(definition.kind);
     }
-    return { ...task, customProperties: values };
+    return values;
+  };
+  const withCustomProperties = (task: Task): Task => ({
+    ...task,
+    customProperties: definedValues(task.customProperties, customDefinitions),
+  });
+  /** Options typed in are added to the definition, as Orca's does. */
+  const withTypedChoices = (
+    definitions: readonly CustomPropertyDefinition[],
+    name: string,
+    value: CustomPropertyValue,
+  ): CustomPropertyDefinition[] => {
+    if (value.kind !== "single" && value.kind !== "multi") {
+      return [...definitions];
+    }
+    const typed =
+      value.kind === "multi"
+        ? value.value
+        : value.value === null
+          ? []
+          : [value.value];
+    return definitions.map((d) =>
+      d.name === name && (d.kind === "single" || d.kind === "multi")
+        ? { ...d, choices: [...new Set([...d.choices, ...typed])] }
+        : d,
+    );
+  };
+  /**
+   * The page named `text` as a new block reference target, or a new page
+   * carrying the tag `scope`, made by `create` inside the caller's write.
+   */
+  const pageTarget = (text: string, scope: string | null) => {
+    // A page already named so is added instead; pages are found by text.
+    const owner = [...blocks.entries()].find(
+      ([, other]) => other.page && other.text === text,
+    )?.[0];
+    const target = owner ?? nextId++;
+    const create = () => {
+      if (owner !== undefined) return;
+      store(target, {
+        text,
+        created: new Date(),
+        parentId: undefined,
+        position: positionOf(undefined),
+        notConvertible: undefined,
+        task: undefined,
+        completionHistory: undefined,
+        myDay: undefined,
+        page: true,
+        tags: scope === null ? [] : [scope],
+        project: undefined,
+      });
+    };
+    return { target, create };
+  };
+  /** The block of a project; a block that is not one fails the write. */
+  const projectToWrite = (id: ProjectId) => {
+    const block = blocks.get(id);
+    if (!block?.project || projectTagPaused) {
+      throw new Error(`block ${id} is not a project`);
+    }
+    return block;
   };
 
   const store = (id: number, block: StoredBlock) => {
@@ -479,6 +558,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       };
       if (existing) {
         existing.project = full;
+        if (setup.customProperties) {
+          existing.projectCustomProperties = setup.customProperties;
+        }
         return;
       }
       store(project.id, {
@@ -493,6 +575,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         page: setup.page ?? false,
         tags: [],
         project: full,
+        ...(setup.customProperties && {
+          projectCustomProperties: setup.customProperties,
+        }),
       });
     },
 
@@ -656,27 +741,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
         value: [],
       });
       const scope = definition.kind === "blockRefs" ? definition.scope : null;
-      // A page already named so is added instead; pages are found by text.
-      const owner = [...blocks.entries()].find(
-        ([, other]) => other.page && other.text === text,
-      )?.[0];
-      const target = owner ?? nextId++;
+      const { target, create } = pageTarget(text, scope);
       write(() => {
-        if (owner === undefined) {
-          store(target, {
-            text,
-            created: new Date(),
-            parentId: undefined,
-            position: positionOf(undefined),
-            notConvertible: undefined,
-            task: undefined,
-            completionHistory: undefined,
-            myDay: undefined,
-            page: true,
-            tags: scope === null ? [] : [scope],
-            project: undefined,
-          });
-        }
+        create();
         const held = block.task.customProperties[name];
         const current = held?.kind === "blockRefs" ? held.value : [];
         block.task = {
@@ -1038,6 +1105,68 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     async getProject(id) {
       if (projectTagPaused) return null;
       return blocks.get(id)?.project ?? null;
+    },
+
+    setProjectCustomPropertyDefinitions(next) {
+      projectCustomDefinitions = [...next];
+    },
+
+    async readProjectCustomPropertyDefinitions() {
+      if (projectTagPaused) throw new Error("projects are paused");
+      return [...projectCustomDefinitions];
+    },
+
+    async writeProjectCustomProperty(id, name, value) {
+      const block = projectToWrite(id);
+      checkCustomPropertyValue(projectCustomDefinitions, name, value);
+      write(() => {
+        projectCustomDefinitions = withTypedChoices(
+          projectCustomDefinitions,
+          name,
+          value,
+        );
+        block.projectCustomProperties = {
+          ...block.projectCustomProperties,
+          [name]: value,
+        };
+      });
+    },
+
+    async addNewProjectBlockRefTarget(id, name, text) {
+      const block = projectToWrite(id);
+      const definition = checkCustomPropertyValue(
+        projectCustomDefinitions,
+        name,
+        { kind: "blockRefs", value: [] },
+      );
+      const scope = definition.kind === "blockRefs" ? definition.scope : null;
+      const { target, create } = pageTarget(text, scope);
+      write(() => {
+        create();
+        const held = block.projectCustomProperties?.[name];
+        const current = held?.kind === "blockRefs" ? held.value : [];
+        block.projectCustomProperties = {
+          ...block.projectCustomProperties,
+          [name]: {
+            kind: "blockRefs",
+            value: [...new Set([...current, target])],
+          },
+        };
+      });
+    },
+
+    async getProjectWithCustomProperties(id) {
+      if (projectTagPaused) return null;
+      const block = blocks.get(id);
+      if (!block?.project) return null;
+      return {
+        project: block.project,
+        definitions: [...projectCustomDefinitions],
+        values: definedValues(
+          block.projectCustomProperties ?? {},
+          projectCustomDefinitions,
+        ),
+      };
     },
 
     async updateProjectStatus(id, status) {
