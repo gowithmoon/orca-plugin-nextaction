@@ -208,8 +208,9 @@ export function DateField(props: {
 }
 
 /**
- * The note: a one-line input saved on Enter or when it loses focus, then
- * "Saved" shows briefly; a failed save shows what the notes hold again.
+ * The note: one line is saved on Enter; several lines (`multiline`) take
+ * Enter as a new line. Either is saved when it loses focus or the panel is
+ * left, then "Saved" shows briefly; a failed save shows what the notes hold again.
  * While it has focus, what the notes hold does not replace what is being
  * typed. Leaving the panel with unsaved text saves it when `saveOnLeave()`
  * allows (not after the task went away, nor while the plugin unloads).

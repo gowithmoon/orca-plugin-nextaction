@@ -98,8 +98,9 @@ function ProjectStatusField(props: {
                 "--nextaction-status-color": icon.color,
               } as React.CSSProperties
             }
-            // Choosing the current project status writes nothing.
-            onClick={() => current || props.onChange(status)}
+            // Written even when current: an empty or unknown project status
+            // reads as planning, and choosing planning repairs it.
+            onClick={() => props.onChange(status)}
           >
             <i className={icon.className} aria-hidden="true" />
             <span className="nextaction-status-button-label">
@@ -272,25 +273,9 @@ export function ProjectPanelForm(props: {
   );
 
   // Each change is its own use case call: one write, one undo. A failure is
-  // told, and the project read again to show what the notes hold.
-  const edit = React.useCallback(
-    async (changes: ProjectChanges) => {
-      try {
-        await deps.editProject(projectId, changes);
-        return true;
-      } catch (error) {
-        notifyProjectActionFailure(notify, error, (reason) =>
-          t("Could not save the change: ${reason}", { reason }),
-        );
-        reload();
-        return false;
-      }
-    },
-    [deps.editProject, projectId, notify, reload],
-  );
-  // Custom properties as the task panel writes them: told and read again
-  // on failure, e.g. a property just deleted or changed in Orca.
-  const runCustom = React.useCallback(
+  // told, and the project read again to show what the notes hold (e.g. a
+  // custom property just deleted or changed in Orca).
+  const run = React.useCallback(
     async (write: () => Promise<void>) => {
       try {
         await write();
@@ -305,15 +290,20 @@ export function ProjectPanelForm(props: {
     },
     [notify, reload],
   );
+  const edit = React.useCallback(
+    (changes: ProjectChanges) =>
+      run(() => deps.editProject(projectId, changes)),
+    [run, deps.editProject, projectId],
+  );
   const setCustomProperty = React.useCallback(
     (name: string, value: CustomPropertyValue) =>
-      runCustom(() => deps.setProjectCustomProperty(projectId, name, value)),
-    [runCustom, deps.setProjectCustomProperty, projectId],
+      run(() => deps.setProjectCustomProperty(projectId, name, value)),
+    [run, deps.setProjectCustomProperty, projectId],
   );
   const addNewBlockRefTarget = React.useCallback(
     (name: string, text: string) =>
-      runCustom(() => deps.addNewProjectBlockRefTarget(projectId, name, text)),
-    [runCustom, deps.addNewProjectBlockRefTarget, projectId],
+      run(() => deps.addNewProjectBlockRefTarget(projectId, name, text)),
+    [run, deps.addNewProjectBlockRefTarget, projectId],
   );
   const { openBlockInNotes } = deps;
   const { onOpenedInNotes } = props;

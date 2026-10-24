@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import { CustomPropertyChangedError } from "../../domain/task/custom-property";
+import { NotAProjectError } from "../ports/task-repository";
 import { createReadProjectForPanel } from "./read-project-for-panel";
 import { createSetProjectCustomProperty } from "./set-project-custom-property";
 
@@ -62,6 +63,19 @@ describe("set a project's custom property", () => {
     await expect(
       setProjectCustomProperty(10, "客户", { kind: "number", value: 1 }),
     ).rejects.toBeInstanceOf(CustomPropertyChangedError);
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("fails with not a project, writing nothing, for a block that is not one", async () => {
+    const { repository, setProjectCustomProperty } = setup();
+    repository.addBlock(30);
+    repository.addTask({ id: 31 });
+
+    for (const id of [30, 31, 32]) {
+      await expect(
+        setProjectCustomProperty(id, "客户", { kind: "text", value: "甲方" }),
+      ).rejects.toBeInstanceOf(NotAProjectError);
+    }
     expect(repository.writeCount()).toBe(0);
   });
 

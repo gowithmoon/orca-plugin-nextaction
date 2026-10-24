@@ -7,7 +7,7 @@ import { owningProject } from "../../domain/project/ownership";
 import type { Project, ProjectId } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
 import type { TaskRepository } from "../ports/task-repository";
-import { NotAProjectError } from "./change-project-status";
+import { NotAProjectError } from "../ports/task-repository";
 
 /** What dropping a project would do, for the user to confirm. */
 export interface DropProjectPlan {
