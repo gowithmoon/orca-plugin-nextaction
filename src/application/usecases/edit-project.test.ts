@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
-import { NotAProjectError } from "./change-project-status";
+import { NotAProjectError } from "../ports/task-repository";
 import { createEditProject } from "./edit-project";
 
 describe("edit project", () => {
@@ -64,15 +64,15 @@ describe("edit project", () => {
     expect((await repository.getTask(21))?.urgency).toBe(2);
   });
 
-  it("fails with not a project while the project tag is paused", async () => {
+  it("fails as paused, not as not a project, while the project tag is paused", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addProject({ id: 10 });
     repository.pauseProjectTag(true);
     const editProject = createEditProject({ repository });
 
-    await expect(editProject(10, { urgency: 7 })).rejects.toBeInstanceOf(
-      NotAProjectError,
-    );
+    const failure = editProject(10, { urgency: 7 }).catch((error) => error);
+    expect(await failure).not.toBeInstanceOf(NotAProjectError);
+    expect(String(await failure)).toContain("paused");
     expect(repository.writeCount()).toBe(0);
   });
 

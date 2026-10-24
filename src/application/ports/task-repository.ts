@@ -93,6 +93,18 @@ export class TaskFeaturesPausedError extends Error {
 }
 
 /**
+ * The block is not a project (any more): no project tag, gone, or an
+ * orphan. Thrown by the project writes; nothing was written. A paused
+ * project tag fails otherwise, keeping why it is paused.
+ */
+export class NotAProjectError extends Error {
+  override name = "NotAProjectError";
+  constructor(readonly id: ProjectId) {
+    super(`block ${id} is not a project`);
+  }
+}
+
+/**
  * Orca writes only through a panel with an editor (a journal or block panel,
  * or the plugin panel), and none is open. Nothing was written; `ui` asks the
  * user to open one.
@@ -556,9 +568,9 @@ export interface TaskRepository {
    * As `writeCustomProperty`, for a custom property of the project tag on
    * project `id` (#235): written on the reference to the project tag, so the
    * task tag's values on a block with both are left as they are. Fails,
-   * writing nothing, with `CustomPropertyChangedError` as it does, or when
-   * the block is not a project, the project tag is paused, or the write
-   * fails.
+   * writing nothing, with `CustomPropertyChangedError` as it does, with
+   * `NotAProjectError` when the block is not a project, or when the project
+   * tag is paused or the write fails.
    */
   writeProjectCustomProperty(
     id: ProjectId,
@@ -580,9 +592,9 @@ export interface TaskRepository {
   /**
    * Writes the project's project status (#144), and nothing else: the tasks
    * belonging to it are left as they are. The user undoes it with one undo.
-   * Fails, writing nothing, when the block is not a project, the project
-   * tag is paused, the project status property is invalidated, or the write
-   * fails. A mirror block's ID writes to its source block.
+   * Fails, writing nothing, with `NotAProjectError` when the block is not a
+   * project, or when the project tag is paused, the project status property
+   * is invalidated, or the write fails. A mirror block's ID writes to its source block.
    */
   updateProjectStatus(id: ProjectId, status: ProjectStatus): Promise<void>;
 
@@ -590,8 +602,9 @@ export interface TaskRepository {
    * Writes the project properties present in `changes` (GLOSSARY: 项目属性面
    * 板, #232), overwriting them, in one undo; the others are left as they
    * are, and so is the task tag's reference on a block with both. Fails,
-   * writing nothing, when the block is not a project, the project tag is
-   * paused, any of them is invalidated, or the write fails. A mirror block's
+   * writing nothing, with `NotAProjectError` when the block is not a
+   * project, or when the project tag is paused, any of them is invalidated,
+   * or the write fails. A mirror block's
    * ID writes to its source block.
    */
   updateProject(id: ProjectId, changes: ProjectChanges): Promise<void>;

@@ -1,8 +1,8 @@
 // The project menu items of #144: the five project statuses. Verified by hand
 // in Orca (docs/ARCHITECTURE.md §5).
 
+import { NotAProjectError } from "../../application/ports/task-repository";
 import type { ChangeProjectStatus } from "../../application/usecases/change-project-status";
-import { NotAProjectError } from "../../application/usecases/change-project-status";
 import type {
   DropProject,
   ReadDropProjectPlan,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import { CustomPropertyChangedError } from "../../domain/task/custom-property";
+import { NotAProjectError } from "../ports/task-repository";
 import { createAddNewProjectBlockRefTarget } from "./add-new-project-block-ref-target";
 import { createReadProjectForPanel } from "./read-project-for-panel";
 
@@ -48,6 +49,19 @@ describe("add a new block reference target to a project", () => {
     await expect(addNew(10, "已删", "王五")).rejects.toBeInstanceOf(
       CustomPropertyChangedError,
     );
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("fails with not a project, writing nothing, for a block that is not one", async () => {
+    const { repository, addNew } = setup();
+    repository.addBlock(30);
+    repository.addTask({ id: 31 });
+
+    for (const id of [30, 31, 32]) {
+      await expect(addNew(id, "负责人", "王五")).rejects.toBeInstanceOf(
+        NotAProjectError,
+      );
+    }
     expect(repository.writeCount()).toBe(0);
   });
 });

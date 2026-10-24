@@ -3,14 +3,13 @@
 // change project status, shared with the project menu.
 import type { ProjectChanges, ProjectId } from "../../domain/project/project";
 import type { TaskRepository } from "../ports/task-repository";
-import { NotAProjectError } from "./change-project-status";
 
 /**
  * Writes the properties present in `changes` to project `id`, overwriting
  * them, in one undo; the others are left as they are. Throws
- * `NotAProjectError`, writing nothing, when the block is not a project (the
- * project tag paused included); other errors are thrown as they are, for
- * `ui` to report.
+ * `NotAProjectError`, writing nothing, when the block is not a project;
+ * other errors (the project tag paused included) are thrown as they are,
+ * for `ui` to report.
  */
 export type EditProject = (
   id: ProjectId,
@@ -20,9 +19,5 @@ export type EditProject = (
 export function createEditProject(deps: {
   repository: TaskRepository;
 }): EditProject {
-  return async (id, changes) => {
-    const project = await deps.repository.getProject(id);
-    if (!project) throw new NotAProjectError(id);
-    await deps.repository.updateProject(id, changes);
-  };
+  return (id, changes) => deps.repository.updateProject(id, changes);
 }

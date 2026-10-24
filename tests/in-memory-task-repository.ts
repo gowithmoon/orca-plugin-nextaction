@@ -4,19 +4,20 @@
 // nothing. Orca details (mirrors, orphans, note-facing names) are covered by
 // the codec tests and not modelled here: a block that cannot be converted is
 // simply marked so.
-import type {
-  ChoiceProperty,
-  CompletionHistoryRead,
-  ConvertToTaskResult,
-  JournalSummaryPart,
-  MoveTaskOptions,
-  NotConvertibleReason,
-  NoteTarget,
-  OutlineBlock,
-  TaskFilter,
-  TaskRepository,
-  TaskWrite,
-  ValuesFilter,
+import {
+  type ChoiceProperty,
+  type CompletionHistoryRead,
+  type ConvertToTaskResult,
+  type JournalSummaryPart,
+  type MoveTaskOptions,
+  NotAProjectError,
+  type NotConvertibleReason,
+  type NoteTarget,
+  type OutlineBlock,
+  type TaskFilter,
+  type TaskRepository,
+  type TaskWrite,
+  type ValuesFilter,
 } from "../src/application/ports/task-repository";
 import type { NoteDropPlan } from "../src/domain/blocking/note-drop";
 import type { MovePlacement, TaskMove } from "../src/domain/blocking/task-move";
@@ -345,10 +346,9 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
   };
   /** The block of a project; a block that is not one fails the write. */
   const projectToWrite = (id: ProjectId) => {
+    if (projectTagPaused) throw new Error("projects are paused");
     const block = blocks.get(id);
-    if (!block?.project || projectTagPaused) {
-      throw new Error(`block ${id} is not a project`);
-    }
+    if (!block?.project) throw new NotAProjectError(id);
     return block;
   };
 
@@ -1170,20 +1170,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     },
 
     async updateProjectStatus(id, status) {
-      const block = blocks.get(id);
-      if (!block?.project) throw new Error(`block ${id} is not a project`);
-      const project = block.project;
+      const block = projectToWrite(id);
+      const project = block.project as Project;
       write(() => {
         block.project = { ...project, status };
       });
     },
 
     async updateProject(id, changes) {
-      const block = blocks.get(id);
-      if (!block?.project || projectTagPaused) {
-        throw new Error(`block ${id} is not a project`);
-      }
-      const project = block.project;
+      const block = projectToWrite(id);
+      const project = block.project as Project;
       write(() => {
         block.project = { ...project, ...changes };
       });
