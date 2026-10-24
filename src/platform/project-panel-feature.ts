@@ -1,8 +1,12 @@
 import type { TaskRepository } from "../application/ports/task-repository";
+import { createAddNewProjectBlockRefTarget } from "../application/usecases/add-new-project-block-ref-target";
 import { createChangeProjectStatus } from "../application/usecases/change-project-status";
 import { createEditProject } from "../application/usecases/edit-project";
+import { createReadProjectBlockRefCandidates } from "../application/usecases/read-block-ref-candidates";
 import { createReadProjectForPanel } from "../application/usecases/read-project-for-panel";
+import { createSetProjectCustomProperty } from "../application/usecases/set-project-custom-property";
 import type { CalendarDate } from "../domain/task/task";
+import { systemClock } from "../infra/system-clock";
 import type { ChangeSignalSource } from "../shared/change-signal";
 import type { TaskActionsDeps } from "../ui/hooks/use-task-actions";
 import { openInNotesReporting } from "../ui/panel/open-in-notes";
@@ -37,6 +41,23 @@ export function createProjectPanelFeature(deps: {
     readProjectForPanel: createReadProjectForPanel({ repository }),
     changeProjectStatus: createChangeProjectStatus({ repository }),
     editProject: createEditProject({ repository }),
+    setProjectCustomProperty: createSetProjectCustomProperty({
+      repository,
+      clock: systemClock,
+    }),
+    addNewProjectBlockRefTarget: createAddNewProjectBlockRefTarget({
+      repository,
+    }),
+    readProjectBlockRefCandidates: createReadProjectBlockRefCandidates({
+      repository,
+    }),
+    // As the project block, any block in the notes (#115).
+    openBlockInNotes: (blockId) =>
+      openInNotesReporting(
+        deps.taskActions.openInNotes,
+        deps.taskActions.notify,
+        blockId,
+      ),
     // Outside the plugin panel's React tree: the plugin panel is worked out
     // from the active panel, as the task panel's popup does.
     openInNotes: (projectId) =>

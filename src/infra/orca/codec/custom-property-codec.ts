@@ -16,6 +16,7 @@ import {
   planBlockRefWrite,
 } from "./dependency-write";
 import { findPropertyKey } from "./names";
+import { findProjectPropertyKey } from "./project-names";
 // task-codec imports this module too; only functions cross, called after
 // both have loaded.
 import {
@@ -68,6 +69,13 @@ export type IsBuiltInProperty = (name: string) => boolean;
 /** The task tag's check: the plugin's task properties (names.ts). */
 export const isTaskBuiltInProperty: IsBuiltInProperty = (name) =>
   findPropertyKey(name) !== undefined;
+
+/**
+ * The project tag's check: its six properties (project-names.ts). A task's
+ * built-in name, such as 工作量, is a custom property here.
+ */
+export const isProjectBuiltInProperty: IsBuiltInProperty = (name) =>
+  findProjectPropertyKey(name) !== undefined;
 
 /** The definition a property stands for, or `undefined` when it is not one. */
 function definitionOf(

@@ -48,8 +48,10 @@ import {
 import {
   blockCandidates,
   customPropertyDefinitions,
+  decodeCustomPropertyValues,
   encodeBlockRefs,
   type IsBuiltInProperty,
+  isProjectBuiltInProperty,
   isTaskBuiltInProperty,
   planBlockRefsWrite,
   planCustomChoiceAdditions,
@@ -146,6 +148,13 @@ interface CustomPropertyTag {
 const taskPropertyTag = (state: ReadyTag): CustomPropertyTag => ({
   tagBlockId: state.tagBlockId,
   isBuiltIn: isTaskBuiltInProperty,
+});
+
+const projectPropertyTag = (
+  state: Extract<ProjectTagState, { kind: "ready" }>,
+): CustomPropertyTag => ({
+  tagBlockId: state.tagBlockId,
+  isBuiltIn: isProjectBuiltInProperty,
 });
 
 type ChoiceKey = Extract<PropertyKey, "context">;
@@ -562,6 +571,15 @@ export function createOrcaTaskRepository(
     }
   };
 
+  /** The project tag, for writes: paused, the write fails. */
+  const readyProjectTag = () => {
+    const state = projectTagState();
+    if (state.kind !== "ready") {
+      throw new OrcaError(`projects are paused (${state.reason})`);
+    }
+    return state;
+  };
+
   /**
    * As `currentTag`, with the custom property definitions, for reads. They
    * are read alongside what the caller reads (not before it), so they add
@@ -755,6 +773,13 @@ export function createOrcaTaskRepository(
     return decoded.kind === "project"
       ? { block, project: decoded.project }
       : undefined;
+  };
+
+  /** As `projectBlock`, for writes: a block that is not a project fails. */
+  const projectBlockToWrite = async (id: ProjectId): Promise<Block> => {
+    const read = await projectBlock(id);
+    if (!read) throw new OrcaError(`block ${id} is not a project`);
+    return read.block;
   };
 
   /**
@@ -1880,6 +1905,77 @@ export function createOrcaTaskRepository(
 
     async getProject(id: ProjectId): Promise<Project | null> {
       return (await projectBlock(id))?.project ?? null;
+    },
+
+    async getProjectWithCustomProperties(id: ProjectId) {
+      const state = projectTagState();
+      if (state.kind !== "ready") return null;
+      const tag = projectPropertyTag(state);
+      // Read alongside the block. When the tag block cannot be read just
+      // now, no custom properties rather than a failed panel, as for tasks;
+      // writes still check and fail.
+      const definitions = readDefinitions(tag).catch((error: unknown) => {
+        console.warn(
+          "[nextaction] the project tag's custom properties cannot be read; the project reads without them",
+          error,
+        );
+        return [];
+      });
+      const [read, defined] = await Promise.all([
+        projectBlock(id),
+        definitions,
+      ]);
+      if (!read) return null;
+      // Only the reference to the project tag: a block that is also a task
+      // keeps the task tag's values on its own reference (ADR 0023).
+      const values = decodeCustomPropertyValues(
+        findTaskTagRef(read.block.refs, tag.tagBlockId)?.data,
+        defined,
+        read.block.refs,
+      );
+      // Targets that are mirrors read as their sources, as a task's do.
+      const targets = Object.values(values).flatMap((value) =>
+        value.kind === "blockRefs" ? value.value : [],
+      );
+      return {
+        project: read.project,
+        definitions: defined,
+        values:
+          targets.length === 0
+            ? values
+            : resolveBlockRefTargets(
+                values,
+                await getBlocks([...new Set(targets)]),
+              ),
+      };
+    },
+
+    async readProjectCustomPropertyDefinitions() {
+      return readDefinitions(projectPropertyTag(readyProjectTag()));
+    },
+
+    async writeProjectCustomProperty(
+      id: ProjectId,
+      name: string,
+      value: CustomPropertyValue,
+      now: Date,
+    ): Promise<void> {
+      await writeCustomPropertyOf(
+        projectPropertyTag(readyProjectTag()),
+        () => projectBlockToWrite(id),
+        name,
+        value,
+        now,
+      );
+    },
+
+    async addNewProjectBlockRefTarget(id, name, text) {
+      await addBlockRefTarget(
+        projectPropertyTag(readyProjectTag()),
+        () => projectBlockToWrite(id),
+        name,
+        text,
+      );
     },
 
     async updateProjectStatus(

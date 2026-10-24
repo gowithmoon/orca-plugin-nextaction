@@ -1,12 +1,17 @@
 // The project panel's form (GLOSSARY: 项目属性面板, #232): shows and edits
-// one project's built-in properties, each change one write and one undo.
+// one project's built-in properties, then the project tag's custom
+// properties (#235), each change one write and one undo.
 // The fields are the task panel's (task-panel-fields.tsx); the project
 // status buttons are its status field's, with the five project statuses.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
+import type { AddNewProjectBlockRefTarget } from "../../application/usecases/add-new-project-block-ref-target";
 import type { ChangeProjectStatus } from "../../application/usecases/change-project-status";
 import type { EditProject } from "../../application/usecases/edit-project";
+import type { ReadBlockRefCandidates } from "../../application/usecases/read-block-ref-candidates";
 import type { ReadProjectForPanel } from "../../application/usecases/read-project-for-panel";
+import type { TaskCustomProperty } from "../../application/usecases/read-task";
+import type { SetProjectCustomProperty } from "../../application/usecases/set-project-custom-property";
 import {
   type Project,
   type ProjectChanges,
@@ -14,6 +19,7 @@ import {
   type ProjectStatus,
   projectStatuses,
 } from "../../domain/project/project";
+import type { CustomPropertyValue } from "../../domain/task/custom-property";
 import type { CalendarDate } from "../../domain/task/task";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { t } from "../../shared/l10n/l10n";
@@ -30,6 +36,10 @@ import type { Notify } from "../notify";
 import { notifyProjectActionFailure } from "../project-menu/builtin-items";
 import { projectStatusIcons } from "../project-menu/project-status-icons";
 import {
+  type BlockRefsDeps,
+  CustomPropertiesField,
+} from "../task-panel/custom-properties-field";
+import {
   DateField,
   Field,
   NoteField,
@@ -41,8 +51,16 @@ export interface ProjectPanelFormDeps {
   /** Shared with the project menu's project statuses (#144). */
   changeProjectStatus: ChangeProjectStatus;
   editProject: EditProject;
+  /** Writes one custom property of the project tag (#235). */
+  setProjectCustomProperty: SetProjectCustomProperty;
+  /** Adds a new page to a block reference custom property. */
+  addNewProjectBlockRefTarget: AddNewProjectBlockRefTarget;
+  /** Blocks offered to a block reference custom property. */
+  readProjectBlockRefCandidates: ReadBlockRefCandidates;
   /** Opens the project block in a note panel; failures are its to tell. */
   openInNotes: (projectId: ProjectId) => void;
+  /** Opens a block reference target in the notes; failures are its to tell. */
+  openBlockInNotes: (blockId: number) => void;
   notify: Notify;
   /** Projects may have changed: the project is read again. */
   changes: ChangeSignalSource;
@@ -147,10 +165,16 @@ function Header(props: {
 
 function Fields(props: {
   project: Project;
+  customProperties: readonly TaskCustomProperty[];
   today: CalendarDate;
   idPrefix: string;
   edit: (changes: ProjectChanges) => Promise<boolean>;
   changeStatus: (status: ProjectStatus) => void;
+  setCustomProperty: (
+    name: string,
+    value: CustomPropertyValue,
+  ) => Promise<boolean>;
+  blockRefs: BlockRefsDeps;
   saveOnLeave: () => boolean;
 }) {
   const { project, today, idPrefix, edit } = props;
@@ -210,6 +234,14 @@ function Fields(props: {
           onChange={(urgency) => void edit({ urgency })}
         />
       </Field>
+      <CustomPropertiesField
+        idPrefix={idPrefix}
+        properties={props.customProperties}
+        today={today}
+        saveOnLeave={props.saveOnLeave}
+        onChange={props.setCustomProperty}
+        blockRefs={props.blockRefs}
+      />
     </div>
   );
 }
@@ -256,6 +288,54 @@ export function ProjectPanelForm(props: {
     },
     [deps.editProject, projectId, notify, reload],
   );
+  // Custom properties as the task panel writes them: told and read again
+  // on failure, e.g. a property just deleted or changed in Orca.
+  const runCustom = React.useCallback(
+    async (write: () => Promise<void>) => {
+      try {
+        await write();
+        return true;
+      } catch (error) {
+        notifyProjectActionFailure(notify, error, (reason) =>
+          t("Could not save the change: ${reason}", { reason }),
+        );
+        reload();
+        return false;
+      }
+    },
+    [notify, reload],
+  );
+  const setCustomProperty = React.useCallback(
+    (name: string, value: CustomPropertyValue) =>
+      runCustom(() => deps.setProjectCustomProperty(projectId, name, value)),
+    [runCustom, deps.setProjectCustomProperty, projectId],
+  );
+  const addNewBlockRefTarget = React.useCallback(
+    (name: string, text: string) =>
+      runCustom(() => deps.addNewProjectBlockRefTarget(projectId, name, text)),
+    [runCustom, deps.addNewProjectBlockRefTarget, projectId],
+  );
+  const { openBlockInNotes } = deps;
+  const { onOpenedInNotes } = props;
+  // A target opened in the notes closes the popup, as the name does.
+  const blockRefs = React.useMemo<BlockRefsDeps>(
+    () => ({
+      readBlockRefCandidates: deps.readProjectBlockRefCandidates,
+      addNew: addNewBlockRefTarget,
+      notify,
+      onOpen: (blockId) => {
+        openBlockInNotes(blockId);
+        onOpenedInNotes();
+      },
+    }),
+    [
+      deps.readProjectBlockRefCandidates,
+      addNewBlockRefTarget,
+      notify,
+      openBlockInNotes,
+      onOpenedInNotes,
+    ],
+  );
   const changeStatus = (status: ProjectStatus) => {
     deps.changeProjectStatus(projectId, status).catch((error: unknown) => {
       notifyProjectActionFailure(notify, error, (reason) =>
@@ -279,10 +359,13 @@ export function ProjectPanelForm(props: {
     body = (
       <Fields
         project={state.project}
+        customProperties={state.customProperties}
         today={deps.today()}
         idPrefix={idPrefix}
         edit={edit}
         changeStatus={changeStatus}
+        setCustomProperty={setCustomProperty}
+        blockRefs={blockRefs}
         saveOnLeave={saveOnLeave}
       />
     );

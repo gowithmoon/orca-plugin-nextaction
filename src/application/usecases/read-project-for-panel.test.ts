@@ -53,4 +53,44 @@ describe("read a project for the project panel", () => {
 
     expect(await readProjectForPanel(10)).toBeNull();
   });
+
+  it("reads every custom property of the project tag in Orca's order, a value of the wrong kind as empty", async () => {
+    const { repository, readProjectForPanel } = setup();
+    repository.setProjectCustomPropertyDefinitions([
+      { name: "工作量", kind: "number" },
+      { name: "客户", kind: "text" },
+      { name: "负责人", kind: "blockRefs", scope: "人" },
+    ]);
+    repository.addBlock(26, { text: "张三" });
+    repository.addProject(
+      { id: 10, text: "Move house" },
+      {
+        customProperties: {
+          工作量: { kind: "text", value: "很多" },
+          负责人: { kind: "blockRefs", value: [26, 99] },
+        },
+      },
+    );
+
+    const read = await readProjectForPanel(10);
+
+    expect(read?.customProperties).toEqual([
+      {
+        definition: { name: "工作量", kind: "number" },
+        value: { kind: "number", value: null },
+      },
+      {
+        definition: { name: "客户", kind: "text" },
+        value: { kind: "text", value: null },
+      },
+      {
+        definition: { name: "负责人", kind: "blockRefs", scope: "人" },
+        value: { kind: "blockRefs", value: [26, 99] },
+        targets: [
+          { id: 26, text: "张三", deleted: false },
+          { id: 99, text: null, deleted: true },
+        ],
+      },
+    ]);
+  });
 });

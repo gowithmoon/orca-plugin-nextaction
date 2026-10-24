@@ -4,13 +4,19 @@
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ReadProjectForPanel } from "../../application/usecases/read-project-for-panel";
+import type { TaskCustomProperty } from "../../application/usecases/read-task";
 import type { Project, ProjectId } from "../../domain/project/project";
 import type { ChangeSignalSource } from "../../shared/change-signal";
 import { createLatestRead } from "./latest-read";
 
 export type LiveProjectState =
   | { readonly kind: "loading" }
-  | { readonly kind: "loaded"; readonly project: Project }
+  | {
+      readonly kind: "loaded";
+      readonly project: Project;
+      /** The project tag's custom properties, in Orca's order (#235). */
+      readonly customProperties: readonly TaskCustomProperty[];
+    }
   /** The block is no longer a project (dropped, deleted, tag removed). */
   | { readonly kind: "gone" }
   | { readonly kind: "failed"; readonly error: unknown }
@@ -43,7 +49,7 @@ export function useLiveProject(
         (outcome) => {
           if (outcome.kind !== "loaded") setState(outcome);
           else if (outcome.data) {
-            setState({ kind: "loaded", project: outcome.data.project });
+            setState({ kind: "loaded", ...outcome.data });
           } else if (paused.current()) setState({ kind: "projectsPaused" });
           else setState({ kind: "gone" });
         },
