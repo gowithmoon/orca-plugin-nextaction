@@ -40,6 +40,7 @@ import { createShiftLater } from "../application/usecases/shift-later";
 import { createUnscheduleInMyDay } from "../application/usecases/unschedule-in-my-day";
 import { createWriteAiSummary } from "../application/usecases/write-ai-summary";
 import { createWriteSummaryToJournal } from "../application/usecases/write-summary-to-journal";
+import type { ProjectId } from "../domain/project/project";
 import type { CalendarDate, TaskId } from "../domain/task/task";
 import { createPluginDataLastFullReview } from "../infra/orca/last-full-review-store";
 import { orcaNoteCursorSource } from "../infra/orca/note-cursor-source";
@@ -156,6 +157,8 @@ export function createPanelFeature(deps: {
   menuItems: () => TaskMenuItems | undefined;
   /** The current load's project menu registrations, for the project rows. */
   projectMenuItems: () => ProjectMenuItems | undefined;
+  /** The project panel (#232), for the project details' attribute area (#234). */
+  openProjectPanel: (projectId: ProjectId) => void;
   /**
    * The task panel (#40, #42): the selected task shows in the side pane in
    * the wide tier and in the popup otherwise.
@@ -338,6 +341,7 @@ export function createPanelFeature(deps: {
       changes,
       taskActions: deps.taskActions,
       projectMenuItems: deps.projectMenuItems,
+      openProjectPanel: deps.openProjectPanel,
       groups: projectGroups,
       readAllTasks,
       openProject,
