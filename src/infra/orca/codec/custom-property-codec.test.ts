@@ -7,6 +7,7 @@ import {
   customPropertyDefinitions,
   decodeCustomPropertyValues,
   encodeBlockRefs,
+  isTaskBuiltInProperty,
   planBlockRefsWrite,
   planCustomChoiceAdditions,
   planCustomPropertyWrite,
@@ -81,22 +82,28 @@ const onTag = (...extra: readonly unknown[]) =>
 
 describe("customPropertyDefinitions", () => {
   it("reads the plugin's own task tag as having no custom properties", () => {
-    expect(customPropertyDefinitions(ownTag.zh)).toEqual([]);
-    expect(customPropertyDefinitions(ownTag.en)).toEqual([]);
+    expect(customPropertyDefinitions(ownTag.zh, isTaskBuiltInProperty)).toEqual(
+      [],
+    );
+    expect(customPropertyDefinitions(ownTag.en, isTaskBuiltInProperty)).toEqual(
+      [],
+    );
   });
 
   it("reads the old 标记 / Label as a multiple choice custom property (#224)", () => {
     // No longer built in, so it is the user's property (ADR 0023, 0028).
-    expect(customPropertyDefinitions(tagBlocks.zh.properties)).toEqual([
-      { name: "标记", kind: "multi", choices: [] },
-    ]);
-    expect(customPropertyDefinitions(tagBlocks.en.properties)).toEqual([
-      { name: "Label", kind: "multi", choices: [] },
-    ]);
+    expect(
+      customPropertyDefinitions(tagBlocks.zh.properties, isTaskBuiltInProperty),
+    ).toEqual([{ name: "标记", kind: "multi", choices: [] }]);
+    expect(
+      customPropertyDefinitions(tagBlocks.en.properties, isTaskBuiltInProperty),
+    ).toEqual([{ name: "Label", kind: "multi", choices: [] }]);
   });
 
   it("maps each of the nine kinds, nulls in pos ordered by name", () => {
-    expect(customPropertyDefinitions(onTag(...added))).toEqual([
+    expect(
+      customPropertyDefinitions(onTag(...added), isTaskBuiltInProperty),
+    ).toEqual([
       { name: "时间", kind: "time" },
       { name: "自定义单选", kind: "single", choices: ["aaa"] },
       { name: "自定义块引用", kind: "blockRefs", scope: null },
@@ -118,6 +125,7 @@ describe("customPropertyDefinitions", () => {
           { name: "合计", type: 7, pos: null },
           { name: "来源", type: 1, pos: null },
         ),
+        isTaskBuiltInProperty,
       ),
     ).toEqual([{ name: "来源", kind: "text" }]);
   });
@@ -125,14 +133,31 @@ describe("customPropertyDefinitions", () => {
   it("leaves out a property named as a built-in one in either language, whatever the tag's language", () => {
     // "Status" on a Chinese tag, "备注" on an English one.
     expect(
-      customPropertyDefinitions(onTag({ name: "Status", type: 1, pos: null })),
+      customPropertyDefinitions(
+        onTag({ name: "Status", type: 1, pos: null }),
+        isTaskBuiltInProperty,
+      ),
     ).toEqual([]);
     expect(
-      customPropertyDefinitions([
-        ...ownTag.en,
-        { name: "备注", type: 3, pos: null },
-      ]),
+      customPropertyDefinitions(
+        [...ownTag.en, { name: "备注", type: 3, pos: null }],
+        isTaskBuiltInProperty,
+      ),
     ).toEqual([]);
+  });
+
+  it("leaves out only what the built-in check passed in says is built in", () => {
+    // Another tag's check: the task's 状态 is kept, 来源 is left out.
+    const isBuiltIn = (name: string) => name === "来源";
+    expect(
+      customPropertyDefinitions(
+        [
+          { name: "状态", type: 1, pos: null },
+          { name: "来源", type: 1, pos: null },
+        ],
+        isBuiltIn,
+      ),
+    ).toEqual([{ name: "状态", kind: "text" }]);
   });
 
   it("does not take an invalidated built-in property, its type changed, for a custom one", () => {
@@ -140,7 +165,9 @@ describe("customPropertyDefinitions", () => {
     const properties = ownTag.zh.map((p) =>
       p.name === "备注" ? { ...p, type: 3 } : p,
     );
-    expect(customPropertyDefinitions(properties)).toEqual([]);
+    expect(
+      customPropertyDefinitions(properties, isTaskBuiltInProperty),
+    ).toEqual([]);
   });
 
   it("reads a date property without a subtype, or with an unknown one, as a date and time", () => {
@@ -150,6 +177,7 @@ describe("customPropertyDefinitions", () => {
           { name: "a", type: 5, pos: null },
           { name: "b", type: 5, pos: null, typeArgs: { subType: "week" } },
         ),
+        isTaskBuiltInProperty,
       ),
     ).toEqual([
       { name: "a", kind: "datetime" },
@@ -166,6 +194,7 @@ describe("customPropertyDefinitions", () => {
           pos: null,
           typeArgs: { choices: [{ n: "客户", c: "" }, "内部"] },
         }),
+        isTaskBuiltInProperty,
       ),
     ).toEqual([{ name: "来源", kind: "single", choices: ["客户", "内部"] }]);
   });
@@ -179,6 +208,7 @@ describe("customPropertyDefinitions", () => {
           pos: null,
           typeArgs: { scope: "人" },
         }),
+        isTaskBuiltInProperty,
       ),
     ).toEqual([{ name: "委托给", kind: "blockRefs", scope: "人" }]);
   });
@@ -192,6 +222,7 @@ describe("customPropertyDefinitions", () => {
           { name: "a", type: 1, pos: null },
           { name: "y", type: 1, pos: 14 },
         ),
+        isTaskBuiltInProperty,
       ).map((d) => d.name),
     ).toEqual(["y", "z", "a", "b"]);
   });
@@ -348,19 +379,34 @@ describe("planCustomChoiceAdditions", () => {
   it("changes nothing when every value is already an option, or for an empty value", () => {
     const tag = onTag(fromInterface);
     expect(
-      planCustomChoiceAdditions(tag, "来源", { kind: "single", value: "内部" }),
+      planCustomChoiceAdditions(
+        tag,
+        "来源",
+        { kind: "single", value: "内部" },
+        isTaskBuiltInProperty,
+      ),
     ).toBeUndefined();
     expect(
-      planCustomChoiceAdditions(tag, "来源", { kind: "single", value: null }),
+      planCustomChoiceAdditions(
+        tag,
+        "来源",
+        { kind: "single", value: null },
+        isTaskBuiltInProperty,
+      ),
     ).toBeUndefined();
   });
 
   it("appends a new option as a string after string options, keeping the whole typeArgs and a null pos", () => {
     expect(
-      planCustomChoiceAdditions(onTag(fromInterface), "来源", {
-        kind: "single",
-        value: "合作方",
-      }),
+      planCustomChoiceAdditions(
+        onTag(fromInterface),
+        "来源",
+        {
+          kind: "single",
+          value: "合作方",
+        },
+        isTaskBuiltInProperty,
+      ),
     ).toEqual({
       name: "来源",
       type: 6,
@@ -382,10 +428,15 @@ describe("planCustomChoiceAdditions", () => {
       typeArgs: { subType: "multi", choices: [{ n: "x", c: "#2196f3" }] },
     };
     expect(
-      planCustomChoiceAdditions(onTag(property), "涉及", {
-        kind: "multi",
-        value: ["y", "x", "z", "y"],
-      }),
+      planCustomChoiceAdditions(
+        onTag(property),
+        "涉及",
+        {
+          kind: "multi",
+          value: ["y", "x", "z", "y"],
+        },
+        isTaskBuiltInProperty,
+      ),
     ).toEqual({
       name: "涉及",
       type: 6,
@@ -409,10 +460,15 @@ describe("planCustomChoiceAdditions", () => {
       typeArgs: { subType: "multi" },
     };
     expect(
-      planCustomChoiceAdditions(onTag(property), "涉及", {
-        kind: "multi",
-        value: ["x"],
-      }),
+      planCustomChoiceAdditions(
+        onTag(property),
+        "涉及",
+        {
+          kind: "multi",
+          value: ["x"],
+        },
+        isTaskBuiltInProperty,
+      ),
     ).toEqual({
       name: "涉及",
       type: 6,
@@ -423,16 +479,26 @@ describe("planCustomChoiceAdditions", () => {
 
   it("refuses a property that is no longer defined, or whose kind changed", () => {
     expect(() =>
-      planCustomChoiceAdditions(onTag(), "来源", {
-        kind: "single",
-        value: "客户",
-      }),
+      planCustomChoiceAdditions(
+        onTag(),
+        "来源",
+        {
+          kind: "single",
+          value: "客户",
+        },
+        isTaskBuiltInProperty,
+      ),
     ).toThrow(CustomPropertyChangedError);
     expect(() =>
-      planCustomChoiceAdditions(onTag(fromInterface), "来源", {
-        kind: "multi",
-        value: ["客户"],
-      }),
+      planCustomChoiceAdditions(
+        onTag(fromInterface),
+        "来源",
+        {
+          kind: "multi",
+          value: ["客户"],
+        },
+        isTaskBuiltInProperty,
+      ),
     ).toThrow(CustomPropertyChangedError);
   });
 });
