@@ -7,7 +7,7 @@ import type {
   DropProject,
   ReadDropProjectPlan,
 } from "../../application/usecases/drop-project";
-import { projectStatuses } from "../../domain/project/project";
+import { type ProjectId, projectStatuses } from "../../domain/project/project";
 import { describeError } from "../../shared/describe-error";
 import { t } from "../../shared/l10n/l10n";
 import { projectStatusLabel } from "../components/project-status-label";
@@ -18,6 +18,8 @@ import { projectStatusIcons } from "./project-status-icons";
 /** Menu groups, lowest first. */
 export const projectMenuGroups = {
   status: 10,
+  /** "Open project panel" (#232). */
+  projectPanel: 20,
   /** "Drop project" (#150). */
   drop: 100,
 } as const;
@@ -37,6 +39,27 @@ export function notifyProjectActionFailure(
     return;
   }
   notify("error", failed(describeError(error)));
+}
+
+/**
+ * "Open project panel" (GLOSSARY: 项目属性面板, #232), after the project
+ * statuses and before "Drop project": the tag menu and the project row share
+ * this registration, so both show it.
+ */
+export function registerProjectPanelItem(
+  items: ProjectMenuItems,
+  openProjectPanel: (projectId: ProjectId) => void,
+): void {
+  items.register({
+    id: "projectPanel",
+    group: projectMenuGroups.projectPanel,
+    order: 0,
+    label: () => t("Open project panel"),
+    icon: "ti ti-list-details",
+    async run(project) {
+      openProjectPanel(project.id);
+    },
+  });
 }
 
 /**

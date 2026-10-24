@@ -222,8 +222,13 @@ export function NoteField(props: {
   saveOnLeave: () => boolean;
   /** Defaults to the note's own hint (a text custom property passes its own). */
   placeholder?: string;
+  /**
+   * Several lines (a project's goal, #232): Enter starts a new line, and
+   * only leaving the field saves.
+   */
+  multiline?: boolean;
 }) {
-  const { CompositionInput } = orca.components;
+  const { CompositionInput, CompositionTextArea } = orca.components;
   const fromNotes = props.note ?? "";
   const [draft, setDraft] = React.useState(fromNotes);
   const focused = React.useRef(false);
@@ -269,35 +274,53 @@ export function NoteField(props: {
     [],
   );
 
+  const onFocus = () => {
+    focused.current = true;
+  };
+  const onBlur = () => {
+    focused.current = false;
+    if (draft !== saved.current) {
+      void save(draft);
+      return;
+    }
+    // Nothing typed: show what the notes came to hold meanwhile.
+    saved.current = latestFromNotes.current;
+    setDraft(latestFromNotes.current);
+  };
+  const placeholder = props.placeholder ?? t("A line about this task");
+
   return (
     <div className="nextaction-note-field">
-      <CompositionInput
-        aria-labelledby={props.labelId}
-        placeholder={props.placeholder ?? t("A line about this task")}
-        value={draft}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-          setDraft(e.target.value)
-        }
-        onFocus={() => {
-          focused.current = true;
-        }}
-        onBlur={() => {
-          focused.current = false;
-          if (draft !== saved.current) {
-            void save(draft);
-            return;
+      {props.multiline ? (
+        <CompositionTextArea
+          aria-labelledby={props.labelId}
+          placeholder={placeholder}
+          rows={3}
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+            setDraft(e.target.value)
           }
-          // Nothing typed: show what the notes came to hold meanwhile.
-          saved.current = latestFromNotes.current;
-          setDraft(latestFromNotes.current);
-        }}
-        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-          // Enter that confirms an IME composition is not a save.
-          if (e.nativeEvent.isComposing || e.key !== "Enter") return;
-          e.preventDefault();
-          void save(draft);
-        }}
-      />
+          onFocus={onFocus}
+          onBlur={onBlur}
+        />
+      ) : (
+        <CompositionInput
+          aria-labelledby={props.labelId}
+          placeholder={placeholder}
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
+          }
+          onFocus={onFocus}
+          onBlur={onBlur}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            // Enter that confirms an IME composition is not a save.
+            if (e.nativeEvent.isComposing || e.key !== "Enter") return;
+            e.preventDefault();
+            void save(draft);
+          }}
+        />
+      )}
       {savedCount > 0 && (
         <span key={savedCount} className="nextaction-note-saved" role="status">
           {t("Saved")}

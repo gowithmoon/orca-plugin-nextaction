@@ -5,6 +5,7 @@
 import {
   defaultProjectStatus,
   type Project,
+  type ProjectChanges,
   type ProjectStatus,
 } from "../../../domain/project/project";
 import { defaultRating, isRating } from "../../../domain/task/task";
@@ -27,7 +28,7 @@ import {
   type RawBlock,
   taskText,
 } from "./task-codec";
-import type { RefDataItem } from "./task-encode";
+import { dateItem, type RefDataItem } from "./task-encode";
 
 /** What the codec needs to know about the project tag. */
 export interface ProjectTagContext {
@@ -62,6 +63,40 @@ export function encodeProjectStatus(
     name: projectPropertyName("status", tag.language),
     value: projectStatusName(status, tag.language),
   };
+}
+
+/**
+ * The items to write to the block's reference to the project tag for the
+ * properties present in `changes`, and only those, as a task's are written
+ * (`encodeTaskChanges`): `null` clears one. Throws, encoding nothing, when
+ * any of them is invalidated (ADR 0008).
+ */
+export function encodeProjectChanges(
+  changes: ProjectChanges,
+  tag: {
+    language: NoteLanguage;
+    invalidated: readonly ProjectPropertyKey[];
+  },
+): RefDataItem[] {
+  const keys = (
+    ["goal", "start", "due", "importance", "urgency"] as const
+  ).filter((key) => changes[key] !== undefined);
+  const refused = keys.filter((key) => tag.invalidated.includes(key));
+  if (refused.length > 0) {
+    throw new Error(
+      `cannot write invalidated properties: ${refused.join(", ")}`,
+    );
+  }
+  return keys.map((key) => {
+    const name = projectPropertyName(key, tag.language);
+    switch (key) {
+      case "start":
+      case "due":
+        return dateItem(name, changes[key] ?? null);
+      default:
+        return { name, value: changes[key] };
+    }
+  });
 }
 
 /** 1–7, or 4 for anything else (GLOSSARY: 重要性, 紧急度). */

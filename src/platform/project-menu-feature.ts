@@ -8,6 +8,7 @@ import { createReadProject } from "../application/usecases/read-project";
 import {
   registerBuiltinProjectMenuItems,
   registerDropProjectItem,
+  registerProjectPanelItem,
 } from "../ui/project-menu/builtin-items";
 import {
   createProjectMenuItems,
@@ -25,6 +26,8 @@ import type { FeatureModule } from "./bootstrap";
 export function createProjectMenuFeature(deps: {
   repository: TaskRepository;
   projectTagBlockId: () => number | undefined;
+  /** Opens the project panel (#232). */
+  openProjectPanel: (projectId: number) => void;
 }): { feature: FeatureModule; items: () => ProjectMenuItems | undefined } {
   const { repository } = deps;
   let current: ProjectMenuItems | undefined;
@@ -34,6 +37,7 @@ export function createProjectMenuFeature(deps: {
       changeProjectStatus: createChangeProjectStatus({ repository }),
       pluginName,
     });
+    registerProjectPanelItem(items, deps.openProjectPanel);
     registerDropProjectItem(items, {
       readDropProjectPlan: createReadDropProjectPlan({ repository }),
       dropProject: createDropProject({ repository }),

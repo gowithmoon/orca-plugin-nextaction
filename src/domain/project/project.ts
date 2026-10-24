@@ -48,6 +48,19 @@ export interface Project {
 }
 
 /**
+ * The project properties the project panel writes and their new values
+ * (GLOSSARY: 项目属性面板), the project status apart. Only those present
+ * are written; `null` clears one.
+ */
+export interface ProjectChanges {
+  readonly goal?: string | null;
+  readonly start?: CalendarDate | null;
+  readonly due?: CalendarDate | null;
+  readonly importance?: Rating;
+  readonly urgency?: Rating;
+}
+
+/**
  * Only an active project lets its tasks be next actions (GLOSSARY: 下一步行
  * 动, 项目状态).
  */

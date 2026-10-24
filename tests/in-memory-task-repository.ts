@@ -1049,6 +1049,17 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async updateProject(id, changes) {
+      const block = blocks.get(id);
+      if (!block?.project || projectTagPaused) {
+        throw new Error(`block ${id} is not a project`);
+      }
+      const project = block.project;
+      write(() => {
+        block.project = { ...project, ...changes };
+      });
+    },
+
     async dropProject(id, tasks) {
       const block = blocks.get(id);
       if (!block?.project) throw new Error(`block ${id} is not a project`);
