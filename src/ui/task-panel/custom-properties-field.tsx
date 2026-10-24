@@ -24,7 +24,8 @@ import { DateField, Field, NoteField } from "./task-panel-fields";
 
 /**
  * The custom properties group, after the built-in fields; nothing when the
- * task tag defines none.
+ * tag defines none. Reads and writes go through the callbacks passed in, so
+ * any tag's panel can show it (ADR 0023).
  */
 export function CustomPropertiesField(props: {
   idPrefix: string;

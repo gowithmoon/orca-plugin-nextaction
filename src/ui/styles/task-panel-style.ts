@@ -920,4 +920,42 @@ button.nextaction-block-ref-target:hover {
   color: var(--orca-color-text-1);
   font-size: var(--orca-fontsize-sm);
 }
+
+/* The project panel (#232): the task panel's form, five project statuses. */
+.nextaction-project-status-buttons {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@container nextaction-task-panel (max-width: 360px) {
+  .nextaction-project-status-buttons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.nextaction-project-panel-icon {
+  height: calc(var(--orca-fontsize-lg) * var(--orca-lineheight-md));
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--orca-fontsize-lg);
+}
+
+/* The name is a button opening the project block, looking like the title. */
+.nextaction-project-panel-name {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.nextaction-project-panel-name:hover {
+  text-decoration: underline;
+}
+
+.nextaction-project-panel .nextaction-note-field textarea {
+  resize: vertical;
+}
 `;

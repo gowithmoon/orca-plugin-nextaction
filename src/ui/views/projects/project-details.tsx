@@ -3,11 +3,12 @@
 // the prototype's variant C chose: the project status icon, the name and the
 // progress ("No tasks" without any) on one line; start, due (red when
 // overdue, as the project row), "no next action" and a non-default
-// importance and urgency squeezed on one line; the goal folded
-// to one line, a click showing all of it; the progress bar on the area's
-// bottom edge. The status icon opens the project menu, the name opens the
-// project block in the notes. The tree below is the projects view's (#157). Verified by
-// hand in Orca (docs/ARCHITECTURE.md §5).
+// importance and urgency squeezed on one line; the goal folded to one line;
+// the progress bar on the area's bottom edge. The status icon opens the
+// project menu, the name opens the project block in the notes; the second
+// line and the goal are each a button opening the project panel (GLOSSARY:
+// 项目属性面板, #234). The tree below is the projects view's (#157).
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ProjectNode } from "../../../application/usecases/read-all-tasks";
 import type { CalendarDate } from "../../../domain/task/task";
@@ -65,8 +66,17 @@ function RatingChip(props: {
   );
 }
 
-function AttributeChips(props: { node: ProjectNode; today: CalendarDate }) {
+/**
+ * The dates and signals line, one button opening the project panel (#234);
+ * none without anything to show. The chips describe the button.
+ */
+function AttributeChips(props: {
+  node: ProjectNode;
+  today: CalendarDate;
+  onOpenPanel: () => void;
+}) {
   const { node, today } = props;
+  const chipsId = React.useId();
   const { project } = node;
   const { Tooltip } = orca.components;
   const { overdue } = node;
@@ -145,25 +155,39 @@ function AttributeChips(props: { node: ProjectNode; today: CalendarDate }) {
     );
   }
   if (items.length === 0) return null;
-  return <div className="nextaction-project-attr-chips">{items}</div>;
+  return (
+    <button
+      type="button"
+      className="nextaction-project-attr-chips"
+      aria-label={t("Open project panel")}
+      aria-describedby={chipsId}
+      onClick={props.onOpenPanel}
+    >
+      <span id={chipsId} className="nextaction-project-attr-chips-items">
+        {items}
+      </span>
+    </button>
+  );
 }
 
-/** The goal folded to one line; a click shows all of it, another folds it. */
-function Goal(props: { goal: string }) {
-  const [open, setOpen] = React.useState(false);
+/**
+ * The goal folded to one line, a button opening the project panel, where
+ * all of it shows (#234, in place of #156's unfolding).
+ */
+function Goal(props: { goal: string; onOpenPanel: () => void }) {
+  const goalId = React.useId();
   return (
     <button
       type="button"
       className="nextaction-project-attr-goal"
-      aria-expanded={open}
-      onClick={() => setOpen(!open)}
+      aria-label={t("Open project panel")}
+      aria-describedby={goalId}
+      onClick={props.onOpenPanel}
     >
-      <span className="nextaction-project-attr-goal-label">{t("Goal")}</span>
-      <span className="nextaction-project-attr-goal-text">{props.goal}</span>
-      <i
-        className={open ? "ti ti-chevron-up" : "ti ti-chevron-down"}
-        aria-hidden="true"
-      />
+      <span id={goalId} className="nextaction-project-attr-goal-content">
+        <span className="nextaction-project-attr-goal-label">{t("Goal")}</span>
+        <span className="nextaction-project-attr-goal-text">{props.goal}</span>
+      </span>
     </button>
   );
 }
@@ -175,6 +199,8 @@ export function ProjectAttributes(props: {
   menuItems: ProjectMenuItems | undefined;
   /** Opens the project's block in a note panel. */
   onOpenInNotes: () => void;
+  /** Opens the project panel (GLOSSARY: 项目属性面板) on this project. */
+  onOpenPanel: () => void;
 }) {
   const { node, today, menuItems } = props;
   const { project } = node;
@@ -225,9 +251,13 @@ export function ProjectAttributes(props: {
             )
           )}
         </div>
-        <AttributeChips node={node} today={today} />
+        <AttributeChips
+          node={node}
+          today={today}
+          onOpenPanel={props.onOpenPanel}
+        />
       </div>
-      {goal !== "" && <Goal goal={goal} />}
+      {goal !== "" && <Goal goal={goal} onOpenPanel={props.onOpenPanel} />}
       <div className="nextaction-project-attr-bar">
         {shownProgress !== null && (
           <i

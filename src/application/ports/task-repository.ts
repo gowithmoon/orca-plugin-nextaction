@@ -3,6 +3,7 @@ import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
 import type {
   Project,
+  ProjectChanges,
   ProjectId,
   ProjectStatus,
 } from "../../domain/project/project";
@@ -13,6 +14,7 @@ import type { CompletionHistory } from "../../domain/task/completion-history";
 import type {
   CustomPropertyDefinition,
   CustomPropertyValue,
+  CustomPropertyValues,
 } from "../../domain/task/custom-property";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
@@ -88,6 +90,18 @@ export interface TaskFilter {
  */
 export class TaskFeaturesPausedError extends Error {
   override name = "TaskFeaturesPausedError";
+}
+
+/**
+ * The block is not a project (any more): no project tag, gone, or an
+ * orphan. Thrown by the project writes; nothing was written. A paused
+ * project tag fails otherwise, keeping why it is paused.
+ */
+export class NotAProjectError extends Error {
+  override name = "NotAProjectError";
+  constructor(readonly id: ProjectId) {
+    super(`block ${id} is not a project`);
+  }
 }
 
 /**
@@ -530,13 +544,70 @@ export interface TaskRepository {
   getProject(id: ProjectId): Promise<Project | null>;
 
   /**
+   * As `getProject`, with the project tag's custom property definitions
+   * (GLOSSARY: 自定义属性, ADR 0023) as they are now, in Orca's order, and
+   * the project's value of each, read against them in one read (#235). A
+   * value whose kind is not its definition's reads as empty. The project
+   * tag's definitions and values only: on a block that is also a task, the
+   * task tag's stay with the task. `null` as for `getProject`.
+   */
+  getProjectWithCustomProperties(id: ProjectId): Promise<{
+    project: Project;
+    definitions: CustomPropertyDefinition[];
+    values: CustomPropertyValues;
+  } | null>;
+
+  /**
+   * The project tag's custom property definitions as they are now, as
+   * `readCustomPropertyDefinitions` reads the task tag's. Fails when the
+   * project tag is paused.
+   */
+  readProjectCustomPropertyDefinitions(): Promise<CustomPropertyDefinition[]>;
+
+  /**
+   * As `writeCustomProperty`, for a custom property of the project tag on
+   * project `id` (#235): written on the reference to the project tag, so the
+   * task tag's values on a block with both are left as they are. Fails,
+   * writing nothing, with `CustomPropertyChangedError` as it does, with
+   * `NotAProjectError` when the block is not a project, or when the project
+   * tag is paused or the write fails.
+   */
+  writeProjectCustomProperty(
+    id: ProjectId,
+    name: string,
+    value: CustomPropertyValue,
+    now: Date,
+  ): Promise<void>;
+
+  /**
+   * As `addNewBlockRefTarget`, for a block reference custom property of the
+   * project tag on project `id` (#235). Fails as `writeProjectCustomProperty`.
+   */
+  addNewProjectBlockRefTarget(
+    id: ProjectId,
+    name: string,
+    text: string,
+  ): Promise<void>;
+
+  /**
    * Writes the project's project status (#144), and nothing else: the tasks
    * belonging to it are left as they are. The user undoes it with one undo.
-   * Fails, writing nothing, when the block is not a project, the project
-   * tag is paused, the project status property is invalidated, or the write
-   * fails. A mirror block's ID writes to its source block.
+   * Fails, writing nothing, with `NotAProjectError` when the block is not a
+   * project, or when the project tag is paused, the project status property
+   * is invalidated, or the write fails. A mirror block's ID writes to its source block.
    */
   updateProjectStatus(id: ProjectId, status: ProjectStatus): Promise<void>;
+
+  /**
+   * Writes the project properties present in `changes` (GLOSSARY: 项目属性面
+   * 板, #232), overwriting them, in one undo; the others are left as they
+   * are, and so is the task tag's reference on a block with both. Fails,
+   * writing nothing, with `NotAProjectError` when the block is not a
+   * project, or when the project tag is paused, any of them is invalidated,
+   * or the write fails. A mirror block's
+   * ID writes to its source block.
+   */
+  updateProject(id: ProjectId, changes: ProjectChanges): Promise<void>;
 
   /**
    * Drops the project (GLOSSARY: 放弃项目, #150), in one undo: clears every
