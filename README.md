@@ -16,6 +16,8 @@
 
 [虎鲸笔记（Orca Note）](https://www.orca-studio.com/orcanote/zh/)的 GTD 任务管理插件（原Task Planner），支持任务创建、下一步行动计算、我的一天、项目、回顾等功能。
 
+详细用法见[用户手册](docs/guide/zh/README.md)。
+
 ## 功能概览
 
 ### 任务与捕获

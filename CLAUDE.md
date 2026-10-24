@@ -14,7 +14,8 @@ Orca Note（虎鲸笔记）的 GTD 任务管理插件，插件标识 `orca-plugi
 | `docs/spikes/` | Orca 实际行为的实测结论，索引在 `README.md` | 依赖 Orca 文档没写清楚的行为时 |
 | GitHub Issue | 一项工作的需求 | 实施时以 Issue 为准 |
 | `docs/ROADMAP.md` | 最初的计划，已全部完成，只作历史记录 | 查某个功能当初的范围和取舍。新工作写进 Issue，不往路线图里加步骤 |
-| `README.md`、`README.en.md` | 用户文档和发版步骤 | 改了用户能看到的功能时，中英两份一起改 |
+| `docs/guide/` | 用户手册，中文为原稿（`zh/`），目录在 `zh/README.md` | 改了用户能看到的行为时，同步改对应章节 |
+| `README.md`、`README.en.md` | 功能概览、安装、发版步骤 | 改了功能概览或安装方式时，中英两份一起改 |
 
 文档之间出现冲突（例如 Issue 的做法违反某个 ADR）时，先停下来向用户指出，商定后修改其中一份文档，再继续写代码。
 
