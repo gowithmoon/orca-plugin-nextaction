@@ -3,6 +3,7 @@ import type { TaskGraphSnapshot } from "../../domain/blocking/task-graph";
 import type { MovePlacement } from "../../domain/blocking/task-move";
 import type {
   Project,
+  ProjectChanges,
   ProjectId,
   ProjectStatus,
 } from "../../domain/project/project";
@@ -537,6 +538,16 @@ export interface TaskRepository {
    * fails. A mirror block's ID writes to its source block.
    */
   updateProjectStatus(id: ProjectId, status: ProjectStatus): Promise<void>;
+
+  /**
+   * Writes the project properties present in `changes` (GLOSSARY: 项目属性面
+   * 板, #232), overwriting them, in one undo; the others are left as they
+   * are, and so is the task tag's reference on a block with both. Fails,
+   * writing nothing, when the block is not a project, the project tag is
+   * paused, any of them is invalidated, or the write fails. A mirror block's
+   * ID writes to its source block.
+   */
+  updateProject(id: ProjectId, changes: ProjectChanges): Promise<void>;
 
   /**
    * Drops the project (GLOSSARY: 放弃项目, #150), in one undo: clears every

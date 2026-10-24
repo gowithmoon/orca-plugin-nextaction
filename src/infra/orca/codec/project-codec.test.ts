@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   decodeProject,
+  encodeProjectChanges,
   encodeProjectStatus,
   type ProjectTagContext,
 } from "./project-codec";
@@ -204,6 +205,63 @@ describe("decodeProject", () => {
     expect(decoded(raw).created).toEqual(new Date(0));
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
+  });
+});
+
+describe("encodeProjectChanges", () => {
+  const zh = { language: "zh" as const, invalidated: [] };
+
+  it("writes each property passed, and only those", () => {
+    expect(encodeProjectChanges({ goal: "搬进新家" }, zh)).toEqual([
+      { name: "目标", value: "搬进新家" },
+    ]);
+    expect(encodeProjectChanges({ importance: 6 }, zh)).toEqual([
+      { name: "重要性", value: 6 },
+    ]);
+    expect(encodeProjectChanges({ urgency: 2 }, zh)).toEqual([
+      { name: "紧急度", value: 2 },
+    ]);
+    expect(
+      encodeProjectChanges({ start: { year: 2026, month: 10, day: 20 } }, zh),
+    ).toEqual([{ name: "开始日期", type: 5, value: new Date(2026, 9, 20) }]);
+    expect(
+      encodeProjectChanges(
+        { due: { year: 2026, month: 12, day: 31 } },
+        { language: "en", invalidated: [] },
+      ),
+    ).toEqual([{ name: "Due", type: 5, value: new Date(2026, 11, 31) }]);
+  });
+
+  it("clears the goal and the dates with null", () => {
+    expect(
+      encodeProjectChanges({ goal: null, start: null, due: null }, zh),
+    ).toEqual([
+      { name: "目标", value: null },
+      { name: "开始日期", value: null },
+      { name: "截止日期", value: null },
+    ]);
+  });
+
+  it("encodes nothing for no changes", () => {
+    expect(encodeProjectChanges({}, zh)).toEqual([]);
+  });
+
+  it("refuses to write an invalidated property, encoding nothing", () => {
+    expect(() =>
+      encodeProjectChanges(
+        { goal: "x", due: null },
+        { language: "zh", invalidated: ["due"] },
+      ),
+    ).toThrow("invalidated");
+  });
+
+  it("writes the others while one not passed is invalidated", () => {
+    expect(
+      encodeProjectChanges(
+        { urgency: 7 },
+        { language: "zh", invalidated: ["importance"] },
+      ),
+    ).toEqual([{ name: "紧急度", value: 7 }]);
   });
 });
 

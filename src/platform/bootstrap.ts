@@ -11,6 +11,7 @@ import { createExtractTasksFeature } from "./extract-tasks-feature";
 import { createPanelFeature } from "./panel-feature";
 import { createPopupStyleFeature } from "./popup-style-feature";
 import { createProjectMenuFeature } from "./project-menu-feature";
+import { createProjectPanelFeature } from "./project-panel-feature";
 import { createRegistry, type Registry } from "./registry";
 import { createLoadReminderDefaultTime } from "./reminder-default-time";
 import { createReminderFeature } from "./reminder-feature";
@@ -195,9 +196,18 @@ export function createNextActionPlugin(): Plugin {
     showInTaskMap: (taskId) => panel.showInTaskMap(taskId),
     names: taskTag.names,
   });
+  const projectPanel = createProjectPanelFeature({
+    repository,
+    changes: taskChanges.changes,
+    today: day.today,
+    taskActions: taskActions.taskActions,
+    // The project tag names are absent exactly while it is paused.
+    projectsPaused: () => taskTag.projectNames.current() === undefined,
+  });
   const projectMenu = createProjectMenuFeature({
     repository,
     projectTagBlockId: taskTag.projectTagBlockId,
+    openProjectPanel: projectPanel.open,
   });
   const panel = createPanelFeature({
     repository,
@@ -240,6 +250,8 @@ export function createNextActionPlugin(): Plugin {
       // Before the menus and the plugin panel that open it, so its root is
       // released after them.
       taskPanel.feature,
+      // Before the project menu that opens it, so its root is released after it.
+      projectPanel.feature,
       // Before the task menu that opens it, so its root is released after it.
       splitSubtasks.feature,
       extractTasks,

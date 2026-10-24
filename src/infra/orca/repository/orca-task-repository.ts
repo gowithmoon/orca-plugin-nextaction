@@ -26,6 +26,7 @@ import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { ProjectSetting } from "../../../domain/project/ownership";
 import type {
   Project,
+  ProjectChanges,
   ProjectId,
   ProjectStatus,
 } from "../../../domain/project/project";
@@ -70,7 +71,11 @@ import {
   encodeProjectSetting,
   projectSettingWithout,
 } from "../codec/project-clear";
-import { decodeProject, encodeProjectStatus } from "../codec/project-codec";
+import {
+  decodeProject,
+  encodeProjectChanges,
+  encodeProjectStatus,
+} from "../codec/project-codec";
 import {
   planRecurrenceDiscard,
   planRecurrenceWrite,
@@ -1840,6 +1845,25 @@ export function createOrcaTaskRepository(
       // reference on a block with both is left as it is (project-tag).
       await writeTo(read.block, async () => {
         await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+      });
+    },
+
+    async updateProject(id: ProjectId, changes: ProjectChanges): Promise<void> {
+      const state = projectTagState();
+      if (state.kind !== "ready") {
+        throw new OrcaError(`projects are paused (${state.reason})`);
+      }
+      // Encoded first: an invalidated property fails before any read.
+      const items = encodeProjectChanges(changes, state);
+      if (items.length === 0) return;
+      const read = await projectBlock(id);
+      if (!read) throw new OrcaError(`block ${id} is not a project`);
+      const ref = findTaskTagRef(read.block.refs, state.tagBlockId);
+      if (!ref) throw new OrcaError(`block ${id} lost its project tag`);
+      // As updateProjectStatus: only the items passed change, on the
+      // reference to the project tag, in one group, one undo.
+      await writeTo(read.block, async () => {
+        await invokeEditorCommand("core.editor.setRefData", ref, items);
       });
     },
 

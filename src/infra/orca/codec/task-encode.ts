@@ -152,8 +152,11 @@ export function encodeProject(
   };
 }
 
-/** A date, or `null` to clear it as tag-operations step 06 did. */
-function dateItem(name: string, date: CalendarDate | null): RefDataItem {
+/**
+ * A date, or `null` to clear it as tag-operations step 06 did; a project's
+ * dates are written so too (project-codec).
+ */
+export function dateItem(name: string, date: CalendarDate | null): RefDataItem {
   return date === null
     ? { name, value: null }
     : // The type is passed with dates as the spikes did.
