@@ -4,7 +4,10 @@
 // name) as set in Orca, every block when it has none. Only a record: a
 // target that is a task is not a dependency.
 
-import { checkCustomPropertyValue } from "../../domain/task/custom-property";
+import {
+  type CustomPropertyDefinition,
+  checkCustomPropertyValue,
+} from "../../domain/task/custom-property";
 import type { BlockCandidate, TaskRepository } from "../ports/task-repository";
 
 /**
@@ -18,18 +21,39 @@ export type ReadBlockRefCandidates = (
   search: string,
 ) => Promise<readonly BlockCandidate[]>;
 
-export function createReadBlockRefCandidates(deps: {
-  repository: TaskRepository;
-}): ReadBlockRefCandidates {
+/** Searches under the scope of `name` among the definitions read. */
+function readCandidates(
+  repository: TaskRepository,
+  readDefinitions: () => Promise<CustomPropertyDefinition[]>,
+): ReadBlockRefCandidates {
   return async (name, search) => {
-    const definition = checkCustomPropertyValue(
-      await deps.repository.readCustomPropertyDefinitions(),
-      name,
-      { kind: "blockRefs", value: [] },
-    );
-    return deps.repository.searchBlocks(
+    const definition = checkCustomPropertyValue(await readDefinitions(), name, {
+      kind: "blockRefs",
+      value: [],
+    });
+    return repository.searchBlocks(
       search,
       definition.kind === "blockRefs" ? definition.scope : null,
     );
   };
+}
+
+/** For a block reference custom property of the task tag. */
+export function createReadBlockRefCandidates(deps: {
+  repository: TaskRepository;
+}): ReadBlockRefCandidates {
+  const { repository } = deps;
+  return readCandidates(repository, () =>
+    repository.readCustomPropertyDefinitions(),
+  );
+}
+
+/** For a block reference custom property of the project tag (#235). */
+export function createReadProjectBlockRefCandidates(deps: {
+  repository: TaskRepository;
+}): ReadBlockRefCandidates {
+  const { repository } = deps;
+  return readCandidates(repository, () =>
+    repository.readProjectCustomPropertyDefinitions(),
+  );
 }

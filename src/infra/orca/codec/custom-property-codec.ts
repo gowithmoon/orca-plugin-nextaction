@@ -1,5 +1,5 @@
 // Custom properties (GLOSSARY: 自定义属性, ADR 0023) on Orca: which properties
-// of the task tag are ones, and how their values read and write
+// of a tag (the task tag, the project tag) are ones, and how their values read and write
 // (custom-properties spike).
 import {
   type CustomPropertyDefinition,
@@ -16,6 +16,7 @@ import {
   planBlockRefWrite,
 } from "./dependency-write";
 import { findPropertyKey } from "./names";
+import { findProjectPropertyKey } from "./project-names";
 // task-codec imports this module too; only functions cross, called after
 // both have loaded.
 import {
@@ -29,7 +30,7 @@ import {
 } from "./task-codec";
 import type { RefDataItem } from "./task-encode";
 
-/** A property definition on the task tag block, as get-blocks returns it. */
+/** A property definition on a tag block, as get-blocks returns it. */
 export interface TagPropertyDefinition {
   name: string;
   type?: number;
@@ -57,14 +58,33 @@ function choiceNames(typeArgs: Record<string, unknown>): string[] {
   return names;
 }
 
+/**
+ * Whether a property name is one of a tag's built-in properties, in either
+ * language, whatever the tag's language; an invalidated one too (ADR 0008).
+ * Each tag passes its own: a name built in on one tag is a custom property
+ * on another (ADR 0023).
+ */
+export type IsBuiltInProperty = (name: string) => boolean;
+
+/** The task tag's check: the plugin's task properties (names.ts). */
+export const isTaskBuiltInProperty: IsBuiltInProperty = (name) =>
+  findPropertyKey(name) !== undefined;
+
+/**
+ * The project tag's check: its six properties (project-names.ts). A task's
+ * built-in name, such as 工作量, is a custom property here.
+ */
+export const isProjectBuiltInProperty: IsBuiltInProperty = (name) =>
+  findProjectPropertyKey(name) !== undefined;
+
 /** The definition a property stands for, or `undefined` when it is not one. */
 function definitionOf(
   property: TagPropertyDefinition,
+  isBuiltIn: IsBuiltInProperty,
 ): CustomPropertyDefinition | undefined {
   const { name } = property;
-  // System properties (`_repr`, `_show`), and the plugin's own in either
-  // language, whatever the tag's language; an invalidated one too (ADR 0008).
-  if (name.startsWith("_") || findPropertyKey(name)) return undefined;
+  // System properties (`_repr`, `_show`), and the tag's built-in ones.
+  if (name.startsWith("_") || isBuiltIn(name)) return undefined;
   const typeArgs = record(property.typeArgs);
   switch (property.type) {
     case PropType.Text:
@@ -127,8 +147,13 @@ export function planCustomChoiceAdditions(
   properties: readonly TagPropertyDefinition[],
   name: string,
   value: Extract<CustomPropertyValue, { kind: "single" | "multi" }>,
+  isBuiltIn: IsBuiltInProperty,
 ): CustomPropertyDefinitionWrite | undefined {
-  checkCustomPropertyValue(customPropertyDefinitions(properties), name, value);
+  checkCustomPropertyValue(
+    customPropertyDefinitions(properties, isBuiltIn),
+    name,
+    value,
+  );
   // Found: the check above passed.
   const property = properties.find((p) => p.name === name) as
     | TagPropertyDefinition
@@ -426,17 +451,18 @@ export function decodeCustomPropertyValues(
 }
 
 /**
- * The custom properties among the task tag's property definitions, in
- * Orca's order: by `pos`, then those without one by name, in Unicode order
- * (tag-operations, custom-properties).
+ * The custom properties among a tag's property definitions, `isBuiltIn`
+ * telling the tag's built-in ones, in Orca's order: by `pos`, then those
+ * without one by name, in Unicode order (tag-operations, custom-properties).
  */
 export function customPropertyDefinitions(
   properties: readonly TagPropertyDefinition[],
+  isBuiltIn: IsBuiltInProperty,
 ): CustomPropertyDefinition[] {
   const found: { pos: number | null; definition: CustomPropertyDefinition }[] =
     [];
   for (const property of properties) {
-    const definition = definitionOf(property);
+    const definition = definitionOf(property, isBuiltIn);
     if (definition) {
       found.push({
         pos: typeof property.pos === "number" ? property.pos : null,

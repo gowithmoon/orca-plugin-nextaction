@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
 import { CustomPropertyChangedError } from "../../domain/task/custom-property";
-import { createReadBlockRefCandidates } from "./read-block-ref-candidates";
+import {
+  createReadBlockRefCandidates,
+  createReadProjectBlockRefCandidates,
+} from "./read-block-ref-candidates";
 
 function setup() {
   const repository = createInMemoryTaskRepository();
@@ -44,6 +47,26 @@ describe("read block reference candidates", () => {
       CustomPropertyChangedError,
     );
     await expect(readBlockRefCandidates("下发人", "张")).rejects.toThrow(
+      CustomPropertyChangedError,
+    );
+  });
+});
+
+describe("read block reference candidates of a project's property", () => {
+  it("searches under the scope the project tag's definition holds, not the task tag's", async () => {
+    const { repository } = setup();
+    repository.setProjectCustomPropertyDefinitions([
+      { name: "委托给", kind: "blockRefs", scope: null },
+      { name: "负责人", kind: "blockRefs", scope: "人" },
+    ]);
+    const read = createReadProjectBlockRefCandidates({ repository });
+
+    expect(await read("负责人", "李")).toEqual([{ id: 28, text: "李四" }]);
+    expect(await read("委托给", "张三")).toEqual([
+      { id: 26, text: "张三" },
+      { id: 27, text: "张三丰的书" },
+    ]);
+    await expect(read("下发人", "张")).rejects.toThrow(
       CustomPropertyChangedError,
     );
   });

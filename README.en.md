@@ -51,6 +51,8 @@ Tag a block with the project tag to make it a project. The project list groups p
 - Board: columns by status or by root task (the project's top-level tasks). Drag cards to change status or parent.
 - Gantt: day, week or month scale. Drag bars to change dates, see dependency arrows and date conflicts, and shift dependent tasks later in one click.
 
+The project panel edits a project's status, goal, dates, importance and urgency, and the custom properties you add to the project tag.
+
 ### Review
 
 Walk through the GTD weekly review step by step: Inbox, Look back, Overdue, Due in the next 7 days, Next actions, Waiting, Projects, Someday, Due for review, Summary. Each step has quick actions such as Add to My Day, change the due date, and Drop. Tasks can have a review interval or a review date, and show up under Due for review once they are due.

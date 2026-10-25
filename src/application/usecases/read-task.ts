@@ -3,6 +3,7 @@
 import {
   type CustomPropertyDefinition,
   type CustomPropertyValue,
+  type CustomPropertyValues,
   emptyCustomPropertyValue,
 } from "../../domain/task/custom-property";
 import type { Task, TaskId } from "../../domain/task/task";
@@ -57,6 +58,54 @@ export interface TaskForPanel {
  */
 export type ReadTaskForPanel = (id: TaskId) => Promise<TaskForPanel | null>;
 
+/**
+ * A row per definition, in their order, each with its value from `stored`
+ * (empty when it holds none or one of another kind), block reference
+ * targets with their texts. Shared by the task panel's read and the project
+ * panel's (#235): any tag's custom properties show the same way.
+ */
+export async function customPropertiesForPanel(
+  repository: Pick<TaskRepository, "readBlockTexts">,
+  definitions: readonly CustomPropertyDefinition[],
+  stored: CustomPropertyValues,
+): Promise<TaskCustomProperty[]> {
+  const values = definitions.map((definition) => {
+    const value = stored[definition.name];
+    return {
+      definition,
+      value:
+        value?.kind === definition.kind
+          ? value
+          : emptyCustomPropertyValue(definition.kind),
+    };
+  });
+  // The targets' texts are read only when there are any, in one read.
+  const targetIds = [
+    ...new Set(
+      values.flatMap(({ value }) =>
+        value.kind === "blockRefs" ? value.value : [],
+      ),
+    ),
+  ];
+  const texts =
+    targetIds.length > 0
+      ? await repository.readBlockTexts(targetIds)
+      : new Map<number, string>();
+  return values.map((property) =>
+    property.value.kind === "blockRefs"
+      ? {
+          ...property,
+          targets: property.value.value.map((id) => {
+            const text = texts.get(id);
+            return text === undefined
+              ? { id, text: null, deleted: true }
+              : { id, text, deleted: false };
+          }),
+        }
+      : property,
+  );
+}
+
 export function createReadTaskForPanel(deps: {
   repository: TaskRepository;
 }): ReadTaskForPanel {
@@ -69,43 +118,13 @@ export function createReadTaskForPanel(deps: {
     ]);
     if (!read) return null;
     const { task, definitions } = read;
-    const values = definitions.map((definition) => {
-      const stored = task.customProperties[definition.name];
-      return {
-        definition,
-        value:
-          stored?.kind === definition.kind
-            ? stored
-            : emptyCustomPropertyValue(definition.kind),
-      };
-    });
-    // The targets' texts are read only when there are any, in one read.
-    const targetIds = [
-      ...new Set(
-        values.flatMap(({ value }) =>
-          value.kind === "blockRefs" ? value.value : [],
-        ),
-      ),
-    ];
-    const texts =
-      targetIds.length > 0
-        ? await deps.repository.readBlockTexts(targetIds)
-        : new Map<number, string>();
     return {
       task,
       completionHistory,
-      customProperties: values.map((property) =>
-        property.value.kind === "blockRefs"
-          ? {
-              ...property,
-              targets: property.value.value.map((id) => {
-                const text = texts.get(id);
-                return text === undefined
-                  ? { id, text: null, deleted: true }
-                  : { id, text, deleted: false };
-              }),
-            }
-          : property,
+      customProperties: await customPropertiesForPanel(
+        deps.repository,
+        definitions,
+        task.customProperties,
       ),
     };
   };

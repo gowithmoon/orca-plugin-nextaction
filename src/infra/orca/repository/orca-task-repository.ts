@@ -10,6 +10,7 @@ import {
   type MoveTaskOptions,
   type NewTask,
   type NewTasksPlacement,
+  NotAProjectError,
   type NoteTarget,
   type OutlineBlock,
   TaskFeaturesPausedError,
@@ -26,6 +27,7 @@ import type { MovePlacement } from "../../../domain/blocking/task-move";
 import type { ProjectSetting } from "../../../domain/project/ownership";
 import type {
   Project,
+  ProjectChanges,
   ProjectId,
   ProjectStatus,
 } from "../../../domain/project/project";
@@ -47,7 +49,11 @@ import {
 import {
   blockCandidates,
   customPropertyDefinitions,
+  decodeCustomPropertyValues,
   encodeBlockRefs,
+  type IsBuiltInProperty,
+  isProjectBuiltInProperty,
+  isTaskBuiltInProperty,
   planBlockRefsWrite,
   planCustomChoiceAdditions,
   planCustomPropertyWrite,
@@ -70,7 +76,11 @@ import {
   encodeProjectSetting,
   projectSettingWithout,
 } from "../codec/project-clear";
-import { decodeProject, encodeProjectStatus } from "../codec/project-codec";
+import {
+  decodeProject,
+  encodeProjectChanges,
+  encodeProjectStatus,
+} from "../codec/project-codec";
 import {
   planRecurrenceDiscard,
   planRecurrenceWrite,
@@ -125,6 +135,29 @@ import { myDayOf, taskGraphSnapshot } from "./task-graph-snapshot";
 import { type HierarchyBlock, missingParents } from "./task-hierarchy";
 
 type ReadyTag = Extract<TaskTagState, { kind: "ready" }>;
+
+/**
+ * A tag whose custom properties are read and written (ADR 0023): its block,
+ * which holds the definitions and which a block's values hang off the
+ * reference to, and which of its properties are built in.
+ */
+interface CustomPropertyTag {
+  tagBlockId: number;
+  isBuiltIn: IsBuiltInProperty;
+}
+
+const taskPropertyTag = (state: ReadyTag): CustomPropertyTag => ({
+  tagBlockId: state.tagBlockId,
+  isBuiltIn: isTaskBuiltInProperty,
+});
+
+const projectPropertyTag = (
+  state: Extract<ProjectTagState, { kind: "ready" }>,
+): CustomPropertyTag => ({
+  tagBlockId: state.tagBlockId,
+  isBuiltIn: isProjectBuiltInProperty,
+});
+
 type ChoiceKey = Extract<PropertyKey, "context">;
 
 /** The property each multi-value task field is stored in. */
@@ -505,19 +538,20 @@ export function createOrcaTaskRepository(
   const currentTag = (): TaskTagContext => tagContext(readyTag());
 
   /**
-   * The task tag's custom property definitions as the tag block holds them
-   * now (ADR 0023). Read on every call rather than kept (ADR 0007), so an
-   * edit in Orca shows on the next read; one get-blocks.
+   * A tag's property definitions as the tag block holds them now (ADR
+   * 0023). Read on every call rather than kept (ADR 0007), so an edit in
+   * Orca shows on the next read; one get-blocks.
    */
-  const readTagProperties = async (state: ReadyTag) => {
-    const tag = (await getBlocks([state.tagBlockId])).get(state.tagBlockId);
-    if (!tag) {
-      throw new OrcaError(`the task tag block ${state.tagBlockId} is gone`);
+  const readTagProperties = async (tag: CustomPropertyTag) => {
+    const block = (await getBlocks([tag.tagBlockId])).get(tag.tagBlockId);
+    if (!block) {
+      throw new OrcaError(`the tag block ${tag.tagBlockId} is gone`);
     }
-    return tag.properties;
+    return block.properties;
   };
-  const readDefinitions = async (state: ReadyTag) =>
-    customPropertyDefinitions(await readTagProperties(state));
+  /** A tag's custom property definitions as they are now. */
+  const readDefinitions = async (tag: CustomPropertyTag) =>
+    customPropertyDefinitions(await readTagProperties(tag), tag.isBuiltIn);
 
   /**
    * As `readDefinitions`, for reads: when the tag block cannot be read just
@@ -528,7 +562,7 @@ export function createOrcaTaskRepository(
     state: ReadyTag,
   ): Promise<CustomPropertyDefinition[]> => {
     try {
-      return await readDefinitions(state);
+      return await readDefinitions(taskPropertyTag(state));
     } catch (error) {
       console.warn(
         "[nextaction] the task tag's custom properties cannot be read; tasks read without them",
@@ -536,6 +570,15 @@ export function createOrcaTaskRepository(
       );
       return [];
     }
+  };
+
+  /** The project tag, for writes: paused, the write fails. */
+  const readyProjectTag = () => {
+    const state = projectTagState();
+    if (state.kind !== "ready") {
+      throw new OrcaError(`projects are paused (${state.reason})`);
+    }
+    return state;
   };
 
   /**
@@ -731,6 +774,18 @@ export function createOrcaTaskRepository(
     return decoded.kind === "project"
       ? { block, project: decoded.project }
       : undefined;
+  };
+
+  /**
+   * As `projectBlock`, for writes: the project tag paused fails as
+   * `readyProjectTag` does, and a block that is not a project with
+   * `NotAProjectError`.
+   */
+  const projectBlockToWrite = async (id: ProjectId): Promise<Block> => {
+    readyProjectTag();
+    const read = await projectBlock(id);
+    if (!read) throw new NotAProjectError(id);
+    return read.block;
   };
 
   /**
@@ -1069,13 +1124,13 @@ export function createOrcaTaskRepository(
    * group, one undo.
    */
   const writeBlockRefs = async (
-    state: ReadyTag,
-    id: TaskId,
+    tag: CustomPropertyTag,
+    blockToWrite: () => Promise<Block>,
     name: string,
     targets: readonly number[],
   ) => {
-    const definitions = await readDefinitions(state);
-    const block = await taskBlockToWrite(id, currentTag());
+    const definitions = await readDefinitions(tag);
+    const block = await blockToWrite();
     // Targets are block IDs coming in: mirrors resolve to their sources
     // first, as every block ID does (block-properties-json M3).
     const resolved =
@@ -1085,15 +1140,106 @@ export function createOrcaTaskRepository(
     const plan = planBlockRefsWrite(
       definitions,
       block,
-      state.tagBlockId,
+      tag.tagBlockId,
       name,
       resolved,
     );
     await writeTo(block, () =>
-      runRefDataWrite(block, state.tagBlockId, plan, (ids) =>
+      runRefDataWrite(block, tag.tagBlockId, plan, (ids) =>
         encodeBlockRefs(name, ids),
       ),
     );
+  };
+
+  /**
+   * Adds a page named `text` to the block reference custom property `name`
+   * of the block `blockToWrite` reads, on the reference to `tag`: the page
+   * so named when there is one, else a new one in the property's scope.
+   * Checked before anything is created: a property just deleted or changed
+   * in Orca fails, writing nothing. One group, one undo.
+   */
+  const addBlockRefTarget = async (
+    tag: CustomPropertyTag,
+    blockToWrite: () => Promise<Block>,
+    name: string,
+    text: string,
+  ) => {
+    const definitions = await readDefinitions(tag);
+    const definition = checkCustomPropertyValue(definitions, name, {
+      kind: "blockRefs",
+      value: [],
+    });
+    const scope = definition.kind === "blockRefs" ? definition.scope : null;
+    const block = await blockToWrite();
+    const held = findTaskTagRef(block.refs, tag.tagBlockId)?.data?.find(
+      (d) => d.name === name,
+    )?.value;
+    const current = refDataTargets(block.refs, held);
+    // The name is taken (e.g. a page outside the scope, so not offered):
+    // that page is the one meant, left as it is.
+    const owner = await findAliasOwner(text);
+    await writeTo(block, async () => {
+      const target = owner ?? (await createPage(text, scope));
+      const plan = planBlockRefsWrite(
+        definitions,
+        block,
+        tag.tagBlockId,
+        name,
+        [...current, target],
+      );
+      await runRefDataWrite(block, tag.tagBlockId, plan, (ids) =>
+        encodeBlockRefs(name, ids),
+      );
+    });
+  };
+
+  /**
+   * Writes the custom property `name` of the block `blockToWrite` reads, on
+   * its reference to `tag`; options typed in go into the tag's choices in
+   * the same group. Checked against the definitions as they are now: a
+   * property just deleted or changed in Orca fails, writing nothing.
+   */
+  const writeCustomPropertyOf = async (
+    tag: CustomPropertyTag,
+    blockToWrite: () => Promise<Block>,
+    name: string,
+    value: CustomPropertyValue,
+    now: Date,
+  ) => {
+    if (value.kind === "blockRefs") {
+      await writeBlockRefs(tag, blockToWrite, name, value.value);
+      return;
+    }
+    const tagProperties = await readTagProperties(tag);
+    const item = planCustomPropertyWrite(
+      customPropertyDefinitions(tagProperties, tag.isBuiltIn),
+      name,
+      value,
+      now,
+    );
+    // Options typed in go into the property's choices first, or Orca
+    // stores them without showing them (multi-choices-created).
+    const choiceWrite =
+      value.kind === "single" || value.kind === "multi"
+        ? planCustomChoiceAdditions(tagProperties, name, value, tag.isBuiltIn)
+        : undefined;
+    const block = await blockToWrite();
+    const ref = findTaskTagRef(block.refs, tag.tagBlockId);
+    if (!ref) throw new OrcaError(`block ${block.id} lost its tag`);
+    // setRefData takes the whole reference object and changes only the
+    // items passed (tag-operations, round 1 steps 05–06).
+    await writeTo(block, async () => {
+      // The options first, in the same group: one undo takes back both
+      // (multi-choices-created §3–4).
+      if (choiceWrite) {
+        await invokeEditorCommand(
+          "core.editor.setProperties",
+          [tag.tagBlockId],
+          [choiceWrite],
+        );
+      }
+      await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+    });
   };
 
   /**
@@ -1736,40 +1882,16 @@ export function createOrcaTaskRepository(
     },
 
     async readCustomPropertyDefinitions() {
-      return readDefinitions(readyTag());
+      return readDefinitions(taskPropertyTag(readyTag()));
     },
 
     async addNewBlockRefTarget(id, name, text) {
-      const state = readyTag();
-      const definitions = await readDefinitions(state);
-      // Checked before anything is created: a property just deleted or
-      // changed in Orca fails, writing nothing.
-      const definition = checkCustomPropertyValue(definitions, name, {
-        kind: "blockRefs",
-        value: [],
-      });
-      const scope = definition.kind === "blockRefs" ? definition.scope : null;
-      const block = await taskBlockToWrite(id, currentTag());
-      const held = findTaskTagRef(block.refs, state.tagBlockId)?.data?.find(
-        (d) => d.name === name,
-      )?.value;
-      const current = refDataTargets(block.refs, held);
-      // The name is taken (e.g. a page outside the scope, so not offered):
-      // that page is the one meant, left as it is.
-      const owner = await findAliasOwner(text);
-      await writeTo(block, async () => {
-        const target = owner ?? (await createPage(text, scope));
-        const plan = planBlockRefsWrite(
-          definitions,
-          block,
-          state.tagBlockId,
-          name,
-          [...current, target],
-        );
-        await runRefDataWrite(block, state.tagBlockId, plan, (ids) =>
-          encodeBlockRefs(name, ids),
-        );
-      });
+      await addBlockRefTarget(
+        taskPropertyTag(readyTag()),
+        () => taskBlockToWrite(id, currentTag()),
+        name,
+        text,
+      );
     },
 
     async writeCustomProperty(
@@ -1778,68 +1900,120 @@ export function createOrcaTaskRepository(
       value: CustomPropertyValue,
       now: Date,
     ): Promise<void> {
-      const state = readyTag();
-      if (value.kind === "blockRefs") {
-        await writeBlockRefs(state, id, name, value.value);
-        return;
-      }
-      const tagProperties = await readTagProperties(state);
-      // Checked against the definitions as they are now: a property just
-      // deleted or changed in Orca fails, writing nothing.
-      const item = planCustomPropertyWrite(
-        customPropertyDefinitions(tagProperties),
+      await writeCustomPropertyOf(
+        taskPropertyTag(readyTag()),
+        () => taskBlockToWrite(id, currentTag()),
         name,
         value,
         now,
       );
-      // Options typed in go into the property's choices first, or Orca
-      // stores them without showing them (multi-choices-created).
-      const choiceWrite =
-        value.kind === "single" || value.kind === "multi"
-          ? planCustomChoiceAdditions(tagProperties, name, value)
-          : undefined;
-      const block = await taskBlockToWrite(id, currentTag());
-      const ref = findTaskTagRef(block.refs, state.tagBlockId);
-      if (!ref) throw new OrcaError(`block ${block.id} lost its task tag`);
-      // setRefData takes the whole reference object and changes only the
-      // items passed (tag-operations, round 1 steps 05–06).
-      await writeTo(block, async () => {
-        // The options first, in the same group: one undo takes back both
-        // (multi-choices-created §3–4).
-        if (choiceWrite) {
-          await invokeEditorCommand(
-            "core.editor.setProperties",
-            [state.tagBlockId],
-            [choiceWrite],
-          );
-        }
-        await invokeEditorCommand("core.editor.setRefData", ref, [item]);
-      });
     },
 
     async getProject(id: ProjectId): Promise<Project | null> {
       return (await projectBlock(id))?.project ?? null;
     },
 
+    async getProjectWithCustomProperties(id: ProjectId) {
+      const state = projectTagState();
+      if (state.kind !== "ready") return null;
+      const tag = projectPropertyTag(state);
+      // Read alongside the block. When the tag block cannot be read just
+      // now, no custom properties rather than a failed panel, as for tasks;
+      // writes still check and fail.
+      const definitions = readDefinitions(tag).catch((error: unknown) => {
+        console.warn(
+          "[nextaction] the project tag's custom properties cannot be read; the project reads without them",
+          error,
+        );
+        return [];
+      });
+      const [read, defined] = await Promise.all([
+        projectBlock(id),
+        definitions,
+      ]);
+      if (!read) return null;
+      // Only the reference to the project tag: a block that is also a task
+      // keeps the task tag's values on its own reference (ADR 0023).
+      const values = decodeCustomPropertyValues(
+        findTaskTagRef(read.block.refs, tag.tagBlockId)?.data,
+        defined,
+        read.block.refs,
+      );
+      // Targets that are mirrors read as their sources, as a task's do.
+      const targets = Object.values(values).flatMap((value) =>
+        value.kind === "blockRefs" ? value.value : [],
+      );
+      return {
+        project: read.project,
+        definitions: defined,
+        values:
+          targets.length === 0
+            ? values
+            : resolveBlockRefTargets(
+                values,
+                await getBlocks([...new Set(targets)]),
+              ),
+      };
+    },
+
+    async readProjectCustomPropertyDefinitions() {
+      return readDefinitions(projectPropertyTag(readyProjectTag()));
+    },
+
+    async writeProjectCustomProperty(
+      id: ProjectId,
+      name: string,
+      value: CustomPropertyValue,
+      now: Date,
+    ): Promise<void> {
+      await writeCustomPropertyOf(
+        projectPropertyTag(readyProjectTag()),
+        () => projectBlockToWrite(id),
+        name,
+        value,
+        now,
+      );
+    },
+
+    async addNewProjectBlockRefTarget(id, name, text) {
+      await addBlockRefTarget(
+        projectPropertyTag(readyProjectTag()),
+        () => projectBlockToWrite(id),
+        name,
+        text,
+      );
+    },
+
     async updateProjectStatus(
       id: ProjectId,
       status: ProjectStatus,
     ): Promise<void> {
-      const state = projectTagState();
-      if (state.kind !== "ready") {
-        throw new OrcaError(`projects are paused (${state.reason})`);
-      }
+      const state = readyProjectTag();
       // Encoded first: an invalidated project status fails before any read.
       const item = encodeProjectStatus(status, state);
-      const read = await projectBlock(id);
-      if (!read) throw new OrcaError(`block ${id} is not a project`);
-      const ref = findTaskTagRef(read.block.refs, state.tagBlockId);
+      const block = await projectBlockToWrite(id);
+      const ref = findTaskTagRef(block.refs, state.tagBlockId);
       if (!ref) throw new OrcaError(`block ${id} lost its project tag`);
       // As a task status: setRefData on the reference to the project tag
       // changes only the item passed, in one group, one undo; the task tag's
       // reference on a block with both is left as it is (project-tag).
-      await writeTo(read.block, async () => {
+      await writeTo(block, async () => {
         await invokeEditorCommand("core.editor.setRefData", ref, [item]);
+      });
+    },
+
+    async updateProject(id: ProjectId, changes: ProjectChanges): Promise<void> {
+      const state = readyProjectTag();
+      // Encoded first: an invalidated property fails before any read.
+      const items = encodeProjectChanges(changes, state);
+      if (items.length === 0) return;
+      const block = await projectBlockToWrite(id);
+      const ref = findTaskTagRef(block.refs, state.tagBlockId);
+      if (!ref) throw new OrcaError(`block ${id} lost its project tag`);
+      // As updateProjectStatus: only the items passed change, on the
+      // reference to the project tag, in one group, one undo.
+      await writeTo(block, async () => {
+        await invokeEditorCommand("core.editor.setRefData", ref, items);
       });
     },
 

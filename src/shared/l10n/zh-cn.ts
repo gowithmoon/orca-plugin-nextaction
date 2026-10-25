@@ -619,6 +619,12 @@ const zhCN: Record<string, string> = {
     "无法打开项目操作菜单：${reason}",
   "Nothing changed: the block is no longer a project.":
     "没有修改：这个块已经不是项目了。",
+  // The project panel (#232).
+  "Open project panel": "打开项目属性面板",
+  "Project panel": "项目属性面板",
+  "Project status": "项目状态",
+  "What counts as done": "怎样算做完",
+  "This block is no longer a project": "这个块已不是项目",
   // Drop project (#150).
   "Drop project": "放弃项目",
   'Drop project "${name}"? Its ${count} open tasks will be dropped too; done tasks are kept. You can undo it.':

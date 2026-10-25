@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
-import { NotAProjectError } from "./change-project-status";
+import { NotAProjectError } from "../ports/task-repository";
 import { createDropProject, createReadDropProjectPlan } from "./drop-project";
 
 describe("drop project", () => {

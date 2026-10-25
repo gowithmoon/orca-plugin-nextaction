@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
-import {
-  createChangeProjectStatus,
-  NotAProjectError,
-} from "./change-project-status";
+import { NotAProjectError } from "../ports/task-repository";
+import { createChangeProjectStatus } from "./change-project-status";
 
 describe("change project status", () => {
   it("writes the chosen project status, in one write", async () => {
@@ -30,6 +28,18 @@ describe("change project status", () => {
     }
     expect(repository.writeCount()).toBe(0);
     expect((await repository.getTask(21))?.status).toBe("todo");
+  });
+
+  it("fails as paused, not as not a project, while the project tag is paused", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addProject({ id: 10, status: "planning" });
+    repository.pauseProjectTag(true);
+    const changeProjectStatus = createChangeProjectStatus({ repository });
+
+    const failure = changeProjectStatus(10, "active").catch((error) => error);
+    expect(await failure).not.toBeInstanceOf(NotAProjectError);
+    expect(String(await failure)).toContain("paused");
+    expect(repository.writeCount()).toBe(0);
   });
 
   it("writes it again when the project already holds it, repairing an unknown one", async () => {
