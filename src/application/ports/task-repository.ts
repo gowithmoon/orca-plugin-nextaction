@@ -391,6 +391,22 @@ export interface TaskRepository {
   ): Promise<TaskId>;
 
   /**
+   * Creates an inbox task with `text`, as plain text, as the last child
+   * block of project `project`'s block (#239), page or block alike, with the
+   * `initial` properties given but no 所属项目: the block it is put below
+   * decides it (GLOSSARY: 快速捕获). A project block that is also a task makes
+   * it a subtask of that task. The user undoes it, properties included, with
+   * one undo; a failed write leaves no task. Fails with `NotAProjectError`,
+   * writing nothing, when `project` is not a project (the project tag paused
+   * included). Returns the new task's ID.
+   */
+  appendTaskToProject(
+    project: ProjectId,
+    text: string,
+    initial?: Omit<InitialProperties, "project">,
+  ): Promise<TaskId>;
+
+  /**
    * Creates `tasks` in their order at `placement` (#202), each as plain text
    * with its status and initial properties, and applies `also` (writes to
    * existing tasks, as `updateTasks` does) in the same undo: the user undoes

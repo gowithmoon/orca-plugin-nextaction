@@ -8,6 +8,7 @@ import {
   type ChoiceProperty,
   type CompletionHistoryRead,
   type ConvertToTaskResult,
+  type InitialProperties,
   type JournalSummaryPart,
   type MoveTaskOptions,
   NotAProjectError,
@@ -362,6 +363,44 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
     const block = blocks.get(id);
     if (!block?.task) throw new Error(`block ${id} is not a task`);
     return block as StoredBlock & { task: Task };
+  };
+
+  /**
+   * Stores a new inbox task with `text` and the `initial` properties as the
+   * last child block of block `parentId`: after every block below it, as
+   * Orca's lastChild puts it. One write.
+   */
+  const appendLastChild = (
+    parentId: number,
+    text: string,
+    initial: Omit<InitialProperties, "project">,
+  ): TaskId => {
+    const below = [...blocks.entries()].filter(
+      ([id]) => id === parentId || isBelow(id, parentId),
+    );
+    const last = Math.max(...below.map(([, block]) => block.position));
+    const id = nextId++;
+    write(() => {
+      for (const block of blocks.values()) {
+        if (block.position > last) block.position += 1;
+      }
+      const created = new Date();
+      store(id, {
+        text,
+        created,
+        parentId,
+        position: last + 1,
+        notConvertible: undefined,
+        // Properties not given keep the defaults, as Orca fills them.
+        task: { ...freshTask(id, text, created), ...initial },
+        completionHistory: undefined,
+        myDay: undefined,
+        page: false,
+        tags: [],
+        project: undefined,
+      });
+    });
+    return id;
   };
 
   /**
@@ -1216,35 +1255,16 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       });
     },
 
+    async appendTaskToProject(project, text, initial = {}) {
+      if (!blocks.get(project)?.project || projectTagPaused) {
+        throw new NotAProjectError(project);
+      }
+      return appendLastChild(project, text, initial);
+    },
+
     async appendSubtask(parentId, text, initial = {}) {
       taskToWrite(parentId);
-      // After the parent's last block below it, as Orca's lastChild puts it.
-      const below = [...blocks.entries()].filter(
-        ([id]) => id === parentId || isBelow(id, parentId),
-      );
-      const last = Math.max(...below.map(([, block]) => block.position));
-      const id = nextId++;
-      write(() => {
-        for (const block of blocks.values()) {
-          if (block.position > last) block.position += 1;
-        }
-        const created = new Date();
-        store(id, {
-          text,
-          created,
-          parentId,
-          position: last + 1,
-          notConvertible: undefined,
-          // Properties not given keep the defaults, as Orca fills them.
-          task: { ...freshTask(id, text, created), ...initial },
-          completionHistory: undefined,
-          myDay: undefined,
-          page: false,
-          tags: [],
-          project: undefined,
-        });
-      });
-      return id;
+      return appendLastChild(parentId, text, initial);
     },
 
     async appendSummaryToJournal(title, parts, now) {

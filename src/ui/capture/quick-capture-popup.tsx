@@ -6,8 +6,12 @@
 // projects step opens it with its 所属项目 filled in (#162), for that opening.
 // The task menu's "Create subtask" (#190) opens the same window for a parent
 // task: titled so, the parent named under the title, and 所属项目 read only, as
-// the parent decides it (GLOSSARY: 所属项目). Verified by hand in Orca
-// (docs/ARCHITECTURE.md §5).
+// the parent decides it (GLOSSARY: 所属项目). Opened for a project (the
+// project details, the review's projects step), it has a 位置 above 所属项目
+// (#239): the end of the project, every opening's default, or today's
+// journal. At the end of the project 所属项目 shows the project read only,
+// "from its location"; the draft's own 所属项目 is kept for today's journal.
+// Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
 import type {
@@ -15,8 +19,10 @@ import type {
   ReadSubtaskProject,
 } from "../../application/usecases/create-subtask";
 import type { QuickCapture } from "../../application/usecases/quick-capture";
+import type { QuickCaptureInProject } from "../../application/usecases/quick-capture-in-project";
 import {
   matchingProjectCandidates,
+  type ProjectCandidate,
   type ReadProjectCandidates,
 } from "../../application/usecases/read-project-candidates";
 import type { ProjectId } from "../../domain/project/project";
@@ -25,6 +31,7 @@ import {
   defaultRating,
   type Rating,
   type Task,
+  type TaskId,
 } from "../../domain/task/task";
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
@@ -93,21 +100,11 @@ const captureTextStyle: React.CSSProperties = {
  */
 function ProjectChoice(props: {
   value: ProjectId | null;
-  /** Filled in on opening: offered even when done (#162). */
-  filledIn: ProjectId | null;
-  readProjectCandidates: ReadProjectCandidates;
-  pluginName: string;
+  /** Read by the window, the filled-in project offered even when done (#162). */
+  candidates: readonly ProjectCandidate[];
   onChange: (project: ProjectId | null) => void;
 }) {
-  const notify = React.useMemo(
-    () => createNotify(props.pluginName),
-    [props.pluginName],
-  );
-  const candidates = useProjectCandidates(
-    props.readProjectCandidates,
-    notify,
-    props.filledIn,
-  );
+  const { candidates } = props;
   const options: SelectOption[] = candidates.map((candidate) => ({
     value: String(candidate.id),
     label: shownText(candidate).text,
@@ -142,6 +139,93 @@ function ProjectChoice(props: {
 }
 
 /**
+ * A 所属项目 shown read only: the status icon, the name and where it comes
+ * from, as the task panel shows one decided for the task.
+ */
+function ReadOnlyProject(props: {
+  labelId: string;
+  /**
+   * `loading`: not read yet, the row kept blank so the window does not jump;
+   * `gone`: the block is no longer a project.
+   */
+  project: Pick<ProjectCandidate, "text" | "status"> | "loading" | "gone";
+  source: string;
+}) {
+  const { project } = props;
+  const icon =
+    typeof project === "object" && projectStatusIcons[project.status];
+  const text =
+    typeof project === "object"
+      ? shownText(project)
+      : {
+          text: project === "gone" ? t("(No longer a project)") : "",
+          empty: true,
+        };
+  return (
+    <Field label={t("Project")} labelId={props.labelId}>
+      <span className="nextaction-capture-project">
+        {icon && (
+          <i
+            className={icon.className}
+            style={{ color: icon.color }}
+            aria-hidden="true"
+          />
+        )}
+        <span data-empty={text.empty || undefined}>{text.text}</span>
+        <span className="nextaction-capture-project-source">
+          {props.source}
+        </span>
+      </span>
+    </Field>
+  );
+}
+
+/** Where a capture opened for a project puts the new task (#239). */
+type Location = "project" | "journal";
+
+const locations: readonly Location[] = ["project", "journal"];
+
+const locationChoices: Record<
+  Location,
+  { readonly icon: string; readonly label: () => string }
+> = {
+  project: { icon: "ti ti-folder", label: () => t("End of project") },
+  journal: { icon: "ti ti-calendar", label: () => t("Today's journal") },
+};
+
+/** The 位置 switch: two segments in the layout switch's look. */
+function LocationSwitch(props: {
+  labelId: string;
+  value: Location;
+  onChange: (location: Location) => void;
+}) {
+  const { Segmented } = orca.components;
+  return (
+    <Field label={t("Location")} labelId={props.labelId}>
+      <Segmented
+        role="group"
+        aria-labelledby={props.labelId}
+        className="nextaction-layout-switch nextaction-capture-location"
+        selected={props.value}
+        options={locations.map((value) => ({
+          value,
+          jsx: (
+            <span className="nextaction-layout-icon nextaction-capture-location-option">
+              <i className={locationChoices[value].icon} aria-hidden="true" />
+              {locationChoices[value].label()}
+            </span>
+          ),
+        }))}
+        onChange={(value) => {
+          const chosen = locations.find((l) => l === value);
+          if (chosen) props.onChange(chosen);
+        }}
+      />
+    </Field>
+  );
+}
+
+/**
  * A new subtask's 所属项目, read only: the parent task's (#190). Nothing
  * shows when there is none.
  */
@@ -161,22 +245,12 @@ function SubtaskProject(props: {
     notify,
   );
   if (!project) return null;
-  const icon = projectStatusIcons[project.status];
-  const text = shownText(project);
   return (
-    <Field label={t("Project")} labelId={props.labelId}>
-      <span className="nextaction-capture-project">
-        <i
-          className={icon.className}
-          style={{ color: icon.color }}
-          aria-hidden="true"
-        />
-        <span data-empty={text.empty || undefined}>{text.text}</span>
-        <span className="nextaction-capture-project-source">
-          {t("· From parent task")}
-        </span>
-      </span>
-    </Field>
+    <ReadOnlyProject
+      labelId={props.labelId}
+      project={project}
+      source={t("· From parent task")}
+    />
   );
 }
 
@@ -187,6 +261,11 @@ type CaptureKind =
       quickCapture: QuickCapture;
       /** The 所属项目 filled in on opening; it can be changed or cleared. */
       project: ProjectId | null;
+      /**
+       * Present when opened for `project` (#239): the new task can go at its
+       * end. Absent for the command, a project picked in the window or not.
+       */
+      quickCaptureInProject?: QuickCaptureInProject;
     }
   | {
       kind: "subtask";
@@ -194,6 +273,31 @@ type CaptureKind =
       readSubtaskProject: ReadSubtaskProject;
       parent: Task;
     };
+
+/** Where the new task goes, from what the window is for and its 位置. */
+type Destination =
+  | { kind: "subtask"; parent: TaskId; create: CreateSubtask }
+  | { kind: "projectEnd"; id: ProjectId; capture: QuickCaptureInProject }
+  | { kind: "journal"; capture: QuickCapture };
+
+/** What the window says of each destination: the footer hint and the notice. */
+const destinationTexts: Record<
+  Destination["kind"],
+  { readonly hint: () => string; readonly created: () => string }
+> = {
+  subtask: {
+    hint: () => t("Goes below the parent task, into the inbox"),
+    created: () => t("Subtask created"),
+  },
+  projectEnd: {
+    hint: () => t("Goes to the end of the project, into the inbox"),
+    created: () => t("Task created and added to the project"),
+  },
+  journal: {
+    hint: () => t("Goes to today's journal, into the inbox"),
+    created: () => t("Task created and added to today's journal"),
+  },
+};
 
 function QuickCapturePopup(props: {
   what: CaptureKind;
@@ -212,24 +316,50 @@ function QuickCapturePopup(props: {
     ...emptyDraft,
     project: what.kind === "capture" ? what.project : null,
   }));
+  // Opened for a project: its end on every opening, never remembered.
+  const forProject =
+    what.kind === "capture" &&
+    what.quickCaptureInProject &&
+    what.project !== null
+      ? { id: what.project, capture: what.quickCaptureInProject }
+      : null;
+  const [location, setLocation] = React.useState<Location>("project");
+  const destination: Destination =
+    what.kind === "subtask"
+      ? { kind: "subtask", parent: what.parent.id, create: what.createSubtask }
+      : forProject && location === "project"
+        ? { kind: "projectEnd", ...forProject }
+        : { kind: "journal", capture: what.quickCapture };
+  const notify = React.useMemo(
+    () => createNotify(props.pluginName),
+    [props.pluginName],
+  );
+  // Read once for the window: offered as 所属项目, and naming the project
+  // shown read only at its end.
+  const candidates = useProjectCandidates(
+    props.readProjectCandidates,
+    notify,
+    what.kind === "capture" ? what.project : null,
+  );
   // Into the text on opening, back where it was (e.g. the editor) on closing.
   const input = React.useRef<HTMLInputElement>(null);
   const run = React.useCallback(
     (text: string, initial: InitialProperties) => {
-      if (what.kind === "capture") return what.quickCapture(text, initial);
-      // The parent decides a subtask's project: none is passed.
+      // The parent, or the project block, decides the project: none is passed.
       const { project: _none, ...rest } = initial;
-      return what.createSubtask(what.parent.id, text, rest);
+      switch (destination.kind) {
+        case "subtask":
+          return destination.create(destination.parent, text, rest);
+        case "projectEnd":
+          return destination.capture(destination.id, text, rest);
+        case "journal":
+          return destination.capture(text, initial);
+      }
     },
-    [what],
+    [destination],
   );
-  const capture = useQuickCapture(
-    run,
-    props.pluginName,
-    what.kind === "capture"
-      ? t("Task created and added to today's journal")
-      : t("Subtask created"),
-  );
+  const texts = destinationTexts[destination.kind];
+  const capture = useQuickCapture(run, props.pluginName, texts.created());
   const today = props.today();
   const blank = text.trim() === "";
 
@@ -326,13 +456,30 @@ function QuickCapturePopup(props: {
                 onChange={set("due")}
               />
             </Field>
-            {what.kind === "capture" ? (
+            {forProject && (
+              <LocationSwitch
+                labelId={id("location")}
+                value={location}
+                onChange={setLocation}
+              />
+            )}
+            {destination.kind === "projectEnd" ? (
+              // Shown from the start, so the window does not jump once read.
+              <ReadOnlyProject
+                labelId={id("project")}
+                project={
+                  candidates === undefined
+                    ? "loading"
+                    : (candidates.find((c) => c.id === destination.id) ??
+                      "gone")
+                }
+                source={t("· From its location")}
+              />
+            ) : what.kind === "capture" ? (
               <Field label={t("Project")} labelId={id("project")}>
                 <ProjectChoice
                   value={draft.project}
-                  filledIn={what.project}
-                  readProjectCandidates={props.readProjectCandidates}
-                  pluginName={props.pluginName}
+                  candidates={candidates ?? []}
                   onChange={set("project")}
                 />
               </Field>
@@ -350,9 +497,7 @@ function QuickCapturePopup(props: {
       <WindowFooter>
         <span className="nextaction-capture-hint">
           <i className="ti ti-inbox" aria-hidden="true" />
-          {what.kind === "capture"
-            ? t("Goes to today's journal, into the inbox")
-            : t("Goes below the parent task, into the inbox")}
+          {texts.hint()}
         </span>
         <Button variant="plain" onClick={props.onClose}>
           {t("Cancel")}
@@ -366,11 +511,13 @@ function QuickCapturePopup(props: {
 }
 
 /**
- * Opens the quick capture popup ("Create task") in `render`'s root, its
- * 所属项目 filled in with `project` when given (#162). At most one popup at a
- * time; opening it while it is open does nothing. A filled-in project that is
- * no longer a project when the task is created is left out, as the use case
- * does for any 所属项目.
+ * Opens the quick capture popup ("Create task") in `render`'s root. With
+ * `project` it is opened for that project: 位置 offers its end, the default,
+ * or today's journal with 所属项目 filled in (#162, #239). At most one popup
+ * at a time; opening it while it is open does nothing. At the end of a
+ * project that is no longer one nothing is written and the window stays; in
+ * today's journal a filled-in project that is no longer one is left out, as
+ * the use case does for any 所属项目.
  */
 export type OpenQuickCapture = (project?: ProjectId) => void;
 
@@ -387,6 +534,7 @@ export type OpenCreateSubtask = (parent: Task) => void;
 export function createQuickCaptureCommand(
   deps: {
     quickCapture: QuickCapture;
+    quickCaptureInProject: QuickCaptureInProject;
     createSubtask: CreateSubtask;
     readSubtaskProject: ReadSubtaskProject;
     /** The projects offered as 所属项目, as in the task panel. */
@@ -423,6 +571,9 @@ export function createQuickCaptureCommand(
         kind: "capture",
         quickCapture: deps.quickCapture,
         project: project ?? null,
+        ...(project !== undefined && {
+          quickCaptureInProject: deps.quickCaptureInProject,
+        }),
       }),
     openCreateSubtask: (parent) =>
       show({
