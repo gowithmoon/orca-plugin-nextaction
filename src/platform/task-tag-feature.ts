@@ -7,6 +7,7 @@ import {
   createReadSubtaskProject,
 } from "../application/usecases/create-subtask";
 import { createQuickCapture } from "../application/usecases/quick-capture";
+import { createQuickCaptureInProject } from "../application/usecases/quick-capture-in-project";
 import { createReadProjectCandidates } from "../application/usecases/read-project-candidates";
 import type { CalendarDate } from "../domain/task/task";
 import { noteLanguageFor } from "../infra/orca/codec/names";
@@ -191,6 +192,7 @@ export function createTaskTagFeature(
     const { openQuickCapture, openCreateSubtask } = createQuickCaptureCommand(
       {
         quickCapture: createQuickCapture({ repository, clock: systemClock }),
+        quickCaptureInProject: createQuickCaptureInProject({ repository }),
         createSubtask: createCreateSubtask({ repository }),
         readSubtaskProject: createReadSubtaskProject({ repository }),
         readProjectCandidates: createReadProjectCandidates({ repository }),
