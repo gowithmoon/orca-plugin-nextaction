@@ -4,9 +4,11 @@
 
 import type { ProjectId } from "../../domain/project/project";
 import type { TaskId } from "../../domain/task/task";
-import type {
-  InitialProperties,
-  TaskRepository,
+import {
+  type InitialProperties,
+  NotAProjectError,
+  TaskFeaturesPausedError,
+  type TaskRepository,
 } from "../ports/task-repository";
 
 /**
@@ -26,9 +28,10 @@ export type ProjectTaskProperties = Omit<InitialProperties, "project">;
  * project `projectId`'s block, with the `initial` properties given, in one
  * undo; blank text writes nothing, properties or not. It belongs to the
  * project by where it is, with no 所属项目 setting of its own. A block that is
- * no longer a project (dropped, project tag removed, deleted, the project tag
- * paused) gets nothing: `projectGone`, for `ui` to say so; never the journal
- * instead. Errors are thrown as they are, for `ui` to report; a failed write
+ * no longer a project (dropped, project tag removed, deleted) gets nothing:
+ * `projectGone`, for `ui` to say so; never the journal instead. While the
+ * project tag is paused nothing is written either: `TaskFeaturesPausedError`,
+ * told as any paused write. Errors are thrown as they are, for `ui` to report; a failed write
  * leaves no task.
  */
 export type QuickCaptureInProject = (
@@ -43,17 +46,28 @@ export function createQuickCaptureInProject(deps: {
   return async (projectId, text, initial) => {
     const trimmed = text.trim();
     if (trimmed === "") return { kind: "empty" };
+    const { projects = [], projectsPaused } =
+      await deps.repository.readTaskGraph();
+    // Paused, every project reads as gone: told as paused instead.
+    if (projectsPaused) {
+      throw new TaskFeaturesPausedError("projects are paused");
+    }
     // Dropped, its project tag removed, or its block deleted while the window
-    // was open; the project tag paused reads as no projects at all.
-    const { projects = [] } = await deps.repository.readTaskGraph();
+    // was open.
     if (!projects.some((item) => item.project.id === projectId)) {
       return { kind: "projectGone" };
     }
-    const id = await deps.repository.appendTaskToProject(
-      projectId,
-      trimmed,
-      initial,
-    );
-    return { kind: "captured", id };
+    try {
+      const id = await deps.repository.appendTaskToProject(
+        projectId,
+        trimmed,
+        initial,
+      );
+      return { kind: "captured", id };
+    } catch (error) {
+      // Gone between the check and the write: told as gone all the same.
+      if (error instanceof NotAProjectError) return { kind: "projectGone" };
+      throw error;
+    }
   };
 }
