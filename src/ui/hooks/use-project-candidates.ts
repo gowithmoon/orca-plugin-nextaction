@@ -15,19 +15,19 @@ import type { Notify } from "../notify";
 import { createLatestRead } from "./latest-read";
 
 /**
- * The candidates, empty until the read ends. A failed read is told once and
- * leaves none offered; the task can still be captured without a project.
- * While task features are paused the capture itself says so.
+ * The candidates, `undefined` until the read ends. A failed read is told
+ * once and leaves none offered; the task can still be captured without a
+ * project. While task features are paused the capture itself says so.
  */
 export function useProjectCandidates(
   readProjectCandidates: ReadProjectCandidates,
   notify: Notify,
   /** The 所属项目 filled in on opening, offered even when done. */
   filledIn: ProjectId | null,
-): readonly ProjectCandidate[] {
+): readonly ProjectCandidate[] | undefined {
   const [candidates, setCandidates] = React.useState<
-    readonly ProjectCandidate[]
-  >([]);
+    readonly ProjectCandidate[] | undefined
+  >(undefined);
   const report = React.useRef(notify);
   report.current = notify;
 
@@ -37,6 +37,7 @@ export function useProjectCandidates(
       (outcome) => {
         if (outcome.kind === "loaded") setCandidates(outcome.data);
         else if (outcome.kind === "failed") {
+          setCandidates([]);
           report.current(
             "error",
             t("Could not read the projects: ${reason}", {
