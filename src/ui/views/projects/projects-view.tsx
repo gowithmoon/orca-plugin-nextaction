@@ -625,8 +625,9 @@ function DetailsGantt(props: {
 
 /**
  * The project details' toolbar and tree (#157): the all tasks view's search
- * box, sort, "collapse all" and filter, then the shared tree and done
- * section over the scoped read, with the details' own stores.
+ * box, sort, "collapse all" and filter, "Create task" as the board's (#238),
+ * then the shared tree and done section over the scoped read, with the
+ * details' own stores.
  */
 function DetailsTree(props: {
   read: Extract<ProjectScopeRead, { kind: "project" }>;
@@ -683,7 +684,7 @@ function DetailsTree(props: {
     // No project rows in a scope: nothing to expand for the filter.
     projectsExpanded: filtering,
   };
-  const { Button } = orca.components;
+  const { Button, Tooltip } = orca.components;
   const empty = nodes.length === 0 && done.count === 0;
   return (
     <>
@@ -705,6 +706,16 @@ function DetailsTree(props: {
             candidates={candidates}
             onChange={stores.filter.set}
           />
+          <Tooltip text={t("Create task")}>
+            <Button
+              variant="plain"
+              className="nextaction-toolbar-button"
+              aria-label={t("Create task")}
+              onClick={() => deps.openQuickCapture(read.project.project.id)}
+            >
+              <i className="ti ti-circle-plus" aria-hidden="true" />
+            </Button>
+          </Tooltip>
         </div>
       </div>
       {filtering && empty ? (
