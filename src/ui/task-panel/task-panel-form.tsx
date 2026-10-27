@@ -522,7 +522,6 @@ export function TaskPanelForm(props: TaskPanelFormProps) {
                 taskActions.openBlockInNotes(projectId);
                 props.onOpenedInNotes?.();
               }}
-              onSelectTask={props.onSelectTask}
             />
           )
         }

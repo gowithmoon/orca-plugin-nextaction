@@ -565,34 +565,15 @@ button.nextaction-block-ref-target:hover {
 }
 
 .nextaction-project-of-task-source {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
   color: var(--orca-color-text-2);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 /* The project name takes only its own width, so the source follows it. */
 .nextaction-block-ref:has(.nextaction-project-of-task-source)
   .nextaction-block-ref-target {
   flex: 0 1 auto;
-}
-
-.nextaction-project-of-task-parent {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: var(--orca-color-primary-5);
-  cursor: pointer;
-}
-
-.nextaction-project-of-task-parent:hover {
-  text-decoration: underline;
-}
-
-.nextaction-project-of-task-parent[data-empty] {
-  font-style: italic;
 }
 
 .nextaction-task-panel-footer {

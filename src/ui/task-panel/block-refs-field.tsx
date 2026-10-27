@@ -118,9 +118,19 @@ export function BlockRefsField(props: {
   >;
   filterPlaceholder: string;
   placeholder: string;
+  /**
+   * A block shown inside the search in place of the placeholder (e.g. a
+   * value that comes from elsewhere); not among `options`.
+   */
+  shown?: {
+    readonly id: number;
+    readonly text: string;
+    readonly before?: React.ReactElement;
+  };
   /** A block was picked from the search. */
   onPick: (id: number) => void;
 }) {
+  const { shown } = props;
   return (
     <div className="nextaction-block-refs-field">
       <BlockRefsList
@@ -134,7 +144,10 @@ export function BlockRefsField(props: {
       {props.below}
       {props.searchable !== false && (
         <Select
-          selected={[]}
+          // Not among the options, so `formatter` gives its text.
+          selected={shown ? [String(shown.id)] : []}
+          formatter={shown ? () => shown.text : undefined}
+          pre={shown?.before}
           options={props.options}
           filter={true}
           filterFunction={props.filterFunction}

@@ -1,9 +1,9 @@
 // The task panel's 所属项目 (#146, GLOSSARY: 所属项目, ADR 0025): the project
 // the task belongs to and where that comes from, in the shared block
 // reference field (#115), one value only. Decided by a parent task: read
-// only, the parent task named and clickable. Decided by its location: a
-// project can be set, which then counts. Its own or none: searched, picked
-// and cleared. The task's own setting that does not count is struck through,
+// only, "from parent task". Decided by its location: shown in the search, a
+// project can be picked there, which then counts. Its own or none: searched,
+// picked and cleared. The task's own setting that does not count is struck through,
 // "not in effect" (overridden) or "stale" (no longer a project), and can be
 // removed. Every set, change or clear is one write, so one undo; it replaces
 // whatever the task held, a stale setting too (ADR 0016). While the project
@@ -18,7 +18,6 @@ import type {
   ProjectShown,
 } from "../../application/usecases/read-project-of-task";
 import type { ProjectId } from "../../domain/project/project";
-import type { TaskId } from "../../domain/task/task";
 import type { SelectOption } from "../../orca.d.ts";
 import { t } from "../../shared/l10n/l10n";
 import { shownText } from "../components/format";
@@ -49,38 +48,26 @@ export function ProjectOfTaskField(props: {
   onChange: (project: ProjectId | null) => void;
   /** Opens the project in the notes. */
   onOpenProject: (projectId: ProjectId) => void;
-  /** Switches the task panel to task `taskId`. */
-  onSelectTask: (taskId: TaskId) => void;
 }) {
   const { read, candidates } = props;
   const { project, source, ownSetting } = read;
   const items: BlockRefsFieldItem[] = [];
-  if (project && source) {
+  // Decided by its location: shown in the search itself, picking another
+  // setting one of its own.
+  const fromLocation = project && source?.kind === "location" ? project : null;
+  if (project && source && source.kind !== "location") {
     items.push({
       id: project.id,
       key: "decided",
       text: project.text,
       before: <StatusIconOf project={project} />,
       after:
-        source.kind === "location" ? (
+        source.kind === "parentTask" ? (
           <span className="nextaction-project-of-task-source">
-            {t("· From its location")}
-          </span>
-        ) : source.kind === "parentTask" ? (
-          <span className="nextaction-project-of-task-source">
-            {t("· From parent task")}{" "}
-            <button
-              type="button"
-              className="nextaction-project-of-task-parent"
-              data-empty={shownText(source.task).empty || undefined}
-              onClick={() => props.onSelectTask(source.task.id)}
-            >
-              {shownText(source.task).text}
-            </button>
+            {t("· From parent task")}
           </span>
         ) : undefined,
-      // Only its own setting is removed here; a location is changed by
-      // setting one, a parent task's is read only.
+      // Only its own setting is removed here; a parent task's is read only.
       removable: source.kind === "own",
     });
   }
@@ -144,6 +131,15 @@ export function ProjectOfTaskField(props: {
       filterPlaceholder={t("Search projects")}
       placeholder={
         source?.kind === "own" ? t("Change project") : t("Set a project")
+      }
+      shown={
+        fromLocation
+          ? {
+              id: fromLocation.id,
+              text: `${shownText(fromLocation).text} ${t("· From its location")}`,
+              before: <StatusIconOf project={fromLocation} />,
+            }
+          : undefined
       }
       onPick={(picked) => props.onChange(picked)}
     />
