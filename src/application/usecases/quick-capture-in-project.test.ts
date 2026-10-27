@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryTaskRepository } from "../../../tests/in-memory-task-repository";
+import {
+  NotAProjectError,
+  TaskFeaturesPausedError,
+} from "../ports/task-repository";
 import { createDropProject } from "./drop-project";
 import { createQuickCaptureInProject } from "./quick-capture-in-project";
 import { createReadProjectOfTask } from "./read-project-of-task";
@@ -85,14 +89,25 @@ describe("quick capture in a project", () => {
     expect(repository.writeCount()).toBe(0);
   });
 
-  it("writes nothing and says the project is gone while the project tag is paused", async () => {
+  it("says the project is gone when it stops being one between the check and the write", async () => {
     const { repository, quickCaptureInProject } = setup();
     repository.addProject({ id: 10, text: "Move house" });
-    repository.pauseProjectTag(true);
+    repository.failWrites(new NotAProjectError(10));
 
     expect(await quickCaptureInProject(10, "Pack the books")).toEqual({
       kind: "projectGone",
     });
+    expect(repository.writeCount()).toBe(0);
+  });
+
+  it("writes nothing and fails as paused while the project tag is paused", async () => {
+    const { repository, quickCaptureInProject } = setup();
+    repository.addProject({ id: 10, text: "Move house" });
+    repository.pauseProjectTag(true);
+
+    await expect(
+      quickCaptureInProject(10, "Pack the books"),
+    ).rejects.toBeInstanceOf(TaskFeaturesPausedError);
     expect(repository.writeCount()).toBe(0);
   });
 
