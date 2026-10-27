@@ -70,6 +70,14 @@ const zhCN: Record<string, string> = {
   Cancel: "取消",
   Create: "创建",
   "Task created and added to today's journal": "任务创建成功，已加入今日日记",
+  // The window opened for a project (#239).
+  Location: "位置",
+  "End of project": "项目末尾",
+  "Today's journal": "今日日记",
+  "Goes to the end of the project, into the inbox": "放到项目末尾，进入收集箱",
+  "Task created and added to the project": "任务已创建，已添加到项目",
+  "The project no longer exists, so the task was not created.":
+    "项目已不存在，任务没有创建",
   "Task features are paused, so the task was not created. See the plugin's earlier notice or its task tag setting.":
     "任务功能暂不可用，任务没有创建。请查看插件任务标签设置是否有问题。",
   "Could not create the task: ${reason}": "无法创建任务：${reason}",

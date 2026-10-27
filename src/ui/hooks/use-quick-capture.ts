@@ -1,5 +1,6 @@
-// Runs the capture window's use case, quick capture or a new subtask (#190),
-// and tells the user what happened. Verified by hand in Orca
+// Runs the capture window's use case, quick capture (in today's journal or at
+// the end of a project, #239) or a new subtask (#190), and tells the user
+// what happened. Verified by hand in Orca
 // (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { InitialProperties } from "../../application/ports/task-repository";
@@ -37,6 +38,15 @@ export function useQuickCapture(
       try {
         const result = await capture(text, initial);
         if (result.kind === "empty") return "empty";
+        // At the end of a project that is no longer one (#239): nothing was
+        // written; the window stays for the user to pick today's journal.
+        if (result.kind === "projectGone") {
+          notify(
+            "warn",
+            t("The project no longer exists, so the task was not created."),
+          );
+          return "failed";
+        }
         notify("success", created);
         return "captured";
       } catch (error) {

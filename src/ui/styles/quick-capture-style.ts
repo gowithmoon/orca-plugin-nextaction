@@ -52,7 +52,19 @@ export const quickCaptureCss = `
   font-size: var(--orca-fontsize-xs);
 }
 
-/* "Create subtask" (#190): the 所属项目, read only, the parent task's. */
+/*
+ * 位置 (#239): the layout switch's segments (project-board-style.ts), an icon
+ * and a word in each.
+ */
+.nextaction-capture-location-option {
+  gap: var(--orca-spacing-xs);
+  font-size: var(--orca-fontsize-sm);
+}
+
+/*
+ * "Create subtask" (#190) and the end of a project (#239): the 所属项目, read
+ * only, with where it comes from.
+ */
 .nextaction-capture-project {
   display: inline-flex;
   align-items: center;
