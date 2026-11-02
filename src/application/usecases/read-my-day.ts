@@ -76,6 +76,16 @@ export interface TodaysMyDay {
 /** Reads today's My Day. Errors are thrown as they are. */
 export type ReadMyDay = () => Promise<TodaysMyDay>;
 
+/**
+ * Whether a recurring task's next occurrence is after today: by its due date,
+ * else its start date (GLOSSARY: 我的一天). Advancing always leaves one of
+ * them; with neither, nothing says it is still to do today.
+ */
+function nextAfterToday(task: Task, today: CalendarDate): boolean {
+  const next = task.due ?? task.start;
+  return next === null || compareDays(next, today) > 0;
+}
+
 export function createReadMyDay(deps: TaskGraphReading): ReadMyDay {
   return async () => {
     // The graph gives what the score needs: the effective start and the
@@ -98,15 +108,18 @@ export function createReadMyDay(deps: TaskGraphReading): ReadMyDay {
       // counts as done (GLOSSARY: 我的一天).
       // Only completions count (GLOSSARY: 完成历史); one skipped today shows
       // as skipped (#91).
+      // Only while its next occurrence is after today: one still on today or
+      // earlier, a fixed schedule run late, is still to do today (#241).
       const recurring = item.task.recurrence.kind === "rule";
       const onToday = (entry: { day: CalendarDate } | undefined) =>
         entry !== undefined && compareDays(entry.day, today) === 0;
+      const over = recurring && nextAfterToday(item.task, today);
       if (
         item.task.status === "done" ||
-        (recurring && onToday(item.lastCompletion))
+        (over && onToday(item.lastCompletion))
       ) {
         done.add(item.task.id);
-      } else if (recurring && onToday(item.lastSkip)) {
+      } else if (over && onToday(item.lastSkip)) {
         skipped.add(item.task.id);
       }
       // One outside today's range reads as unscheduled (ADR 0020).

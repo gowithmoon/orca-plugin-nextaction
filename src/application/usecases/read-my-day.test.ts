@@ -301,6 +301,84 @@ describe("read today's My Day", () => {
       [3, true, false],
     ]);
   });
+
+  it("shows a recurring task completed or skipped today as not done when its next occurrence is still today or earlier (#241)", async () => {
+    const { repository, readMyDay } = setup();
+    const weekly = {
+      kind: "rule",
+      rule: { period: { interval: 1, unit: "week" }, basis: "schedule" },
+    } as const;
+    const completedToday = {
+      kind: "readable",
+      history: [{ at: at("09T08:00:00"), day: oct9 }],
+    } as const;
+    const skippedToday = {
+      kind: "readable",
+      history: [{ at: at("09T08:00:00"), day: oct9, kind: "skip" }],
+    } as const;
+    const oct10 = { year: 2026, month: 10, day: 10 };
+    const oct7 = { year: 2026, month: 10, day: 7 };
+    // Next due after today: done today, as before.
+    repository.addTask(
+      { id: 1, status: "todo", recurrence: weekly, due: oct10 },
+      { ...myDay({ day: oct9 }), completionHistory: completedToday },
+    );
+    // Next due today: still to do today.
+    repository.addTask(
+      { id: 2, status: "todo", recurrence: weekly, due: oct9 },
+      { ...myDay({ day: oct9 }), completionHistory: completedToday },
+    );
+    // Next due in the past: still to do, overdue.
+    repository.addTask(
+      { id: 3, status: "todo", recurrence: weekly, due: oct7 },
+      { ...myDay({ day: oct9 }), completionHistory: completedToday },
+    );
+    // Next start today, no due date: still to do today.
+    repository.addTask(
+      { id: 4, status: "todo", recurrence: weekly, start: oct9 },
+      { ...myDay({ day: oct9 }), completionHistory: completedToday },
+    );
+    // Next start after today, no due date: done today.
+    repository.addTask(
+      { id: 5, status: "todo", recurrence: weekly, start: oct10 },
+      { ...myDay({ day: oct9 }), completionHistory: completedToday },
+    );
+    // Skipped today, next due today: still to do today.
+    repository.addTask(
+      { id: 6, status: "todo", recurrence: weekly, due: oct9 },
+      { ...myDay({ day: oct9 }), completionHistory: skippedToday },
+    );
+    // Skipped today, next due after today: skipped today, as before.
+    repository.addTask(
+      { id: 7, status: "todo", recurrence: weekly, due: oct10 },
+      { ...myDay({ day: oct9 }), completionHistory: skippedToday },
+    );
+
+    const read = await readMyDay();
+
+    const byId = new Map(read.all.map((item) => [item.task.id, item]));
+    expect(
+      [1, 2, 3, 4, 5, 6, 7].map((id) => {
+        const item = byId.get(id);
+        return [id, item?.done, item?.skipped, item?.overdue];
+      }),
+    ).toEqual([
+      [1, true, false, false],
+      [2, false, false, false],
+      [3, false, false, true],
+      [4, false, false, false],
+      [5, true, false, false],
+      [6, false, false, false],
+      [7, false, true, false],
+    ]);
+    // The ones still to do come before the ones over for today.
+    expect(
+      read.all
+        .slice(0, 4)
+        .map((item) => item.task.id)
+        .sort(),
+    ).toEqual([2, 3, 4, 6]);
+  });
 });
 
 describe("read today's My Day: the project on a card", () => {
