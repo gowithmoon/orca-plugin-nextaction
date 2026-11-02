@@ -25,12 +25,14 @@ export interface MyDayItem {
   readonly task: Task;
   /**
    * Done today: the task is done, or it is a recurring task completed today
-   * that has advanced already (GLOSSARY: 我的一天), its status todo.
+   * that has advanced already (GLOSSARY: 我的一天), its status todo, its
+   * next occurrence after today (#241).
    */
   readonly done: boolean;
   /**
    * Skipped today: a recurring task whose occurrence was skipped today and
-   * has advanced (GLOSSARY: 跳过, #91). Faded as done, saying so; a task
+   * has advanced, its next occurrence after today (GLOSSARY: 跳过, #91,
+   * #241). Faded as done, saying so; a task
    * also completed today reads as done instead.
    */
   readonly skipped: boolean;
@@ -113,13 +115,13 @@ export function createReadMyDay(deps: TaskGraphReading): ReadMyDay {
       const recurring = item.task.recurrence.kind === "rule";
       const onToday = (entry: { day: CalendarDate } | undefined) =>
         entry !== undefined && compareDays(entry.day, today) === 0;
-      const over = recurring && nextAfterToday(item.task, today);
+      const advancedPastToday = recurring && nextAfterToday(item.task, today);
       if (
         item.task.status === "done" ||
-        (over && onToday(item.lastCompletion))
+        (advancedPastToday && onToday(item.lastCompletion))
       ) {
         done.add(item.task.id);
-      } else if (over && onToday(item.lastSkip)) {
+      } else if (advancedPastToday && onToday(item.lastSkip)) {
         skipped.add(item.task.id);
       }
       // One outside today's range reads as unscheduled (ADR 0020).
