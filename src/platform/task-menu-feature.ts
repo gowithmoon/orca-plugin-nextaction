@@ -15,6 +15,10 @@ import {
   createCanSkipOccurrence,
   createSkipOccurrence,
 } from "../application/usecases/skip-occurrence";
+import {
+  createReadStandingScheduleOffer,
+  createSetStandingScheduleFromToday,
+} from "../application/usecases/standing-schedule-from-today";
 import type { Task, TaskId } from "../domain/task/task";
 import { systemClock } from "../infra/system-clock";
 import { registerBuiltinTaskMenuItems } from "../ui/task-menu/builtin-items";
@@ -28,6 +32,7 @@ import { createNoteStatusMenu } from "../ui/task-menu/note-status-menu";
 import { statusIconAt } from "../ui/task-menu/orca-dom";
 import { registerSkipMenuItem } from "../ui/task-menu/skip-menu-item";
 import { registerSplitMenuItem } from "../ui/task-menu/split-menu-item";
+import { registerStandingScheduleMenuItem } from "../ui/task-menu/standing-schedule-menu-item";
 import { registerSubtaskMenuItem } from "../ui/task-menu/subtask-menu-item";
 import { registerTaskMapMenuItem } from "../ui/task-menu/task-map-menu-item";
 import {
@@ -89,6 +94,12 @@ export function createTaskMenuFeature(deps: {
     registerSkipMenuItem(items, {
       canSkipOccurrence: createCanSkipOccurrence(myDayDeps),
       skipOccurrence: createSkipOccurrence(myDayDeps),
+      pluginName,
+    });
+    registerStandingScheduleMenuItem(items, {
+      readStandingScheduleOffer: createReadStandingScheduleOffer(myDayDeps),
+      setStandingScheduleFromToday:
+        createSetStandingScheduleFromToday(myDayDeps),
       pluginName,
     });
     registerMarkReviewedMenuItem(items, {

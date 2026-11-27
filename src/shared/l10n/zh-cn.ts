@@ -367,6 +367,18 @@ const zhCN: Record<string, string> = {
     "时段跨过了日界线（${boundary}），请选在一天之内。",
   "This task's standing schedule cannot be read (${reason}). It is kept as it is and cannot be changed here.":
     "这个任务的常设排期读取失败（${reason}），这里无法修改，常设排期没有改动。",
+  "Standing schedule: ${times}": "常设排期：${times}",
+  "Always schedule at this time": "以后都排在这个时段",
+  "Change standing schedule to this time": "常设排期改成这个时段",
+  "Not set: this task is not scheduled today.":
+    "无法设置常设排期：这个任务今天没有排期。",
+  "Not set: this task does not repeat.": "无法设置常设排期：这个任务不重复。",
+  "Not set: this task's My Day entries cannot be read (${reason}).":
+    "无法设置常设排期：这个任务的我的一天记录读取失败（${reason}）。",
+  "Could not set the standing schedule: ${reason}":
+    "无法设置常设排期：${reason}",
+  "Could not read the standing schedule: ${reason}":
+    "无法读取常设排期：${reason}",
   Every: "每",
   "Next occurrence counts from": "下次日期怎么算",
   "From the task's due date (or start date), whenever it is done.":

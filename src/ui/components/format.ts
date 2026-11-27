@@ -1,6 +1,8 @@
 // How task values read in the plugin panel. Display only: nothing here
 // changes what the notes hold.
+import type { StandingSchedule } from "../../domain/task/standing-schedule";
 import type { CalendarDate, Rating, Task } from "../../domain/task/task";
+import type { TimeOfDay } from "../../domain/time/time-of-day";
 import { t } from "../../shared/l10n/l10n";
 
 /**
@@ -67,6 +69,16 @@ export function formatTimeRange(range: {
   return t("${start}–${end}", {
     start: formatClock(range.start),
     end: formatClock(range.end),
+  });
+}
+
+/** A standing schedule's times of day (GLOSSARY: 常设排期) as "8:45–9:15". */
+export function formatStandingSchedule(schedule: StandingSchedule): string {
+  const clock = (time: TimeOfDay) =>
+    `${time.hours}:${String(time.minutes).padStart(2, "0")}`;
+  return t("${start}–${end}", {
+    start: clock(schedule.start),
+    end: clock(schedule.end),
   });
 }
 

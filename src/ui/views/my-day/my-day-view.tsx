@@ -338,7 +338,7 @@ function TimelineArea(props: {
     () => ({
       actions,
       menuItems,
-      menuPlace: { selectTask },
+      menuPlace: { selectTask, timeline: true },
       onOpen: (item: ScheduledMyDayItem) => selectTask(item.task.id),
       onSchedule,
     }),
