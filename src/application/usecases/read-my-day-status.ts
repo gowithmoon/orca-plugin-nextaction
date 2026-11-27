@@ -6,7 +6,7 @@ import { logicalDay } from "../../domain/time/logical-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
-import { standingBringingIn } from "./standing-bringing-in";
+import { standingBringingIn } from "./entries-with-standing-schedule";
 
 /** Where a task stands in today's My Day. */
 export type MyDayStatus =

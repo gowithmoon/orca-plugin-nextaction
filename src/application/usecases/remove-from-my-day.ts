@@ -6,8 +6,8 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository, TaskWrite } from "../ports/task-repository";
 import type { MyDayChangeResult } from "./add-to-my-day";
+import { standingBringingIn } from "./entries-with-standing-schedule";
 import { MyDayUnreadableError } from "./my-day-unreadable-error";
-import { standingBringingIn } from "./standing-bringing-in";
 
 /**
  * Removes task `id` from My Day on the current logical day in one undo:
