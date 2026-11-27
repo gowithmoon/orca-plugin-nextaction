@@ -358,7 +358,7 @@ const zhCN: Record<string, string> = {
   "End time": "结束时刻",
   to: "至",
   "Each day it is to be done, it shows in My Day at these times.":
-    "每到该做的那天，它自动排在我的一天的这个时段。",
+    "每到该做的那天，它排在我的一天的这个时段。",
   "Set both a start and an end time, or clear both.":
     "开始和结束时刻都要填，或者都清空。",
   "Times snap to 15 minutes.": "时刻要按 15 分钟对齐。",
