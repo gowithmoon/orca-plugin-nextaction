@@ -293,4 +293,52 @@ describe("read today's My Day with standing schedules", () => {
     );
     expect(read.all.map((item) => item.task.id)).toEqual([2]);
   });
+
+  // For the card's icon (#247): brought in or not, each task tells its own.
+  it("tells each task's standing schedule, whether or not today has its entry", async () => {
+    const { repository, readMyDay } = setup();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due: oct9,
+      recurrence: weekdays,
+      standingSchedule: standup,
+    });
+    repository.addTask(
+      {
+        id: 2,
+        status: "todo",
+        due: oct9,
+        recurrence: weekdays,
+        standingSchedule: standingSchedule("17:30", "18:00"),
+      },
+      {
+        myDay: {
+          kind: "readable",
+          entries: [
+            {
+              day: oct9,
+              schedule: { start: at("09T16:00:00"), end: at("09T16:30:00") },
+            },
+          ],
+        },
+      },
+    );
+    repository.addTask(
+      { id: 3, status: "todo" },
+      { myDay: { kind: "readable", entries: [{ day: oct9 }] } },
+    );
+
+    const read = await readMyDay();
+
+    expect(
+      read.all
+        .map((item) => [item.task.id, item.task.standingSchedule] as const)
+        .sort(([a], [b]) => a - b),
+    ).toEqual([
+      [1, standup],
+      [2, standingSchedule("17:30", "18:00")],
+      [3, { kind: "none" }],
+    ]);
+  });
 });

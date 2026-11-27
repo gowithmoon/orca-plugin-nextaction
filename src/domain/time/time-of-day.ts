@@ -26,3 +26,8 @@ export function momentOnDate(date: CalendarDate, time: TimeOfDay): Date {
     time.minutes,
   );
 }
+
+/** The local time of day `moment` falls at, to the minute. */
+export function timeOfDayOf(moment: Date): TimeOfDay {
+  return { hours: moment.getHours(), minutes: moment.getMinutes() };
+}

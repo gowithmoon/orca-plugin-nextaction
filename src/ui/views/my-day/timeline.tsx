@@ -16,11 +16,13 @@
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
 import type { ScheduledMyDayItem } from "../../../application/usecases/read-my-day";
+import type { StandingSchedule } from "../../../domain/task/standing-schedule";
 import type { TaskId } from "../../../domain/task/task";
 import type { LogicalDayRange } from "../../../domain/time/logical-day";
 import { t } from "../../../shared/l10n/l10n";
 import {
   formatClock,
+  formatStandingSchedule,
   formatTimeRange,
   shownText,
 } from "../../components/format";
@@ -71,6 +73,29 @@ export function ScheduleButton(props: { onClick: () => void }) {
       >
         <i className="ti ti-clock" aria-hidden="true" />
       </button>
+    </Tooltip>
+  );
+}
+
+/**
+ * The small mark of a task with a standing schedule (GLOSSARY: 常设排期,
+ * #247), in the card's top right, its tooltip telling the times: why it is
+ * here. Shown whether or not today has its entry; quiet, as it is no action.
+ */
+function StandingScheduleMark(props: { schedule: StandingSchedule }) {
+  const { Tooltip } = orca.components;
+  const text = t("Standing schedule: ${times}", {
+    times: formatStandingSchedule(props.schedule),
+  });
+  return (
+    <Tooltip text={text}>
+      <span
+        className="nextaction-timeline-card-standing"
+        role="img"
+        aria-label={text}
+      >
+        <i className="ti ti-pin" aria-hidden="true" />
+      </span>
     </Tooltip>
   );
 }
@@ -194,6 +219,9 @@ export function TimelineCard(props: {
             role="img"
             aria-label={t("Overdue")}
           />
+        )}
+        {task.standingSchedule.kind === "schedule" && (
+          <StandingScheduleMark schedule={task.standingSchedule.schedule} />
         )}
         <ScheduleButton onClick={() => card.onSchedule(item)} />
       </div>

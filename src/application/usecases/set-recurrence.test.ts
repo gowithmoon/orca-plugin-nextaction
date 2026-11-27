@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createFixedClock } from "../../../tests/fixed-clock";
 import { createFixedDayBoundary } from "../../../tests/fixed-day-boundary";
+import { createFixedStartPreviewDays } from "../../../tests/fixed-start-preview-days";
 import {
   createInMemoryTaskRepository,
   type InMemoryTaskRepository,
 } from "../../../tests/in-memory-task-repository";
 import { createChangeStatus } from "./change-status";
+import { createReadMyDay } from "./read-my-day";
 import { createSetRecurrence } from "./set-recurrence";
 import { StandingScheduleRefusedError } from "./set-standing-schedule";
 
@@ -320,5 +322,98 @@ describe("set recurrence with a standing schedule (GLOSSARY: 常设排期)", () 
       new StandingScheduleRefusedError("not-recurring"),
     );
     expect(repository.writeCount()).toBe(0);
+  });
+
+  it("removing the rule removes the standing schedule, in the same write (#246)", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      recurrence: { kind: "rule", rule: everyTwoWeeks },
+      standingSchedule: { kind: "schedule", schedule: standup },
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    await setRecurrence(1, null);
+
+    expect(await repository.getTask(1)).toMatchObject({
+      recurrence: { kind: "none" },
+      standingSchedule: { kind: "none" },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("removing the rule leaves a standing schedule it cannot read as it is (#246)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const unreadable = {
+      kind: "unreadable",
+      reason: "unknown version 2",
+    } as const;
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      recurrence: { kind: "rule", rule: everyTwoWeeks },
+      standingSchedule: unreadable,
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    await setRecurrence(1, null);
+
+    expect(await repository.getTask(1)).toMatchObject({
+      recurrence: { kind: "none" },
+      standingSchedule: unreadable,
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("pausing keeps the standing schedule; resumed, it brings the task into today again (#246)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const stored = { kind: "schedule", schedule: standup } as const;
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due: { year: 2026, month: 10, day: 8 },
+      recurrence: { kind: "rule", rule: everyTwoWeeks },
+      standingSchedule: stored,
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+    const readMyDay = createReadMyDay({
+      ...deps(repository),
+      startPreviewDays: createFixedStartPreviewDays(),
+    });
+    const todays = async () =>
+      (await readMyDay()).scheduled.map((item) => item.task.id);
+
+    await setRecurrence(1, { ...everyTwoWeeks, paused: true });
+    expect((await repository.getTask(1))?.standingSchedule).toEqual(stored);
+    expect(await todays()).toEqual([]);
+
+    await setRecurrence(1, everyTwoWeeks);
+    expect((await repository.getTask(1))?.standingSchedule).toEqual(stored);
+    expect(await todays()).toEqual([1]);
+  });
+
+  it("resuming on the last occurrence removes the standing schedule with the rule, in the same write (#246)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const lastOne = {
+      ...everyTwoWeeks,
+      end: { kind: "count", total: 5, remaining: 1 },
+    } as const;
+    repository.addTask({
+      id: 1,
+      status: "done",
+      due: { year: 2026, month: 10, day: 2 },
+      recurrence: { kind: "rule", rule: { ...lastOne, paused: true } },
+      standingSchedule: { kind: "schedule", schedule: standup },
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    expect(await setRecurrence(1, lastOne, standup)).toEqual({ kind: "ended" });
+
+    expect(await repository.getTask(1)).toMatchObject({
+      recurrence: { kind: "none" },
+      standingSchedule: { kind: "none" },
+    });
+    expect(repository.writeCount()).toBe(1);
   });
 });
