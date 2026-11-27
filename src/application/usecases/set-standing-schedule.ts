@@ -3,6 +3,7 @@
 // one undo; My Day entries are left as they are, so a day that has one
 // keeps it.
 import {
+  keepingRemoval,
   type StandingSchedule,
   type StandingScheduleProblem,
   standingScheduleProblem,
@@ -59,13 +60,17 @@ export function createSetStandingSchedule(deps: {
 }): SetStandingSchedule {
   return async (id, schedule) => {
     // Clearing needs no rule: one left behind can always go.
-    if (schedule) {
-      checkStandingSchedule(
-        await deps.repository.getTask(id),
-        schedule,
-        deps.dayBoundary.current(),
-      );
+    if (!schedule) {
+      await deps.repository.updateTask(id, { standingSchedule: null });
+      return;
     }
-    await deps.repository.updateTask(id, { standingSchedule: schedule });
+    const task = await deps.repository.getTask(id);
+    checkStandingSchedule(task, schedule, deps.dayBoundary.current());
+    await deps.repository.updateTask(id, {
+      // A removal from today's My Day stays (#245).
+      standingSchedule: task
+        ? keepingRemoval(schedule, task.standingSchedule)
+        : schedule,
+    });
   };
 }

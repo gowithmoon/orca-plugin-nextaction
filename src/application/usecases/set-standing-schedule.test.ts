@@ -104,4 +104,26 @@ describe("set standing schedule", () => {
     await expect(setStandingSchedule(1, null)).rejects.toThrow();
     expect(repository.writeCount()).toBe(0);
   });
+
+  it("keeps the day it was removed from My Day on when the times change, so it stays out today (#245)", async () => {
+    const { repository, setStandingSchedule } = setup();
+    const removedOn = { year: 2026, month: 10, day: 9 };
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      recurrence: weekdays,
+      standingSchedule: {
+        kind: "schedule",
+        schedule: { ...standup, removedOn },
+      },
+    });
+    const report = { start: time(17, 30), end: time(18) };
+
+    await setStandingSchedule(1, report);
+
+    expect(await standingOf(repository, 1)).toEqual({
+      kind: "schedule",
+      schedule: { ...report, removedOn },
+    });
+  });
 });

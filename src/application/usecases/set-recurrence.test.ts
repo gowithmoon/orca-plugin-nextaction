@@ -263,6 +263,31 @@ describe("set recurrence with a standing schedule (GLOSSARY: 常设排期)", () 
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("keeps the day it was removed from My Day on when the standing schedule's times change (#245)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const removedOn = { year: 2026, month: 10, day: 8 };
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      recurrence: { kind: "rule", rule: everyTwoWeeks },
+      standingSchedule: {
+        kind: "schedule",
+        schedule: {
+          start: { hours: 17, minutes: 30 },
+          end: { hours: 18, minutes: 0 },
+          removedOn,
+        },
+      },
+    });
+
+    await createSetRecurrence(deps(repository))(1, everyTwoWeeks, standup);
+
+    expect((await repository.getTask(1))?.standingSchedule).toEqual({
+      kind: "schedule",
+      schedule: { ...standup, removedOn },
+    });
+  });
+
   it("leaves the standing schedule as it is when none is given", async () => {
     const repository = createInMemoryTaskRepository();
     const stored = { kind: "schedule", schedule: standup } as const;

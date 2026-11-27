@@ -47,6 +47,20 @@ export type StandingScheduleRead =
 export const noStandingSchedule: StandingScheduleRead = { kind: "none" };
 
 /**
+ * `next` replacing `current` with the day the task was removed from My Day
+ * on kept (#245): changing the times does not add it back that day. `null`
+ * (cleared) stays `null`.
+ */
+export function keepingRemoval(
+  next: StandingSchedule | null,
+  current: StandingScheduleRead,
+): StandingSchedule | null {
+  if (!next || current.kind !== "schedule") return next;
+  const { removedOn } = current.schedule;
+  return removedOn ? { ...next, removedOn } : next;
+}
+
+/**
  * `schedule` on the logical day whose range is `day`: its times on the
  * clock within that day, those before the day boundary at its end (ADR
  * 0029); an end on the boundary itself is the day's end. `undefined` when

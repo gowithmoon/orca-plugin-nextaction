@@ -8,7 +8,10 @@ import {
   planResume,
   type RecurrenceRule,
 } from "../../domain/recurrence/recurrence";
-import type { StandingSchedule } from "../../domain/task/standing-schedule";
+import {
+  keepingRemoval,
+  type StandingSchedule,
+} from "../../domain/task/standing-schedule";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
@@ -61,8 +64,16 @@ export function createSetRecurrence(deps: {
         deps.dayBoundary.current(),
       );
     }
-    const standing = standingSchedule === undefined ? {} : { standingSchedule };
     const task = await deps.repository.getTask(id);
+    // A removal from today's My Day stays (#245).
+    const standing =
+      standingSchedule === undefined
+        ? {}
+        : {
+            standingSchedule: task
+              ? keepingRemoval(standingSchedule, task.standingSchedule)
+              : standingSchedule,
+          };
     // Anything but a resume only writes the rule (a block that is no longer
     // a task fails there, writing nothing).
     if (!task || !isResume(task, rule)) {
