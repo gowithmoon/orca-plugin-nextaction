@@ -655,3 +655,87 @@ describe("change status: reminders (GLOSSARY: 提醒)", () => {
     });
   });
 });
+
+describe("completing a recurring task with a standing schedule (GLOSSARY: 常设排期, #246)", () => {
+  const due = { year: 2026, month: 10, day: 5 };
+  const weekly = {
+    period: { interval: 1, unit: "week" },
+    basis: "schedule",
+  } as const;
+  const lastOne = {
+    ...weekly,
+    end: { kind: "count", total: 3, remaining: 1 },
+  } as const;
+  const standup = {
+    kind: "schedule",
+    schedule: {
+      start: { hours: 8, minutes: 45 },
+      end: { hours: 9, minutes: 15 },
+    },
+  } as const;
+
+  it("completing the last occurrence removes the standing schedule with the rule, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due,
+      recurrence: { kind: "rule", rule: lastOne },
+      standingSchedule: standup,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(1, "done")).toEqual({ kind: "ended" });
+
+    expect(await repository.getTask(1)).toMatchObject({
+      status: "done",
+      recurrence: { kind: "none" },
+      standingSchedule: { kind: "none" },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it.each([
+    ["with occurrences left", weekly],
+    ["whose rule is paused", { ...lastOne, paused: true }],
+  ])("completing a task %s keeps the standing schedule", async (_, rule) => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due,
+      recurrence: { kind: "rule", rule },
+      standingSchedule: standup,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    await changeStatus(1, "done");
+
+    expect((await repository.getTask(1))?.standingSchedule).toEqual(standup);
+  });
+
+  it("completing the last occurrence leaves a standing schedule it cannot read as it is", async () => {
+    const repository = createInMemoryTaskRepository();
+    const unreadable = {
+      kind: "unreadable",
+      reason: "unknown version 2",
+    } as const;
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due,
+      recurrence: { kind: "rule", rule: lastOne },
+      standingSchedule: unreadable,
+    });
+    const changeStatus = createChangeStatus(deps(repository));
+
+    expect(await changeStatus(1, "done")).toEqual({ kind: "ended" });
+
+    expect(await repository.getTask(1)).toMatchObject({
+      status: "done",
+      recurrence: { kind: "none" },
+      standingSchedule: unreadable,
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+});

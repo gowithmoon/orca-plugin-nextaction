@@ -114,6 +114,35 @@ describe("repair a recurring task not advanced: end conditions (#89)", () => {
     });
     expect(repository.writeCount()).toBe(1);
   });
+
+  it("on the one remaining occurrence, removes the standing schedule with the rule, in the same write (#246)", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 12,
+      status: "done",
+      due: { year: 2026, month: 10, day: 12 },
+      recurrence: {
+        kind: "rule",
+        rule: { ...weekly, end: { kind: "count", total: 5, remaining: 1 } },
+      },
+      standingSchedule: {
+        kind: "schedule",
+        schedule: {
+          start: { hours: 8, minutes: 45 },
+          end: { hours: 9, minutes: 15 },
+        },
+      },
+    });
+    const advance = createRepairNotAdvanced(deps(repository));
+
+    await advance(12);
+
+    expect(await repository.getTask(12)).toMatchObject({
+      recurrence: { kind: "none" },
+      standingSchedule: { kind: "none" },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
 });
 
 describe("repair a recurring task not advanced", () => {
