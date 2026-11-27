@@ -354,6 +354,19 @@ const zhCN: Record<string, string> = {
     "无法完成任务：重复规则读取失败（${reason}），规则没有改动。",
   "This task's recurrence rule cannot be read (${reason}). It is kept as it is and cannot be changed here.":
     "这个任务的重复规则读取失败（${reason}），这里无法修改，规则没有改动。",
+  "Standing schedule": "常设排期",
+  "End time": "结束时刻",
+  to: "至",
+  "Each day it is to be done, it shows in My Day at these times.":
+    "每到该做的那天，它自动排在我的一天的这个时段。",
+  "Set both a start and an end time, or clear both.":
+    "开始和结束时刻都要填，或者都清空。",
+  "Times snap to 15 minutes.": "时刻要按 15 分钟对齐。",
+  "The end time must be after the start time.": "结束时刻要晚于开始时刻。",
+  "The times cross the day boundary (${boundary}). Choose times within one day.":
+    "时段跨过了日界线（${boundary}），请选在一天之内。",
+  "This task's standing schedule cannot be read (${reason}). It is kept as it is and cannot be changed here.":
+    "这个任务的常设排期读取失败（${reason}），这里无法修改，常设排期没有改动。",
   Every: "每",
   "Next occurrence counts from": "下次日期怎么算",
   "From the task's due date (or start date), whenever it is done.":

@@ -172,6 +172,7 @@ export function createTaskPanelFeature(deps: {
           dayBoundary: deps.dayBoundary,
         }),
         today: deps.today,
+        dayBoundary: () => deps.dayBoundary.current(),
         notify: deps.taskActions.notify,
         discard,
       },
