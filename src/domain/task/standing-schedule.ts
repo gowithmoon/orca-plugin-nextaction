@@ -8,7 +8,7 @@ import {
   type LogicalDayRange,
   momentOn,
 } from "../time/logical-day";
-import type { TimeOfDay } from "../time/time-of-day";
+import { sameTimeOfDay, type TimeOfDay } from "../time/time-of-day";
 import {
   entryOn,
   type MyDayEntries,
@@ -75,9 +75,7 @@ export function standingScheduleOn(
   const start = momentOn(day, schedule.start);
   const placedEnd = momentOn(day, schedule.end);
   const end = placedEnd.getTime() === day.start.getTime() ? day.end : placedEnd;
-  if (minuteOfDay(schedule.start) === minuteOfDay(schedule.end)) {
-    return undefined;
-  }
+  if (sameTimeOfDay(schedule.start, schedule.end)) return undefined;
   return end.getTime() > start.getTime() ? { start, end } : undefined;
 }
 
@@ -104,9 +102,7 @@ export function standingScheduleProblem(
     (minuteOfDay(time) - minuteOfDay(boundary) + minutesPerDay) % minutesPerDay;
   const start = fromBoundary(schedule.start);
   const end = fromBoundary(schedule.end) || minutesPerDay;
-  if (minuteOfDay(schedule.start) === minuteOfDay(schedule.end)) {
-    return "empty";
-  }
+  if (sameTimeOfDay(schedule.start, schedule.end)) return "empty";
   return end > start ? undefined : "crosses-day-boundary";
 }
 

@@ -12,7 +12,7 @@ import {
 } from "../../domain/task/standing-schedule";
 import type { TaskId } from "../../domain/task/task";
 import { logicalDay, logicalDayRange } from "../../domain/time/logical-day";
-import { type TimeOfDay, timeOfDayOf } from "../../domain/time/time-of-day";
+import { sameTimeOfDay, timeOfDayOf } from "../../domain/time/time-of-day";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
@@ -128,7 +128,4 @@ export function createReadStandingScheduleOffer(
 }
 
 const sameTimes = (a: StandingSchedule, b: StandingSchedule) =>
-  minutesOf(a.start) === minutesOf(b.start) &&
-  minutesOf(a.end) === minutesOf(b.end);
-
-const minutesOf = (time: TimeOfDay) => time.hours * 60 + time.minutes;
+  sameTimeOfDay(a.start, b.start) && sameTimeOfDay(a.end, b.end);

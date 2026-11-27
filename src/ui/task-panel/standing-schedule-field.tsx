@@ -11,7 +11,7 @@ import {
   standingScheduleProblem,
 } from "../../domain/task/standing-schedule";
 import type { DayBoundary } from "../../domain/time/logical-day";
-import type { TimeOfDay } from "../../domain/time/time-of-day";
+import { sameTimeOfDay, type TimeOfDay } from "../../domain/time/time-of-day";
 import { t } from "../../shared/l10n/l10n";
 
 /** What the two time inputs hold: "HH:MM", or "" when cleared. */
@@ -98,9 +98,7 @@ export function sameStandingSchedule(
   b: StandingSchedule | null,
 ): boolean {
   if (a === null || b === null) return a === b;
-  const same = (x: TimeOfDay, y: TimeOfDay) =>
-    x.hours === y.hours && x.minutes === y.minutes;
-  return same(a.start, b.start) && same(a.end, b.end);
+  return sameTimeOfDay(a.start, b.start) && sameTimeOfDay(a.end, b.end);
 }
 
 /** The row: two time inputs, a clear button, and a hint or what is wrong. */
