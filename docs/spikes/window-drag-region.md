@@ -1,6 +1,6 @@
 # 技术验证：插件窗口顶到 Orca 标题栏时按钮点不中
 
-2026-11-27 实测（Windows，显示缩放 200%，视口 1440×852），`.scratch/spikes/task-panel-header-hit.js`、`task-panel-click-shift.js`。状态：**原因已确认，修复待在 Orca 中确认**。
+2026-11-27 实测（Windows，显示缩放 200%，视口 1440×852），`.scratch/spikes/task-panel-header-hit.js`、`task-panel-click-shift.js`。状态：**已确认**，修复在 Windows 上验证通过。
 
 ## 现象
 
@@ -17,9 +17,11 @@
 
 `.nextaction-window` 设 `-webkit-app-region: no-drag`（`ui/styles/window-style.ts`）。所有插件窗口共用这个类，快速捕获、提醒、回顾等窗口一并生效。
 
-## 待在 Orca 中确认
+## 查拖动区域
 
-查拖动区域的办法，控制台运行
+控制台运行
 `[...document.querySelectorAll("*")].filter(e => getComputedStyle(e).webkitAppRegion === "drag").map(e => [e.className, JSON.stringify(e.getBoundingClientRect())])`
 
-- 修复后，窗口顶到上限时两个按钮的上半部分也点得中
+## 验证
+
+修复后，窗口顶到上限时两个按钮的上半部分也点得中；快速捕获、提醒窗口的关闭按钮正常；窗口没盖住的标题栏仍能拖动 Orca。
