@@ -355,6 +355,20 @@ export const myDayCss = `
   flex: 0 0 auto;
 }
 
+/* A standing schedule's mark (#247): small and faint, level with the text. */
+.nextaction-timeline-card-standing {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: calc(var(--orca-fontsize-sm) * var(--orca-lineheight-md));
+  color: var(--orca-color-text-3);
+  font-size: var(--orca-fontsize-xs);
+}
+
+.nextaction-timeline-card[data-compact] .nextaction-timeline-card-standing {
+  height: auto;
+}
+
 /*
  * The top and bottom edges: where dragging changes the start or the end
  * (#85). Laid over the card's rim, so a short card keeps its body; over the
