@@ -1,5 +1,5 @@
 // Times of day and calendar days as local time (ADR 0012). Pure.
-import type { CalendarDate } from "../task/task";
+import type { CalendarDate } from "./calendar-days";
 
 /** A local time of day: hours 0–23, minutes 0–59. */
 export interface TimeOfDay {

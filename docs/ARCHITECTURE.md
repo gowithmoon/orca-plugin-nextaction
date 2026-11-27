@@ -43,7 +43,7 @@ src/
     blocking/              阻塞判断、搁置子树、下一步行动筛选、日期冲突、顺延计划
     project/               项目、项目状态、所属项目的判定（ADR 0025）
     scoring/               评分公式及其参数
-    time/                  日界线、逻辑日
+    time/                  日历日期、日界线、逻辑日
     recurrence/            重复规则、下次日期（安排下一次）
     review/                回顾步骤、回顾周期
   application/

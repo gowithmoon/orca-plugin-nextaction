@@ -1,6 +1,6 @@
 // The day boundary and the logical day (GLOSSARY: Day Boundary, Logical Day;
 // ADR 0005). Pure: the current time is passed in as `now`.
-import type { CalendarDate } from "../task/task";
+import type { CalendarDate } from "./calendar-days";
 import type { TimeOfDay } from "./time-of-day";
 
 /** The time of day a logical day starts at. */

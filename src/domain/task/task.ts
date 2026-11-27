@@ -3,8 +3,14 @@
 import type { RecurrenceRead } from "../recurrence/recurrence";
 import type { ReminderRead } from "../reminder/reminder";
 import type { ReviewRead } from "../review/review";
+import type { CalendarDate } from "../time/calendar-days";
 import type { CustomPropertyValues } from "./custom-property";
 import type { StandingScheduleRead } from "./standing-schedule";
+
+// Defined with the calendar arithmetic, so domain/time depends on nothing
+// else in domain (#249). Re-exported so existing imports keep working; new
+// code imports it from domain/time/calendar-days.
+export type { CalendarDate };
 
 /** Identifies a task. It is the ID of the task's (source) block. */
 export type TaskId = number;
@@ -31,15 +37,6 @@ export type Rating = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Importance = Rating;
 export type Urgency = Rating;
 export type Effort = Rating;
-
-/** A calendar date with no time of day and no time zone (ADR 0012). */
-export interface CalendarDate {
-  readonly year: number;
-  /** 1–12 */
-  readonly month: number;
-  /** 1–31 */
-  readonly day: number;
-}
 
 /** A task's start and due dates, `null` when it lacks one. */
 export interface TaskDates {
