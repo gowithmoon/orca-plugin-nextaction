@@ -27,20 +27,30 @@ export class StandingScheduleRefusedError extends Error {
 }
 
 /**
+ * Why `schedule` cannot be set on `task`, or `undefined` when it can: it has
+ * no rule this plugin reads (a paused one counts: it is kept, and so is the
+ * standing schedule), or the times cannot be saved.
+ */
+export function standingScheduleRefusal(
+  task: Pick<Task, "recurrence"> | null,
+  schedule: StandingSchedule,
+  boundary: DayBoundary,
+): StandingScheduleRefusedError["reason"] | undefined {
+  if (task?.recurrence.kind !== "rule") return "not-recurring";
+  return standingScheduleProblem(schedule, boundary);
+}
+
+/**
  * Throws `StandingScheduleRefusedError` when `schedule` cannot be set on
- * `task`: it has no rule this plugin reads (a paused one counts: it is
- * kept, and so is the standing schedule), or the times cannot be saved.
+ * `task`, as `standingScheduleRefusal` says.
  */
 export function checkStandingSchedule(
   task: Pick<Task, "recurrence"> | null,
   schedule: StandingSchedule,
   boundary: DayBoundary,
 ): void {
-  if (task?.recurrence.kind !== "rule") {
-    throw new StandingScheduleRefusedError("not-recurring");
-  }
-  const problem = standingScheduleProblem(schedule, boundary);
-  if (problem) throw new StandingScheduleRefusedError(problem);
+  const refusal = standingScheduleRefusal(task, schedule, boundary);
+  if (refusal) throw new StandingScheduleRefusedError(refusal);
 }
 
 /**

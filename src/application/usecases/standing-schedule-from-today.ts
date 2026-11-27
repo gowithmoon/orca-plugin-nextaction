@@ -6,10 +6,7 @@ import {
   type MyDayEntries,
   scheduleWithin,
 } from "../../domain/task/my-day";
-import {
-  type StandingSchedule,
-  standingScheduleProblem,
-} from "../../domain/task/standing-schedule";
+import type { StandingSchedule } from "../../domain/task/standing-schedule";
 import type { TaskId } from "../../domain/task/task";
 import { logicalDay, logicalDayRange } from "../../domain/time/logical-day";
 import { sameTimeOfDay, timeOfDayOf } from "../../domain/time/time-of-day";
@@ -20,6 +17,7 @@ import { MyDayUnreadableError } from "./my-day-unreadable-error";
 import {
   checkStandingSchedule,
   replacingStandingSchedule,
+  standingScheduleRefusal,
 } from "./set-standing-schedule";
 
 /**
@@ -118,8 +116,12 @@ export function createReadStandingScheduleOffer(
     const times = todaysTimes(read.entries, deps);
     if (!times) return null;
     const task = await deps.repository.getTask(id);
-    if (task?.recurrence.kind !== "rule") return null;
-    if (standingScheduleProblem(times, deps.dayBoundary.current())) return null;
+    if (
+      !task ||
+      standingScheduleRefusal(task, times, deps.dayBoundary.current())
+    ) {
+      return null;
+    }
     const current = task.standingSchedule;
     if (current.kind === "unreadable") return null;
     if (current.kind === "schedule" && sameTimes(current.schedule, times)) {
