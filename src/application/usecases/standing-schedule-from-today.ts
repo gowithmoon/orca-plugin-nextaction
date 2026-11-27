@@ -17,7 +17,10 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
 import { MyDayUnreadableError } from "./my-day-unreadable-error";
-import { checkStandingSchedule } from "./set-standing-schedule";
+import {
+  checkStandingSchedule,
+  replacingStandingSchedule,
+} from "./set-standing-schedule";
 
 /**
  * The task has no schedule today to take the times from: no entry today, an
@@ -79,12 +82,11 @@ export function createSetStandingScheduleFromToday(
     }
     const schedule = todaysTimes(read.entries, deps);
     if (!schedule) throw new NotScheduledTodayError(id);
-    checkStandingSchedule(
-      await deps.repository.getTask(id),
-      schedule,
-      deps.dayBoundary.current(),
-    );
-    await deps.repository.updateTask(id, { standingSchedule: schedule });
+    const task = await deps.repository.getTask(id);
+    checkStandingSchedule(task, schedule, deps.dayBoundary.current());
+    await deps.repository.updateTask(id, {
+      standingSchedule: replacingStandingSchedule(task, schedule),
+    });
     return schedule;
   };
 }

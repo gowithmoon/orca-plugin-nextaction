@@ -44,6 +44,20 @@ export function checkStandingSchedule(
 }
 
 /**
+ * `schedule` as written over `task`'s standing schedule, the day it was
+ * removed from My Day on kept (#245): changing the times does not add it
+ * back that day. Every write of a standing schedule goes through here. A
+ * `task` that is `null` (no longer a task, so the write fails) takes
+ * `schedule` as it is.
+ */
+export function replacingStandingSchedule(
+  task: Pick<Task, "standingSchedule"> | null,
+  schedule: StandingSchedule | null,
+): StandingSchedule | null {
+  return task ? keepingRemoval(schedule, task.standingSchedule) : schedule;
+}
+
+/**
  * Writes `schedule` as task `id`'s standing schedule in one undo; `null`
  * clears it. Throws `StandingScheduleRefusedError` as `checkStandingSchedule`
  * says, writing nothing; other errors are thrown as they are, for `ui` to
@@ -67,10 +81,7 @@ export function createSetStandingSchedule(deps: {
     const task = await deps.repository.getTask(id);
     checkStandingSchedule(task, schedule, deps.dayBoundary.current());
     await deps.repository.updateTask(id, {
-      // A removal from today's My Day stays (#245).
-      standingSchedule: task
-        ? keepingRemoval(schedule, task.standingSchedule)
-        : schedule,
+      standingSchedule: replacingStandingSchedule(task, schedule),
     });
   };
 }

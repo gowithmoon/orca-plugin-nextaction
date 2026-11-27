@@ -81,6 +81,29 @@ describe("set the standing schedule from today's schedule", () => {
       end: time(5),
     });
   });
+
+  it("keeps the day it was removed from My Day on, replacing a standing schedule at other times (#245)", async () => {
+    const { repository, setFromToday } = setup();
+    repository.addTask(
+      {
+        id: 1,
+        status: "todo",
+        recurrence: weekdays,
+        standingSchedule: {
+          kind: "schedule",
+          schedule: { start: time(17, 30), end: time(18), removedOn: oct8 },
+        },
+      },
+      scheduledToday("09T08:45:00", "09T09:15:00"),
+    );
+
+    await setFromToday(1);
+
+    expect(await standingOf(repository, 1)).toEqual({
+      kind: "schedule",
+      schedule: { ...standup, removedOn: oct8 },
+    });
+  });
 });
 
 describe("set the standing schedule from today's schedule, refused", () => {
