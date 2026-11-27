@@ -40,6 +40,12 @@ export const windowCss = `
   box-shadow: var(--orca-shadow-popup);
   color: var(--orca-color-text-1);
   overflow: hidden;
+  /*
+   * Orca's title bar is a drag region of the app window; Electron takes the
+   * mouse there before the page, even under the overlay, so a window tall
+   * enough to reach it had controls that did not click (window-drag-region).
+   */
+  -webkit-app-region: no-drag;
 }
 
 .nextaction-window > * {
