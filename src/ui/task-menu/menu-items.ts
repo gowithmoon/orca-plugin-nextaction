@@ -15,6 +15,11 @@ import {
 export interface TaskMenuPlace {
   /** Selects the task there: the side pane or the popup shows it (`PanelContextValue.selectedTaskId`). */
   readonly selectTask: (taskId: TaskId) => void;
+  /**
+   * Opened on a card on the timeline (GLOSSARY: 时间轴), whose schedule
+   * today items may refer to (#247).
+   */
+  readonly timeline?: boolean;
 }
 
 /** What every entry of the task menu has. */
@@ -40,10 +45,13 @@ export interface ResolvedTaskMenuEntry {
  */
 export interface ResolvedTaskMenuItem extends TaskMenuItemBase {
   /**
-   * What the item shows and does for `task`; `null` hides it. Never rejects:
-   * errors are the item's to report.
+   * What the item shows and does for `task`; `null` hides it. `place` as
+   * `StaticTaskMenuItem.run`. Never rejects: errors are the item's to report.
    */
-  readonly resolve: (task: Task) => Promise<ResolvedTaskMenuEntry | null>;
+  readonly resolve: (
+    task: Task,
+    place?: TaskMenuPlace,
+  ) => Promise<ResolvedTaskMenuEntry | null>;
 }
 
 /** One entry of the task menu. */

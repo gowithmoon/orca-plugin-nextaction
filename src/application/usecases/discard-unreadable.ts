@@ -1,6 +1,7 @@
-// Use case: discard a task's recurrence rule, review plan or reminders that
-// this plugin cannot read (an unknown version, or damaged), at the user's
-// explicit request in their popup, so they can be set afresh. The one write
+// Use case: discard a task's recurrence rule, review plan, reminders or
+// standing schedule that this plugin cannot read (an unknown version, or
+// damaged), at the user's explicit request in their popup, so they can be set
+// afresh. The one write
 // that overwrites unreadable data (docs/ARCHITECTURE.md §4).
 import type { TaskId } from "../../domain/task/task";
 import type { DiscardableData, TaskRepository } from "../ports/task-repository";

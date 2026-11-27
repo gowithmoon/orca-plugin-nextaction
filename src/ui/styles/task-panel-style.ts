@@ -814,6 +814,19 @@ button.nextaction-block-ref-target:hover {
   font-size: var(--orca-fontsize-xs);
 }
 
+/* The standing schedule (#243): start, "to", end and clear in a row. */
+.nextaction-recurrence-popup-standing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--orca-spacing-sm);
+}
+
+/* The time inputs, however Orca's Input wraps them. */
+.nextaction-recurrence-popup-standing > :not(span):not(button) {
+  width: 7rem;
+}
+
 /* Pause (#92): the switch, what it does beside it. */
 .nextaction-recurrence-popup-pause {
   display: flex;

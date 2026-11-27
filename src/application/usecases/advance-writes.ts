@@ -36,19 +36,23 @@ export type PlannedAdvance = Omit<AdvancePlan, "history"> & {
  * descendants are left as they are. The task's reminders move with its
  * dates, or are cleared on the last occurrence (GLOSSARY: 提醒); those of its
  * descendants are left as they are, and so are reminders this plugin cannot
- * read. Throws `RecurrenceUnreadableError`, having written nothing, when a
+ * read. On the last occurrence its standing schedule goes with its rule
+ * (`standingScheduleCleared`). Throws `RecurrenceUnreadableError`, having written nothing, when a
  * done descendant task's rule cannot be read.
  */
 export async function advanceWrites(
   repository: TaskRepository,
   task: Task,
   plan: PlannedAdvance,
-): Promise<TaskWrite[]> {
+): Promise<[TaskWrite, ...TaskWrite[]]> {
   const write: TaskWrite = {
     id: task.id,
     changes: plan.changes,
     ...(plan.history !== undefined && { completionHistory: plan.history }),
     ...(plan.recurrence !== undefined && { recurrence: plan.recurrence }),
+    // On the last occurrence the rule goes, and the standing schedule with
+    // it (ADR 0029).
+    ...(plan.recurrence === null && standingScheduleCleared(task)),
     ...remindersWrite(task, plan.next),
   };
   if (plan.next === null) return [write];
@@ -60,6 +64,21 @@ export async function advanceWrites(
     );
   }
   return [write, ...descendants.advances];
+}
+
+/**
+ * The write clearing `task`'s standing schedule as its rule is removed
+ * (GLOSSARY: 常设排期; ADR 0029): only recurring tasks have one, so none is
+ * left behind. Nothing when it has none, or one this plugin
+ * cannot read (kept as it is, as reminders are, rather than failing the
+ * write the user asked for).
+ */
+export function standingScheduleCleared(task: Task): {
+  standingSchedule?: null;
+} {
+  return task.standingSchedule.kind === "schedule"
+    ? { standingSchedule: null }
+    : {};
 }
 
 /**

@@ -5,6 +5,8 @@
 // Each unit offers its placement, and the next occurrence is previewed
 // before saving (#88). The end condition (never / on a day / after N times,
 // #89) ends the recurrence once the next occurrence would fall outside it.
+// The standing schedule (GLOSSARY: 常设排期, #243) is set here too, saved with
+// the rule in the same undo.
 // In a plugin window, rendered into its own React root, as the schedule popup.
 // Verified by hand in Orca (docs/ARCHITECTURE.md §5).
 import * as React from "react";
@@ -24,6 +26,7 @@ import {
 } from "../../domain/recurrence/recurrence";
 import type { CalendarDate, Task } from "../../domain/task/task";
 import { daysBetween } from "../../domain/time/calendar-days";
+import type { DayBoundary } from "../../domain/time/logical-day";
 import { t } from "../../shared/l10n/l10n";
 import { formatDate } from "../components/format";
 import {
@@ -45,6 +48,12 @@ import {
   placementDraftOf,
   RecurrencePlacementField,
 } from "./recurrence-placement-field";
+import {
+  StandingScheduleField,
+  sameStandingSchedule,
+  standingChoiceOf,
+  standingDraftOf,
+} from "./standing-schedule-field";
 import { DateField } from "./task-panel-fields";
 
 export interface RecurrencePopupDeps {
@@ -53,6 +62,8 @@ export interface RecurrencePopupDeps {
   previewNextOccurrence: PreviewNextOccurrence;
   /** The current logical day, for showing dates and the end day's picker. */
   today: () => CalendarDate;
+  /** The day boundary, for checking the standing schedule's times. */
+  dayBoundary: () => DayBoundary;
   notify: Notify;
   /** Discards the task's data when it cannot be read (#106). */
   discard: DiscardUnreadableDeps;
@@ -174,6 +185,9 @@ function RecurrencePopup(props: {
   );
   // Paused (GLOSSARY: 暂停重复, #92): saved with the rule.
   const [paused, setPaused] = React.useState(current?.paused === true);
+  const [standingDraft, setStandingDraft] = React.useState(() =>
+    standingDraftOf(task.standingSchedule),
+  );
   const [busy, setBusy] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
   // Discarded (#106): shown afresh with the empty value to edit, or closed
@@ -182,6 +196,15 @@ function RecurrencePopup(props: {
     deps.discard,
     task.id,
     "recurrence",
+    React.useCallback(
+      (read: Task | null) => (read ? onReopen(read) : onClose()),
+      [onReopen, onClose],
+    ),
+  );
+  const discardStanding = useDiscardUnreadable(
+    deps.discard,
+    task.id,
+    "standingSchedule",
     React.useCallback(
       (read: Task | null) => (read ? onReopen(read) : onClose()),
       [onReopen, onClose],
@@ -216,6 +239,26 @@ function RecurrencePopup(props: {
   // An unreadable rule cannot be overwritten (the repository refuses); the
   // popup says so instead of offering a save that would fail.
   const unreadable = task.recurrence.kind === "unreadable";
+  // The standing schedule (#243): one that cannot be read is kept, not
+  // offered for editing; it is written only when changed, so a save that
+  // leaves it alone never fails on it.
+  const standingUnreadable = task.standingSchedule.kind === "unreadable";
+  const standingChoice = standingChoiceOf(standingDraft, deps.dayBoundary());
+  const storedStanding =
+    task.standingSchedule.kind === "schedule"
+      ? task.standingSchedule.schedule
+      : null;
+  // `undefined` leaves it as it is.
+  const standingChange =
+    standingUnreadable ||
+    standingChoice.kind === "invalid" ||
+    sameStandingSchedule(standingChoice.schedule, storedStanding)
+      ? undefined
+      : standingChoice.schedule;
+  const savable =
+    draft !== undefined &&
+    !unreadable &&
+    (standingUnreadable || standingChoice.kind === "valid");
   // What completing it today would do; `last` on its last occurrence (#89).
   const preview =
     draft && !unreadable ? deps.previewNextOccurrence(draft, task) : undefined;
@@ -224,7 +267,13 @@ function RecurrencePopup(props: {
     if (busy) return;
     setBusy(true);
     try {
-      const result = await deps.setRecurrence(task.id, rule);
+      // Removing the rule removes the standing schedule with it, in the same
+      // undo (#246); what is drafted for it is not saved.
+      const result = await deps.setRecurrence(
+        task.id,
+        rule,
+        rule === null ? undefined : standingChange,
+      );
       // Resuming a done task advanced it (#92): its icon shows todo again, so
       // the next occurrence is told, as after completing it.
       if (result.kind === "advanced") {
@@ -246,7 +295,7 @@ function RecurrencePopup(props: {
     }
   };
   const save = () => {
-    if (draft === undefined || unreadable) return;
+    if (draft === undefined || !savable) return;
     void write(draft);
   };
 
@@ -405,6 +454,30 @@ function RecurrencePopup(props: {
             </div>
           )}
         </div>
+        {standingUnreadable ? (
+          <>
+            <div className="nextaction-recurrence-popup-warning">
+              {t(
+                "This task's standing schedule cannot be read (${reason}). It is kept as it is and cannot be changed here.",
+                { reason: task.standingSchedule.reason },
+              )}
+            </div>
+            <DiscardUnreadableField
+              busy={discardStanding.busy}
+              onDiscard={discardStanding.discard}
+            />
+          </>
+        ) : (
+          <StandingScheduleField
+            draft={standingDraft}
+            problem={
+              standingChoice.kind === "invalid"
+                ? standingChoice.message
+                : undefined
+            }
+            onChange={setStandingDraft}
+          />
+        )}
         {/* Pause (GLOSSARY: 暂停重复, #92): only for a rule already set. */}
         {task.recurrence.kind === "rule" && (
           <div className="nextaction-recurrence-popup-field">
@@ -478,11 +551,7 @@ function RecurrencePopup(props: {
         <Button variant="plain" onClick={onClose}>
           {t("Cancel")}
         </Button>
-        <Button
-          variant="solid"
-          disabled={draft === undefined || unreadable || busy}
-          onClick={save}
-        >
+        <Button variant="solid" disabled={!savable || busy} onClick={save}>
           {t("Save")}
         </Button>
       </WindowFooter>

@@ -64,4 +64,31 @@ describe("read My Day status", () => {
       reason: "unknown version 2",
     });
   });
+
+  it("is in today for one its standing schedule brings in, not once it was removed today", async () => {
+    const repository = createInMemoryTaskRepository();
+    const standing = (removedOn?: typeof oct8.day) =>
+      ({
+        status: "todo",
+        due: oct8.day,
+        recurrence: {
+          kind: "rule",
+          rule: { period: { interval: 1, unit: "day" }, basis: "schedule" },
+        },
+        standingSchedule: {
+          kind: "schedule",
+          schedule: {
+            start: { hours: 8, minutes: 45 },
+            end: { hours: 9, minutes: 15 },
+            ...(removedOn && { removedOn }),
+          },
+        },
+      }) as const;
+    repository.addTask({ id: 1, ...standing() });
+    repository.addTask({ id: 2, ...standing(oct8.day) });
+    const readMyDayStatus = createReadMyDayStatus(deps(repository));
+
+    expect(await readMyDayStatus(1)).toEqual({ kind: "in-today" });
+    expect(await readMyDayStatus(2)).toEqual({ kind: "not-in-today" });
+  });
 });

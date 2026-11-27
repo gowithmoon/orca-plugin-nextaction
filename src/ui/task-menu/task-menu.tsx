@@ -51,13 +51,13 @@ function ResolvedEntry(props: {
     let current = true;
     setEntry(null);
     // resolve never rejects: the item reports its own errors.
-    void item.resolve(task).then((resolved) => {
+    void item.resolve(task, place).then((resolved) => {
       if (current) setEntry(resolved);
     });
     return () => {
       current = false;
     };
-  }, [item, task]);
+  }, [item, task, place]);
   if (!entry) return null;
   return (
     <MenuText

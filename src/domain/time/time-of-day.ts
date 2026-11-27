@@ -26,3 +26,13 @@ export function momentOnDate(date: CalendarDate, time: TimeOfDay): Date {
     time.minutes,
   );
 }
+
+/** The local time of day `moment` falls at, to the minute. */
+export function timeOfDayOf(moment: Date): TimeOfDay {
+  return { hours: moment.getHours(), minutes: moment.getMinutes() };
+}
+
+/** Whether `a` and `b` are the same time of day. */
+export function sameTimeOfDay(a: TimeOfDay, b: TimeOfDay): boolean {
+  return a.hours === b.hours && a.minutes === b.minutes;
+}

@@ -29,6 +29,7 @@ const task = (id: TaskId): Task => ({
   recurrence: { kind: "none" },
   review: { kind: "none" },
   reminders: { kind: "none" },
+  standingSchedule: { kind: "none" },
   customProperties: {},
   anomalies: [],
 });

@@ -4,6 +4,7 @@ import type { RecurrenceRead } from "../recurrence/recurrence";
 import type { ReminderRead } from "../reminder/reminder";
 import type { ReviewRead } from "../review/review";
 import type { CustomPropertyValues } from "./custom-property";
+import type { StandingScheduleRead } from "./standing-schedule";
 
 /** Identifies a task. It is the ID of the task's (source) block. */
 export type TaskId = number;
@@ -120,6 +121,11 @@ export interface Task {
    */
   readonly reminders: ReminderRead;
   /**
+   * Its standing schedule as read (GLOSSARY: 常设排期): none, one, or one
+   * this plugin cannot read.
+   */
+  readonly standingSchedule: StandingScheduleRead;
+  /**
    * Its custom property values (GLOSSARY: 自定义属性), by property name, for
    * the properties the task tag defines. A record only: no rule reads it.
    */
@@ -162,6 +168,7 @@ export interface TaskInNotes {
   recurrence: RecurrenceRead;
   review: ReviewRead;
   reminders: ReminderRead;
+  standingSchedule: StandingScheduleRead;
   customProperties: CustomPropertyValues;
 }
 
@@ -221,6 +228,7 @@ export function taskFromNotes(input: TaskInNotes): Task {
     recurrence: input.recurrence,
     review: input.review,
     reminders: input.reminders,
+    standingSchedule: input.standingSchedule,
     customProperties: input.customProperties,
     anomalies,
   };

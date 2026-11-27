@@ -75,4 +75,70 @@ describe("read My Day candidates", () => {
 
     expect(found.map((candidate) => candidate.id)).toEqual([1, 2]);
   });
+
+  it("leaves out a task its standing schedule brings into today (GLOSSARY: 常设排期)", async () => {
+    const repository = createInMemoryTaskRepository();
+    const recurring = {
+      status: "todo",
+      recurrence: {
+        kind: "rule",
+        rule: { period: { interval: 1, unit: "day" }, basis: "schedule" },
+      },
+      standingSchedule: {
+        kind: "schedule",
+        schedule: {
+          start: { hours: 8, minutes: 45 },
+          end: { hours: 9, minutes: 15 },
+        },
+      },
+    } as const;
+    repository.addTask({ id: 1, text: "Stand-up", due: oct8, ...recurring });
+    // Not yet to do today: offered.
+    repository.addTask({
+      id: 2,
+      text: "Weekly report",
+      due: { year: 2026, month: 10, day: 9 },
+      ...recurring,
+    });
+    const readMyDayCandidates = createReadMyDayCandidates({
+      repository,
+      clock: createFixedClock(night),
+      dayBoundary: createFixedDayBoundary(),
+    });
+
+    expect(
+      (await readMyDayCandidates()).map((candidate) => candidate.id),
+    ).toEqual([2]);
+  });
+
+  it("offers a task its standing schedule would bring in but the user removed from today's My Day", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      text: "Stand-up",
+      status: "todo",
+      due: oct8,
+      recurrence: {
+        kind: "rule",
+        rule: { period: { interval: 1, unit: "day" }, basis: "schedule" },
+      },
+      standingSchedule: {
+        kind: "schedule",
+        schedule: {
+          start: { hours: 8, minutes: 45 },
+          end: { hours: 9, minutes: 15 },
+          removedOn: oct8,
+        },
+      },
+    });
+    const readMyDayCandidates = createReadMyDayCandidates({
+      repository,
+      clock: createFixedClock(night),
+      dayBoundary: createFixedDayBoundary(),
+    });
+
+    expect(
+      (await readMyDayCandidates()).map((candidate) => candidate.id),
+    ).toEqual([1]);
+  });
 });
