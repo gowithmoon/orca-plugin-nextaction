@@ -44,7 +44,7 @@ export async function advanceWrites(
   repository: TaskRepository,
   task: Task,
   plan: PlannedAdvance,
-): Promise<TaskWrite[]> {
+): Promise<[TaskWrite, ...TaskWrite[]]> {
   const write: TaskWrite = {
     id: task.id,
     changes: plan.changes,

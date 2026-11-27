@@ -12,7 +12,7 @@ import type { StandingSchedule } from "../../domain/task/standing-schedule";
 import type { CalendarDate, TaskId } from "../../domain/task/task";
 import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
-import type { TaskRepository, TaskWrite } from "../ports/task-repository";
+import type { TaskRepository } from "../ports/task-repository";
 import {
   advanceWrites,
   eventNow,
@@ -109,7 +109,7 @@ export function createSetRecurrence(deps: {
     // rule is removed (ADR 0029).
     const ended = plan.recurrence === null;
     await deps.repository.updateTasks([
-      { ...(own as TaskWrite), ...(ended ? {} : standing) },
+      { ...own, ...(ended ? {} : standing) },
       ...descendants,
     ]);
     if (plan.next === null) return { kind: "ended" };
