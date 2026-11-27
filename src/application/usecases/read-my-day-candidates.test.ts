@@ -110,4 +110,35 @@ describe("read My Day candidates", () => {
       (await readMyDayCandidates()).map((candidate) => candidate.id),
     ).toEqual([2]);
   });
+
+  it("offers a task its standing schedule would bring in but the user removed from today's My Day", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      text: "Stand-up",
+      status: "todo",
+      due: oct8,
+      recurrence: {
+        kind: "rule",
+        rule: { period: { interval: 1, unit: "day" }, basis: "schedule" },
+      },
+      standingSchedule: {
+        kind: "schedule",
+        schedule: {
+          start: { hours: 8, minutes: 45 },
+          end: { hours: 9, minutes: 15 },
+          removedOn: oct8,
+        },
+      },
+    });
+    const readMyDayCandidates = createReadMyDayCandidates({
+      repository,
+      clock: createFixedClock(night),
+      dayBoundary: createFixedDayBoundary(),
+    });
+
+    expect(
+      (await readMyDayCandidates()).map((candidate) => candidate.id),
+    ).toEqual([1]);
+  });
 });

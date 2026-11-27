@@ -259,4 +259,38 @@ describe("read today's My Day with standing schedules", () => {
     expect((await repository.getTask(1))?.standingSchedule).toEqual(standup);
     expect(repository.writeCount()).toBe(0);
   });
+
+  it("does not bring in a task removed from today's My Day; one removed on an earlier day comes in", async () => {
+    const { repository, readMyDay } = setup();
+    const removedOn = (day: number) =>
+      ({
+        kind: "schedule",
+        schedule: {
+          ...standup.schedule,
+          removedOn: { year: 2026, month: 10, day },
+        },
+      }) as const;
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due: oct9,
+      recurrence: weekdays,
+      standingSchedule: removedOn(9),
+    });
+    // Removed yesterday: over by today, left as it is.
+    repository.addTask({
+      id: 2,
+      status: "todo",
+      due: oct9,
+      recurrence: weekdays,
+      standingSchedule: removedOn(8),
+    });
+
+    const read = await readMyDay();
+
+    expect(read.scheduled.map((item) => [item.task.id, item.schedule])).toEqual(
+      [[2, { start: at("09T08:45:00"), end: at("09T09:15:00") }]],
+    );
+    expect(read.all.map((item) => item.task.id)).toEqual([2]);
+  });
 });

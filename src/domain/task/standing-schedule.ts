@@ -25,6 +25,12 @@ import type { CalendarDate, Task } from "./task";
 export interface StandingSchedule {
   readonly start: TimeOfDay;
   readonly end: TimeOfDay;
+  /**
+   * The logical day the user last removed the task from My Day on (#245):
+   * that day it is not brought in. Only the last one is kept; on any other
+   * day it says nothing, so it is never cleared but by adding it back.
+   */
+  readonly removedOn?: CalendarDate;
 }
 
 /**
@@ -113,10 +119,11 @@ export interface StandingScheduleCandidate {
  * The standing schedule that brings the task into My Day on `day` (GLOSSARY:
  * 常设排期), or `undefined` when it does not bring it in: a recurring task,
  * its rule not paused, not left done without advancing (GLOSSARY: 未自动重
- * 复), with no My Day entry that day (an entry is what holds then), and
- * either to be done by that day (not done, its date, the due date if it has
- * one, else the start date, on that day or before) or completed or skipped
- * that day, so it stays in that day's My Day as done or skipped.
+ * 复), with no My Day entry that day (an entry is what holds then), not
+ * removed from My Day that day (`removedOn`), and either to be done by that
+ * day (not done, its date, the due date if it has one, else the start date,
+ * on that day or before) or completed or skipped that day, so it stays in
+ * that day's My Day as done or skipped.
  */
 export function bringingIn(
   candidate: StandingScheduleCandidate,
@@ -126,6 +133,8 @@ export function bringingIn(
   if (task.standingSchedule.kind !== "schedule") return undefined;
   if (!activeRule(task.recurrence) || isNotAdvanced(task)) return undefined;
   if (entryOn(candidate.entries, day)) return undefined;
+  const { removedOn } = task.standingSchedule.schedule;
+  if (removedOn && compareDays(removedOn, day) === 0) return undefined;
   const date = task.due ?? task.start;
   const toDo = date !== null && compareDays(date, day) <= 0;
   const on = (entry: { readonly day: CalendarDate } | undefined) =>

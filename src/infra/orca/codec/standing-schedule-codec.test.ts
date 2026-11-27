@@ -51,6 +51,23 @@ describe("readStandingSchedule and planStandingScheduleWrite", () => {
     });
   });
 
+  it("reads back the day it was removed from My Day on (#245)", () => {
+    const removed = {
+      ...morning,
+      removedOn: { year: 2026, month: 10, day: 9 },
+    };
+    const write = planStandingScheduleWrite(taskBlockWith(), removed);
+    if (write.kind !== "write") throw new Error("refused");
+    expect(write.property.value).toEqual({
+      v: 1,
+      schedule: { start: "08:45", end: "09:15", removedOn: "2026-10-09" },
+    });
+    expect(readStandingSchedule(taskBlockWith(write.property))).toEqual({
+      kind: "schedule",
+      schedule: removed,
+    });
+  });
+
   it("reads none when the block holds none", () => {
     expect(readStandingSchedule(taskBlockWith())).toEqual({ kind: "none" });
   });
@@ -60,7 +77,7 @@ describe("readStandingSchedule and planStandingScheduleWrite", () => {
       readStandingSchedule(
         stored({
           v: 1,
-          schedule: { start: "01:00", end: "02:00", removedOn: "2026-10-09" },
+          schedule: { start: "01:00", end: "02:00", colour: "blue" },
         }),
       ),
     ).toEqual({
@@ -84,6 +101,10 @@ describe("readStandingSchedule and planStandingScheduleWrite", () => {
       { v: 1, schedule: { start: "24:00", end: "09:15" } },
     ],
     ["a missing end", { v: 1, schedule: { start: "08:45" } }],
+    [
+      "a removal day that is not one",
+      { v: 1, schedule: { start: "08:45", end: "09:15", removedOn: 9 } },
+    ],
     ["not a versioned object", "08:45-09:15"],
   ])("reads %s as unreadable, and never overwrites it", (_, value) => {
     const block = stored(value);

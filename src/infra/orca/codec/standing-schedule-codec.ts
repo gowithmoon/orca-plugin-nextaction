@@ -1,13 +1,15 @@
 // The standing schedule (GLOSSARY: 常设排期; ADR 0029) as stored in the plugin
 // block property `nextaction.standingschedule`:
-// `{ v: 1, schedule: { start: "HH:MM", end: "HH:MM" } }`, local times of day
-// (not moments, so daylight saving time does not move it), or `{ v: 1,
+// `{ v: 1, schedule: { start: "HH:MM", end: "HH:MM", removedOn? } }`, local
+// times of day (not moments, so daylight saving time does not move it),
+// `removedOn` the logical day it was last removed from My Day on as
+// `YYYY-MM-DD` (as in the My Day entries, #245), or `{ v: 1,
 // schedule: null }` once it is cleared (the property is kept, one write path,
 // as for the recurrence rule). Whether the times hold on a logical day is
 // the domain's to tell, not the codec's: one crossing the day boundary after
 // the user moved it reads as it is (ADR 0029). Fields this version does not
-// know are not read, so a later field (the day it was removed from My Day,
-// #245) fits within v1 (ADR 0008). The version number is added and checked
+// know are not read, so a later optional field fits within v1 (ADR 0008),
+// as `removedOn` did. The version number is added and checked
 // by the plugin block property codec.
 import type {
   StandingSchedule,
@@ -23,6 +25,7 @@ import {
   pluginPropertyPrefix,
   readPluginProperty,
 } from "./plugin-block-property-codec";
+import { formatDay, parseDay } from "./stored-values";
 
 /** The plugin block property key (without the `nextaction.` prefix). */
 const key = "standingschedule";
@@ -85,7 +88,12 @@ export function readStandingSchedule(
   const start = parseTimeOfDay(fields.start);
   const end = parseTimeOfDay(fields.end);
   if (!start || !end) return unreadable("a time is not a time of day");
-  return { kind: "schedule", schedule: { start, end } };
+  if (fields.removedOn === undefined) {
+    return { kind: "schedule", schedule: { start, end } };
+  }
+  const removedOn = parseDay(fields.removedOn);
+  if (!removedOn) return unreadable("the removal day is not a day");
+  return { kind: "schedule", schedule: { start, end, removedOn } };
 }
 
 /**
@@ -106,6 +114,7 @@ export function planStandingScheduleWrite(
     schedule: schedule && {
       start: formatTimeOfDay(schedule.start),
       end: formatTimeOfDay(schedule.end),
+      ...(schedule.removedOn && { removedOn: formatDay(schedule.removedOn) }),
     },
   });
 }
