@@ -1,6 +1,14 @@
-// Whole-day arithmetic on calendar dates (ADR 0012): no time of day, no time
-// zone. Pure.
-import type { CalendarDate } from "../task/task";
+// Calendar dates and whole-day arithmetic on them (ADR 0012): no time of day,
+// no time zone. Pure.
+
+/** A calendar date with no time of day and no time zone (ADR 0012). */
+export interface CalendarDate {
+  readonly year: number;
+  /** 1–12 */
+  readonly month: number;
+  /** 1–31 */
+  readonly day: number;
+}
 
 const dayMs = 24 * 60 * 60 * 1000;
 
