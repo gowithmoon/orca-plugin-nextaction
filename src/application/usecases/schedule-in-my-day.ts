@@ -1,6 +1,8 @@
 // Use case: schedule a task in today's My Day (GLOSSARY: 排期), from the
 // schedule popup (#84) or a drop on the timeline (#85). The start date, the
-// due date and the score are left alone.
+// due date and the score are left alone. A card its standing schedule
+// brought in (GLOSSARY: 常设排期) gets today's entry, which holds from then
+// on (ADR 0029).
 import {
   normalizeSchedule,
   type ScheduleRequest,
@@ -12,13 +14,16 @@ import type { Clock } from "../ports/clock";
 import type { DayBoundarySetting } from "../ports/day-boundary-setting";
 import type { TaskRepository } from "../ports/task-repository";
 import type { MyDayChangeResult } from "./add-to-my-day";
+import { entriesWithStandingSchedule } from "./entries-with-standing-schedule";
 import { MyDayUnreadableError } from "./my-day-unreadable-error";
 
 /**
  * Schedules task `id` on the current logical day at `request`, snapped by
  * the domain (`normalizeSchedule`), in one undo; past entries are kept
- * (ADR 0020). Unchanged when the task is not in today's My Day or already
- * has that schedule. Throws `MyDayUnreadableError`, writing nothing, when
+ * (ADR 0020). A task its standing schedule brings in, with no entry today,
+ * gets one at `request` (ADR 0029). Unchanged when the task is not in
+ * today's My Day or already has that schedule, from its entry or its
+ * standing schedule. Throws `MyDayUnreadableError`, writing nothing, when
  * its entries cannot be read; other errors are thrown as they are, for `ui`
  * to report.
  */
@@ -39,12 +44,17 @@ export function createScheduleInMyDay(deps: {
     }
     const boundary = deps.dayBoundary.current();
     const today = logicalDay(deps.clock.now(), boundary);
-    const schedule = normalizeSchedule(
-      request,
-      logicalDayRange(today, boundary),
+    const range = logicalDayRange(today, boundary);
+    const schedule = normalizeSchedule(request, range);
+    const current = await entriesWithStandingSchedule(
+      deps.repository,
+      id,
+      read.entries,
+      today,
+      range,
     );
-    const entries = scheduleToday(read.entries, today, schedule);
-    if (entries === read.entries) return { kind: "unchanged" };
+    const entries = scheduleToday(current, today, schedule);
+    if (entries === current) return { kind: "unchanged" };
     await deps.repository.updateTask(id, { myDay: entries });
     return { kind: "changed" };
   };

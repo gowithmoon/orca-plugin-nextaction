@@ -278,3 +278,52 @@ describe("skip this occurrence: reminders (GLOSSARY: 提醒)", () => {
     });
   });
 });
+
+describe("skip this occurrence: the standing schedule (GLOSSARY: 常设排期, #246)", () => {
+  const standup = {
+    kind: "schedule",
+    schedule: {
+      start: { hours: 8, minutes: 45 },
+      end: { hours: 9, minutes: 15 },
+    },
+  } as const;
+  const counted = (remaining: number) =>
+    ({
+      kind: "rule",
+      rule: { ...weekly, end: { kind: "count", total: 3, remaining } },
+    }) as const;
+
+  it("keeps the standing schedule as the skip uses up an occurrence", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due: oct12,
+      recurrence: counted(2),
+      standingSchedule: standup,
+    });
+    const skip = createSkipOccurrence(deps(repository));
+
+    await skip(1);
+
+    expect(await repository.getTask(1)).toMatchObject({
+      recurrence: counted(1),
+      standingSchedule: standup,
+    });
+  });
+
+  it("refuses the last occurrence, so the rule and the standing schedule stay", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({
+      id: 1,
+      status: "todo",
+      due: oct12,
+      recurrence: counted(1),
+      standingSchedule: standup,
+    });
+    const skip = createSkipOccurrence(deps(repository));
+
+    await expect(skip(1)).rejects.toMatchObject({ reason: "last" });
+    expect(repository.writeCount()).toBe(0);
+  });
+});

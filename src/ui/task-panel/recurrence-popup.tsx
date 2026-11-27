@@ -267,7 +267,8 @@ function RecurrencePopup(props: {
     if (busy) return;
     setBusy(true);
     try {
-      // Removing the rule leaves the standing schedule as it is.
+      // Removing the rule removes the standing schedule with it, in the same
+      // undo (#246); what is drafted for it is not saved.
       const result = await deps.setRecurrence(
         task.id,
         rule,
