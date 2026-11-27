@@ -38,6 +38,8 @@ Each morning, pick the tasks you want to do today from your task lists and add t
 - List: today's tasks laid out flat, sorted by score from high to low.
 - Eisenhower Matrix: four quadrants by importance and urgency. Dragging a card to another quadrant rewrites those values.
 
+A recurring task can have a standing schedule: on each day it is to be done, it sits in My Day at the same times, without being picked again.
+
 ### Inbox and All tasks
 
 - Inbox: where new tasks start. Clarify them one by one in the Task Panel, deciding which to do, which to leave for later, and which no longer need doing.
