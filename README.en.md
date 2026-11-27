@@ -144,8 +144,8 @@ Then run `pnpm deploy:local` to copy the build into the `orca-plugin-nextaction/
 
 ### Releasing a new version
 
-1. Bump `version` in `package.json`, commit and push to main.
-2. Push a matching tag, e.g. `git tag v1.0.1 && git push origin v1.0.1`. GitHub Actions checks that the tag matches the version, runs `pnpm check`, and publishes the zip from `pnpm package` to Releases.
+1. Add a section for the new version at the top of `CHANGELOG.md` (`## <version> - <date>`), grouped under 新功能 (features), 优化 (improvements), 问题修复 (fixes) and 其他 (other), skipping empty groups. Bump `version` in `package.json`, commit both and push to main.
+2. Push a matching tag, e.g. `git tag v1.0.1 && git push origin v1.0.1`. GitHub Actions checks that the tag matches the version, runs `pnpm check`, and publishes the zip from `pnpm package` to Releases. The release notes come from that version's section of `CHANGELOG.md`; the release fails if the section is missing.
 3. In [awesome-orcanote](https://github.com/sethyuan/awesome-orcanote), update this plugin's `version`, `updated` and `zip` in `plugins.json` and open a PR.
 
 ## License

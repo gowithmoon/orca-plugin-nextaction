@@ -146,8 +146,8 @@ ORCA_PLUGINS_DIR=/path/to/Documents/orca/plugins
 
 ### 发布新版本
 
-1. 改 `package.json` 的 `version`，提交并推到 main。
-2. 打同名 tag 并推送，例如 `git tag v1.0.1 && git push origin v1.0.1`。GitHub Actions 会检查 tag 与版本号一致，跑一遍 `pnpm check`，再把 `pnpm package` 打出的 zip 发到 Releases。
+1. 在 `CHANGELOG.md` 顶部加上新版本的一节（`## <版本号> - <发布日期>`），按「新功能」「优化」「问题修复」「其他」分类写给用户看，没有的分类不写。改 `package.json` 的 `version`，一起提交并推到 main。
+2. 打同名 tag 并推送，例如 `git tag v1.0.1 && git push origin v1.0.1`。GitHub Actions 会检查 tag 与版本号一致，跑一遍 `pnpm check`，再把 `pnpm package` 打出的 zip 发到 Releases，Release 说明取自 `CHANGELOG.md` 中这个版本的一节，找不到这一节时发布失败。
 3. 在 [awesome-orcanote](https://github.com/sethyuan/awesome-orcanote) 的 `plugins.json` 里更新本插件的 `version`、`updated` 和 `zip`，提 PR。
 
 ## 许可证

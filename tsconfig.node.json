@@ -18,6 +18,7 @@
     "vitest.config.ts",
     "scripts/deploy-local.ts",
     "scripts/package.ts",
+    "scripts/release-notes.ts",
     "tests/source-checks.ts",
     "tests/architecture.test.ts",
     "tests/translations.test.ts"
