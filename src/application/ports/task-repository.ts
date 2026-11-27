@@ -17,6 +17,7 @@ import type {
   CustomPropertyValues,
 } from "../../domain/task/custom-property";
 import type { MyDayEntries, MyDayRead } from "../../domain/task/my-day";
+import type { StandingSchedule } from "../../domain/task/standing-schedule";
 import type { Task, TaskId, TaskStatus } from "../../domain/task/task";
 import type { TaskChanges } from "../../domain/task/task-changes";
 import type { NoteCaret } from "./note-cursor";
@@ -39,6 +40,7 @@ export type DiscardableData =
   | "recurrence"
   | "review"
   | "reminders"
+  | "standingSchedule"
   | "completionHistory";
 
 /** Values a multi-value property (contexts) must or must not hold. */
@@ -189,7 +191,8 @@ export interface NewTask {
 /**
  * A write to one task (`updateTask`, `updateTasks`). Every part is optional:
  * what is absent is left as it is. The plugin block properties (completion
- * history, recurrence rule, reminders, My Day entries, review plan) are each
+ * history, recurrence rule, reminders, My Day entries, review plan, standing
+ * schedule) are each
  * replaced whole; one this plugin cannot read fails the write, writing
  * nothing (only `discardUnreadable` overwrites it).
  */
@@ -217,6 +220,11 @@ export interface TaskWrite {
    * with no fields is written as such, the property kept.
    */
   readonly review?: ReviewPlan;
+  /**
+   * Replaces the task's standing schedule (GLOSSARY: 常设排期), `null`
+   * clearing it, the property kept.
+   */
+  readonly standingSchedule?: StandingSchedule | null;
 }
 
 /**
@@ -317,7 +325,7 @@ export interface TaskRepository {
   /**
    * Discards the task's `data` when this plugin cannot read it, writing its
    * empty value over it: no recurrence rule, a review plan with no fields, no
-   * reminders. The one write that overwrites unreadable data, made only when
+   * reminders, no standing schedule. The one write that overwrites unreadable data, made only when
    * the user asks for it; every other write refuses. Readable data, or none,
    * is left as it is, writing nothing. The user undoes it with one undo.
    * Fails, writing nothing, when the block is not a task or the write fails.

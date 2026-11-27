@@ -22,6 +22,7 @@ import {
 import { recurrenceOf } from "./recurrence-codec";
 import { remindersOf } from "./reminders-codec";
 import { reviewOf } from "./review-codec";
+import { standingScheduleOf } from "./standing-schedule-codec";
 
 /** What the codec needs to know about the task tag. */
 export interface TaskTagContext {
@@ -168,6 +169,7 @@ export function decodeTask(block: RawBlock, tag: TaskTagContext): DecodeResult {
       recurrence: recurrenceOf(block),
       review: reviewOf(block),
       reminders: remindersOf(block),
+      standingSchedule: standingScheduleOf(block),
       customProperties: decodeCustomPropertyValues(
         ref.data,
         tag.customProperties ?? [],

@@ -59,6 +59,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      standingSchedule: { kind: "none" },
       customProperties: {},
       anomalies: [],
     });
@@ -86,6 +87,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      standingSchedule: { kind: "none" },
       customProperties: {},
       anomalies: [],
     });
@@ -114,6 +116,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      standingSchedule: { kind: "none" },
       customProperties: {},
       anomalies: [],
     });
@@ -141,6 +144,7 @@ describe("decodeTask", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      standingSchedule: { kind: "none" },
       customProperties: {},
       anomalies: [{ property: "status", value: null }],
     });
@@ -739,6 +743,7 @@ describe("decodeTask with values of the wrong kind", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      standingSchedule: { kind: "none" },
       customProperties: {},
       anomalies: [{ property: "status", value: ["待开始"] }],
     });

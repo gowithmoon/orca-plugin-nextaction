@@ -44,6 +44,7 @@ describe("convert to task", () => {
       recurrence: { kind: "none" },
       review: { kind: "none" },
       reminders: { kind: "none" },
+      standingSchedule: { kind: "none" },
       // Custom property values are filled in by Orca (ADR 0023); none here.
       customProperties: {},
       anomalies: [],

@@ -91,6 +91,10 @@ import {
 } from "../codec/reminders-codec";
 import { planReviewDiscard, planReviewWrite } from "../codec/review-codec";
 import {
+  planStandingScheduleDiscard,
+  planStandingScheduleWrite,
+} from "../codec/standing-schedule-codec";
+import {
   decodeTask,
   findTaskTagRef,
   isOrphan,
@@ -428,6 +432,7 @@ const discardPlans = {
   recurrence: planRecurrenceDiscard,
   review: planReviewDiscard,
   reminders: planRemindersDiscard,
+  standingSchedule: planStandingScheduleDiscard,
   completionHistory: planCompletionHistoryDiscard,
 } satisfies Record<DiscardableData, unknown>;
 
@@ -988,6 +993,15 @@ export function createOrcaTaskRepository(
       // The review plan likewise.
       ...(write.review !== undefined
         ? [plannedWrite(block, planReviewWrite(block, write.review))]
+        : []),
+      // The standing schedule likewise.
+      ...(write.standingSchedule !== undefined
+        ? [
+            plannedWrite(
+              block,
+              planStandingScheduleWrite(block, write.standingSchedule),
+            ),
+          ]
         : []),
     ];
     // Dependency targets are block IDs coming in: mirrors resolve to their

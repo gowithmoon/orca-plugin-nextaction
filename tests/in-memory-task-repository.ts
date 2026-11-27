@@ -204,6 +204,7 @@ function freshTask(id: TaskId, text: string, created: Date): Task {
     recurrence: { kind: "none" },
     review: { kind: "none" },
     reminders: { kind: "none" },
+    standingSchedule: { kind: "none" },
     customProperties: {},
     anomalies: [],
   };
@@ -422,6 +423,11 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       [taskWrite.reminders, block.task.reminders, "reminders"],
       [taskWrite.myDay, block.myDay, "My Day entries"],
       [taskWrite.review, block.task.review, "review plan"],
+      [
+        taskWrite.standingSchedule,
+        block.task.standingSchedule,
+        "standing schedule",
+      ],
     ] as const;
     for (const [value, current, what] of replaced) {
       if (value !== undefined && current?.kind === "unreadable") {
@@ -510,6 +516,14 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
       block.task = {
         ...block.task,
         review: { kind: "plan", plan: taskWrite.review },
+      };
+    }
+    if (taskWrite.standingSchedule !== undefined) {
+      block.task = {
+        ...block.task,
+        standingSchedule: taskWrite.standingSchedule
+          ? { kind: "schedule", schedule: taskWrite.standingSchedule }
+          : { kind: "none" },
       };
     }
   };
@@ -1011,6 +1025,7 @@ export function createInMemoryTaskRepository(): InMemoryTaskRepository {
           plan: { interval: null, lastReviewed: null, reviewOn: null },
         },
         reminders: { kind: "list", reminders: [] },
+        standingSchedule: { kind: "none" },
       } as const;
       write(() => {
         block.task = { ...block.task, [data]: empty[data] };
