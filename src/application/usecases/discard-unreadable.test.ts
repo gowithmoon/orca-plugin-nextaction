@@ -35,6 +35,16 @@ describe("discard data this plugin cannot read", () => {
     expect(repository.writeCount()).toBe(1);
   });
 
+  it("writes no standing schedule over one it cannot read, in one write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, status: "todo", standingSchedule: unreadable });
+    await createDiscardUnreadable({ repository })(1, "standingSchedule");
+    expect((await repository.getTask(1))?.standingSchedule).toEqual({
+      kind: "none",
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
   it("writes an empty completion history over one it cannot read, in one write", async () => {
     const repository = createInMemoryTaskRepository();
     repository.addTask(

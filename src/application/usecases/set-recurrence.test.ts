@@ -7,6 +7,7 @@ import {
 } from "../../../tests/in-memory-task-repository";
 import { createChangeStatus } from "./change-status";
 import { createSetRecurrence } from "./set-recurrence";
+import { StandingScheduleRefusedError } from "./set-standing-schedule";
 
 const everyTwoWeeks = {
   period: { interval: 2, unit: "week" },
@@ -238,6 +239,61 @@ describe("set recurrence", () => {
 
     await expect(setRecurrence(3, everyTwoWeeks)).rejects.toThrow();
     expect((await repository.getTask(3))?.recurrence).toEqual(stored);
+    expect(repository.writeCount()).toBe(0);
+  });
+});
+
+describe("set recurrence with a standing schedule (GLOSSARY: 常设排期)", () => {
+  const standup = {
+    start: { hours: 8, minutes: 45 },
+    end: { hours: 9, minutes: 15 },
+  };
+
+  it("writes the standing schedule with the rule, in the same write", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, status: "todo" });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    await setRecurrence(1, everyTwoWeeks, standup);
+
+    expect(await repository.getTask(1)).toMatchObject({
+      recurrence: { kind: "rule", rule: everyTwoWeeks },
+      standingSchedule: { kind: "schedule", schedule: standup },
+    });
+    expect(repository.writeCount()).toBe(1);
+  });
+
+  it("leaves the standing schedule as it is when none is given", async () => {
+    const repository = createInMemoryTaskRepository();
+    const stored = { kind: "schedule", schedule: standup } as const;
+    repository.addTask({
+      id: 1,
+      recurrence: { kind: "rule", rule: everyTwoWeeks },
+      standingSchedule: stored,
+    });
+    const setRecurrence = createSetRecurrence(deps(repository));
+
+    await setRecurrence(1, { ...everyTwoWeeks, basis: "completion" });
+
+    expect((await repository.getTask(1))?.standingSchedule).toEqual(stored);
+  });
+
+  it("refuses a standing schedule it cannot save, writing neither", async () => {
+    const repository = createInMemoryTaskRepository();
+    repository.addTask({ id: 1, status: "todo" });
+    const setRecurrence = createSetRecurrence(deps(repository));
+    // 4:00–6:00 crosses the 5:00 boundary.
+    const crossing = {
+      start: { hours: 4, minutes: 0 },
+      end: { hours: 6, minutes: 0 },
+    };
+
+    await expect(setRecurrence(1, everyTwoWeeks, crossing)).rejects.toEqual(
+      new StandingScheduleRefusedError("crosses-day-boundary"),
+    );
+    await expect(setRecurrence(1, null, standup)).rejects.toEqual(
+      new StandingScheduleRefusedError("not-recurring"),
+    );
     expect(repository.writeCount()).toBe(0);
   });
 });

@@ -3,9 +3,18 @@
 // the logical day and the day boundary are passed in.
 import { activeRule, isNotAdvanced } from "../recurrence/recurrence";
 import { compareDays } from "../time/calendar-days";
-import { type LogicalDayRange, momentOn } from "../time/logical-day";
+import {
+  type DayBoundary,
+  type LogicalDayRange,
+  momentOn,
+} from "../time/logical-day";
 import type { TimeOfDay } from "../time/time-of-day";
-import { entryOn, type MyDayEntries, type MyDaySchedule } from "./my-day";
+import {
+  entryOn,
+  type MyDayEntries,
+  type MyDaySchedule,
+  scheduleStepMinutes,
+} from "./my-day";
 import type { CalendarDate, Task } from "./task";
 
 /**
@@ -46,8 +55,46 @@ export function standingScheduleOn(
   const start = momentOn(day, schedule.start);
   const placedEnd = momentOn(day, schedule.end);
   const end = placedEnd.getTime() === day.start.getTime() ? day.end : placedEnd;
+  if (minuteOfDay(schedule.start) === minuteOfDay(schedule.end)) {
+    return undefined;
+  }
   return end.getTime() > start.getTime() ? { start, end } : undefined;
 }
+
+const minutesPerDay = 24 * 60;
+
+const minuteOfDay = (time: TimeOfDay) => time.hours * 60 + time.minutes;
+
+/**
+ * Why `schedule` cannot be saved, or `undefined` when it can: a time off the
+ * 15-minute steps the timeline snaps to (`off-step`); the start and the end
+ * the same time of day (`empty`); the end not after the start within one
+ * logical day from the day `boundary` on (`crosses-day-boundary`). Times
+ * before the boundary count at the end of the logical day, an end on the
+ * boundary itself at its very end (ADR 0029).
+ */
+export function standingScheduleProblem(
+  schedule: StandingSchedule,
+  boundary: DayBoundary,
+): StandingScheduleProblem | undefined {
+  const onStep = (time: TimeOfDay) => time.minutes % scheduleStepMinutes === 0;
+  if (!onStep(schedule.start) || !onStep(schedule.end)) return "off-step";
+  // Minutes from the boundary, within one logical day.
+  const fromBoundary = (time: TimeOfDay) =>
+    (minuteOfDay(time) - minuteOfDay(boundary) + minutesPerDay) % minutesPerDay;
+  const start = fromBoundary(schedule.start);
+  const end = fromBoundary(schedule.end) || minutesPerDay;
+  if (minuteOfDay(schedule.start) === minuteOfDay(schedule.end)) {
+    return "empty";
+  }
+  return end > start ? undefined : "crosses-day-boundary";
+}
+
+/** Why a standing schedule cannot be saved (`standingScheduleProblem`). */
+export type StandingScheduleProblem =
+  | "off-step"
+  | "empty"
+  | "crosses-day-boundary";
 
 /** What tells whether a task's standing schedule brings it in on a day. */
 export interface StandingScheduleCandidate {
