@@ -1,5 +1,7 @@
 // Use case: read today's My Day (GLOSSARY: 我的一天), for the My Day view
-// (#83): the tasks with an entry on the current logical day.
+// (#83): the tasks with an entry on the current logical day, and those their
+// standing schedule brings in (GLOSSARY: 常设排期), computed and not written
+// (ADR 0029).
 import type { TaskGraphEntry } from "../../domain/blocking/task-graph";
 import type { Project } from "../../domain/project/project";
 import { rankByScore } from "../../domain/scoring/score";
@@ -9,6 +11,10 @@ import {
   todayEntry,
 } from "../../domain/task/my-day";
 import { isOverdue } from "../../domain/task/overdue";
+import {
+  bringingIn,
+  standingScheduleOn,
+} from "../../domain/task/standing-schedule";
 import type { CalendarDate, Task, TaskId } from "../../domain/task/task";
 import { compareDays } from "../../domain/time/calendar-days";
 import {
@@ -100,9 +106,17 @@ export function createReadMyDay(deps: TaskGraphReading): ReadMyDay {
     const done = new Set<TaskId>();
     const skipped = new Set<TaskId>();
     for (const item of snapshot.tasks) {
-      if (item.myDay?.kind !== "readable") continue;
-      const todays = todayEntry(item.myDay.entries, now, boundary);
-      if (!todays) continue;
+      // None at all read as no entries; ones that cannot be read leave the
+      // task out, as nothing tells whether it is in today.
+      if (item.myDay?.kind === "unreadable") continue;
+      const entries = item.myDay?.entries ?? [];
+      const todays = todayEntry(entries, now, boundary);
+      // No entry today, a standing schedule may bring it in, computed and
+      // not written (ADR 0029).
+      const standing = todays
+        ? undefined
+        : bringingIn({ ...item, entries }, today);
+      if (!todays && !standing) continue;
       const entry = graph.entry(item.task.id);
       if (!entry) continue;
       inToday.push(entry);
@@ -124,10 +138,14 @@ export function createReadMyDay(deps: TaskGraphReading): ReadMyDay {
       } else if (advancedPastToday && onToday(item.lastSkip)) {
         skipped.add(item.task.id);
       }
-      // One outside today's range reads as unscheduled (ADR 0020).
-      if (todays.schedule && scheduleWithin(todays.schedule, range)) {
-        schedules.set(item.task.id, todays.schedule);
-      }
+      // One outside today's range reads as unscheduled (ADR 0020), and so
+      // does a standing schedule crossing the day boundary (ADR 0029).
+      const schedule = todays
+        ? todays.schedule && scheduleWithin(todays.schedule, range)
+          ? todays.schedule
+          : undefined
+        : standing && standingScheduleOn(standing, range);
+      if (schedule) schedules.set(item.task.id, schedule);
     }
     const ranked = rankByScore(inToday, today);
     // Done and skipped ones are over for today: after the others.
